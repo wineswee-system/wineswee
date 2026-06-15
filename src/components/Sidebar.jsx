@@ -16,6 +16,7 @@ import { useAuth } from '../contexts/AuthContext'
 import FontSizeControl from './FontSizeControl'
 import { prefetchGroup } from '../modules/prefetch'
 import { majorGroups, groupNav } from './sidebar/sidebarConfig'
+import { usePendingApprovals } from '../lib/usePendingApprovals'
 
 // Init theme from localStorage (default to light) — runs at module load to prevent FOUC
 const savedTheme = typeof window !== 'undefined' ? localStorage.getItem('theme') : null
@@ -108,6 +109,7 @@ const routeToGroup = (pathname) => {
 export default function Sidebar() {
   const location = useLocation()
   const navigate = useNavigate()
+  const { totalPending } = usePendingApprovals()  // 我的待簽件數（給頂部紅點）
   const { profile, signOut, isSuperAdmin, hasPermission } = useAuth()
   const [activeGroup, setActiveGroup] = useState(() => routeToGroup(location.pathname))
   const [openMenus, setOpenMenus] = useState({})
@@ -396,6 +398,22 @@ export default function Sidebar() {
       </nav>
 
       <div className="topnav-actions">
+        {totalPending > 0 && (
+          <button
+            onClick={() => navigate('/')}
+            className="topnav-theme-btn"
+            title={`我的待簽 ${totalPending} 件 — 點我去簽核`}
+            style={{ position: 'relative' }}
+          >
+            <Bell size={15} />
+            <span style={{
+              position: 'absolute', top: -3, right: -3,
+              minWidth: 15, height: 15, padding: '0 3px',
+              borderRadius: 8, background: 'var(--accent-red)', color: '#fff',
+              fontSize: 9, fontWeight: 700, lineHeight: '15px', textAlign: 'center',
+            }}>{totalPending > 99 ? '99+' : totalPending}</span>
+          </button>
+        )}
         <button
           onClick={() => navigate('/demo')}
           className="topnav-demo-btn"

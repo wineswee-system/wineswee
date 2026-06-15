@@ -44,6 +44,7 @@ const CRITICAL = [
   'get_expense_request_chain_full',
   'preview_payroll',
   '_compute_payroll_for_employee',
+  'cashout_annual_leave',
   'hr_chain_approve',
   'form_submission_chain_approve',
   'liff_approve_request',

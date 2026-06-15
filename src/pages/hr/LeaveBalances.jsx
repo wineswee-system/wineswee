@@ -125,39 +125,73 @@ export default function LeaveBalances() {
     return 'var(--accent-red)'
   }
 
+  // 治本：特休結清改走後端聚合 RPC cashout_annual_leave（單一 transaction，杜絕半套寫入）。
+  // 算法與範圍 1:1 對齊舊前端（year+org+特休+remaining>0、日薪=base/30），逐筆比對一致才信。
+  // 出問題把 USE_DB_CASHOUT 改 false 即整段回退舊前端路徑。
+  const USE_DB_CASHOUT = true
+
+  // 舊前端算法：對目前 balances 算結清明細。同時當 (1) RPC 的 fallback (2) 逐筆比對基準。
+  const computeCashoutLocal = async () => {
+    const annualBals = balances.filter(b =>
+      b.leave_type === '特休' &&
+      (Number(b.total_days) + Number(b.carry_over_days || 0) - Number(b.used_days)) > 0
+    )
+    const uniqueEmpIds = [...new Set(annualBals.map(b => b.employee_id))]
+    const empSalaryMap = {}
+    if (uniqueEmpIds.length > 0) {
+      const { data: empData } = await supabase
+        .from('employees').select('id, name, base_salary').in('id', uniqueEmpIds)
+      if (empData) empData.forEach(e => { empSalaryMap[e.id] = e })
+    }
+    return annualBals.map(b => {
+      const unused = Number(b.total_days) + Number(b.carry_over_days || 0) - Number(b.used_days)
+      const emp = empSalaryMap[b.employee_id] || {}
+      const baseSalary = Number(emp.base_salary) || 0
+      const dailyRate = baseSalary > 0 ? baseSalary / 30 : 0
+      const cashoutAmount = Math.round(unused * dailyRate)
+      return { bal: b, unused, dailyRate, cashoutAmount, empName: emp.name || getEmpName(b.employee_id) }
+    })
+  }
+
   const openCashout = async () => {
+    setCashoutLoading(true)
+    setShowCashoutModal(true)
     try {
-      setCashoutLoading(true)
-      setShowCashoutModal(true)
-      // Filter balances for 特休 with remaining days > 0
-      const annualBals = balances.filter(b =>
-        b.leave_type === '特休' &&
-        (Number(b.total_days) + Number(b.carry_over_days || 0) - Number(b.used_days)) > 0
-      )
-      const uniqueEmpIds = [...new Set(annualBals.map(b => b.employee_id))]
-      let empSalaryMap = {}
-      if (uniqueEmpIds.length > 0) {
-        const { data: empData } = await supabase
-          .from('employees')
-          .select('id, name, base_salary')
-          .in('id', uniqueEmpIds)
-        if (empData) {
-          empData.forEach(e => { empSalaryMap[e.id] = e })
-        }
+      if (USE_DB_CASHOUT) {
+        const { data, error } = await supabase.rpc('cashout_annual_leave', {
+          p_org: profile?.organization_id, p_year: yearFilter, p_dry_run: true,
+        })
+        if (error) throw error
+        const items = (data?.items || []).map(it => ({
+          bal: { id: it.balance_id, employee_id: it.employee_id },
+          unused: Number(it.unused_days),
+          dailyRate: Number(it.daily_rate),
+          cashoutAmount: Number(it.amount),
+          empName: it.name,
+        }))
+        // 驗證期：與舊前端逐筆比對金額（不一致只 console.warn，不影響顯示）
+        try {
+          const local = await computeCashoutLocal()
+          const lmap = Object.fromEntries(local.map(x => [x.bal.id, x.cashoutAmount]))
+          const diffs = items.filter(x => lmap[x.bal.id] !== x.cashoutAmount)
+          if (diffs.length || local.length !== items.length) {
+            console.warn('[cashout] DB vs 前端不一致：', { db: items.length, local: local.length, diffs })
+          }
+          // 無 warn 即逐筆一致
+        } catch { /* 比對失敗不影響主流程 */ }
+        setCashoutItems(items)
+      } else {
+        setCashoutItems(await computeCashoutLocal())
       }
-      const items = annualBals.map(b => {
-        const unused = Number(b.total_days) + Number(b.carry_over_days || 0) - Number(b.used_days)
-        const emp = empSalaryMap[b.employee_id] || {}
-        const baseSalary = Number(emp.base_salary) || 0
-        const dailyRate = baseSalary > 0 ? baseSalary / 30 : 0
-        const cashoutAmount = Math.round(unused * dailyRate)
-        return { bal: b, unused, dailyRate, cashoutAmount, empName: emp.name || getEmpName(b.employee_id) }
-      })
-      setCashoutItems(items)
     } catch (err) {
-      console.error('Failed to prepare cashout:', err)
-      toast.error('結算資料載入失敗：' + (err.message || '未知錯誤'))
-      setShowCashoutModal(false)
+      console.warn('[openCashout] cashout_annual_leave 失敗，fallback 前端:', err)
+      try {
+        setCashoutItems(await computeCashoutLocal())
+      } catch (e2) {
+        console.error('Failed to prepare cashout:', e2)
+        toast.error('結算資料載入失敗：' + (e2.message || '未知錯誤'))
+        setShowCashoutModal(false)
+      }
     } finally {
       setCashoutLoading(false)
     }
@@ -167,32 +201,34 @@ export default function LeaveBalances() {
     if (!cashoutItems.length) return
     try {
       setCashoutSaving(true)
-      const today = new Date().toISOString().split('T')[0]
-      const currentYear = new Date().getFullYear()
-      await Promise.all(
-        cashoutItems.map(async ({ bal, unused, cashoutAmount }) => {
-          // Create bonus record
-          const { error: bonusErr } = await supabase.from('bonus_records').insert({
-            employee_id: bal.employee_id,
-            category: '特休結清',
-            amount: cashoutAmount,
-            note: `特休結清 ${currentYear}`,
-            date: today,
-            organization_id: profile?.organization_id,
-          })
-          if (bonusErr) throw bonusErr
-          // Mark leave balance as fully used
-          const newUsed = Number(bal.total_days) + Number(bal.carry_over_days || 0)
-          await supabase
-            .from('leave_balances')
-            .update({ used_days: newUsed })
-            .eq('id', bal.id)
+      if (USE_DB_CASHOUT) {
+        // 單一 RPC = 單一 transaction：全部結清或全部不動，杜絕半套
+        const { data, error } = await supabase.rpc('cashout_annual_leave', {
+          p_org: profile?.organization_id, p_year: yearFilter, p_dry_run: false,
         })
-      )
+        if (error) throw error
+        toast.success(`已結清 ${data?.processed_count ?? 0} 人，共 NT$ ${Number(data?.total_amount || 0).toLocaleString()}`)
+      } else {
+        // 舊路徑（無 transaction，僅 USE_DB_CASHOUT=false 完全回退時用）
+        const today = new Date().toISOString().split('T')[0]
+        const currentYear = new Date().getFullYear()
+        await Promise.all(
+          cashoutItems.map(async ({ bal, unused, cashoutAmount }) => {
+            const { error: bonusErr } = await supabase.from('bonus_records').insert({
+              employee_id: bal.employee_id, category: '特休結清', amount: cashoutAmount,
+              note: `特休結清 ${currentYear}`, date: today, organization_id: profile?.organization_id,
+            })
+            if (bonusErr) throw bonusErr
+            const newUsed = Number(bal.total_days) + Number(bal.carry_over_days || 0)
+            await supabase.from('leave_balances').update({ used_days: newUsed }).eq('id', bal.id)
+          })
+        )
+      }
       setShowCashoutModal(false)
       setCashoutItems([])
       fetchData()
     } catch (err) {
+      // RPC 失敗「不」自動 fallback 舊寫入——寧可沒結清，也不要半套。要回退請改 USE_DB_CASHOUT=false。
       console.error('Cashout failed:', err)
       toast.error('結算失敗：' + (err.message || '未知錯誤'))
     } finally {

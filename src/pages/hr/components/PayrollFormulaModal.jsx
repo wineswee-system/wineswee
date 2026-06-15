@@ -283,17 +283,6 @@ export default function PayrollFormulaModal({ payroll, month, onClose }) {
               <FormulaRow label="其他自訂津貼" value={p.other_custom_total}
                 formula="自訂津貼加總（排除已歸類的夜班/跨店）" />
             )}
-            <FormulaRow
-              label="全勤獎金"
-              value={p.attendance_bonus}
-              formula="若整月無遲到、無無薪缺勤 → 給設定值，否則 0"
-              vars={[
-                { k: '遲到分鐘', v: p.lateMins },
-                { k: '無薪缺勤天數', v: p.absenceDays },
-              ]}
-              hint={p.attendance_bonus === 0 && (p.lateMins > 0 || p.absenceDays > 0)
-                ? '有遲到或無薪缺勤 → 不發' : null}
-            />
 
             {p.regular_overtime_pay > 0 && (
               <FormulaRow

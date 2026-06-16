@@ -8,6 +8,7 @@ import { LEAVE_TYPES } from '../../lib/leavePolicy'
 import { validateBenefitPolicy, BONUS_TYPE_LABELS, getLeaveLabel } from '../../lib/benefitPolicy'
 import { empLabel } from '../../lib/empLabel'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
+import { useAuth } from '../../contexts/AuthContext'
 
 import { confirm } from '../../lib/confirm'
 const TABS = [
@@ -19,7 +20,10 @@ const emptyLeaveForm = { code: '', extra_days: 0, notes: '' }
 const emptyBonusForm = { code: '', type: 'fixed', amount: 0, rate: 0, base: 'sales', cap: 0, period: 'monthly', notes: '' }
 
 export default function BenefitSettings() {
+  const { role, hasPermission } = useAuth()
   const [tab, setTab] = useState('leave')
+  const isAdminRole = role?.name === 'admin' || role?.name === 'super_admin'
+  const canEditPolicy = isAdminRole || hasPermission(tab === 'leave' ? 'leave_type.edit' : 'bonus.compute')
   const [stores, setStores] = useState([])
   const [employees, setEmployees] = useState([])
   const [selectedStoreId, setSelectedStoreId] = useState(null) // null = 全公司
@@ -195,9 +199,9 @@ export default function BenefitSettings() {
           </button>
         ))}
         <div style={{ flex: 1 }} />
-        <button className="btn btn-primary" onClick={openCreate} style={{ marginBottom: 4 }}>
+        {canEditPolicy && <button className="btn btn-primary" onClick={openCreate} style={{ marginBottom: 4 }}>
           <Plus size={16} /> 新增{tab === 'leave' ? '假別' : '獎金'}政策
-        </button>
+        </button>}
       </div>
 
       {/* Content */}
@@ -248,10 +252,10 @@ export default function BenefitSettings() {
                         <td>{scopeLabel(p)}</td>
                         <td style={{ color: 'var(--text-muted)', fontSize: 13 }}>{p.notes || '-'}</td>
                         <td>
-                          <div style={{ display: 'flex', gap: 4 }}>
+                          {canEditPolicy && <div style={{ display: 'flex', gap: 4 }}>
                             <button className="btn btn-sm" onClick={() => openEdit(p)}><Edit2 size={14} /></button>
                             <button className="btn btn-sm btn-danger" onClick={() => handleDelete(p.id)}><Trash2 size={14} /></button>
-                          </div>
+                          </div>}
                         </td>
                       </>
                     ) : (
@@ -267,10 +271,10 @@ export default function BenefitSettings() {
                         <td>{scopeLabel(p)}</td>
                         <td style={{ color: 'var(--text-muted)', fontSize: 13 }}>{p.notes || '-'}</td>
                         <td>
-                          <div style={{ display: 'flex', gap: 4 }}>
+                          {canEditPolicy && <div style={{ display: 'flex', gap: 4 }}>
                             <button className="btn btn-sm" onClick={() => openEdit(p)}><Edit2 size={14} /></button>
                             <button className="btn btn-sm btn-danger" onClick={() => handleDelete(p.id)}><Trash2 size={14} /></button>
-                          </div>
+                          </div>}
                         </td>
                       </>
                     )}

@@ -3,6 +3,7 @@ import { Save, Workflow, Clock, RotateCcw } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { LEAVE_TYPES } from '../../lib/leavePolicy'
+import { useAuth } from '../../contexts/AuthContext'
 
 // 加班 step 可選值
 const OVERTIME_STEP_OPTIONS = [
@@ -28,6 +29,8 @@ const LEAVE_STEP_OPTIONS = {
 }
 
 export default function WorkUnitSettings() {
+  const { role, hasPermission } = useAuth()
+  const canEditRule = role?.name === 'admin' || role?.name === 'super_admin' || hasPermission('schedule.rule_edit')
   const [stores, setStores] = useState([])
   const [leaveSettings, setLeaveSettings] = useState([])  // [{store_id, leave_code, step, unit}]
   const [selectedStoreId, setSelectedStoreId] = useState('all')  // 'all' = 全公司
@@ -173,9 +176,9 @@ export default function WorkUnitSettings() {
               廠商可依需求設定加班與請假的最小單位倍數，員工申請時系統會自動依此限制可選值
             </p>
           </div>
-          <button className="btn btn-primary" onClick={handleSave} disabled={saving} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {canEditRule && <button className="btn btn-primary" onClick={handleSave} disabled={saving} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <Save size={16} /> {saving ? '儲存中...' : '儲存全部變更'}
-          </button>
+          </button>}
         </div>
       </div>
 

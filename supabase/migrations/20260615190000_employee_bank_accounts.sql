@@ -87,8 +87,9 @@ GRANT ALL ON public.employee_bank_accounts TO service_role;
 GRANT USAGE, SELECT ON SEQUENCE public.employee_bank_accounts_id_seq TO authenticated, service_role;
 
 
--- ── 匯入 RPC（給 scripts/import_bank.mjs 用；service_role 受 RLS 擋，故走 DEFINER）──
--- 只 GRANT 給 service_role（本機管理者用服務金鑰跑），不給 authenticated，避免任何登入者亂寫帳號。
+-- ── 匯入 RPC（給 scripts/import_bank.mjs 與「匯入銀行帳號」UI 用）──
+-- DEFINER 繞 RLS；自己 guard：登入者必須 admin/super_admin；service_role(腳本,auth.uid()=null)放行。
+-- anon 不 grant。
 CREATE OR REPLACE FUNCTION public.import_employee_bank_account(
   p_employee_number TEXT,
   p_name            TEXT,
@@ -99,6 +100,11 @@ CREATE OR REPLACE FUNCTION public.import_employee_bank_account(
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE v_emp employees; v_by TEXT;
 BEGIN
+  -- 權限：有登入者 → 必須 admin/super_admin；無登入者(service_role 腳本) → 放行
+  IF auth.uid() IS NOT NULL AND current_employee_role() NOT IN ('admin','super_admin') THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'NOT_AUTHORIZED');
+  END IF;
+
   -- 先用員工編號比對，找不到再用姓名
   IF p_employee_number IS NOT NULL AND btrim(p_employee_number) <> '' THEN
     SELECT * INTO v_emp FROM employees WHERE employee_number = btrim(p_employee_number) LIMIT 1;
@@ -129,8 +135,9 @@ BEGIN
   RETURN jsonb_build_object('ok', true, 'employee_id', v_emp.id, 'name', v_emp.name, 'matched_by', v_by);
 END $$;
 
-REVOKE ALL ON FUNCTION public.import_employee_bank_account(TEXT,TEXT,TEXT,TEXT,TEXT) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.import_employee_bank_account(TEXT,TEXT,TEXT,TEXT,TEXT) TO service_role;
+REVOKE ALL ON FUNCTION public.import_employee_bank_account(TEXT,TEXT,TEXT,TEXT,TEXT) FROM PUBLIC, anon;
+-- 開放給 authenticated（UI 用，函式內已 guard 只有 admin 能寫）+ service_role（腳本）
+GRANT EXECUTE ON FUNCTION public.import_employee_bank_account(TEXT,TEXT,TEXT,TEXT,TEXT) TO authenticated, service_role;
 
 COMMIT;
 

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Download, Plus, Calculator, Pencil } from 'lucide-react'
+import { Download, Plus, Calculator, Pencil, Landmark } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { calculateLaborInsurance, calculateHealthInsurance, calculateLaborPension, calculateMonthlyWithholding, calculateNetSalary, calculateInServiceDays } from '../../lib/payroll'
@@ -12,6 +12,7 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 import SalaryTable from './components/SalaryTable'
 import SalaryFormModal from './components/SalaryFormModal'
 import BatchPayrollModal from './components/BatchPayrollModal'
+import BankImportModal from './components/BankImportModal'
 
 import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
@@ -104,6 +105,7 @@ export default function Salary() {
   const userRole = role?.name || profile?.role || 'store_staff'
   const isStaff = userRole === 'store_staff'
   const isManager = userRole === 'manager'
+  const isAdmin = userRole === 'admin' || userRole === 'super_admin'
 
   const [records, setRecords] = useState([])
   const [bonusRecords, setBonusRecords] = useState([])
@@ -123,6 +125,7 @@ export default function Salary() {
   const [showBatchModal, setShowBatchModal] = useState(false)
   const [batchPreview, setBatchPreview] = useState([])
   const [batchSaving, setBatchSaving] = useState(false)
+  const [showBankImport, setShowBankImport] = useState(false)
 
   // 勞健保級距（從 DB 載入，year 隨 form.month / 篩選 month 變動）
   // 結構：{ labor: [...], health: [...] } 或 null（DB 沒資料時 fallback hardcoded）
@@ -452,6 +455,11 @@ export default function Salary() {
               <button className="btn btn-secondary" onClick={() => exportSalaryPdf(filtered, month)}>
                 <Download size={14} /> 匯出 PDF
               </button>
+              {isAdmin && (
+                <button className="btn btn-secondary" onClick={() => setShowBankImport(true)}>
+                  <Landmark size={14} /> 匯入銀行帳號
+                </button>
+              )}
             </>}
           </div>
         </div>
@@ -540,6 +548,11 @@ export default function Salary() {
           onClose={() => { setShowModal(false); setEditingRecord(null); setForm(emptyForm) }}
           onSubmit={handleSubmit}
         />
+      )}
+
+      {/* ── 匯入銀行帳號（admin）── */}
+      {showBankImport && (
+        <BankImportModal onClose={() => setShowBankImport(false)} />
       )}
 
       {/* ── Batch Payroll Modal ── */}

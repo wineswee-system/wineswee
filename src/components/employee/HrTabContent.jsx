@@ -55,6 +55,12 @@ export default function HrTabContent({
             <div><div style={L}>入職日期</div><input className="form-input" type="date" style={{ width: '100%' }} value={form.join_date || ''} onChange={e => set('join_date', e.target.value)} /></div>
             <div><div style={L}>試用期結束</div><input className="form-input" type="date" style={{ width: '100%' }} value={form.probation_end || ''} onChange={e => set('probation_end', e.target.value)} /></div>
           </div>
+          {form.employment_type === '外籍' && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              <div><div style={L}>工作證號</div><input className="form-input" type="text" style={{ width: '100%' }} value={form.work_permit_number || ''} onChange={e => set('work_permit_number', e.target.value)} /></div>
+              <div><div style={L}>工作證到期日</div><input className="form-input" type="date" style={{ width: '100%' }} value={form.work_permit_expiry || ''} onChange={e => set('work_permit_expiry', e.target.value)} /></div>
+            </div>
+          )}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <div><div style={L}>離職日期</div><input className="form-input" type="date" style={{ width: '100%' }} value={form.resign_date || ''} onChange={e => set('resign_date', e.target.value)} /></div>
           </div>

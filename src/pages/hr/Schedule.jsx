@@ -5,7 +5,7 @@ import { supabase } from '../../lib/supabase'
 import { validateSchedule } from '../../lib/laborLaw'
 import { gatherSchedulingData, runAiSchedule, runMonthlyAiSchedule, fixViolations } from '../../lib/schedulingAi'
 import { runProgrammaticSchedule, runMonthlyProgrammaticSchedule } from '../../lib/schedulingAlgo'
-import { parseTime, getMonthDates, getWeekDates, isAbsence, formatYearMonth, parseYearMonth, getDayLabel, listCyclesInRange, getCycleFor, validateLeisureQuota, validateMonthlyOvertime, validateNightShiftProtection, validateHolidayWork, getLockedDateSetForStore } from '../../lib/scheduleUtils'
+import { parseTime, getMonthDates, getWeekDates, isAbsence, formatYearMonth, parseYearMonth, getDayLabel, listCyclesInRange, getCycleFor, validateLeisureQuota, validateMonthlyOvertime, validateNightShiftProtection, validateHolidayWork } from '../../lib/scheduleUtils'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import MonthScheduleTable from './components/MonthScheduleTable'
@@ -90,8 +90,9 @@ export default function Schedule() {
   const [error, setError] = useState(null)
   const [mainTab, setMainTab] = useState('schedule') // schedule | store-settings | preferences | swaps | analytics
   // Store settings
-  const [publishStatus, setPublishStatus] = useState(null) // { status: 'draft'|'published', published_at } — 舊單筆 (legacy)
+  const [publishStatus, setPublishStatus] = useState(null) // { status: 'draft'|'published', published_at } — 發布狀態（cycle）
   const [publishStatusRows, setPublishStatusRows] = useState([]) // 多筆 cycle 級別發布狀態
+  const [monthLocks, setMonthLocks] = useState([]) // schedule_month_locks: [{store_id, month, locked_at, locked_by}] — 月鎖（對齊薪資）
   const [storeSettings, setStoreSettings] = useState(null)
   const [staffing, setStaffing] = useState([])
   const [operatingHours, setOperatingHours] = useState({})
@@ -270,46 +271,51 @@ export default function Schedule() {
         .eq('store_id', store.id)
         .or(`and(cycle_start.lte.${activeEnd},cycle_end.gte.${activeStart}),month.eq.${month}`)
         .then(({ data }) => { if (!signal.aborted) setPublishStatusRows(data || []) })
+      // 月鎖（對齊薪資）
+      supabase.from('schedule_month_locks').select('*').eq('store_id', store.id)
+        .then(({ data }) => { if (!signal.aborted) setMonthLocks(data || []) })
     } else {
       setPublishStatusRows([])
+      setMonthLocks([])
     }
 
     return () => controller.abort()
   }, [activeStart, activeEnd, storeFilter, locations])
 
-  // 鎖定日期 Set（從 publishStatusRows 算）
+  // 鎖定狀態（月級，對齊薪資）。lockedMonths = 該店已鎖月份；lockedDates 限定在當前畫面日期
   const currentStore = locations.length > 0 ? locations.find(l => l.name === storeFilter) : null
-  const lockedDates = currentStore
-    ? getLockedDateSetForStore(publishStatusRows, currentStore.id)
-    : new Set()
-
-  // 當前 cycle 鎖定狀態 — 給 header chip 用
-  // 用 activeStart 對應到的 cycle row（cycle_start <= activeStart <= cycle_end）
-  const currentCycleRow = publishStatusRows.find(r =>
-    r.cycle_start && r.cycle_end
-    && r.store_id === currentStore?.id
-    && r.cycle_start <= activeStart
-    && r.cycle_end >= activeStart
+  const lockedMonths = new Set(
+    currentStore ? monthLocks.filter(r => r.store_id === currentStore.id).map(r => r.month) : []
   )
-  const isCurrentCycleLocked = currentCycleRow?.status === 'published' && !!currentCycleRow?.locked_at
+  const lockedDates = new Set((activeDates || []).filter(d => lockedMonths.has(d.slice(0, 7))))
+  // 當前畫面（cycle 可能跨月）碰到的月份，給狀態列「逐月鎖定/解鎖」用
+  const viewMonths = [...new Set((activeDates || []).map(d => d.slice(0, 7)))].sort()
   const isAdmin = ['admin', 'super_admin'].includes(authRole)
 
-  // 解鎖當前 cycle (admin only)
-  const handleUnpublishCycle = async () => {
-    if (!isAdmin || !currentCycleRow || !currentStore) return
-    const ok = window.confirm(`確定解鎖此 cycle？\n\n${currentCycleRow.cycle_start} ~ ${currentCycleRow.cycle_end}\n\n解鎖後 cell 可再次編輯。`)
-    if (!ok) return
-    const { error } = await supabase.rpc('unpublish_schedule_cycle', {
-      p_store_id: currentStore.id,
-      p_cycle_start: currentCycleRow.cycle_start,
-      p_cycle_end: currentCycleRow.cycle_end,
-    })
-    if (error) { window.alert('解鎖失敗：' + error.message); return }
-    // 重撈
-    const { data } = await supabase.from('schedule_publish_status').select('*')
-      .eq('store_id', currentStore.id)
-      .or(`and(cycle_start.lte.${activeEnd},cycle_end.gte.${activeStart}),month.eq.${activeStart?.slice(0, 7)}`)
-    setPublishStatusRows(data || [])
+  const reloadMonthLocks = async () => {
+    if (!currentStore) return
+    const { data } = await supabase.from('schedule_month_locks').select('*').eq('store_id', currentStore.id)
+    setMonthLocks(data || [])
+  }
+
+  // 鎖定整月（凍結該月班表，薪資才能結算）
+  const handleLockMonth = async (month) => {
+    if (!currentStore) return
+    if (!(await confirm({ message: `確定鎖定「${currentStore.name}」${month} 的班表？\n\n鎖定後該月班表不能再改，薪資才能結算（薪資結算前一定要先鎖）。` }))) return
+    const { error } = await supabase.rpc('lock_schedule_month', { p_store_id: currentStore.id, p_month: month })
+    if (error) { toast.error('鎖定失敗：' + error.message); return }
+    await reloadMonthLocks()
+    toast.success(`已鎖定 ${month} 班表`)
+  }
+
+  // 解鎖整月（admin / super_admin only）
+  const handleUnlockMonth = async (month) => {
+    if (!isAdmin || !currentStore) return
+    if (!(await confirm({ message: `確定解鎖「${currentStore.name}」${month}？\n\n解鎖後該月可再編輯。注意：薪資結算前請再鎖回。` }))) return
+    const { error } = await supabase.rpc('unlock_schedule_month', { p_store_id: currentStore.id, p_month: month })
+    if (error) { toast.error('解鎖失敗：' + error.message); return }
+    await reloadMonthLocks()
+    toast.success(`已解鎖 ${month}`)
   }
 
   // Run compliance check when schedules update（debounce 250ms：連續填格時只在停下後驗一次，
@@ -1074,42 +1080,46 @@ export default function Schedule() {
             <h2><span className="header-icon">📅</span> 排班管理</h2>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <p style={{ margin: 0 }}>管理班表、排班偏好與AI自動排班</p>
-              {publishStatus && (
+              {/* 發布狀態（cycle） */}
+              {storeFilter && (
                 <span style={{
                   padding: '2px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700,
-                  background: publishStatus.status === 'published' ? 'rgba(52,211,153,0.12)' : 'rgba(251,191,36,0.12)',
-                  color: publishStatus.status === 'published' ? '#10b981' : '#f59e0b',
+                  background: publishStatus?.status === 'published' ? 'rgba(52,211,153,0.12)' : 'rgba(251,191,36,0.12)',
+                  color: publishStatus?.status === 'published' ? '#10b981' : '#f59e0b',
                 }}>
-                  {publishStatus.status === 'published' ? `✓ 已發布 ${publishStatus.published_at?.slice(0, 10) || ''}` : '草稿'}
+                  {publishStatus?.status === 'published' ? `✓ 已發布 ${publishStatus.published_at?.slice(0, 10) || ''}` : '未發布'}
                 </span>
               )}
-              {!publishStatus && storeFilter && (
-                <span style={{ padding: '2px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700, background: 'rgba(251,191,36,0.12)', color: '#f59e0b' }}>
-                  未發布
-                </span>
-              )}
-              {/* Cycle-level lock chip (新機制) */}
-              {currentCycleRow && (
-                <span style={{
-                  padding: '2px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700,
-                  background: isCurrentCycleLocked ? 'rgba(16,185,129,0.12)' : 'rgba(245,158,11,0.12)',
-                  color: isCurrentCycleLocked ? 'var(--accent-green)' : 'var(--accent-orange)',
-                  border: `1px solid ${isCurrentCycleLocked ? 'rgba(16,185,129,0.35)' : 'rgba(245,158,11,0.35)'}`,
-                }} title={`Cycle ${currentCycleRow.cycle_start} ~ ${currentCycleRow.cycle_end}`}>
-                  {isCurrentCycleLocked ? '🟢 Cycle 已鎖定' : '🟡 Cycle 草稿'}
-                </span>
-              )}
-              {isCurrentCycleLocked && isAdmin && (
-                <button onClick={handleUnpublishCycle} style={{
-                  padding: '2px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700,
-                  background: 'rgba(245,158,11,0.12)',
-                  color: 'var(--accent-orange)',
-                  border: '1px solid var(--accent-orange)',
-                  cursor: 'pointer',
-                }} title="解鎖此 cycle（admin 才看得到）">
-                  🔓 解鎖
-                </button>
-              )}
+              {/* 鎖定狀態（月級，對齊薪資）— 當前畫面碰到的每個月各自鎖定/解鎖 */}
+              {storeFilter && currentStore && viewMonths.map(m => {
+                const locked = lockedMonths.has(m)
+                return (
+                  <span key={m} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{
+                      padding: '2px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700,
+                      background: locked ? 'rgba(16,185,129,0.12)' : 'rgba(245,158,11,0.12)',
+                      color: locked ? 'var(--accent-green)' : 'var(--accent-orange)',
+                      border: `1px solid ${locked ? 'rgba(16,185,129,0.35)' : 'rgba(245,158,11,0.35)'}`,
+                    }} title={locked ? `${m} 班表已鎖定，薪資可結算` : `${m} 尚未鎖定`}>
+                      {locked ? `🔒 ${m} 已鎖定` : `🔓 ${m} 未鎖定`}
+                    </span>
+                    {!locked && canEditSchedule && (
+                      <button onClick={() => handleLockMonth(m)} style={{
+                        padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700,
+                        background: 'var(--accent-green-dim)', color: 'var(--accent-green)',
+                        border: '1px solid var(--accent-green)', cursor: 'pointer',
+                      }} title={`鎖定 ${m} 班表（鎖定後該月薪資才能結算）`}>鎖定</button>
+                    )}
+                    {locked && isAdmin && (
+                      <button onClick={() => handleUnlockMonth(m)} style={{
+                        padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700,
+                        background: 'rgba(245,158,11,0.12)', color: 'var(--accent-orange)',
+                        border: '1px solid var(--accent-orange)', cursor: 'pointer',
+                      }} title="解鎖（admin 才看得到）">解鎖</button>
+                    )}
+                  </span>
+                )
+              })}
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -1206,7 +1216,7 @@ export default function Schedule() {
                   : '✓ 排班檢查'}
             </button>
             {/* ✏ 繼續編輯排班 — 當選了店且該店該 cycle 有資料時，直接進 builder 跳過 wizard */}
-            {canEditSchedule && storeFilter && currentStore && schedules.length > 0 && !isCurrentCycleLocked && (
+            {canEditSchedule && storeFilter && currentStore && schedules.length > 0 && viewMonths.some(m => !lockedMonths.has(m)) && (
               <button
                 className="btn btn-secondary"
                 style={{
@@ -1260,7 +1270,7 @@ export default function Schedule() {
                     background: 'linear-gradient(135deg, var(--accent-purple), #7c3aed)',
                     display: 'flex', alignItems: 'center', gap: 6,
                   }}
-                  onClick={() => { setWizardMode('manual'); setShowWizard(true); setShowWizardDropdown(false) }}
+                  onClick={() => setShowWizardDropdown(v => !v)}
                 >
                   <Wand2 size={14} /> 排班精靈
                 </button>
@@ -1304,7 +1314,7 @@ export default function Schedule() {
             {aiDraft && (
               <>
                 <button className="btn btn-primary" style={{ width: 'auto', padding: '8px 16px' }} onClick={handlePublishDraft}>
-                  <Save size={14} /> 發布草稿
+                  <Save size={14} /> 發布
                 </button>
                 <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 16px' }} onClick={handleDiscardDraft}>
                   捨棄草稿

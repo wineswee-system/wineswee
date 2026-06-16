@@ -39,7 +39,7 @@ export default function BatchPayrollModal({ month, batchPreview, batchSaving, on
   const statusInfo = anomalyReport ? (STATUS_ICON[anomalyReport.status] || STATUS_ICON.warning) : null
   const StatusIcon = statusInfo?.icon
 
-  return (
+  return createPortal(
     <div style={{
       position: 'fixed', inset: 0, zIndex: 10000,
       background: 'var(--bg-modal-overlay)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)',
@@ -332,6 +332,7 @@ export default function BatchPayrollModal({ month, batchPreview, batchSaving, on
           onClose={() => setFormulaPayroll(null)}
         />
       )}
-    </div>
+    </div>,
+    document.body
   )
 }

@@ -100,12 +100,14 @@ const emptyForm = {
 export default function Salary() {
   // Role-based access
   const navigate = useNavigate()
-  const { profile, role } = useAuth()
+  const { profile, role, hasPermission } = useAuth()
   const orgId = profile?.organization_id
   const userRole = role?.name || profile?.role || 'store_staff'
   const isStaff = userRole === 'store_staff'
   const isManager = userRole === 'manager'
   const isAdmin = userRole === 'admin' || userRole === 'super_admin'
+  // 銀行帳號 / 代發薪：admin 或被授予「薪資發放」權限者（在權限設定頁可指定）
+  const canBank = isAdmin || hasPermission('salary.pay')
 
   const [records, setRecords] = useState([])
   const [bonusRecords, setBonusRecords] = useState([])
@@ -484,12 +486,12 @@ export default function Salary() {
               <button className="btn btn-secondary" onClick={() => exportSalaryPdf(filtered, month)}>
                 <Download size={14} /> 匯出 PDF
               </button>
-              {isAdmin && (
+              {canBank && (
                 <button className="btn btn-secondary" onClick={() => setShowBankImport(true)}>
                   <Landmark size={14} /> 匯入銀行帳號
                 </button>
               )}
-              {isAdmin && (
+              {canBank && (
                 <button className="btn btn-secondary" onClick={handleExportTransfer}>
                   <Download size={14} /> 匯出代發薪檔
                 </button>

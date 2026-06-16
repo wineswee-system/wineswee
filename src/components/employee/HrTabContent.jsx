@@ -1,6 +1,6 @@
 import { Upload, Eye, Plus, X } from 'lucide-react'
-import { empLabel } from '../../lib/empLabel'
 import { getPTAnnualLeaveHours, getAnnualLeaveEntitlement } from '../../lib/leavePolicy'
+import SearchableSelect, { empOptions } from '../SearchableSelect'
 
 const maskBank = (v) => v ? '****' + v.slice(-4) : ''
 
@@ -99,12 +99,15 @@ export default function HrTabContent({
               </select>
             </div>
             <div><div style={L}>直屬主管</div>
-              <select className="form-input" style={{ width: '100%' }} value={form.supervisor || ''} onChange={e => set('supervisor', e.target.value)}>
-                <option value="">— 未指派 —</option>
-                {(allEmployees || []).filter(e => e.id !== employee.id && e.status === '在職').map(e => (
-                  <option key={e.id} value={e.name}>{empLabel(e)}{(e.position || e.dept) ? ` - ${e.position || e.dept}` : ''}</option>
-                ))}
-              </select>
+              <SearchableSelect
+                value={form.supervisor || ''}
+                onChange={(v) => set('supervisor', v || '')}
+                options={empOptions(
+                  (allEmployees || []).filter(e => e.id !== employee.id && e.status === '在職'),
+                  { keyBy: 'name' }
+                )}
+                placeholder="— 未指派 —"
+              />
             </div>
           </div>
 

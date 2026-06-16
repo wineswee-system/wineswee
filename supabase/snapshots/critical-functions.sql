@@ -698,6 +698,106 @@ BEGIN
 END $function$
 ;
 
+-- ═══════════ can_manage_bank() ═══════════
+CREATE OR REPLACE FUNCTION public.can_manage_bank()
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  SELECT current_employee_role() IN ('admin','super_admin')
+      OR public.current_user_can('salary.pay')
+$function$
+;
+
+-- ═══════════ cashout_annual_leave(p_org integer, p_year integer, p_dry_run boolean) ═══════════
+CREATE OR REPLACE FUNCTION public.cashout_annual_leave(p_org integer, p_year integer, p_dry_run boolean DEFAULT true)
+ RETURNS json
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_items json;
+  v_count INT     := 0;
+  v_total numeric := 0;
+  r       RECORD;
+BEGIN
+  -- 權限 guard：結清會寫入獎金 + 改餘額（錢），且本函式 SECURITY DEFINER 繞 RLS，
+  -- 故必須在此擋權限，否則任何 authenticated 直接打 RPC 就能結清全公司特休（提權）。
+  -- 白名單 = HR 行政層；store_staff / 無員工身分一律擋。dry_run 也擋（金額也敏感）。
+  IF COALESCE(public.current_employee_role(), '') NOT IN ('admin','super_admin','manager','office_staff') THEN
+    RAISE EXCEPTION '無權限執行特休結清';
+  END IF;
+
+  -- ── 候選明細（特休 + 該年 + 該 org + 尚有剩餘；範圍 1:1 對齊舊前端 openCashout）──
+  -- 永遠先算一次（dry_run 與實寫共用同一份 WHERE，確保預覽=實寫範圍）
+  SELECT
+    COALESCE(json_agg(json_build_object(
+      'employee_id', t.employee_id,
+      'name',        t.name,
+      'balance_id',  t.balance_id,
+      'unused_days', t.unused,
+      'daily_rate',  t.daily_rate,
+      'amount',      t.amount
+    ) ORDER BY t.name), '[]'::json),
+    COUNT(*),
+    COALESCE(SUM(t.amount), 0)
+  INTO v_items, v_count, v_total
+  FROM (
+    SELECT
+      lb.id   AS balance_id,
+      e.id    AS employee_id,
+      e.name,
+      (COALESCE(lb.total_days,0) + COALESCE(lb.carry_over_days,0) - COALESCE(lb.used_days,0)) AS unused,
+      (COALESCE(e.base_salary,0) / 30.0) AS daily_rate,
+      round(
+        (COALESCE(lb.total_days,0) + COALESCE(lb.carry_over_days,0) - COALESCE(lb.used_days,0))
+        * (COALESCE(e.base_salary,0) / 30.0)
+      ) AS amount
+    FROM leave_balances lb
+    JOIN employees e ON e.id = lb.employee_id
+    WHERE lb.leave_type = '特休'
+      AND lb.year       = p_year
+      AND lb.organization_id = p_org
+      AND (COALESCE(lb.total_days,0) + COALESCE(lb.carry_over_days,0) - COALESCE(lb.used_days,0)) > 0
+  ) t;
+
+  -- ── 實寫（單一 function = 單一 transaction，任一筆 raise 全回滾）──
+  IF NOT p_dry_run THEN
+    FOR r IN
+      SELECT
+        lb.id AS balance_id,
+        e.id  AS employee_id,
+        (COALESCE(lb.total_days,0) + COALESCE(lb.carry_over_days,0)) AS new_used,
+        round(
+          (COALESCE(lb.total_days,0) + COALESCE(lb.carry_over_days,0) - COALESCE(lb.used_days,0))
+          * (COALESCE(e.base_salary,0) / 30.0)
+        ) AS amount
+      FROM leave_balances lb
+      JOIN employees e ON e.id = lb.employee_id
+      WHERE lb.leave_type = '特休'
+        AND lb.year       = p_year
+        AND e.status      = '在職'
+        AND e.organization_id = p_org
+        AND (COALESCE(lb.total_days,0) + COALESCE(lb.carry_over_days,0) - COALESCE(lb.used_days,0)) > 0
+    LOOP
+      INSERT INTO bonus_records(employee_id, category, amount, note, date, organization_id)
+      VALUES (r.employee_id, '特休結清', r.amount, '特休結清 ' || p_year, current_date, p_org);
+
+      UPDATE leave_balances SET used_days = r.new_used WHERE id = r.balance_id;
+    END LOOP;
+  END IF;
+
+  RETURN json_build_object(
+    'dry_run',         p_dry_run,
+    'processed_count', v_count,
+    'total_amount',    v_total,
+    'items',           v_items
+  );
+END $function$
+;
+
 -- ═══════════ classify_overtime_category_v2(p_date date, p_employee_id integer) ═══════════
 CREATE OR REPLACE FUNCTION public.classify_overtime_category_v2(p_date date, p_employee_id integer)
  RETURNS text
@@ -748,6 +848,36 @@ BEGIN
   ELSE
     RETURN 'weekday';
   END IF;
+END $function$
+;
+
+-- ═══════════ current_user_can(p_code text) ═══════════
+CREATE OR REPLACE FUNCTION public.current_user_can(p_code text)
+ RETURNS boolean
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE me employees; v_eff boolean;
+BEGIN
+  SELECT * INTO me FROM employees WHERE auth_user_id = auth.uid() LIMIT 1;
+  IF me.id IS NULL THEN RETURN false; END IF;
+  IF EXISTS (SELECT 1 FROM roles r WHERE r.id = me.role_id AND r.name = 'super_admin') THEN
+    RETURN true;
+  END IF;
+  SELECT CASE
+    WHEN ep.mode = 'grant'      THEN true
+    WHEN ep.mode = 'revoke'     THEN false
+    WHEN rp.role_id IS NOT NULL THEN true
+    ELSE false
+  END
+  INTO v_eff
+  FROM permissions p
+  LEFT JOIN role_permissions rp     ON rp.permission_id = p.id AND rp.role_id = me.role_id
+  LEFT JOIN employee_permissions ep ON ep.permission_id = p.id AND ep.employee_id = me.id
+  WHERE p.code = p_code
+  LIMIT 1;
+  RETURN COALESCE(v_eff, false);
 END $function$
 ;
 
@@ -2074,6 +2204,38 @@ BEGIN
 END $function$
 ;
 
+-- ═══════════ get_payroll_transfer_file(p_period text, p_org integer) ═══════════
+CREATE OR REPLACE FUNCTION public.get_payroll_transfer_file(p_period text, p_org integer)
+ RETURNS json
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE v_result json;
+BEGIN
+  IF auth.uid() IS NOT NULL AND NOT public.can_manage_bank() THEN
+    RAISE EXCEPTION 'NOT_AUTHORIZED';
+  END IF;
+
+  SELECT COALESCE(json_agg(json_build_object(
+    'employee_number', e.employee_number,
+    'name',            sr.employee,
+    'bank_code',       ba.bank_code,
+    'bank_branch',     ba.bank_branch,
+    'bank_account',    ba.bank_account,
+    'amount',          sr.net_salary,
+    'has_account',     (ba.bank_account IS NOT NULL AND btrim(ba.bank_account) <> '')
+  ) ORDER BY e.employee_number NULLS LAST, sr.employee), '[]'::json)
+  INTO v_result
+  FROM salary_records sr
+  LEFT JOIN employees e ON e.name = sr.employee AND e.organization_id = p_org
+  LEFT JOIN employee_bank_accounts ba ON ba.employee_id = e.id
+  WHERE sr.organization_id = p_org AND sr.month = p_period;
+
+  RETURN v_result;
+END $function$
+;
+
 -- ═══════════ hr_chain_approve(p_table text, p_id integer, p_approver_id integer, p_action text, p_reason text) ═══════════
 CREATE OR REPLACE FUNCTION public.hr_chain_approve(p_table text, p_id integer, p_approver_id integer, p_action text, p_reason text DEFAULT NULL::text)
  RETURNS json
@@ -2228,6 +2390,49 @@ BEGIN
   END IF;
 END
 $function$
+;
+
+-- ═══════════ import_employee_bank_account(p_employee_number text, p_name text, p_bank_code text, p_bank_branch text, p_bank_account text) ═══════════
+CREATE OR REPLACE FUNCTION public.import_employee_bank_account(p_employee_number text, p_name text, p_bank_code text, p_bank_branch text, p_bank_account text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE v_emp employees; v_by TEXT;
+BEGIN
+  IF auth.uid() IS NOT NULL AND NOT public.can_manage_bank() THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'NOT_AUTHORIZED');
+  END IF;
+
+  IF p_employee_number IS NOT NULL AND btrim(p_employee_number) <> '' THEN
+    SELECT * INTO v_emp FROM employees WHERE employee_number = btrim(p_employee_number) LIMIT 1;
+    IF v_emp.id IS NOT NULL THEN v_by := 'employee_number'; END IF;
+  END IF;
+  IF v_emp.id IS NULL AND p_name IS NOT NULL AND btrim(p_name) <> '' THEN
+    SELECT * INTO v_emp FROM employees WHERE name = btrim(p_name) LIMIT 1;
+    IF v_emp.id IS NOT NULL THEN v_by := 'name'; END IF;
+  END IF;
+  IF v_emp.id IS NULL THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'EMPLOYEE_NOT_FOUND',
+      'employee_number', p_employee_number, 'name', p_name);
+  END IF;
+
+  INSERT INTO employee_bank_accounts
+    (employee_id, organization_id, bank_code, bank_branch, bank_account, account_holder)
+  VALUES
+    (v_emp.id, v_emp.organization_id,
+     NULLIF(btrim(p_bank_code),''), NULLIF(btrim(p_bank_branch),''),
+     NULLIF(btrim(p_bank_account),''), NULLIF(btrim(p_name),''))
+  ON CONFLICT (employee_id) DO UPDATE SET
+    bank_code      = EXCLUDED.bank_code,
+    bank_branch    = EXCLUDED.bank_branch,
+    bank_account   = EXCLUDED.bank_account,
+    account_holder = COALESCE(EXCLUDED.account_holder, employee_bank_accounts.account_holder),
+    updated_at     = now();
+
+  RETURN jsonb_build_object('ok', true, 'employee_id', v_emp.id, 'name', v_emp.name, 'matched_by', v_by);
+END $function$
 ;
 
 -- ═══════════ liff_approve_request(p_line_user_id text, p_type text, p_id integer, p_action text, p_reason text) ═══════════
@@ -3132,6 +3337,103 @@ BEGIN
 
   RETURN;
 END $function$
+;
+
+-- ═══════════ restore_request(p_table text, p_id integer) ═══════════
+CREATE OR REPLACE FUNCTION public.restore_request(p_table text, p_id integer)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+AS $function$
+DECLARE
+  v_caller_org INT;
+  v_record_org INT;
+  v_emp_id     INT;
+BEGIN
+  SELECT organization_id INTO v_caller_org
+  FROM public.employees
+  WHERE auth_user_id = auth.uid()
+  LIMIT 1;
+
+  CASE p_table
+
+    WHEN 'leave_requests' THEN
+      SELECT employee_id INTO v_emp_id FROM public.leave_requests WHERE id = p_id;
+      IF v_caller_org IS NOT NULL THEN
+        SELECT organization_id INTO v_record_org FROM public.employees WHERE id = v_emp_id;
+        IF v_record_org IS DISTINCT FROM v_caller_org THEN
+          RAISE EXCEPTION 'restore_request: permission denied (org mismatch)';
+        END IF;
+      END IF;
+      UPDATE public.leave_requests SET deleted_at = NULL, deleted_by = NULL WHERE id = p_id;
+
+    WHEN 'overtime_requests' THEN
+      SELECT employee_id INTO v_emp_id FROM public.overtime_requests WHERE id = p_id;
+      IF v_caller_org IS NOT NULL THEN
+        SELECT organization_id INTO v_record_org FROM public.employees WHERE id = v_emp_id;
+        IF v_record_org IS DISTINCT FROM v_caller_org THEN
+          RAISE EXCEPTION 'restore_request: permission denied (org mismatch)';
+        END IF;
+      END IF;
+      UPDATE public.overtime_requests SET deleted_at = NULL, deleted_by = NULL WHERE id = p_id;
+
+    WHEN 'clock_corrections' THEN
+      SELECT employee_id INTO v_emp_id FROM public.clock_corrections WHERE id = p_id;
+      IF v_caller_org IS NOT NULL THEN
+        SELECT organization_id INTO v_record_org FROM public.employees WHERE id = v_emp_id;
+        IF v_record_org IS DISTINCT FROM v_caller_org THEN
+          RAISE EXCEPTION 'restore_request: permission denied (org mismatch)';
+        END IF;
+      END IF;
+      UPDATE public.clock_corrections SET deleted_at = NULL, deleted_by = NULL WHERE id = p_id;
+
+    WHEN 'business_trips' THEN
+      SELECT organization_id INTO v_record_org FROM public.business_trips WHERE id = p_id;
+      IF v_caller_org IS NOT NULL AND v_record_org IS DISTINCT FROM v_caller_org THEN
+        RAISE EXCEPTION 'restore_request: permission denied (org mismatch)';
+      END IF;
+      UPDATE public.business_trips SET deleted_at = NULL, deleted_by = NULL WHERE id = p_id;
+
+    WHEN 'headcount_requests' THEN
+      SELECT organization_id INTO v_record_org FROM public.headcount_requests WHERE id = p_id;
+      IF v_caller_org IS NOT NULL AND v_record_org IS DISTINCT FROM v_caller_org THEN
+        RAISE EXCEPTION 'restore_request: permission denied (org mismatch)';
+      END IF;
+      UPDATE public.headcount_requests SET deleted_at = NULL, deleted_by = NULL WHERE id = p_id;
+
+    WHEN 'expense_requests' THEN
+      SELECT organization_id INTO v_record_org FROM public.expense_requests WHERE id = p_id;
+      IF v_caller_org IS NOT NULL AND v_record_org IS DISTINCT FROM v_caller_org THEN
+        RAISE EXCEPTION 'restore_request: permission denied (org mismatch)';
+      END IF;
+      UPDATE public.expense_requests SET deleted_at = NULL, deleted_by = NULL WHERE id = p_id;
+
+    WHEN 'form_submissions' THEN
+      SELECT organization_id INTO v_record_org FROM public.form_submissions WHERE id = p_id;
+      IF v_caller_org IS NOT NULL AND v_record_org IS DISTINCT FROM v_caller_org THEN
+        RAISE EXCEPTION 'restore_request: permission denied (org mismatch)';
+      END IF;
+      UPDATE public.form_submissions SET deleted_at = NULL, deleted_by = NULL WHERE id = p_id;
+
+    WHEN 'shift_swaps' THEN
+      SELECT organization_id INTO v_record_org FROM public.shift_swaps WHERE id = p_id;
+      IF v_caller_org IS NOT NULL AND v_record_org IS DISTINCT FROM v_caller_org THEN
+        RAISE EXCEPTION 'restore_request: permission denied (org mismatch)';
+      END IF;
+      UPDATE public.shift_swaps SET deleted_at = NULL, deleted_by = NULL WHERE id = p_id;
+
+    WHEN 'off_requests' THEN
+      SELECT organization_id INTO v_record_org FROM public.off_requests WHERE id = p_id;
+      IF v_caller_org IS NOT NULL AND v_record_org IS DISTINCT FROM v_caller_org THEN
+        RAISE EXCEPTION 'restore_request: permission denied (org mismatch)';
+      END IF;
+      UPDATE public.off_requests SET deleted_at = NULL, deleted_by = NULL WHERE id = p_id;
+
+    ELSE
+      RAISE EXCEPTION 'restore_request: unknown table %', p_table;
+  END CASE;
+END;
+$function$
 ;
 
 -- ═══════════ security_health_check() ═══════════

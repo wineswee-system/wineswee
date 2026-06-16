@@ -309,17 +309,25 @@ function WorkflowProgressCard({ w, tasks, days, onJump, index }) {
 // 主元件
 // ──────────────────────────────────────────────
 export default function TeamDashboard() {
-  const { profile, role } = useAuth()
+  const { profile, role, hasPermission } = useAuth()
   const navigate = useNavigate()
   const userRole = role?.name || 'office_staff'
   const isManager = userRole === 'manager'
   const isAdminPlus = ['admin', 'super_admin'].includes(userRole)
+  // 儀表板分頁可見性（admin 可在權限頁逐人調；super_admin 永遠 true；
+  // manager/admin/super_admin 角色預設已含 nav.dashboard.*）
+  const canSeeHr = hasPermission('nav.dashboard.hr')
+  const canSeeProcess = hasPermission('nav.dashboard.process')
 
   // 「待我簽核」用 web_list_my_pending_approval_ids RPC 過濾，
   // 只算當前 chain step 真的指派給我的單，跟 /process/approvals 頁面口徑一致
   const { canApprove } = usePendingApprovals()
 
   const [tab, setTab] = useState('hr')  // 'hr' | 'process'
+  // 實際顯示的分頁：先看選的 tab 有沒有權限，沒有就退到另一個有權限的
+  const effectiveTab = (tab === 'process' && canSeeProcess) ? 'process'
+    : (tab === 'hr' && canSeeHr) ? 'hr'
+    : canSeeHr ? 'hr' : canSeeProcess ? 'process' : null
   const [stores, setStores] = useState([])
   const [storeFilter, setStoreFilter] = useState(null)  // admin 才會用
   const [team, setTeam] = useState([])
@@ -675,8 +683,8 @@ export default function TeamDashboard() {
   }, [orgId, profile?.name, team, isManager])
 
   useEffect(() => {
-    if (tab === 'process') loadProcessData()
-  }, [tab, loadProcessData, refreshTick])
+    if (effectiveTab === 'process') loadProcessData()
+  }, [effectiveTab, loadProcessData, refreshTick])
 
   // ── 自動 refresh (每 60 秒) ──
   useEffect(() => {
@@ -932,37 +940,49 @@ export default function TeamDashboard() {
         </div>
       </div>
 
-      {/* ─── Tab switcher ─── */}
+      {/* ─── Tab switcher（只顯示有權限的分頁；兩個都只剩一個就不必切換）─── */}
+      {(canSeeHr || canSeeProcess) && (canSeeHr && canSeeProcess) && (
       <div style={{ display: 'flex', gap: 4, background: C.bg2, padding: 4, borderRadius: 10, width: 'fit-content', border: `1px solid ${C.borderSubtle}` }}>
+        {canSeeHr && (
         <button
           onClick={() => setTab('hr')}
           style={{
             padding: '8px 18px', borderRadius: 8, border: 'none', cursor: 'pointer',
-            background: tab === 'hr' ? C.card : 'transparent',
-            color: tab === 'hr' ? 'var(--text-primary)' : C.muted,
+            background: effectiveTab === 'hr' ? C.card : 'transparent',
+            color: effectiveTab === 'hr' ? 'var(--text-primary)' : C.muted,
             fontSize: 13, fontWeight: 600,
-            boxShadow: tab === 'hr' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+            boxShadow: effectiveTab === 'hr' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
             display: 'flex', alignItems: 'center', gap: 6,
           }}
         >
           <Users size={14} /> 人 · HR
         </button>
+        )}
+        {canSeeProcess && (
         <button
           onClick={() => setTab('process')}
           style={{
             padding: '8px 18px', borderRadius: 8, border: 'none', cursor: 'pointer',
-            background: tab === 'process' ? C.card : 'transparent',
-            color: tab === 'process' ? 'var(--text-primary)' : C.muted,
+            background: effectiveTab === 'process' ? C.card : 'transparent',
+            color: effectiveTab === 'process' ? 'var(--text-primary)' : C.muted,
             fontSize: 13, fontWeight: 600,
-            boxShadow: tab === 'process' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+            boxShadow: effectiveTab === 'process' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
             display: 'flex', alignItems: 'center', gap: 6,
           }}
         >
           <WorkflowIcon size={14} /> 事 · 流程
         </button>
+        )}
       </div>
+      )}
 
-      {tab === 'hr' && <>
+      {!canSeeHr && !canSeeProcess && (
+        <div style={{ padding: '60px 24px', textAlign: 'center', color: C.muted }}>
+          <p style={{ fontSize: 14 }}>你的角色尚未開放任何戰情儀表板分頁。如需檢視，請聯繫管理員於「系統設定 → 權限」開通。</p>
+        </div>
+      )}
+
+      {effectiveTab === 'hr' && <>
       {/* ─── KPI Bar (HR) ─── */}
       <div style={{
         display: 'grid',
@@ -1309,7 +1329,7 @@ export default function TeamDashboard() {
       })()}
       </>}
 
-      {tab === 'process' && <>
+      {effectiveTab === 'process' && <>
       {/* ─── KPI Bar (Process) ─── */}
       <div style={{
         display: 'grid',

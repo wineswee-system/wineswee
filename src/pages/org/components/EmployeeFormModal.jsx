@@ -245,14 +245,7 @@ export default function EmployeeFormModal({
             </select>
           </Field>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <Field label="銀行代碼">
-            <input className="form-input" type="text" style={{ width: '100%' }} placeholder="004" maxLength={7} value={form.bank_code} onChange={e => set('bank_code', e.target.value)} />
-          </Field>
-          <Field label="銀行帳號">
-            <input className="form-input" type="text" style={{ width: '100%' }} placeholder="帳戶號碼" value={form.bank_account} onChange={e => set('bank_account', e.target.value)} />
-          </Field>
-        </div>
+        {/* 銀行帳號已移到「薪資管理 → 匯入銀行帳號」(安全表，只 admin 可讀寫) */}
       </div>
 
       {/* 薪資資訊 */}

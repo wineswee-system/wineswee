@@ -293,15 +293,8 @@ export default function HrTabContent({
             )}
           </div>
 
-          <SectionTitle icon="🏦" text="銀行帳戶" />
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <div><div style={L}>銀行名稱</div><input className="form-input" style={{ width: '100%' }} placeholder="例：台灣銀行" value={form.bank_name || ''} onChange={e => set('bank_name', e.target.value)} readOnly={!isAdmin} /></div>
-            <div><div style={L}>銀行代碼</div><input className="form-input" style={{ width: '100%' }} value={form.bank_code || '004'} onChange={e => set('bank_code', e.target.value)} readOnly={!isAdmin} /></div>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <div><div style={L}>分行名稱</div><input className="form-input" style={{ width: '100%' }} placeholder="例：忠孝分行" value={form.bank_branch || ''} onChange={e => set('bank_branch', e.target.value)} readOnly={!isAdmin} /></div>
-            <div><div style={L}>帳號</div><input className="form-input" style={{ width: '100%' }} value={isAdmin ? (form.bank_account || '') : maskBank(form.bank_account)} onChange={e => set('bank_account', e.target.value)} readOnly={!isAdmin} /></div>
-          </div>
+          {/* 銀行帳戶已移到「薪資管理 → 匯入銀行帳號」(存安全表 employee_bank_accounts，
+              只 admin 可讀寫;不再寫 employees.bank_*，避免全公司可讀的個資外洩) */}
 
           {/* 存摺封面上傳 */}
           {isAdmin && (

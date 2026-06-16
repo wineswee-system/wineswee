@@ -416,6 +416,35 @@ export default function Salary() {
   const handleBatchSave        = () => handleBatchSaveCore('finalized')
   const handleBatchSaveAsDraft = () => handleBatchSaveCore('draft')
 
+  // ── 匯出代發薪匯款檔（admin）──
+  // 本月 salary_records 實領 + employee_bank_accounts 帳號 → CSV(BOM,Excel 不亂碼)
+  const handleExportTransfer = async () => {
+    const { data, error } = await supabase.rpc('get_payroll_transfer_file', { p_period: month, p_org: orgId })
+    if (error) { toast.error('匯出失敗：' + error.message); return }
+    const all = Array.isArray(data) ? data : []
+    if (all.length === 0) { toast.error('本月沒有薪資資料'); return }
+    const pay = all.filter(r => r.has_account && Number(r.amount) > 0)
+    const missing = all.filter(r => !r.has_account)
+    if (pay.length === 0) { toast.error('沒有可匯款的資料(都缺帳號?)'); return }
+
+    const cell = (v) => { const s = String(v ?? ''); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s }
+    const header = ['員工編號', '戶名', '銀行代號', '分行', '帳號', '金額']
+    const lines = [header.join(',')]
+    for (const r of pay) {
+      const code = (String(r.bank_code || '').match(/\d+/) || [''])[0]   // "822 中國信託" → "822"
+      lines.push([r.employee_number || '', r.name || '', code, r.bank_branch || '', r.bank_account || '', Math.round(Number(r.amount) || 0)].map(cell).join(','))
+    }
+    const csv = '﻿' + lines.join('\r\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = `代發薪_${month}.csv`; a.click()
+    URL.revokeObjectURL(url)
+
+    if (missing.length) toast.error(`已匯出 ${pay.length} 筆;⚠️ ${missing.length} 人缺帳號未列入：${missing.map(m => m.name).join('、')}`)
+    else toast.success(`已匯出 ${pay.length} 筆代發薪資料`)
+  }
+
   if (loading) return <LoadingSpinner />
   if (error) return (
     <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}>
@@ -458,6 +487,11 @@ export default function Salary() {
               {isAdmin && (
                 <button className="btn btn-secondary" onClick={() => setShowBankImport(true)}>
                   <Landmark size={14} /> 匯入銀行帳號
+                </button>
+              )}
+              {isAdmin && (
+                <button className="btn btn-secondary" onClick={handleExportTransfer}>
+                  <Download size={14} /> 匯出代發薪檔
                 </button>
               )}
             </>}

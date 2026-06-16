@@ -18,7 +18,8 @@ const LEVELS = [
 ]
 
 export default function Departments() {
-  const { profile } = useAuth()
+  const { profile, role, hasPermission } = useAuth()
+  const canEditStructure = role?.name === 'admin' || role?.name === 'super_admin' || hasPermission('org.structure.edit')
   const [departments, setDepartments] = useState([])
   const [employees, setEmployees] = useState([])
   const [sections, setSections] = useState([])
@@ -183,7 +184,7 @@ export default function Departments() {
             <h2><span className="header-icon">🗂️</span> 部門</h2>
             <p>公司部門設定與管理</p>
           </div>
-          <button className="btn btn-primary" onClick={openCreate}><Plus size={14} /> 新增部門</button>
+          {canEditStructure && <button className="btn btn-primary" onClick={openCreate}><Plus size={14} /> 新增部門</button>}
         </div>
       </div>
 
@@ -231,13 +232,13 @@ export default function Departments() {
                   <td style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{d.description}</td>
                   <td>
                     <div style={{ display: 'flex', gap: 4 }}>
-                      <button className="btn btn-sm btn-secondary" onClick={() => openEdit(d)}><Pencil size={12} /></button>
+                      {canEditStructure && <button className="btn btn-sm btn-secondary" onClick={() => openEdit(d)}><Pencil size={12} /></button>}
                       <button className="btn btn-sm btn-secondary" onClick={async () => {
                         setHistoryDept(d)
                         const { data } = await getDeptManagerHistory(d.id)
                         setMgrHistory(data || [])
                       }}><History size={12} /></button>
-                      <button className="btn btn-sm btn-secondary" onClick={() => handleDelete(d)} style={{ color: 'var(--accent-red)' }}><Trash2 size={12} /></button>
+                      {canEditStructure && <button className="btn btn-sm btn-secondary" onClick={() => handleDelete(d)} style={{ color: 'var(--accent-red)' }}><Trash2 size={12} /></button>}
                     </div>
                   </td>
                 </tr>

@@ -5,6 +5,7 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import { empLabel } from '../../lib/empLabel'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
+import { useAuth } from '../../contexts/AuthContext'
 
 import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
@@ -12,6 +13,8 @@ import { geocodeAddress } from '../../lib/geocoding'
 const EMPTY_FORM = { name: '', company: '', company_id: '', address: '', phone: '', manager: '', manager_id: '', status: '營運中', store_code: '', store_type: 'retail', city: '', lat: '', lng: '', clock_radius: 150, allowed_wifi: '', late_tolerance_minutes: 5, early_clock_minutes: 30, clock_in_method: 'any' }
 
 export default function Locations() {
+  const { role, hasPermission } = useAuth()
+  const canEditStructure = role?.name === 'admin' || role?.name === 'super_admin' || hasPermission('org.structure.edit')
   const [stores, setStores] = useState([])
   const [employees, setEmployees] = useState([])
   const [companies, setCompanies] = useState([])
@@ -139,7 +142,7 @@ export default function Locations() {
             <h2><span className="header-icon">📍</span> 門市</h2>
             <p>門市地點管理</p>
           </div>
-          <button className="btn btn-primary" onClick={openCreate}><Plus size={14} /> 新增門市</button>
+          {canEditStructure && <button className="btn btn-primary" onClick={openCreate}><Plus size={14} /> 新增門市</button>}
         </div>
       </div>
 
@@ -191,10 +194,12 @@ export default function Locations() {
                     </span>
                   </td>
                   <td>
+                    {canEditStructure ? (
                     <div style={{ display: 'flex', gap: 4 }}>
                       <button className="btn btn-sm btn-secondary" onClick={() => openEdit(s)}><Pencil size={12} /></button>
                       <button className="btn btn-sm btn-secondary" onClick={() => handleDelete(s)} style={{ color: 'var(--accent-red)' }}><Trash2 size={12} /></button>
                     </div>
+                    ) : <span style={{ color: 'var(--text-muted)' }}>—</span>}
                   </td>
                 </tr>
               ))}

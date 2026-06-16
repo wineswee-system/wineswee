@@ -96,7 +96,7 @@ export default function FormBuilder() {
             <h2>表單建立器</h2>
             <p>建立 / 維護自訂表單模板，員工會在 HR 表單中心看到</p>
           </div>
-          <button className="btn btn-primary" onClick={openNew}><Plus size={14} /> 新增模板</button>
+          {isAdmin && <button className="btn btn-primary" onClick={openNew}><Plus size={14} /> 新增模板</button>}
         </div>
       </div>
 
@@ -139,12 +139,14 @@ export default function FormBuilder() {
                     <td style={{ fontSize: 12 }}>{t.created_at?.slice(0, 10)}</td>
                     <td>
                       <div style={{ display: 'flex', gap: 4 }}>
+                        {isAdmin ? (<>
                         <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px' }} onClick={() => openEdit(t)}>
                           <Pencil size={11} /> 編輯
                         </button>
                         <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px', color: 'var(--accent-red)' }} onClick={() => handleDelete(t)}>
                           <Trash2 size={11} /> 刪除
                         </button>
+                        </>) : <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>—</span>}
                       </div>
                     </td>
                   </tr>

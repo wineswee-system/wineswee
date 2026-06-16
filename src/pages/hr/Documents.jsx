@@ -10,7 +10,8 @@ import { confirm } from '../../lib/confirm'
 const CATEGORIES = ['報告', '制度規章', '表單', '合約範本', '教育訓練', '其他']
 
 export default function Documents() {
-  const { profile } = useAuth()
+  const { profile, role, hasPermission } = useAuth()
+  const canDeleteDoc = role?.name === 'admin' || role?.name === 'super_admin' || hasPermission('doc.delete')
   const orgId = profile?.organization_id
   const [docs, setDocs] = useState([])
   const [loading, setLoading] = useState(true)
@@ -103,7 +104,7 @@ export default function Documents() {
                   <td>
                     <div style={{ display: 'flex', gap: 4 }}>
                       {d.url && <a href={d.url} target="_blank" rel="noreferrer" className="btn btn-sm btn-secondary"><Download size={12} /></a>}
-                      <button className="btn btn-sm btn-secondary" style={{ color: 'var(--accent-red)' }} onClick={() => handleDelete(d.id)}><Trash2 size={12} /></button>
+                      {canDeleteDoc && <button className="btn btn-sm btn-secondary" style={{ color: 'var(--accent-red)' }} onClick={() => handleDelete(d.id)}><Trash2 size={12} /></button>}
                     </div>
                   </td>
                 </tr>

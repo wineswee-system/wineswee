@@ -12,7 +12,7 @@ import { confirm } from '../../lib/confirm'
 export default function ScheduleBuilder() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { profile: authProfile } = useAuth()
+  const { profile: authProfile, hasPermission } = useAuth()
 
   const state = location.state || {}
   const { store, storeId, month, range, workHourSystem, restDayMap = {} } = state
@@ -26,7 +26,7 @@ export default function ScheduleBuilder() {
   const [calendarSubView, setCalendarSubView] = useState('month')
   const [publishing, setPublishing] = useState(false)
   const [publishStatusRows, setPublishStatusRows] = useState([])  // 整個 cycle 範圍的發布狀態
-  const isAdmin = ['admin', 'super_admin'].includes(authProfile?.role)
+  const isAdmin = ['admin', 'super_admin'].includes(authProfile?.role) || hasPermission('schedule.edit')
 
   // 儲存狀態 indicator — 給使用者看「✓ 已儲存」/「💾 儲存中...」/「⚠️ 失敗」
   // 預設 'saved' — 剛從 DB 載入的就是儲存狀態，使用者一進來就看得到「✓ 已儲存」

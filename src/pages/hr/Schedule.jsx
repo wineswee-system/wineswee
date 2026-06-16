@@ -49,10 +49,11 @@ function buildShiftTypes(dbShifts) {
 export default function Schedule() {
 
   const navigate = useNavigate()
-  const { role: authRole, profile: authProfile } = useAuth()
+  const { role: authRole, profile: authProfile, hasPermission } = useAuth()
   const userRole = authRole?.name || 'store_staff'
-  const canEditSchedule = ['admin', 'super_admin', 'manager'].includes(userRole)
-  const canUseAISchedule = ['admin', 'super_admin', 'manager'].includes(userRole)
+  // 角色預設 OR 被授予對應權限（權限設定頁可分人）
+  const canEditSchedule = ['admin', 'super_admin', 'manager'].includes(userRole) || hasPermission('schedule.edit')
+  const canUseAISchedule = ['admin', 'super_admin', 'manager'].includes(userRole) || hasPermission('schedule.algo')
   const isSuperAdmin = userRole === 'super_admin'
   const userPosition = authProfile?.position || ''
   const isStoreMgr = !canEditSchedule && userPosition.includes('店長')

@@ -19,6 +19,12 @@ src/graphify-out/
 .tmp_*.csv
 .tmp_*.sql
 
+# 員工銀行帳號名冊（敏感個資，絕不進版控）
+bank_accounts.csv
+*bank_account*.csv
+*薪轉*.csv
+*代發薪*.csv
+
 # Python
 __pycache__/
 *.pyc

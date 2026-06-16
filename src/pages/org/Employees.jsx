@@ -70,7 +70,12 @@ const PosSelect = ({ value, onChange }) => (
 )
 
 export default function Employees() {
-  const { profile } = useAuth()
+  const { profile, role, hasPermission } = useAuth()
+  // 權限旗標（admin 角色預設已含這些碼；super_admin 由 hasPermission 自動 true）
+  const isAdmin = role?.name === 'admin' || role?.name === 'super_admin'
+  const canEditEmp = isAdmin || hasPermission('org.employee.edit')        // 新增 / 匯入員工
+  const canDeleteEmp = isAdmin || hasPermission('org.employee.delete')    // 離職 / 復職
+  const canEditStructure = isAdmin || hasPermission('org.structure.edit') // 部門 / 組織編輯
   const [offboardingFor, setOffboardingFor] = useState(null)  // { employee, date, reason }
   const [showProxyMgmt, setShowProxyMgmt] = useState(false)
   const [employees, setEmployees] = useState([])
@@ -362,8 +367,8 @@ export default function Employees() {
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="btn btn-secondary" onClick={() => setShowProxyMgmt(true)}><ArrowRightLeft size={14} /> 代理管理</button>
-            <button className="btn btn-secondary" onClick={() => setShowCsvImport(true)}><Upload size={14} /> 匯入指派 CSV</button>
-            <button className="btn btn-primary" onClick={() => setShowModal(true)}><Plus size={14} /> 新增員工（到職）</button>
+            {canEditEmp && <button className="btn btn-secondary" onClick={() => setShowCsvImport(true)}><Upload size={14} /> 匯入指派 CSV</button>}
+            {canEditEmp && <button className="btn btn-primary" onClick={() => setShowModal(true)}><Plus size={14} /> 新增員工（到職）</button>}
           </div>
         </div>
       </div>
@@ -401,6 +406,7 @@ export default function Employees() {
                     <Building2 size={16} style={{ color: 'var(--accent-cyan)' }} />
                     <span style={{ fontSize: 15, fontWeight: 700 }}>{dept.name}</span>
                   </div>
+                  {canEditStructure && (
                   <div style={{ display: 'flex', gap: 4 }}>
                     <button className="btn btn-sm btn-secondary" style={{ padding: '4px 6px' }}
                       onClick={() => { setEditingDept(dept); setDeptForm({ name: dept.name || '', manager_id: dept.manager_id ? String(dept.manager_id) : '', description: dept.description || '', level: dept.level || '部', parent_department_id: dept.parent_department_id ? String(dept.parent_department_id) : '' }); setShowDeptModal(true) }}>
@@ -411,6 +417,7 @@ export default function Employees() {
                       <Trash2 size={12} />
                     </button>
                   </div>
+                  )}
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>
                   <span style={{ fontWeight: 600, color: 'var(--text-muted)' }}>主管</span>
@@ -585,7 +592,7 @@ export default function Employees() {
                           <Mail size={12} /> 邀請
                         </button>
                       )}
-                      {e.status === '在職' ? (
+                      {canDeleteEmp && (e.status === '在職' ? (
                         <button className="btn btn-sm btn-secondary" style={{ width: 'auto', padding: '4px 10px', fontSize: 11, color: 'var(--accent-red)' }}
                           onClick={ev => { ev.stopPropagation(); openResign(e) }}>
                           <UserMinus size={12} /> 離職
@@ -595,7 +602,7 @@ export default function Employees() {
                           onClick={ev => { ev.stopPropagation(); openRehire(e) }}>
                           <UserPlus size={12} /> 復職
                         </button>
-                      )}
+                      ))}
                     </div>
                   </td>
                 </tr>

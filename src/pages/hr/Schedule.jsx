@@ -1266,25 +1266,14 @@ export default function Schedule() {
                 <button
                   className="btn btn-primary"
                   style={{
-                    width: 'auto', padding: '8px 14px', borderRadius: '8px 0 0 8px',
+                    width: 'auto', padding: '8px 14px', borderRadius: 8,
                     background: 'linear-gradient(135deg, var(--accent-purple), #7c3aed)',
                     display: 'flex', alignItems: 'center', gap: 6,
                   }}
                   onClick={() => setShowWizardDropdown(v => !v)}
                 >
                   <Wand2 size={14} /> 排班精靈
-                </button>
-                <button
-                  className="btn btn-primary"
-                  style={{
-                    width: 'auto', padding: '8px 8px', borderRadius: '0 8px 8px 0',
-                    background: 'linear-gradient(135deg, #7c3aed, #6d28d9)',
-                    borderLeft: '1px solid rgba(255,255,255,0.2)',
-                    display: 'flex', alignItems: 'center',
-                  }}
-                  onClick={(e) => { e.stopPropagation(); setShowWizardDropdown(v => !v) }}
-                >
-                  <ChevronDown size={14} />
+                  <ChevronDown size={14} style={{ marginLeft: 2, opacity: 0.85, transform: showWizardDropdown ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
                 </button>
                 {showWizardDropdown && (
                   <div style={{

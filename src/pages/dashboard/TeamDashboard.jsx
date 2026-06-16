@@ -350,6 +350,8 @@ export default function TeamDashboard() {
   const [last7Att, setLast7Att] = useState([])  // [{date, normal, late, leave}]
   const [taskStatusDist, setTaskStatusDist] = useState({})  // status -> count
   const [alerts, setAlerts] = useState([])
+  const [hrStats, setHrStats] = useState(null)   // fn_hr_analytics（離職率/加班/薪資）
+  const [hrDash, setHrDash] = useState(null)      // get_hr_dashboard（到期風險）
   const [loading, setLoading] = useState(true)
   const [refreshTick, setRefreshTick] = useState(0)
 
@@ -582,6 +584,17 @@ export default function TeamDashboard() {
         type: 'birthday', icon: '🎂', color: C.purple,
         text: `生日：${e.name}（${fmtDate(e.birthday)}）`,
       }))
+
+    // ── HR 戰情：離職率/加班/薪資(fn_hr_analytics) + 到期風險(get_hr_dashboard) ──
+    // 失敗不影響既有儀表板
+    try {
+      const { data: hs } = await supabase.rpc('fn_hr_analytics', { p_org_id: orgId })
+      setHrStats(hs || null)
+    } catch (e) { console.warn('[dashboard] fn_hr_analytics:', e) }
+    try {
+      const { data: hd } = await supabase.rpc('get_hr_dashboard', { p_org: orgId })
+      setHrDash(hd || null)
+    } catch (e) { console.warn('[dashboard] get_hr_dashboard:', e) }
 
     setAlerts(al)
     setLoading(false)
@@ -986,6 +999,13 @@ export default function TeamDashboard() {
                  subColor={kpi.lateCount > yesterdayLateCount ? C.red : C.green}
                  color={C.red} colorDim={C.redDim}
                  onClick={() => navigate('/hr/attendance')} />
+        <KpiCard icon={TrendingUp} label="滾動離職率"
+                 value={hrStats?.attrition?.rate_pct != null ? hrStats.attrition.rate_pct : '—'}
+                 suffix={hrStats?.attrition?.rate_pct != null ? '%' : ''}
+                 sub={hrStats?.attrition?.ytd_terms != null ? `今年離職 ${hrStats.attrition.ytd_terms} 人` : '近 12 個月'}
+                 color={(hrStats?.attrition?.rate_pct ?? 0) > 10 ? C.red : (hrStats?.attrition?.rate_pct ?? 0) > 5 ? C.orange : C.green}
+                 colorDim={(hrStats?.attrition?.rate_pct ?? 0) > 10 ? C.redDim : (hrStats?.attrition?.rate_pct ?? 0) > 5 ? C.orangeDim : C.greenDim}
+                 onClick={() => navigate('/analytics/HRAnalytics')} />
       </div>
 
       {/* ─── AI 智慧洞察（Gemini）─── */}
@@ -1080,6 +1100,33 @@ export default function TeamDashboard() {
           )}
         </div>
       </div>
+
+      {/* ─── 到期提醒（特休/外籍證件;有資料才顯示，避免空卡）─── */}
+      {(hrDash?.leave_expiry?.people > 0 || hrDash?.permit_expiry?.people > 0) && (
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16, marginBottom: 16 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>⏰ 到期提醒</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+            {hrDash?.leave_expiry?.people > 0 && (
+              <div onClick={() => navigate('/hr/leave-balances')} style={{ cursor: 'pointer', padding: 12, borderRadius: 8, background: C.bg2 }}>
+                <div style={{ fontSize: 13, color: C.muted }}>特休將到期</div>
+                <div style={{ fontSize: 20, fontWeight: 800, color: hrDash.leave_expiry.crit > 0 ? C.red : C.orange }}>
+                  {hrDash.leave_expiry.people} 人 · {hrDash.leave_expiry.total_days} 天
+                </div>
+                <div style={{ fontSize: 12, color: C.muted }}>{hrDash.thresholds?.leave_warn} 天內到期</div>
+              </div>
+            )}
+            {hrDash?.permit_expiry?.people > 0 && (
+              <div onClick={() => navigate('/hr/foreign-workers')} style={{ cursor: 'pointer', padding: 12, borderRadius: 8, background: C.bg2 }}>
+                <div style={{ fontSize: 13, color: C.muted }}>外籍證件將到期</div>
+                <div style={{ fontSize: 20, fontWeight: 800, color: hrDash.permit_expiry.crit > 0 ? C.red : C.orange }}>
+                  {hrDash.permit_expiry.people} 人
+                </div>
+                <div style={{ fontSize: 12, color: C.muted }}>{hrDash.thresholds?.permit_warn} 天內</div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ─── Charts row：近 7 天出勤 + 部門人力 ─── */}
       <DashboardCharts last7Att={last7Att} deptCounts={deptCounts} />

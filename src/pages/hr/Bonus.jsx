@@ -12,7 +12,8 @@ import { toast } from '../../lib/toast'
 const ROLE_TYPES = ['業務', '倉管', '內勤採購', '跨部門']
 
 export default function Bonus() {
-  const { profile } = useAuth()
+  const { profile, role, hasPermission } = useAuth()
+  const canCompute = role?.name === 'admin' || role?.name === 'super_admin' || hasPermission('bonus.compute')
   const [tab, setTab] = useState('業務')
   const [records, setRecords] = useState([])
   const [settings, setSettings] = useState([])
@@ -178,8 +179,8 @@ export default function Bonus() {
           <div><h2><span className="header-icon">💰</span> 績效獎金管理</h2><p>CRM × WMS × ERP 三系統驅動的獎金計算</p></div>
           <div style={{ display: 'flex', gap: 8 }}>
             <input type="month" className="form-input" value={period} onChange={e => setPeriod(e.target.value)} style={{ fontSize: 13 }} />
-            <button className="btn btn-secondary" onClick={() => setShowSettingModal(true)}><Settings size={14} /> 指標設定</button>
-            <button className="btn btn-primary" onClick={() => setShowRecordModal(true)}><Plus size={14} /> 發放獎金</button>
+            {canCompute && <button className="btn btn-secondary" onClick={() => setShowSettingModal(true)}><Settings size={14} /> 指標設定</button>}
+            {canCompute && <button className="btn btn-primary" onClick={() => setShowRecordModal(true)}><Plus size={14} /> 發放獎金</button>}
           </div>
         </div>
       </div>

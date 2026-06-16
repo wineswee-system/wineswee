@@ -29,7 +29,8 @@ const LEGAL_REASONS = [
 ]
 
 export default function Severance() {
-  const { profile } = useAuth()
+  const { profile, role, hasPermission } = useAuth()
+  const canExecute = role?.name === 'admin' || role?.name === 'super_admin' || hasPermission('severance.execute')
   const [records, setRecords] = useState([])
   const [employees, setEmployees] = useState([])
   const [loading, setLoading] = useState(true)
@@ -171,9 +172,9 @@ export default function Severance() {
             <h2><span className="header-icon">⚖️</span> 資遣管理</h2>
             <p>勞退新制：服務年資 × 0.5 月平均工資（封頂 6 個月）+ 預告工資（10/20/30 日）</p>
           </div>
-          <button className="btn btn-primary" onClick={() => setShowCalcModal(true)}>
+          {canExecute && <button className="btn btn-primary" onClick={() => setShowCalcModal(true)}>
             <Plus size={14} /> 新增資遣計算
-          </button>
+          </button>}
         </div>
       </div>
 
@@ -257,7 +258,7 @@ export default function Severance() {
                     <td><span style={{ padding: '3px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700, background: sb.bg, color: sb.color }}>{sb.text}</span></td>
                     <td>
                       <div style={{ display: 'flex', gap: 4 }}>
-                        {r.status === 'pending' && (
+                        {canExecute && r.status === 'pending' && (
                           <>
                             <AsyncButton className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px', color: 'var(--accent-green)' }} onClick={() => handleMarkPaid(r)} busyLabel="處理中…">
                               <Check size={11} /> 標已付

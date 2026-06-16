@@ -35,7 +35,8 @@ const emptyForm = {
 }
 
 export default function LegalDeductions() {
-  const { profile } = useAuth()
+  const { profile, role, hasPermission } = useAuth()
+  const canEdit = role?.name === 'admin' || role?.name === 'super_admin' || hasPermission('legal_deduction.edit')
   const [items, setItems] = useState([])
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
@@ -215,9 +216,9 @@ export default function LegalDeductions() {
               法院強制扣薪管理；薪資結算時依此自動扣款
             </p>
           </div>
-          <button className="btn btn-primary" onClick={openAdd} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {canEdit && <button className="btn btn-primary" onClick={openAdd} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <Plus size={16} /> 新增法扣
-          </button>
+          </button>}
         </div>
       </div>
 
@@ -311,6 +312,7 @@ export default function LegalDeductions() {
                     <td style={{ padding: '10px 14px', fontSize: 12, color: 'var(--text-muted)' }}>{item.case_number || '—'}</td>
                     <td style={{ padding: '10px 14px' }}>
                       <div style={{ display: 'flex', gap: 4 }}>
+                        {canEdit ? (<>
                         <button onClick={() => openEdit(item)} title="編輯"
                           style={{ background: 'none', border: 'none', color: 'var(--accent-cyan)', cursor: 'pointer', padding: 4 }}>
                           <Edit2 size={14} />
@@ -333,6 +335,7 @@ export default function LegalDeductions() {
                             <Trash2 size={14} />
                           </button>
                         )}
+                        </>) : <span style={{ color: 'var(--text-muted)' }}>—</span>}
                       </div>
                     </td>
                   </tr>

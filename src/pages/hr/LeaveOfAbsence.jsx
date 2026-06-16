@@ -10,7 +10,7 @@ import Modal, { Field } from '../../components/Modal'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { toast } from '../../lib/toast'
 import {
-  findFormChainByApplicantType, loadChainSteps, approveChainStep,
+  findFormChainByApplicantType, loadChainStepsBatch, approveChainStep,
 } from '../../lib/hrChain'
 import ApprovalDetailModal from '../../components/ApprovalDetailModal'
 import { printLoaSignOff } from '../../lib/signOffAdapters'
@@ -131,11 +131,7 @@ export default function LeaveOfAbsence() {
 
     const uniqChainIds = [...new Set((r || []).map(x => x.approval_chain_id).filter(Boolean))]
     if (chain?.id) uniqChainIds.push(chain.id)
-    const stepMap = {}
-    await Promise.all([...new Set(uniqChainIds)].map(async (cid) => {
-      stepMap[cid] = await loadChainSteps(cid)
-    }))
-    setChainSteps(stepMap)
+    setChainSteps(await loadChainStepsBatch([...new Set(uniqChainIds)]))
     setLoading(false)
   }
   useEffect(() => { load() }, [profile?.id, isAdmin, profile?.organization_id])

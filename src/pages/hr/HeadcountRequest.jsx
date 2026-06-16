@@ -10,7 +10,7 @@ import Modal, { Field } from '../../components/Modal'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { toast } from '../../lib/toast'
 import {
-  findActiveChainByCategory, loadChainSteps,
+  findActiveChainByCategory, loadChainStepsBatch,
   resolveFirstApprovers, approveChainStep, notifyApprovers,
 } from '../../lib/hrChain'
 import ApprovalDetailModal from '../../components/ApprovalDetailModal'
@@ -209,11 +209,7 @@ export default function HeadcountRequest() {
 
     const uniqChainIds = [...new Set((r || []).map(x => x.approval_chain_id).filter(Boolean))]
     if (chain?.id) uniqChainIds.push(chain.id)
-    const stepMap = {}
-    await Promise.all([...new Set(uniqChainIds)].map(async (cid) => {
-      stepMap[cid] = await loadChainSteps(cid)
-    }))
-    setChainSteps(stepMap)
+    setChainSteps(await loadChainStepsBatch([...new Set(uniqChainIds)]))
     setLoading(false)
   }
 

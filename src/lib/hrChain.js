@@ -87,6 +87,25 @@ export async function loadChainSteps(chainId) {
 }
 
 /**
+ * 一次抓多條 chain 的 steps（取代列表頁「每個 chain 各查一次」的 N+1）
+ * @param {Array<number>} chainIds
+ * @returns {Promise<Record<number, Array>>} { chainId: [steps...] }
+ */
+export async function loadChainStepsBatch(chainIds) {
+  const ids = [...new Set((chainIds || []).filter(Boolean))]
+  if (ids.length === 0) return {}
+  const { data } = await supabase
+    .from('approval_chain_steps')
+    .select('id, chain_id, step_order, label, role_name, target_type, target_emp_id, target_dept_id, target_role_id')
+    .in('chain_id', ids)
+    .order('chain_id', { ascending: true })
+    .order('step_order', { ascending: true })
+  const map = {}
+  for (const s of (data || [])) { (map[s.chain_id] ||= []).push(s) }
+  return map
+}
+
+/**
  * 取一筆單目前等待簽核的人員清單
  */
 export async function resolveFirstApprovers(table, requestId) {

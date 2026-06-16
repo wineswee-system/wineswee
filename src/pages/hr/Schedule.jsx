@@ -110,6 +110,7 @@ export default function Schedule() {
   // 自動建立精靈完成後，標記「待自動跑排班代碼」；下方 effect 等 cycle + schedules reload 就緒才觸發
   const [pendingAutoCode, setPendingAutoCode] = useState(false)
   const autoCodeSawLoadingRef = useRef(false)  // 確保等過 schedules reload（含剛寫入的休假）才排，避免漏假
+  const pendingAutoStoreIdRef = useRef(null)   // 目標門市 id：cycle 週期是用門市設定算的，要等該門市設定載入才正確
   const [aiProgress, setAiProgress] = useState('') // status message during AI run
   // Schedule Wizard
   const [showWizard, setShowWizard] = useState(false)
@@ -909,7 +910,8 @@ export default function Schedule() {
       // Switch to cycle view so the full cross-month period (e.g. 4-week Jun 26~Jul 23) is built
       setViewMode('cycle')
       setCycleProbeDate(primaryRange.start)
-      // 自動建立：標記 pending，下方 effect 等 cycle 算好後自動跑「排班代碼」演算法（免再回主畫面按）
+      // 自動建立：記住目標門市 id（cycle 週期要用「該門市」設定算），標記 pending
+      pendingAutoStoreIdRef.current = primary.storeId
       setPendingAutoCode(true)
       toast.success(`門市「${primary.store}」已設定，開始自動排班…`)
     }
@@ -998,12 +1000,15 @@ export default function Schedule() {
   useEffect(() => {
     if (!pendingAutoCode) return
     if (!(viewMode === 'cycle' && storeFilter && cycleDates && cycleInfo)) return
-    if (scheduleLoading) { autoCodeSawLoadingRef.current = true; return }  // reload 進行中 → 等
+    // cycle 週期是用門市設定(storeSettings)算的 → 必須等「目標門市」設定載入完，否則會用上一個門市的
+    // 工時制度算出錯誤週期（例：4 週變形被算成 5 週、範圍錯位 → 一堆假性違規）。
+    if (storeSettings?.store_id !== pendingAutoStoreIdRef.current) return
+    if (scheduleLoading) { autoCodeSawLoadingRef.current = true; return }  // schedules reload 進行中 → 等
     if (!autoCodeSawLoadingRef.current) return  // setCycleProbeDate 觸發的 reload 尚未開始 → 再等一拍
     autoCodeSawLoadingRef.current = false
     setPendingAutoCode(false)
     handleCodeSchedule({ skipConfirm: true })
-  }, [pendingAutoCode, viewMode, storeFilter, cycleDates, cycleInfo, scheduleLoading]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [pendingAutoCode, viewMode, storeFilter, cycleDates, cycleInfo, scheduleLoading, storeSettings]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load store settings + events whenever storeFilter changes
   useEffect(() => {

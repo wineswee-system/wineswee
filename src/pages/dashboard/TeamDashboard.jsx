@@ -1192,6 +1192,60 @@ export default function TeamDashboard() {
         )
       })()}
 
+      {/* ─── 簽核效率：我的待簽分佈 + 卡關 ─── */}
+      {pendingUnified.length > 0 && (() => {
+        const byKind = {}
+        for (const p of pendingUnified) {
+          if (!byKind[p.kindLabel]) byKind[p.kindLabel] = { count: 0, color: p.kindColor, target: p.target, maxDays: 0 }
+          byKind[p.kindLabel].count += 1
+          byKind[p.kindLabel].maxDays = Math.max(byKind[p.kindLabel].maxDays, p.daysOpen || 0)
+        }
+        const maxStuck = Math.max(0, ...pendingUnified.map(p => p.daysOpen || 0))
+        return (
+          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16, marginBottom: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <div style={{ fontSize: 14, fontWeight: 700 }}>
+                📋 待簽分佈（{pendingUnified.length} 件）
+                {maxStuck >= 3 && <span style={{ marginLeft: 8, fontSize: 12, color: C.red }}>最久卡 {maxStuck} 天</span>}
+              </div>
+              <button onClick={() => navigate('/process/approvals')} style={{ background: 'transparent', border: 'none', color: C.cyan, cursor: 'pointer', fontSize: 13 }}>全部 ›</button>
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {Object.entries(byKind).map(([k, v]) => (
+                <div key={k} onClick={() => navigate(v.target)} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 20, background: C.bg2, border: `1px solid ${v.maxDays >= 3 ? C.red : C.borderSubtle}` }}>
+                  <span style={{ fontSize: 13 }}>{k}</span>
+                  <span style={{ fontSize: 14, fontWeight: 800, color: v.color }}>{v.count}</span>
+                  {v.maxDays >= 3 && <span style={{ fontSize: 11, color: C.red }}>🔴{v.maxDays}天</span>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* ─── 流動率：近 12 月離職趨勢 ─── */}
+      {hrStats?.attrition?.by_month?.length > 0 && (() => {
+        const bm = hrStats.attrition.by_month
+        const maxC = Math.max(1, ...bm.map(m => Number(m.count) || 0))
+        return (
+          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16, marginBottom: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <div style={{ fontSize: 14, fontWeight: 700 }}>📉 近 12 月離職趨勢</div>
+              <button onClick={() => navigate('/analytics/HRAnalytics')} style={{ background: 'transparent', border: 'none', color: C.cyan, cursor: 'pointer', fontSize: 13 }}>分析 ›</button>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 90 }}>
+              {bm.map((m, i) => (
+                <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                  <div style={{ fontSize: 10, color: C.muted }}>{Number(m.count) || 0}</div>
+                  <div style={{ width: '70%', height: `${(Number(m.count) / maxC) * 60}px`, minHeight: Number(m.count) > 0 ? 3 : 0, background: C.cyan, borderRadius: 3 }} />
+                  <div style={{ fontSize: 9, color: C.muted }}>{String(m.month).slice(5)}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      })()}
+
       {/* ─── Charts row：近 7 天出勤 + 部門人力 ─── */}
       <DashboardCharts last7Att={last7Att} deptCounts={deptCounts} />
 

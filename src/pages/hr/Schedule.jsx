@@ -107,6 +107,9 @@ export default function Schedule() {
   const [showCompOff, setShowCompOff] = useState(false)
   // AI Draft workflow
   const [aiDraft, setAiDraft] = useState(null) // { assignments, reasoning, aiWarnings, violations, errors, warnings, meta }
+  // 自動建立精靈完成後，標記「待自動跑排班代碼」；下方 effect 等 cycle + schedules reload 就緒才觸發
+  const [pendingAutoCode, setPendingAutoCode] = useState(false)
+  const autoCodeSawLoadingRef = useRef(false)  // 確保等過 schedules reload（含剛寫入的休假）才排，避免漏假
   const [aiProgress, setAiProgress] = useState('') // status message during AI run
   // Schedule Wizard
   const [showWizard, setShowWizard] = useState(false)
@@ -906,7 +909,9 @@ export default function Schedule() {
       // Switch to cycle view so the full cross-month period (e.g. 4-week Jun 26~Jul 23) is built
       setViewMode('cycle')
       setCycleProbeDate(primaryRange.start)
-      toast.success(`已設定門市「${primary.store}」，請點擊 AI 自動排班`)
+      // 自動建立：標記 pending，下方 effect 等 cycle 算好後自動跑「排班代碼」演算法（免再回主畫面按）
+      setPendingAutoCode(true)
+      toast.success(`門市「${primary.store}」已設定，開始自動排班…`)
     }
   }
 
@@ -936,7 +941,7 @@ export default function Schedule() {
   }
 
   // ── Programmatic Schedule (no AI) ──
-  const handleCodeSchedule = async () => {
+  const handleCodeSchedule = async (opts = {}) => {
     if (!canUseAISchedule) { toast.error('您沒有使用排班功能的權限'); return }
     const isMonthly = viewMode === 'month'
     const isCycle = viewMode === 'cycle' && cycleDates && cycleInfo
@@ -952,7 +957,7 @@ export default function Schedule() {
       toast.error('⚠ 尚未設定班別定義，無法排班。\n\n請先到「門市設定」新增班別（例如：11-20 早班、15-0 晚班等）。')
       return
     }
-    if (!(await confirm({ message: `將使用程式演算法為 ${filtered.length} 位員工自動排班（${rangeLabel}）\n\n不使用 AI，純邏輯計算。產出為草稿，您可以審閱後再發布。` }))) return
+    if (!opts.skipConfirm && !(await confirm({ message: `將使用程式演算法為 ${filtered.length} 位員工自動排班（${rangeLabel}）\n\n不使用 AI，純邏輯計算。產出為草稿，您可以審閱後再發布。` }))) return
     setAutoScheduling(true)
     setAiDraft(null)
     setAiProgress('程式排班計算中...')
@@ -987,6 +992,18 @@ export default function Schedule() {
       setAutoScheduling(false)
     }
   }
+
+  // 自動建立精靈完成 → 等 cycle/門市就緒「且 schedules 已 reload（含剛寫入的休假）」才自動跑排班代碼，
+  // 免使用者再回主畫面按一次。等 reload 是因為演算法會從 schedules 讀已點的休假併入，搶在 reload 前會漏假。
+  useEffect(() => {
+    if (!pendingAutoCode) return
+    if (!(viewMode === 'cycle' && storeFilter && cycleDates && cycleInfo)) return
+    if (scheduleLoading) { autoCodeSawLoadingRef.current = true; return }  // reload 進行中 → 等
+    if (!autoCodeSawLoadingRef.current) return  // setCycleProbeDate 觸發的 reload 尚未開始 → 再等一拍
+    autoCodeSawLoadingRef.current = false
+    setPendingAutoCode(false)
+    handleCodeSchedule({ skipConfirm: true })
+  }, [pendingAutoCode, viewMode, storeFilter, cycleDates, cycleInfo, scheduleLoading]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load store settings + events whenever storeFilter changes
   useEffect(() => {

@@ -835,7 +835,7 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
                 <button className="btn btn-primary" disabled={isSaving}
                   style={{ padding: '14px', fontSize: 15, fontWeight: 700, background: 'linear-gradient(135deg, var(--accent-red), var(--accent-orange))', opacity: isSaving ? 0.7 : 1 }}
                   onClick={() => handleComplete('auto')}>
-                  {isSaving ? '建立草稿中...' : '✨ AI 自動排班 →'}
+                  {isSaving ? '建立草稿中...' : '⚙️ 自動排班（排班代碼）→'}
                 </button>
               )}
             </div>

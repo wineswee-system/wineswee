@@ -14,7 +14,8 @@ const ENROLL_STATUSES = ['已報名', '進行中', '已完成', '未通過']
 const emptyForm = { title: '', description: '', category: '一般', duration_hours: '1', instructor: '', max_enrollment: '30', status: '開課中' }
 
 export default function Training() {
-  const { profile } = useAuth()
+  const { profile, role, hasPermission } = useAuth()
+  const canManage = role?.name === 'admin' || role?.name === 'super_admin' || hasPermission('training.manage')
   const orgId = profile?.organization_id
   const [courses, setCourses] = useState([])
   const [loading, setLoading] = useState(true)
@@ -108,9 +109,9 @@ export default function Training() {
             <h2><span className="header-icon">🎓</span> 教育訓練</h2>
             <p>Training / LMS — 課程管理、報名、完課追蹤</p>
           </div>
-          <button className="btn btn-primary" onClick={() => { setForm(emptyForm); setEditingId(null); setShowModal(true) }}>
+          {canManage && <button className="btn btn-primary" onClick={() => { setForm(emptyForm); setEditingId(null); setShowModal(true) }}>
             <Plus size={14} /> 新增課程
-          </button>
+          </button>}
         </div>
       </div>
 
@@ -147,8 +148,8 @@ export default function Training() {
             </div>
             <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600, background: `color-mix(in srgb, ${catColor(course.category)} 15%, transparent)`, color: catColor(course.category) }}>{course.category}</span>
             <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600, background: course.status === '開課中' ? 'var(--accent-green-dim)' : 'var(--accent-red-dim)', color: course.status === '開課中' ? 'var(--accent-green)' : 'var(--text-secondary)' }}>{course.status}</span>
-            <button className="btn btn-secondary" style={{ padding: '4px 8px' }} onClick={e => { e.stopPropagation(); handleEdit(course) }}><Edit3 size={13} /></button>
-            <button className="btn btn-secondary" style={{ padding: '4px 8px', color: 'var(--accent-red)' }} onClick={e => { e.stopPropagation(); handleDelete(course.id) }}><Trash2 size={13} /></button>
+            {canManage && <button className="btn btn-secondary" style={{ padding: '4px 8px' }} onClick={e => { e.stopPropagation(); handleEdit(course) }}><Edit3 size={13} /></button>}
+            {canManage && <button className="btn btn-secondary" style={{ padding: '4px 8px', color: 'var(--accent-red)' }} onClick={e => { e.stopPropagation(); handleDelete(course.id) }}><Trash2 size={13} /></button>}
           </div>
 
           {expandedId === course.id && (
@@ -156,9 +157,9 @@ export default function Training() {
               {course.description && <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 12 }}>{course.description}</div>}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <span style={{ fontSize: 13, fontWeight: 600 }}>學員 ({enrollments.length} / {course.max_enrollment})</span>
-                <button className="btn btn-primary" style={{ fontSize: 12, padding: '4px 10px' }} onClick={() => setShowEnrollModal(true)}>
+                {canManage && <button className="btn btn-primary" style={{ fontSize: 12, padding: '4px 10px' }} onClick={() => setShowEnrollModal(true)}>
                   <Plus size={12} /> 新增學員
-                </button>
+                </button>}
               </div>
               {enrollments.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: 16, color: 'var(--text-secondary)', fontSize: 13 }}>尚無學員</div>

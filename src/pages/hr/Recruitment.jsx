@@ -436,7 +436,8 @@ function CandidatePanel({ c, interviews, allInterviews, jobs = [], evalTemplates
 
 // ──────────────────────────────────────────────
 export default function Recruitment() {
-  const { profile } = useAuth()
+  const { profile, role, hasPermission } = useAuth()
+  const canManage = role?.name === 'admin' || role?.name === 'super_admin' || hasPermission('recruit.manage')
   const orgId = profile?.organization_id
   const [tab, setTab] = useState('jobs')
 
@@ -851,17 +852,17 @@ export default function Recruitment() {
                 style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 ↓ 匯出 CSV（104）
               </button>
-              <button className="btn btn-primary" onClick={() => setShowJobModal(true)}>
+              {canManage && <button className="btn btn-primary" onClick={() => setShowJobModal(true)}>
                 <Plus size={14} /> 新增職缺
-              </button>
+              </button>}
             </div>
           )}
-          {tab === 'candidates' && (
+          {tab === 'candidates' && canManage && (
             <button className="btn btn-primary" onClick={() => setShowCandModal(true)}>
               <Plus size={14} /> 新增候選人
             </button>
           )}
-          {tab === 'headcount' && (
+          {tab === 'headcount' && canManage && (
             <button className="btn btn-primary" onClick={() => setShowHcModal(true)}>
               <Plus size={14} /> 新增需求單
             </button>

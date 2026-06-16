@@ -6,6 +6,7 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
+import { useAuth } from '../../contexts/AuthContext'
 
 import { toast } from '../../lib/toast'
 const STATUS_STYLES = {
@@ -18,6 +19,8 @@ const STATUS_STYLES = {
 const EMPTY_FORM = { employee: '', start_date: '', end_date: '', mentor: '', notes: '' }
 
 export default function ProbationTracker() {
+  const { role, hasPermission } = useAuth()
+  const canEval = role?.name === 'admin' || role?.name === 'super_admin' || hasPermission('probation.evaluate')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [records, setRecords] = useState([])
@@ -118,9 +121,9 @@ export default function ProbationTracker() {
             <p>追蹤試用期進度、評核、到期提醒</p>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn btn-primary" onClick={() => { setForm(EMPTY_FORM); setShowModal(true) }}>
+            {canEval && <button className="btn btn-primary" onClick={() => { setForm(EMPTY_FORM); setShowModal(true) }}>
               <Plus size={14} /> 新增試用紀錄
-            </button>
+            </button>}
           </div>
         </div>
       </div>
@@ -228,7 +231,7 @@ export default function ProbationTracker() {
                       </span>
                     </td>
                     <td>
-                      {r.status === '試用中' && (
+                      {canEval && r.status === '試用中' && (
                         <button className="btn btn-secondary" style={{ padding: '2px 10px', fontSize: 12 }} onClick={() => openEval(r)}>
                           <Edit2 size={12} /> 評核
                         </button>

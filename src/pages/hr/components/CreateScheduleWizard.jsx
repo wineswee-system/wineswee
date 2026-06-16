@@ -114,7 +114,6 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
       setSelectedPeriodIdx(0)
       setStoreStartOverrides({})
       setEmpRestMap({})
-      setShowPicker({})
       setIsSaving(false)
       setActiveStoreTab(null)
       setSessionId(null)

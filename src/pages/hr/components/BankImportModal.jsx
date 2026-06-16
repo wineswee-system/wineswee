@@ -76,7 +76,9 @@ export default function BankImportModal({ onClose }) {
   }
 
   const maskAcct = (a) => { if (!a) return ''; if (showFull) return a; return a.length <= 4 ? a : '••••' + a.slice(-4) }
-  const haveCount = roster.filter(e => e.employee_bank_accounts?.[0]?.bank_account).length
+  // employee_id 有 UNIQUE → PostgREST 巢狀關聯回「物件」(非陣列);相容兩種寫法
+  const bankOf = (e) => Array.isArray(e.employee_bank_accounts) ? e.employee_bank_accounts[0] : e.employee_bank_accounts
+  const haveCount = roster.filter(e => bankOf(e)?.bank_account).length
 
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
@@ -135,7 +137,7 @@ export default function BankImportModal({ onClose }) {
                 </tr></thead>
                 <tbody>
                   {roster.map(e => {
-                    const b = e.employee_bank_accounts?.[0]
+                    const b = bankOf(e)
                     const missing = !b?.bank_account
                     return (
                       <tr key={e.id}>

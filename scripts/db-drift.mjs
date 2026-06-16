@@ -49,6 +49,7 @@ const CRITICAL = [
   'import_employee_bank_account',
   'get_payroll_transfer_file',
   'restore_request',
+  'get_hr_dashboard',
   'cashout_annual_leave',
   'hr_chain_approve',
   'form_submission_chain_approve',

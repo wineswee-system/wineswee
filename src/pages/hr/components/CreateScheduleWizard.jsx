@@ -390,7 +390,7 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
     }} onClick={handleClose}>
       <div style={{
         background: 'var(--bg-card)', border: '1px solid var(--border-strong)',
-        borderRadius: 18, width: 660, maxWidth: '95vw', maxHeight: '90vh',
+        borderRadius: 18, width: step === 2 ? 1080 : 660, maxWidth: '95vw', maxHeight: '90vh',
         boxShadow: '0 32px 80px rgba(0,0,0,0.4)',
         display: 'flex', flexDirection: 'column',  // ← flex column 讓 header 固定 + body 滾
         overflow: 'hidden',  // 鎖死容器避免內容溢出

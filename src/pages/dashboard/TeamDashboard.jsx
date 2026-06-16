@@ -1128,6 +1128,70 @@ export default function TeamDashboard() {
         </div>
       )}
 
+      {/* ─── 薪資成本（僅有薪資權限者，後端 RPC 沒回就不顯示）─── */}
+      {hrDash?.salary_cost && (() => {
+        const sc = hrDash.salary_cost
+        const delta = sc.last_total > 0 ? ((sc.this_total - sc.last_total) / sc.last_total) * 100 : null
+        const otPct = sc.this_total > 0 ? (sc.ot_total / sc.this_total) * 100 : 0
+        const maxDept = Math.max(1, ...(sc.by_dept || []).map(d => Number(d.total) || 0))
+        return (
+          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16, marginBottom: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <div style={{ fontSize: 14, fontWeight: 700 }}>💰 薪資成本（{sc.month}）</div>
+              <button onClick={() => navigate('/hr/salary')} style={{ background: 'transparent', border: 'none', color: C.cyan, cursor: 'pointer', fontSize: 13 }}>明細 ›</button>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px,1fr))', gap: 12, marginBottom: (sc.by_dept || []).length ? 14 : 0 }}>
+              <div style={{ padding: 12, borderRadius: 8, background: C.bg2 }}>
+                <div style={{ fontSize: 13, color: C.muted }}>本月人事成本（實領）</div>
+                <div style={{ fontSize: 22, fontWeight: 800 }}>NT$ {Math.round(sc.this_total).toLocaleString()}</div>
+                {delta != null && (
+                  <div style={{ fontSize: 12, color: delta > 0 ? C.red : C.green }}>
+                    比上月 {delta > 0 ? '↑' : '↓'} {Math.abs(delta).toFixed(1)}%
+                  </div>
+                )}
+              </div>
+              <div style={{ padding: 12, borderRadius: 8, background: C.bg2 }}>
+                <div style={{ fontSize: 13, color: C.muted }}>加班費佔比</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: otPct > 15 ? C.orange : 'var(--text-primary)' }}>{otPct.toFixed(1)}%</div>
+                <div style={{ fontSize: 12, color: C.muted }}>加班費 NT$ {Math.round(sc.ot_total).toLocaleString()}</div>
+              </div>
+            </div>
+            {(sc.by_dept || []).slice(0, 6).map((d, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                <div style={{ width: 90, fontSize: 12, color: C.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.dept}</div>
+                <div style={{ flex: 1, height: 8, background: C.bg2, borderRadius: 4 }}>
+                  <div style={{ width: `${(Number(d.total) / maxDept) * 100}%`, height: '100%', background: C.cyan, borderRadius: 4 }} />
+                </div>
+                <div style={{ width: 90, fontSize: 12, textAlign: 'right' }}>NT$ {Math.round(Number(d.total)).toLocaleString()}</div>
+              </div>
+            ))}
+          </div>
+        )
+      })()}
+
+      {/* ─── 本月加班 Top（fn_hr_analytics）─── */}
+      {hrStats?.overtime?.top_overtimers?.length > 0 && (() => {
+        const ot = hrStats.overtime
+        const maxH = Math.max(1, ...ot.top_overtimers.map(o => Number(o.hours) || 0))
+        return (
+          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16, marginBottom: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <div style={{ fontSize: 14, fontWeight: 700 }}>🔥 本月加班 Top{ot.this_month_total_hours != null ? `（共 ${Number(ot.this_month_total_hours).toFixed(0)}h）` : ''}</div>
+              <button onClick={() => navigate('/hr/overtime')} style={{ background: 'transparent', border: 'none', color: C.cyan, cursor: 'pointer', fontSize: 13 }}>明細 ›</button>
+            </div>
+            {ot.top_overtimers.slice(0, 5).map((o, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                <div style={{ width: 90, fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{o.name}</div>
+                <div style={{ flex: 1, height: 8, background: C.bg2, borderRadius: 4 }}>
+                  <div style={{ width: `${(Number(o.hours) / maxH) * 100}%`, height: '100%', background: Number(o.hours) >= 46 ? C.red : C.orange, borderRadius: 4 }} />
+                </div>
+                <div style={{ width: 56, fontSize: 12, textAlign: 'right', color: Number(o.hours) >= 46 ? C.red : 'var(--text-primary)' }}>{Number(o.hours).toFixed(1)}h</div>
+              </div>
+            ))}
+          </div>
+        )
+      })()}
+
       {/* ─── Charts row：近 7 天出勤 + 部門人力 ─── */}
       <DashboardCharts last7Att={last7Att} deptCounts={deptCounts} />
 

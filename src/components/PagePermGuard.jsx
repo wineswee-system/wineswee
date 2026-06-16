@@ -14,13 +14,17 @@ import { useAuth } from '../contexts/AuthContext'
 //      否則會擋掉員工看自己 → 改在頁內 gate 個別按鈕。
 //   4. 缺項 = 放行（安全預設）：map 寫錯頂多沒擋到，不會誤鎖。
 // ════════════════════════════════════════════════════════════════════════
+// 用「查詢碼」(*.view) gate 頁面進入 → 權限頁的「查詢」toggle 真的會生效。
+// 這些 view 碼由 20260515150000_split_view_edit_perms.sql 種入並發給 admin/manager，
+// 所以 admin/manager 可看（符合原設計：可看不可改）；office/store 未授予 → 擋下。
+// 頁內的「執行/編輯」動作另由動作碼(*.execute/*.edit)gate（見各頁）。
 export const PAGE_PERM = {
-  '/hr/recruitment':      'recruit.manage',
-  '/hr/training':         'training.manage',
-  '/hr/probation':        'probation.evaluate',
-  '/hr/severance':        'severance.execute',
-  '/hr/legal-deductions': 'legal_deduction.edit',
-  '/hr/bonus':            'bonus.compute',
+  '/hr/recruitment':      'recruit.view',
+  '/hr/training':         'training.view',
+  '/hr/probation':        'probation.view',
+  '/hr/severance':        'severance.view',
+  '/hr/legal-deductions': 'legal_deduction.view',
+  '/hr/bonus':            'bonus.view',
   '/hr/surveys':          'survey.view_result',
   '/hr/attrition':        'ai_attrition.view',
 }

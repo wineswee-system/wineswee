@@ -108,6 +108,10 @@ export default function Salary() {
   const isAdmin = userRole === 'admin' || userRole === 'super_admin'
   // 銀行帳號 / 代發薪：admin 或被授予「薪資發放」權限者（在權限設定頁可指定）
   const canBank = isAdmin || hasPermission('salary.pay')
+  // 其餘按鈕也由「全縣設定 → 權限」細項控制（admin/super_admin 永遠有）
+  const canCompute = isAdmin || hasPermission('salary.compute')  // 批次計薪
+  const canEditSalary = isAdmin || hasPermission('salary.edit')  // 新增薪資 / 逐筆調整（薪資結構=修改薪資）
+  const canAudit = isAdmin || hasPermission('audit.view')        // 稽核（操作紀錄）
 
   const [records, setRecords] = useState([])
   const [bonusRecords, setBonusRecords] = useState([])
@@ -471,18 +475,26 @@ export default function Salary() {
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             {!isStaff && <>
-              <button className="btn btn-primary" onClick={() => { setEditingRecord(null); setForm(emptyForm); setShowModal(true) }}>
-                <Plus size={14} /> 新增薪資
-              </button>
-              <button className="btn btn-secondary" onClick={handleBatchPayroll}>
-                <Calculator size={14} /> 批次計薪
-              </button>
-              <button className="btn btn-secondary" onClick={() => navigate(`/hr/salary-adjust?month=${month}`)}>
-                <Pencil size={14} /> 逐筆調整
-              </button>
-              <button className="btn btn-secondary" onClick={() => navigate('/hr/salary-audit-log')}>
-                🔍 稽核
-              </button>
+              {canEditSalary && (
+                <button className="btn btn-primary" onClick={() => { setEditingRecord(null); setForm(emptyForm); setShowModal(true) }}>
+                  <Plus size={14} /> 新增薪資
+                </button>
+              )}
+              {canCompute && (
+                <button className="btn btn-secondary" onClick={handleBatchPayroll}>
+                  <Calculator size={14} /> 批次計薪
+                </button>
+              )}
+              {canEditSalary && (
+                <button className="btn btn-secondary" onClick={() => navigate(`/hr/salary-adjust?month=${month}`)}>
+                  <Pencil size={14} /> 逐筆調整
+                </button>
+              )}
+              {canAudit && (
+                <button className="btn btn-secondary" onClick={() => navigate('/hr/salary-audit-log')}>
+                  🔍 稽核
+                </button>
+              )}
               <button className="btn btn-secondary" onClick={() => exportSalaryPdf(filtered, month)}>
                 <Download size={14} /> 匯出 PDF
               </button>

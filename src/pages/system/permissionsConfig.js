@@ -22,6 +22,7 @@ export const FEATURES = [
   // HR 表單
   { module: 'HR 表單', label: '審核 HR 表單', view: 'hr_form.view', edit: 'hr_form.approve' },
   { module: 'HR 表單', label: 'HR 表單範本',  view: null,           edit: 'hr_form.template_edit' },
+  { module: 'HR 表單', label: '還原已刪除單據', view: null,         edit: 'hr_form.restore' },
   // 薪酬與福利
   { module: '薪酬與福利', label: '部門薪資',   view: 'salary.view_dept',     edit: null },
   { module: '薪酬與福利', label: '全公司薪資', view: 'salary.view_all',      edit: null },

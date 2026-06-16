@@ -9,7 +9,9 @@ import { useDebouncedValue } from '../../lib/performanceUtils'
 const PAGE_SIZE = 50
 
 export default function AuditLog() {
-  const { profile, isAdmin } = useAuth()
+  const { profile, isAdmin, hasPermission } = useAuth()
+  // 稽核日誌：admin 或被授予「操作紀錄(audit.view)」權限者（權限設定頁可分人）
+  const canViewAudit = isAdmin || hasPermission('audit.view')
   const [logs, setLogs] = useState([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -25,7 +27,7 @@ export default function AuditLog() {
   const debouncedSearch = useDebouncedValue(search, 300)
 
   const fetchLogs = useCallback(async () => {
-    if (!profile?.organization_id || !isAdmin) { setLoading(false); return }
+    if (!profile?.organization_id || !canViewAudit) { setLoading(false); return }
     setLoading(true)
     setError(null)
     const currentSection = SECTIONS.find(s => s.key === section)
@@ -84,7 +86,7 @@ export default function AuditLog() {
   const totalPages = Math.ceil(total / PAGE_SIZE)
   const activeFilterCount = Object.values(filters).filter(Boolean).length
 
-  if (!isAdmin) return (
+  if (!canViewAudit) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh', flexDirection: 'column', gap: 12 }}>
       <h2>權限不足</h2>
       <p style={{ color: 'var(--text-secondary)' }}>此頁面僅限管理員存取</p>

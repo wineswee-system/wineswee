@@ -39,6 +39,9 @@ DECLARE
   v_app_org   int;
   v_app_store int;
 BEGIN
+  -- 受信任後端：Edge Functions（LINE webhook 查加班/核假…）用 service_role → 放行
+  IF auth.role() = 'service_role' THEN RETURN true; END IF;
+
   IF v_me IS NULL OR p_applicant_emp_id IS NULL THEN RETURN false; END IF;
 
   -- ① 本人
@@ -88,6 +91,7 @@ AS $$
 DECLARE
   v_me int := current_employee_id();
 BEGIN
+  IF auth.role() = 'service_role' THEN RETURN true; END IF;
   IF v_me IS NULL OR p_applicant_emp_id IS NULL THEN RETURN false; END IF;
   IF is_admin() THEN RETURN true; END IF;
   RETURN EXISTS (

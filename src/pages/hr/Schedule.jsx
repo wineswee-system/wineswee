@@ -55,9 +55,6 @@ export default function Schedule() {
   const canEditSchedule = ['admin', 'super_admin', 'manager'].includes(userRole) || hasPermission('schedule.edit')
   const canUseAISchedule = ['admin', 'super_admin', 'manager'].includes(userRole) || hasPermission('schedule.algo')
   const isSuperAdmin = userRole === 'super_admin'
-  const userPosition = authProfile?.position || ''
-  const isStoreMgr = !canEditSchedule && userPosition.includes('店長')
-  const isSupervisor = !canEditSchedule && userPosition.includes('督導')
 
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
@@ -295,7 +292,23 @@ export default function Schedule() {
   const lockedDates = new Set((activeDates || []).filter(d => lockedMonths.has(d.slice(0, 7))))
   // 當前畫面（cycle 可能跨月）碰到的月份，給狀態列「逐月鎖定/解鎖」用
   const viewMonths = [...new Set((activeDates || []).map(d => d.slice(0, 7)))].sort()
-  const isAdmin = ['admin', 'super_admin'].includes(authRole)
+  const isAdmin = ['admin', 'super_admin'].includes(userRole)
+
+  // 我可排班的門市範圍：admin/super_admin → 全部；其他 → user_stores 指派 + 自己門市 +
+  // 我擔任店長(stores.manager_id=我)的店。非 admin 不該排到不屬於自己的店。
+  const scopedStoreIds = (() => {
+    const ids = new Set(myStoreIds)
+    if (authProfile?.store_id) ids.add(authProfile.store_id)
+    locations.forEach(l => { if (l.manager_id === authProfile?.id) ids.add(l.id) })
+    return ids
+  })()
+  const scopedLocations = isAdmin ? locations : locations.filter(l => scopedStoreIds.has(l.id))
+
+  // 非 admin 進來預設選自己第一間店（沒有「全部門市」可選）
+  useEffect(() => {
+    if (isAdmin || storeFilter || scopedLocations.length === 0) return
+    setStoreFilter(scopedLocations[0].name)
+  }, [isAdmin, storeFilter, locations, myStoreIds, authProfile?.store_id, authProfile?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const reloadMonthLocks = async () => {
     if (!currentStore) return
@@ -1442,8 +1455,8 @@ export default function Schedule() {
           <span style={{ fontSize: 14 }}>🏪</span>
           <select className="form-input" style={{ width: 200, padding: '8px 12px', fontSize: 13 }}
             value={storeFilter} onChange={e => setStoreFilter(e.target.value)}>
-            <option value="">全部門市</option>
-            {locations.map(l => <option key={l.id} value={l.name}>{l.name}</option>)}
+            {isAdmin && <option value="">全部門市</option>}
+            {scopedLocations.map(l => <option key={l.id} value={l.name}>{l.name}</option>)}
           </select>
         </div>
         {/* 框選提示條：fixed 飄右下角，不參與 flex 佈局避免班表往下跳 */}
@@ -1821,12 +1834,7 @@ export default function Schedule() {
       <CreateScheduleWizard
         open={showWizard}
         mode={wizardMode}
-        locations={(() => {
-          if (canEditSchedule) return locations
-          if (isSupervisor) return locations.filter(l => myStoreIds.includes(l.id))
-          if (isStoreMgr) return locations.filter(l => l.id === authProfile?.store_id)
-          return []
-        })()}
+        locations={scopedLocations}
         onClose={() => setShowWizard(false)}
         onComplete={handleWizardComplete}
       />

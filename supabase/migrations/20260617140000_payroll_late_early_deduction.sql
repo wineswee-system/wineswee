@@ -161,6 +161,12 @@ BEGIN
       LEFT JOIN schedules s ON s.employee_id = ar.employee_id AND s.date = ar.date
       WHERE ar.employee_id = p_emp_id AND ar.date >= v_mstart AND ar.date <= v_mend
         AND ar.clock_in IS NOT NULL
+        -- 排除「有核准請假」的日子：請假提早走/晚到不該再扣早退/遲到（避免跟請假扣重複）
+        AND NOT EXISTS (
+          SELECT 1 FROM leave_requests lr
+          WHERE lr.employee_id = ar.employee_id AND lr.status = '已核准'
+            AND ar.date BETWEEN lr.start_date AND COALESCE(lr.end_date, lr.start_date)
+        )
     ) x;
     v_late_mins  := COALESCE(v_late_mins,0);
     v_early_mins := COALESCE(v_early_mins,0);

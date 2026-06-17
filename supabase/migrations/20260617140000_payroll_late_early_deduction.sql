@@ -494,6 +494,54 @@ BEGIN
     'laborEmployer', v_labor_er,
     'healthEmployer', v_health_er,
     'pensionEmployer', v_pension_er
+  ) || jsonb_build_object(
+    -- ── 逐日明細（給公式視窗的明細表用）──
+    '_ot_rows', COALESCE((
+      SELECT jsonb_agg(jsonb_build_object('date', request_date, 'hours', ot_hours,
+        'category', COALESCE(NULLIF(ot_category,''), CASE extract(dow from request_date)::int WHEN 0 THEN 'weekly_off' WHEN 6 THEN 'restday' ELSE 'weekday' END)) ORDER BY request_date)
+      FROM overtime_requests WHERE employee_id=p_emp_id AND status='已核准' AND NOT COALESCE(is_exception,false)
+        AND request_date>=v_mstart AND request_date<=v_mend), '[]'::jsonb),
+    '_ot_exception_rows', COALESCE((
+      SELECT jsonb_agg(jsonb_build_object('date', request_date, 'hours', ot_hours,
+        'category', COALESCE(NULLIF(ot_category,''), CASE extract(dow from request_date)::int WHEN 0 THEN 'weekly_off' WHEN 6 THEN 'restday' ELSE 'weekday' END)) ORDER BY request_date)
+      FROM overtime_requests WHERE employee_id=p_emp_id AND status='已核准' AND COALESCE(is_exception,false)
+        AND request_date>=v_mstart AND request_date<=v_mend), '[]'::jsonb),
+    '_leave_rows', COALESCE((
+      SELECT jsonb_agg(jsonb_build_object('date', start_date, 'type', type, 'hours', hours, 'days', days) ORDER BY start_date)
+      FROM leave_requests WHERE employee_id=p_emp_id AND status='已核准'
+        AND start_date>=v_mstart AND start_date<=v_mend), '[]'::jsonb),
+    '_late_rows', COALESCE((
+      SELECT jsonb_agg(jsonb_build_object('date', dt, 'late_minutes', round(lm)) ORDER BY dt)
+      FROM (
+        SELECT y.dt, GREATEST(0, y.ci - y.ast - y.grace) AS lm
+        FROM (
+          SELECT ar.date AS dt,
+            EXTRACT(EPOCH FROM ar.clock_in::time)/60.0 AS ci,
+            COALESCE(EXTRACT(EPOCH FROM s.actual_start::time)/60.0, CASE WHEN COALESCE(v_emp_category,'')='admin' THEN 540 ELSE NULL END) AS ast,
+            CASE WHEN COALESCE(v_emp_category,'')='admin' THEN 30 ELSE 0 END AS grace
+          FROM attendance_records ar
+          LEFT JOIN schedules s ON s.employee_id=ar.employee_id AND s.date=ar.date
+          WHERE ar.employee_id=p_emp_id AND ar.date>=v_mstart AND ar.date<=v_mend AND ar.clock_in IS NOT NULL AND NOT v_is_piece
+            AND NOT EXISTS (SELECT 1 FROM leave_requests lr WHERE lr.employee_id=ar.employee_id AND lr.status='已核准' AND ar.date BETWEEN lr.start_date AND COALESCE(lr.end_date,lr.start_date))
+        ) y WHERE y.ast IS NOT NULL
+      ) q WHERE lm > 0), '[]'::jsonb),
+    '_early_rows', COALESCE((
+      SELECT jsonb_agg(jsonb_build_object('date', dt, 'early_minutes', round(em)) ORDER BY dt)
+      FROM (
+        SELECT y.dt, CASE WHEN y.ae IS NOT NULL AND y.has_out THEN GREATEST(0, (y.ae + CASE WHEN y.ae<=y.ast THEN 1440 ELSE 0 END) - y.cot) ELSE 0 END AS em
+        FROM (
+          SELECT ar.date AS dt,
+            EXTRACT(EPOCH FROM ar.clock_in::time)/60.0 AS ci,
+            (EXTRACT(EPOCH FROM ar.clock_out::time)/60.0) + CASE WHEN ar.clock_out IS NOT NULL AND EXTRACT(EPOCH FROM ar.clock_out::time)<EXTRACT(EPOCH FROM ar.clock_in::time) THEN 1440 ELSE 0 END AS cot,
+            COALESCE(EXTRACT(EPOCH FROM s.actual_start::time)/60.0, CASE WHEN COALESCE(v_emp_category,'')='admin' THEN 540 ELSE NULL END) AS ast,
+            COALESCE(EXTRACT(EPOCH FROM s.actual_end::time)/60.0, CASE WHEN COALESCE(v_emp_category,'')='admin' THEN LEAST(GREATEST(EXTRACT(EPOCH FROM ar.clock_in::time)/60.0+540,1080),1110) ELSE NULL END) AS ae,
+            (ar.clock_out IS NOT NULL) AS has_out
+          FROM attendance_records ar
+          LEFT JOIN schedules s ON s.employee_id=ar.employee_id AND s.date=ar.date
+          WHERE ar.employee_id=p_emp_id AND ar.date>=v_mstart AND ar.date<=v_mend AND ar.clock_in IS NOT NULL AND NOT v_is_piece
+            AND NOT EXISTS (SELECT 1 FROM leave_requests lr WHERE lr.employee_id=ar.employee_id AND lr.status='已核准' AND ar.date BETWEEN lr.start_date AND COALESCE(lr.end_date,lr.start_date))
+        ) y
+      ) q WHERE em > 0), '[]'::jsonb)
   );
 END $$;
 

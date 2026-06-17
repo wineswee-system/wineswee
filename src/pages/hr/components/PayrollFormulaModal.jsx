@@ -174,6 +174,78 @@ function LateDetailTable({ rows, hourlyRate, lateDeduction }) {
   )
 }
 
+// 早退明細小表
+function EarlyDetailTable({ rows, hourlyRate, earlyDeduction }) {
+  if (!rows || rows.length === 0) return (
+    <div style={{ padding: 12, fontSize: 12, color: 'var(--text-muted)', textAlign: 'center' }}>本月無早退紀錄</div>
+  )
+  const sorted = [...rows].sort((a, b) => (a.date || '').localeCompare(b.date || ''))
+  const totalMins = sorted.reduce((s, r) => s + (r.early_minutes || 0), 0)
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
+        <thead>
+          <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-medium)' }}>
+            <th style={{ padding: '6px 8px', textAlign: 'left' }}>日期</th>
+            <th style={{ padding: '6px 8px', textAlign: 'right' }}>早退分鐘</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map((r, i) => (
+            <tr key={i} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+              <td style={{ padding: '5px 8px' }}>{r.date}</td>
+              <td style={{ padding: '5px 8px', textAlign: 'right', fontWeight: 600, color: 'var(--accent-orange)' }}>{r.early_minutes} 分</td>
+            </tr>
+          ))}
+          <tr style={{ borderTop: '2px solid var(--border-medium)', fontWeight: 700, background: 'var(--bg-secondary)' }}>
+            <td style={{ padding: '6px 8px' }}>合計</td>
+            <td style={{ padding: '6px 8px', textAlign: 'right', color: 'var(--accent-orange)' }}>{totalMins} 分</td>
+          </tr>
+        </tbody>
+      </table>
+      <div style={{ marginTop: 6, padding: '6px 8px', fontSize: 11, color: 'var(--text-muted)' }}>
+        ※ 扣款公式：合計早退分鐘 × 時薪 ÷ 60（無條件捨去）＝ {totalMins} × {hourlyRate} ÷ 60 ＝ {fmt(earlyDeduction || 0)}<br/>
+        ※ 門市以班表下班時間為準、無寬限；行政最晚 18:30。有核准請假的日子不算。
+      </div>
+    </div>
+  )
+}
+
+// 請假明細小表
+function LeaveDetailTable({ rows }) {
+  if (!rows || rows.length === 0) return (
+    <div style={{ padding: 12, fontSize: 12, color: 'var(--text-muted)', textAlign: 'center' }}>本月無請假紀錄</div>
+  )
+  const sorted = [...rows].sort((a, b) => (a.date || '').localeCompare(b.date || ''))
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
+        <thead>
+          <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-medium)' }}>
+            <th style={{ padding: '6px 8px', textAlign: 'left' }}>起始日</th>
+            <th style={{ padding: '6px 8px', textAlign: 'left' }}>假別</th>
+            <th style={{ padding: '6px 8px', textAlign: 'right' }}>時數</th>
+            <th style={{ padding: '6px 8px', textAlign: 'right' }}>天數</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map((r, i) => (
+            <tr key={i} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+              <td style={{ padding: '5px 8px' }}>{r.date}</td>
+              <td style={{ padding: '5px 8px' }}>{r.type}</td>
+              <td style={{ padding: '5px 8px', textAlign: 'right' }}>{r.hours ?? '-'}</td>
+              <td style={{ padding: '5px 8px', textAlign: 'right' }}>{r.days ?? '-'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div style={{ marginTop: 6, padding: '6px 8px', fontSize: 11, color: 'var(--text-muted)' }}>
+        ※ 已核准請假明細；扣款見上方「請假扣款」。有請假的日子不另扣遲到/早退。
+      </div>
+    </div>
+  )
+}
+
 export default function PayrollFormulaModal({ payroll, month, onClose }) {
   if (!payroll) return null
   const p = payroll
@@ -183,6 +255,8 @@ export default function PayrollFormulaModal({ payroll, month, onClose }) {
   const isProrated = _p < 0.9999
   const otRows = p._ot_rows || []
   const lateRows = p._late_rows || []
+  const earlyRows = p._early_rows || []
+  const leaveRows = p._leave_rows || []
 
   const allowancesSum = (p.role_allowance||0) + (p.meal_allowance||0) + (p.transport_allowance||0)
     + (p.night_allowance||0) + (p.cross_store_allowance||0) + (p.other_custom_total||0) + (p.attendance_bonus||0)
@@ -348,6 +422,20 @@ export default function PayrollFormulaModal({ payroll, month, onClose }) {
           {(lateRows.length > 0) && (
             <Section title="⏰ 遲到明細" color="var(--accent-orange)">
               <LateDetailTable rows={lateRows} hourlyRate={hr} lateDeduction={p.lateDeduction} />
+            </Section>
+          )}
+
+          {/* ── 早退明細 ── */}
+          {(earlyRows.length > 0) && (
+            <Section title="🚪 早退明細" color="var(--accent-orange)">
+              <EarlyDetailTable rows={earlyRows} hourlyRate={hr} earlyDeduction={p.earlyLeaveDeduction} />
+            </Section>
+          )}
+
+          {/* ── 請假明細 ── */}
+          {(leaveRows.length > 0) && (
+            <Section title="🏖️ 請假明細" color="var(--accent-orange)">
+              <LeaveDetailTable rows={leaveRows} />
             </Section>
           )}
 

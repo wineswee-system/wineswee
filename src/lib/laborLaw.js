@@ -244,6 +244,9 @@ export function validateSchedule(schedules, weekDates, shiftDefs = []) {
   const warnings = []
   const errors = []
 
+  // 單日排班上限（gross span，actual_start→actual_end）：最多 11h = 10 工作 + 1 休息
+  const DAILY_MAX_SPAN_HOURS = 11
+
   // 'HH:MM[:SS]' → 小數小時（如 '12:30' → 12.5）；無法解析回 null
   const _hm = (t) => {
     if (!t || typeof t !== 'string') return null
@@ -295,24 +298,16 @@ export function validateSchedule(schedules, weekDates, shiftDefs = []) {
     // H10: 四週變形工時制不檢查每週休假（由月制 off_requests 控制）
     // 原規則：每週至少2天休息 (§36) — 已停用
 
-    // H2: 每日工時檢查 — 正常8h，含加班最高12h (§30, §32)
+    // H2: 單日排班上限 — 最多 11h（10 工作 + 1 休息）
     for (const s of workDays) {
       const hours = resolveShift(s)?.hours
-      if (hours && hours > 12) {
+      if (hours && hours > DAILY_MAX_SPAN_HOURS) {
         errors.push({
           employee: emp,
           constraint: 'H2',
-          law: '勞基法 §32',
-          message: `${emp} ${s.date} 班次「${s.shift}」單日工時 ${hours.toFixed(1)}h 過長`,
+          law: '單日工時上限',
+          message: `${emp} ${s.date} 班次「${s.shift}」單日 ${hours.toFixed(1)}h 超過上限 ${DAILY_MAX_SPAN_HOURS}h（10 工作 + 1 休息）`,
           severity: 'error',
-        })
-      } else if (hours && hours > 8) {
-        warnings.push({
-          employee: emp,
-          constraint: 'H2',
-          law: '勞基法 §30',
-          message: `${emp} ${s.date} 班次「${s.shift}」單日工時 ${hours.toFixed(1)}h 偏高`,
-          severity: 'warning',
         })
       }
     }

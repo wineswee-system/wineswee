@@ -224,7 +224,7 @@ export default function BatchPayrollModal({ month, batchPreview, batchSaving, on
                     <th style={{ color: 'var(--accent-orange)' }}>勞保</th>
                     <th style={{ color: 'var(--accent-orange)' }}>健保</th>
                     <th style={{ color: 'var(--accent-orange)' }}>勞退自提</th>
-                    <th style={{ color: 'var(--accent-orange)' }}>請假扣</th>
+                    <th style={{ color: 'var(--accent-orange)' }} title="請假扣 + 遲到扣 + 早退扣">出勤扣</th>
                     <th style={{ color: 'var(--accent-orange)' }}>法扣</th>
                     {/* 減項 + 實領 */}
                     <th style={{ color: 'var(--accent-red)', fontWeight: 700 }}>減項合計</th>

@@ -317,8 +317,8 @@ BEGIN
   ) b;
 
   -- ── 扣款金額 ──
-  v_late_deduction  := round(v_late_mins  * v_hourly_rate / 60.0);  -- per-minute
-  v_early_deduction := round(v_early_mins * v_hourly_rate / 60.0);
+  v_late_deduction  := floor(v_late_mins  * v_hourly_rate / 60.0);  -- per-minute,無條件捨去
+  v_early_deduction := floor(v_early_mins * v_hourly_rate / 60.0);
   v_unpaid_deduct  := CASE WHEN v_is_hourly THEN 0 ELSE floor(v_unpaid_hours * v_hourly_rate) END;
   v_half_deduct    := CASE WHEN v_is_hourly THEN 0 ELSE floor(v_half_hours * v_hourly_rate * 0.5) END;
   v_absence_deduct := v_unpaid_deduct + v_half_deduct;

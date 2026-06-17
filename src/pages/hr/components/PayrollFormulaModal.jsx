@@ -143,9 +143,6 @@ function LateDetailTable({ rows, hourlyRate, lateDeduction }) {
   )
   const sorted = [...rows].sort((a, b) => (a.date || '').localeCompare(b.date || ''))
   const totalMins = sorted.reduce((s, r) => s + (r.late_minutes || 0), 0)
-  const totalUnits = Math.floor(totalMins / 30)
-  // 取一筆做容差顯示（同員工同月通常都在同一門市，容差相同）
-  const tolerance = sorted[0]?.tolerance
   return (
     <div style={{ overflowX: 'auto' }}>
       <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
@@ -153,7 +150,6 @@ function LateDetailTable({ rows, hourlyRate, lateDeduction }) {
           <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-medium)' }}>
             <th style={{ padding: '6px 8px', textAlign: 'left' }}>日期</th>
             <th style={{ padding: '6px 8px', textAlign: 'right' }}>遲到分鐘</th>
-            <th style={{ padding: '6px 8px', textAlign: 'right' }}>滿 30 分單位數</th>
           </tr>
         </thead>
         <tbody>
@@ -161,20 +157,18 @@ function LateDetailTable({ rows, hourlyRate, lateDeduction }) {
             <tr key={i} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
               <td style={{ padding: '5px 8px' }}>{r.date}</td>
               <td style={{ padding: '5px 8px', textAlign: 'right', fontWeight: 600, color: 'var(--accent-orange)' }}>{r.late_minutes} 分</td>
-              <td style={{ padding: '5px 8px', textAlign: 'right', color: 'var(--text-muted)' }}>{Math.floor(r.late_minutes / 30)}</td>
             </tr>
           ))}
           <tr style={{ borderTop: '2px solid var(--border-medium)', fontWeight: 700, background: 'var(--bg-secondary)' }}>
             <td style={{ padding: '6px 8px' }}>合計</td>
             <td style={{ padding: '6px 8px', textAlign: 'right', color: 'var(--accent-orange)' }}>{totalMins} 分</td>
-            <td style={{ padding: '6px 8px', textAlign: 'right' }}>{totalUnits} 單位</td>
           </tr>
         </tbody>
       </table>
       <div style={{ marginTop: 6, padding: '6px 8px', fontSize: 11, color: 'var(--text-muted)' }}>
-        {tolerance != null && <>※ 門市容差：≤ {tolerance} 分鐘的遲到忽略不計，本表只列超過者。<br/></>}
-        ※ 扣款公式：合計分鐘 ÷ 30（無條件捨去）× 時薪 × 0.5
-        ＝ {totalUnits} × {hourlyRate} × 0.5 ＝ {fmt(lateDeduction || 0)}
+        ※ 扣款公式：合計遲到分鐘 × 時薪 ÷ 60（無條件捨去）
+        ＝ {totalMins} × {hourlyRate} ÷ 60 ＝ {fmt(lateDeduction || 0)}<br/>
+        ※ 門市以班表上班時間為準、無寬限；行政朝9晚6寬限到 9:30。逐日為打卡 late_minutes 參考值。
       </div>
     </div>
   )
@@ -197,7 +191,7 @@ export default function PayrollFormulaModal({ payroll, month, onClose }) {
 
   const leaveDeduction = (p.unpaidDeduction||0) + (p.halfPayDeduction||0)
   const totalDedCheck = (p.laborInsurance||0) + (p.healthInsurance||0) + (p.pension||0)
-    + leaveDeduction + (p.lateDeduction||0) + (p.legal_deduction||0)
+    + leaveDeduction + (p.lateDeduction||0) + (p.earlyLeaveDeduction||0) + (p.legal_deduction||0)
 
   return createPortal(
     <div onClick={onClose} style={{
@@ -410,9 +404,18 @@ export default function PayrollFormulaModal({ payroll, month, onClose }) {
               <FormulaRow
                 label="遲到扣款"
                 value={-p.lateDeduction}
-                formula="合計遲到分鐘 ÷ 30（無條件捨去）× 時薪 × 0.5"
+                formula="合計遲到分鐘 × 時薪 ÷ 60（無條件捨去）"
                 vars={[{ k: '合計遲到分鐘', v: p.lateMins }, { k: '時薪', v: hr }]}
-                hint="每滿 30 分鐘扣半小時薪；上方有逐筆遲到日明細"
+                hint="每分鐘扣 (時薪÷60)；門市以班表上班時間為準、無寬限，行政朝9晚6寬限到9:30"
+              />
+            )}
+            {p.earlyLeaveDeduction > 0 && (
+              <FormulaRow
+                label="早退扣款"
+                value={-p.earlyLeaveDeduction}
+                formula="合計早退分鐘 × 時薪 ÷ 60（無條件捨去）"
+                vars={[{ k: '合計早退分鐘', v: p.earlyLeaveMinutes }, { k: '時薪', v: hr }]}
+                hint="每分鐘扣 (時薪÷60)；門市以班表下班時間為準、無寬限，行政最晚 18:30"
               />
             )}
             {p.legal_deduction > 0 && (
@@ -428,7 +431,7 @@ export default function PayrollFormulaModal({ payroll, month, onClose }) {
               label="減項合計"
               value={-p.totalDeductions}
               color="var(--accent-red)"
-              formula="勞保 + 健保 + 勞退自提 + 請假扣 + 遲到扣 + 法扣"
+              formula="勞保 + 健保 + 勞退自提 + 請假扣 + 遲到扣 + 早退扣 + 法扣"
               vars={[{ k: '驗算', v: totalDedCheck }]}
             />
           </Section>

@@ -180,13 +180,13 @@ export default function BatchPayrollModal({ month, batchPreview, batchSaving, on
           )}
 
           {/* 對齊廠商 PDF 欄位順序：加項 → 應領 → 扣項 → 減項合計 → 實領 → 雇主負擔 */}
-          {/* 表格自身雙向捲動、固定高度 */}
-          <div
-            ref={bodyScrollRef}
-            onScroll={() => syncFrom(bodyScrollRef, topScrollRef)}
-            style={{ flex: 1, minHeight: 0, overflow: 'auto' }}
-          >
-            <div className="data-table-wrapper">
+          {/* 外層只管垂直捲動；橫向由 .data-table-wrapper(CSS overflow-x:scroll) 負責 */}
+          <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden' }}>
+            <div
+              className="data-table-wrapper"
+              ref={bodyScrollRef}
+              onScroll={() => syncFrom(bodyScrollRef, topScrollRef)}
+            >
               <table className="data-table" style={{ fontSize: 11, whiteSpace: 'nowrap', minWidth: 2000 }}>
                 <thead>
                   {/* 第 1 列：分組標題 */}

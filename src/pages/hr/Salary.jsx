@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Download, Plus, Calculator, Pencil, Landmark } from 'lucide-react'
+import { Download, Plus, Calculator, Pencil, Landmark, Package } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { calculateLaborInsurance, calculateHealthInsurance, calculateLaborPension, calculateMonthlyWithholding, calculateNetSalary, calculateInServiceDays } from '../../lib/payroll'
@@ -13,6 +13,7 @@ import SalaryTable from './components/SalaryTable'
 import SalaryFormModal from './components/SalaryFormModal'
 import BatchPayrollModal from './components/BatchPayrollModal'
 import BankImportModal from './components/BankImportModal'
+import PieceCountModal from './components/PieceCountModal'
 
 import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
@@ -132,6 +133,7 @@ export default function Salary() {
   const [batchPreview, setBatchPreview] = useState([])
   const [batchSaving, setBatchSaving] = useState(false)
   const [showBankImport, setShowBankImport] = useState(false)
+  const [showPieceModal, setShowPieceModal] = useState(false)
 
   // 勞健保級距（從 DB 載入，year 隨 form.month / 篩選 month 變動）
   // 結構：{ labor: [...], health: [...] } 或 null（DB 沒資料時 fallback hardcoded）
@@ -485,6 +487,11 @@ export default function Salary() {
                   <Calculator size={14} /> 批次計薪
                 </button>
               )}
+              {canCompute && (
+                <button className="btn btn-secondary" onClick={() => setShowPieceModal(true)}>
+                  <Package size={14} /> 計件件數
+                </button>
+              )}
               {canEditSalary && (
                 <button className="btn btn-secondary" onClick={() => navigate(`/hr/salary-adjust?month=${month}`)}>
                   <Pencil size={14} /> 逐筆調整
@@ -601,6 +608,15 @@ export default function Salary() {
       {/* ── 匯入銀行帳號（admin）── */}
       {showBankImport && (
         <BankImportModal onClose={() => setShowBankImport(false)} />
+      )}
+
+      {showPieceModal && (
+        <PieceCountModal
+          month={month}
+          employees={employees}
+          orgId={orgId}
+          onClose={() => setShowPieceModal(false)}
+        />
       )}
 
       {/* ── Batch Payroll Modal ── */}

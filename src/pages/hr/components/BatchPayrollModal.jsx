@@ -39,6 +39,15 @@ export default function BatchPayrollModal({ month, batchPreview, batchSaving, on
   const statusInfo = anomalyReport ? (STATUS_ICON[anomalyReport.status] || STATUS_ICON.warning) : null
   const StatusIcon = statusInfo?.icon
 
+  // 頂部常駐總計（免捲到最下面看 tfoot 合計）
+  const totals = batchPreview.reduce((a, p) => ({
+    gross: a.gross + (p.gross || 0),
+    ded:   a.ded   + (p.totalDeductions || 0),
+    net:   a.net   + (p.netSalary || 0),
+    emp:   a.emp   + (p.laborEmployer || 0) + (p.healthEmployer || 0) + (p.pensionEmployer || 0),
+  }), { gross: 0, ded: 0, net: 0, emp: 0 })
+  const zeroCount = batchPreview.filter(p => !(p.gross > 0)).length
+
   return createPortal(
     <div style={{
       position: 'fixed', inset: 0, zIndex: 10000,
@@ -69,6 +78,26 @@ export default function BatchPayrollModal({ month, batchPreview, batchSaving, on
             )}
             <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>共 {batchPreview.length} 位員工</span>
           </div>
+        </div>
+
+        {/* 頂部常駐總計 — 免捲到最下面看合計 */}
+        <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'center', padding: '12px 24px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-card)' }}>
+          {[
+            { label: '應領總額', val: fmt(totals.gross), color: 'var(--text-primary)' },
+            { label: '扣款總額', val: '-' + fmt(totals.ded), color: 'var(--accent-orange)' },
+            { label: '實領總額', val: fmt(totals.net), color: 'var(--accent-green)', strong: true },
+            { label: '雇主負擔', val: fmt(totals.emp), color: 'var(--text-muted)' },
+          ].map(s => (
+            <div key={s.label}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 2 }}>{s.label}</div>
+              <div style={{ fontSize: s.strong ? 18 : 15, fontWeight: s.strong ? 800 : 700, color: s.color }}>{s.val}</div>
+            </div>
+          ))}
+          {zeroCount > 0 && (
+            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--accent-orange)', background: 'var(--accent-orange-dim)', padding: '6px 12px', borderRadius: 8 }}>
+              <AlertTriangle size={14} /> {zeroCount} 人應領為 0（未設底薪/薪資結構，請確認）
+            </div>
+          )}
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px' }}>

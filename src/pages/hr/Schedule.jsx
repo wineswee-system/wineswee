@@ -371,6 +371,7 @@ export default function Schedule() {
     const vEnd = activeDates?.[activeDates.length - 1]
     const filteredEmps = employees.filter(em =>
       em.employment_category !== 'admin' && em.employment_category !== 'piece' &&
+      (isAdmin || scopedStoreIds.has(em.store_id)) &&
       (deptFilter === '' || em.dept === deptFilter) &&
       (storeFilter === '' || em.store === storeFilter) &&
       (!em.join_date   || !vEnd   || em.join_date   <= vEnd) &&
@@ -413,6 +414,7 @@ export default function Schedule() {
       const vEnd = activeDates?.[activeDates.length - 1]
       const filteredEmps = employees.filter(em =>
         em.employment_category !== 'admin' && em.employment_category !== 'piece' &&
+        (isAdmin || scopedStoreIds.has(em.store_id)) &&
         (deptFilter === '' || em.dept === deptFilter) &&
         (storeFilter === '' || em.store === storeFilter) &&
         (!em.join_date   || !vEnd   || em.join_date   <= vEnd) &&
@@ -1075,6 +1077,7 @@ export default function Schedule() {
   const viewEnd = activeDates?.[activeDates.length - 1] || monthEnd
   const filtered = employees.filter(e =>
     e.employment_category !== 'admin' && e.employment_category !== 'piece' &&  // 行政(固定9-6)+計件(按件數)不排班 → 排除;督導請改成「正職」才會出現
+    (isAdmin || scopedStoreIds.has(e.store_id)) &&   // 非 admin 只看自己可排的店(不然 storeFilter='' 會洩漏全部)
     (deptFilter === '' || e.dept === deptFilter) &&
     (storeFilter === '' || e.store === storeFilter) &&
     (!e.join_date   || e.join_date   <= viewEnd) &&   // 4/30 之後入職 → 4 月不顯示
@@ -1848,6 +1851,7 @@ export default function Schedule() {
         const vStart = activeDates?.[0]
         const vEnd = activeDates?.[activeDates.length - 1]
         const fEmps = employees.filter(em =>
+          (isAdmin || scopedStoreIds.has(em.store_id)) &&
           (deptFilter === '' || em.dept === deptFilter) &&
           (storeFilter === '' || em.store === storeFilter) &&
           (!em.join_date   || !vEnd   || em.join_date   <= vEnd) &&

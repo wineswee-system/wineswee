@@ -13,8 +13,6 @@
 -- ★ status='draft'（存為草稿，逐筆調整用）→ 放行，不擋；只擋正式結算 finalized。
 -- ★ INSERT + UPDATE 都擋：四月已有 85 筆，重存是 UPDATE（upsert），只擋 INSERT 會漏。
 -- ★ 沒門市的員工（總部/行政固定工時，不在門市班表上）→ 跳過檢查，照常結算。
--- ★ 計件（salary_structures.employment_category='piece'）→ 放行：按件數計薪、不排班不看考勤，
---   要求鎖班表才能結薪不合理。
 -- ★ 不碰 secure_upsert_salary_v2 巨型函式（風險最低），任何寫入路徑都擋得到。
 --
 -- idempotent：CREATE OR REPLACE + DROP TRIGGER IF EXISTS。
@@ -31,20 +29,9 @@ AS $$
 DECLARE
   v_store_id   INT;
   v_store_name TEXT;
-  v_category   TEXT;
 BEGIN
   -- 只擋正式結算；草稿（試算暫存、逐筆調整前）放行
   IF COALESCE(NEW.status, 'finalized') <> 'finalized' THEN
-    RETURN NEW;
-  END IF;
-
-  -- 計件（按件數計薪、不排班不看考勤）→ 放行，不需班表鎖定
-  SELECT s.employment_category INTO v_category
-    FROM salary_structures s
-    WHERE s.employee_id = NEW.employee_id
-    ORDER BY s.id DESC
-    LIMIT 1;
-  IF v_category = 'piece' THEN
     RETURN NEW;
   END IF;
 

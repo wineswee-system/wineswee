@@ -180,15 +180,7 @@ export default function BatchPayrollModal({ month, batchPreview, batchSaving, on
           )}
 
           {/* 對齊廠商 PDF 欄位順序：加項 → 應領 → 扣項 → 減項合計 → 實領 → 雇主負擔 */}
-          {/* 上方同步橫向滾輪 — 一進來頂部就能左右捲，不用找最下面那條 */}
-          <div
-            ref={topScrollRef}
-            onScroll={() => syncFrom(topScrollRef, bodyScrollRef)}
-            style={{ overflowX: 'scroll', overflowY: 'hidden', flexShrink: 0, height: 14, background: 'var(--bg-card)', borderRadius: 6 }}
-          >
-            <div style={{ width: scrollW, height: 1 }} />
-          </div>
-          {/* 表格自身雙向捲動、固定高度 → 橫向滾輪也固定在可視底部 */}
+          {/* 表格自身雙向捲動、固定高度 */}
           <div
             ref={bodyScrollRef}
             onScroll={() => syncFrom(bodyScrollRef, topScrollRef)}
@@ -358,6 +350,15 @@ export default function BatchPayrollModal({ month, batchPreview, batchSaving, on
               </table>
             </div>
           </div>
+        </div>
+
+        {/* 固定在按鈕正上方的同步橫向滾輪 — 永遠看得到、不用捲 */}
+        <div
+          ref={topScrollRef}
+          onScroll={() => syncFrom(topScrollRef, bodyScrollRef)}
+          style={{ overflowX: 'scroll', overflowY: 'hidden', flexShrink: 0, height: 16, background: 'var(--bg-card)', borderTop: '1px solid var(--border-subtle)' }}
+        >
+          <div style={{ width: scrollW, height: 1 }} />
         </div>
 
         <div style={{ padding: '14px 24px', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

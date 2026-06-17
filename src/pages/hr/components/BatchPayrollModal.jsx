@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { Calculator, Play, Sparkles, AlertTriangle, CheckCircle, AlertOctagon, Pencil, FunctionSquare } from 'lucide-react'
 import { detectPayrollAnomalies, isConfigured as aiReady } from '../../../lib/ai/hrAI'
@@ -23,6 +23,22 @@ export default function BatchPayrollModal({ month, batchPreview, batchSaving, on
   const [anomalyReport, setAnomalyReport] = useState(null)
   const [aiChecking, setAiChecking] = useState(false)
   const [formulaPayroll, setFormulaPayroll] = useState(null)
+
+  // 上方同步橫向滾輪：免捲到最下面才找得到滾輪
+  const bodyScrollRef = useRef(null)
+  const topScrollRef = useRef(null)
+  const syncingRef = useRef(false)
+  const [scrollW, setScrollW] = useState(2000)
+  useEffect(() => {
+    const el = bodyScrollRef.current
+    if (el) setScrollW(el.scrollWidth)
+  }, [batchPreview])
+  const syncFrom = (from, to) => {
+    if (syncingRef.current) return
+    syncingRef.current = true
+    if (from.current && to.current) to.current.scrollLeft = from.current.scrollLeft
+    syncingRef.current = false
+  }
 
   const handleAICheck = async () => {
     setAiChecking(true)
@@ -159,8 +175,20 @@ export default function BatchPayrollModal({ month, batchPreview, batchSaving, on
           )}
 
           {/* 對齊廠商 PDF 欄位順序：加項 → 應領 → 扣項 → 減項合計 → 實領 → 雇主負擔 */}
-          {/* 表格自身雙向捲動、固定高度 → 橫向滾輪固定在可視底部，不用捲到最下面 */}
-          <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+          {/* 上方同步橫向滾輪 — 一進來頂部就能左右捲，不用找最下面那條 */}
+          <div
+            ref={topScrollRef}
+            onScroll={() => syncFrom(topScrollRef, bodyScrollRef)}
+            style={{ overflowX: 'auto', overflowY: 'hidden', flexShrink: 0 }}
+          >
+            <div style={{ width: scrollW, height: 1 }} />
+          </div>
+          {/* 表格自身雙向捲動、固定高度 → 橫向滾輪也固定在可視底部 */}
+          <div
+            ref={bodyScrollRef}
+            onScroll={() => syncFrom(bodyScrollRef, topScrollRef)}
+            style={{ flex: 1, minHeight: 0, overflow: 'auto' }}
+          >
             <div className="data-table-wrapper">
               <table className="data-table" style={{ fontSize: 11, whiteSpace: 'nowrap', minWidth: 2000 }}>
                 <thead>

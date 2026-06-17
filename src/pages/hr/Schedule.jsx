@@ -200,15 +200,20 @@ export default function Schedule() {
       supabase.from('shift_definitions').select('*').order('sort_order'),
       supabase.from('holidays').select('date'),
       supabase.from('user_stores').select('employee_id, store_id, is_primary'),
-    ]).then(([e, d, l, sd, hd, us]) => {
+      supabase.from('salary_structures').select('employee_id, employment_category'),
+    ]).then(([e, d, l, sd, hd, us, ss]) => {
       // Enrich employees with user_stores data
       const userStoresMap = {}
       for (const row of (us.data || [])) {
         if (!userStoresMap[row.employee_id]) userStoresMap[row.employee_id] = []
         userStoresMap[row.employee_id].push(row.store_id)
       }
+      // 員工分類（salary_structures，不在 employees）— 用來把「行政(admin)」排除在排班外
+      const catMap = {}
+      for (const row of (ss.data || [])) catMap[row.employee_id] = row.employment_category
       const enriched = (e.data || []).map(emp => ({
         ...emp,
+        employment_category: catMap[emp.id] || null,
         assigned_store_ids: userStoresMap[emp.id] || (emp.store_id ? [emp.store_id] : []),
       }))
       setEmployees(enriched)
@@ -352,6 +357,7 @@ export default function Schedule() {
     const vStart = activeDates?.[0]
     const vEnd = activeDates?.[activeDates.length - 1]
     const filteredEmps = employees.filter(em =>
+      em.employment_category !== 'admin' &&
       (deptFilter === '' || em.dept === deptFilter) &&
       (storeFilter === '' || em.store === storeFilter) &&
       (!em.join_date   || !vEnd   || em.join_date   <= vEnd) &&
@@ -393,6 +399,7 @@ export default function Schedule() {
       const vStart = activeDates?.[0]
       const vEnd = activeDates?.[activeDates.length - 1]
       const filteredEmps = employees.filter(em =>
+        em.employment_category !== 'admin' &&
         (deptFilter === '' || em.dept === deptFilter) &&
         (storeFilter === '' || em.store === storeFilter) &&
         (!em.join_date   || !vEnd   || em.join_date   <= vEnd) &&
@@ -1054,6 +1061,7 @@ export default function Schedule() {
   const viewStart = activeDates?.[0] || monthStart
   const viewEnd = activeDates?.[activeDates.length - 1] || monthEnd
   const filtered = employees.filter(e =>
+    e.employment_category !== 'admin' &&               // 行政(固定9-6)不排班 → 排除;督導請改成「正職」才會出現
     (deptFilter === '' || e.dept === deptFilter) &&
     (storeFilter === '' || e.store === storeFilter) &&
     (!e.join_date   || e.join_date   <= viewEnd) &&   // 4/30 之後入職 → 4 月不顯示

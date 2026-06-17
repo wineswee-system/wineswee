@@ -143,7 +143,8 @@ export default function HrTabContent({
         <>
           <SectionTitle icon="💰" text="薪資" />
           {/* ★ 員工分類 — 4 個選項決定加班費演算法 + 投保邏輯
-             regular(正職門市 1.34/1.67) / admin(行政 OT×1 月薪含) / parttime(兼職 PT 投保) / piece(計件無 OT) */}
+             regular(正職門市 1.34/1.67·看班表) / admin(行政 月薪制·固定9-6·不排班) / parttime(兼職 PT 投保) / piece(計件無 OT)
+             ※ 加班費目前 regular/admin 同階梯算（DB 未對 admin 套 ×1）;admin 與 regular 計薪差別在「考勤基準」 */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <div><div style={L}>員工分類</div>
               <select className="form-input" style={{ width: '100%' }}
@@ -157,8 +158,8 @@ export default function HrTabContent({
                   // 計件預設單價 2000（廠商實務上多數 2000/件）
                   if (cat === 'piece' && !form.piece_rate) set('piece_rate', 2000)
                 }}>
-                <option value="regular">正職（門市，加班 1.34/1.67 階梯）</option>
-                <option value="admin">行政（月薪含 OT，加班 ×1）</option>
+                <option value="regular">正職（門市，看班表、加班 1.34/1.67 階梯）</option>
+                <option value="admin">行政（月薪制，固定工時 9-6、不排班）</option>
                 <option value="parttime">兼職（時薪制，投保 PT 級距）</option>
                 <option value="piece">計件（月薪 = 件數 × 單價，不算加班）</option>
               </select>

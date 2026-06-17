@@ -100,7 +100,7 @@ export default function BatchPayrollModal({ month, batchPreview, batchSaving, on
           )}
         </div>
 
-        <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px' }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, padding: '16px 24px', gap: 12 }}>
           {/* AI Anomaly Report */}
           {anomalyReport && (
             <div style={{
@@ -159,7 +159,8 @@ export default function BatchPayrollModal({ month, batchPreview, batchSaving, on
           )}
 
           {/* 對齊廠商 PDF 欄位順序：加項 → 應領 → 扣項 → 減項合計 → 實領 → 雇主負擔 */}
-          <div style={{ overflowX: 'auto' }}>
+          {/* 表格自身雙向捲動、固定高度 → 橫向滾輪固定在可視底部，不用捲到最下面 */}
+          <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
             <div className="data-table-wrapper">
               <table className="data-table" style={{ fontSize: 11, whiteSpace: 'nowrap', minWidth: 2000 }}>
                 <thead>

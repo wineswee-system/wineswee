@@ -20,6 +20,7 @@ DECLARE
   -- 分類
   v_is_hourly      boolean;
   v_emp_category   text;
+  v_is_office      boolean;   -- 真行政(admin 且職位非督導)→ 才用固定 9-6+30分寬限;督導當門市(看班表/無寬限)
   v_is_piece       boolean;
   v_is_ptlike      boolean;
   -- 出勤
@@ -114,6 +115,8 @@ BEGIN
   v_is_hourly    := COALESCE(v_ss.salary_type,'') = 'hourly';
   v_emp_category := v_ss.employment_category;
   v_is_piece     := COALESCE(v_emp_category = 'piece', false);   -- NULL→false（否則 NOT NULL 連鎖出錯）
+  -- 真行政=admin 且職位不含「督導」。督導當門市看(班表為準、無寬限、沒班表不算),不套固定 9-6。
+  v_is_office    := COALESCE(v_emp_category = 'admin', false) AND COALESCE(v_emp.position,'') NOT LIKE '%督導%';
   v_is_ptlike    := v_is_hourly OR v_is_piece;
 
   -- ── 員工所屬門市 id（給政策獎金 specificity 用）──
@@ -150,12 +153,12 @@ BEGIN
                   AND EXTRACT(EPOCH FROM ar.clock_out::time) < EXTRACT(EPOCH FROM ar.clock_in::time)
                  THEN 1440 ELSE 0 END AS cot,
         COALESCE(EXTRACT(EPOCH FROM s.actual_start::time)/60.0,
-                 CASE WHEN COALESCE(v_emp_category,'')='admin' THEN 540 ELSE NULL END) AS ast,
+                 CASE WHEN v_is_office THEN 540 ELSE NULL END) AS ast,
         COALESCE(EXTRACT(EPOCH FROM s.actual_end::time)/60.0,
-                 CASE WHEN COALESCE(v_emp_category,'')='admin'
+                 CASE WHEN v_is_office
                       THEN LEAST(GREATEST(EXTRACT(EPOCH FROM ar.clock_in::time)/60.0 + 540, 1080), 1110)
                       ELSE NULL END) AS ae,
-        CASE WHEN COALESCE(v_emp_category,'')='admin' THEN 30 ELSE 0 END AS grace,
+        CASE WHEN v_is_office THEN 30 ELSE 0 END AS grace,
         (ar.clock_out IS NOT NULL) AS has_out
       FROM attendance_records ar
       LEFT JOIN schedules s ON s.employee_id = ar.employee_id AND s.date = ar.date
@@ -517,8 +520,8 @@ BEGIN
         FROM (
           SELECT ar.date AS dt,
             EXTRACT(EPOCH FROM ar.clock_in::time)/60.0 AS ci,
-            COALESCE(EXTRACT(EPOCH FROM s.actual_start::time)/60.0, CASE WHEN COALESCE(v_emp_category,'')='admin' THEN 540 ELSE NULL END) AS ast,
-            CASE WHEN COALESCE(v_emp_category,'')='admin' THEN 30 ELSE 0 END AS grace
+            COALESCE(EXTRACT(EPOCH FROM s.actual_start::time)/60.0, CASE WHEN v_is_office THEN 540 ELSE NULL END) AS ast,
+            CASE WHEN v_is_office THEN 30 ELSE 0 END AS grace
           FROM attendance_records ar
           LEFT JOIN schedules s ON s.employee_id=ar.employee_id AND s.date=ar.date
           WHERE ar.employee_id=p_emp_id AND ar.date>=v_mstart AND ar.date<=v_mend AND ar.clock_in IS NOT NULL AND NOT v_is_piece
@@ -533,8 +536,8 @@ BEGIN
           SELECT ar.date AS dt,
             EXTRACT(EPOCH FROM ar.clock_in::time)/60.0 AS ci,
             (EXTRACT(EPOCH FROM ar.clock_out::time)/60.0) + CASE WHEN ar.clock_out IS NOT NULL AND EXTRACT(EPOCH FROM ar.clock_out::time)<EXTRACT(EPOCH FROM ar.clock_in::time) THEN 1440 ELSE 0 END AS cot,
-            COALESCE(EXTRACT(EPOCH FROM s.actual_start::time)/60.0, CASE WHEN COALESCE(v_emp_category,'')='admin' THEN 540 ELSE NULL END) AS ast,
-            COALESCE(EXTRACT(EPOCH FROM s.actual_end::time)/60.0, CASE WHEN COALESCE(v_emp_category,'')='admin' THEN LEAST(GREATEST(EXTRACT(EPOCH FROM ar.clock_in::time)/60.0+540,1080),1110) ELSE NULL END) AS ae,
+            COALESCE(EXTRACT(EPOCH FROM s.actual_start::time)/60.0, CASE WHEN v_is_office THEN 540 ELSE NULL END) AS ast,
+            COALESCE(EXTRACT(EPOCH FROM s.actual_end::time)/60.0, CASE WHEN v_is_office THEN LEAST(GREATEST(EXTRACT(EPOCH FROM ar.clock_in::time)/60.0+540,1080),1110) ELSE NULL END) AS ae,
             (ar.clock_out IS NOT NULL) AS has_out
           FROM attendance_records ar
           LEFT JOIN schedules s ON s.employee_id=ar.employee_id AND s.date=ar.date

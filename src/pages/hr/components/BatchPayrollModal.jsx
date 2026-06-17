@@ -240,7 +240,7 @@ export default function BatchPayrollModal({ month, batchPreview, batchSaving, on
                   {batchPreview.map((p, i) => {
                     const hasAnomaly = anomalyReport?.anomalies?.some(a => a.employee === p.employee)
                     const employerTotal = (p.laborEmployer || 0) + (p.healthEmployer || 0) + (p.pensionEmployer || 0)
-                    const leaveDeduction = (p.absenceDeduction || 0) + (p.lateDeduction || 0)
+                    const leaveDeduction = (p.absenceDeduction || 0) + (p.lateDeduction || 0) + (p.earlyLeaveDeduction || 0)
                     const rowBg = hasAnomaly ? 'rgba(245,158,11,0.06)' : undefined
                     return (
                       <tr key={i} style={rowBg ? { background: rowBg } : undefined}>
@@ -337,7 +337,7 @@ export default function BatchPayrollModal({ month, batchPreview, batchSaving, on
                     <td style={{ color: 'var(--accent-orange)' }}>-{batchPreview.reduce((s, p) => s + (p.laborInsurance || 0), 0).toLocaleString()}</td>
                     <td style={{ color: 'var(--accent-orange)' }}>-{batchPreview.reduce((s, p) => s + (p.healthInsurance || 0), 0).toLocaleString()}</td>
                     <td style={{ color: 'var(--accent-orange)' }}>-{batchPreview.reduce((s, p) => s + (p.pension || 0), 0).toLocaleString()}</td>
-                    <td style={{ color: 'var(--accent-orange)' }}>-{batchPreview.reduce((s, p) => s + (p.absenceDeduction || 0) + (p.lateDeduction || 0), 0).toLocaleString()}</td>
+                    <td style={{ color: 'var(--accent-orange)' }}>-{batchPreview.reduce((s, p) => s + (p.absenceDeduction || 0) + (p.lateDeduction || 0) + (p.earlyLeaveDeduction || 0), 0).toLocaleString()}</td>
                     <td style={{ color: 'var(--accent-orange)' }}>-{batchPreview.reduce((s, p) => s + (p.legal_deduction || 0), 0).toLocaleString()}</td>
                     <td style={{ color: 'var(--accent-red)' }}>-{batchPreview.reduce((s, p) => s + (p.totalDeductions || 0), 0).toLocaleString()}</td>
                     <td style={{ color: 'var(--accent-green)' }}>{fmt(batchPreview.reduce((s, p) => s + (p.netSalary || 0), 0))}</td>

@@ -15,6 +15,8 @@
  * - 病假新制：10天內不得不利處分、全勤按比例扣
  */
 
+import { parseShiftRange } from './scheduleUtils'
+
 // ══════════════════════════════════════
 //  勞基法 — 工時與排班規定
 // ══════════════════════════════════════
@@ -242,20 +244,42 @@ export function validateSchedule(schedules, weekDates, shiftDefs = []) {
   const warnings = []
   const errors = []
 
-  // Build shift time lookup from definitions
+  // 'HH:MM[:SS]' → 小數小時（如 '12:30' → 12.5）；無法解析回 null
+  const _hm = (t) => {
+    if (!t || typeof t !== 'string') return null
+    const m = t.match(/^(\d{1,2}):(\d{2})/)
+    if (!m) return null
+    return parseInt(m[1], 10) + parseInt(m[2], 10) / 60
+  }
+
+  // Build shift time lookup from definitions（用小數小時，保留分鐘）
   const shiftTimeMap = {}
-  const shiftHoursMap = {}
   shiftDefs.forEach(d => {
-    const startH = parseInt(d.start_time) || 0
-    const startM = parseInt((d.start_time || '').split(':')[1]) || 0
-    const endH = parseInt(d.end_time) || 0
-    const endM = parseInt((d.end_time || '').split(':')[1]) || 0
-    const start = startH + startM / 60
-    const end = endH + endM / 60
-    shiftTimeMap[d.name] = { start: startH, end: endH }
-    // Calculate shift duration
-    shiftHoursMap[d.name] = end > start ? end - start : (24 - start + end)
+    const start = _hm(d.start_time)
+    const end = _hm(d.end_time)
+    if (start != null && end != null) shiftTimeMap[d.name] = { start, end }
   })
+
+  // 統一解析一筆班的上下班時間（小數小時，0–24）。優先序：
+  //   1) schedules.actual_start/actual_end（計薪用回填的可靠時間）
+  //   2) shift_definitions 名稱對照
+  //   3) parseShiftRange 解析班別字串（含分鐘、跨午夜，如 '12:30~1'、'18~0'）
+  // 回傳 { start, end, hours }；跨午夜（end<=start）工時 +24。解析不出回 null。
+  const resolveShift = (s) => {
+    let start = _hm(s.actual_start)
+    let end = _hm(s.actual_end)
+    if (start == null || end == null) {
+      const def = shiftTimeMap[s.shift]
+      if (def) { start = def.start; end = def.end }
+    }
+    if (start == null || end == null) {
+      const p = parseShiftRange(s.shift)
+      if (p) { start = _hm(p.start); end = _hm(p.end) }
+    }
+    if (start == null || end == null) return null
+    const hours = end > start ? end - start : (24 - start + end)
+    return { start, end, hours }
+  }
 
   // Group by employee
   const byEmployee = {}
@@ -273,7 +297,7 @@ export function validateSchedule(schedules, weekDates, shiftDefs = []) {
 
     // H2: 每日工時檢查 — 正常8h，含加班最高12h (§30, §32)
     for (const s of workDays) {
-      const hours = shiftHoursMap[s.shift]
+      const hours = resolveShift(s)?.hours
       if (hours && hours > 12) {
         errors.push({
           employee: emp,
@@ -323,46 +347,37 @@ export function validateSchedule(schedules, weekDates, shiftDefs = []) {
       })
     }
 
-    // H4: 輪班間隔檢查 (§34) — 用 shift_definitions 的時間
-    for (let i = 1; i < empSchedules.length; i++) {
-      const prev = empSchedules[i - 1]
-      const curr = empSchedules[i]
-      if (prev.shift && curr.shift && prev.shift !== '休' && curr.shift !== '休') {
-        const prevTime = shiftTimeMap[prev.shift] || parseShiftString(prev.shift)
-        const currTime = shiftTimeMap[curr.shift] || parseShiftString(curr.shift)
+    // H4: 輪班間隔檢查 (§34) — 更換班次至少連續 11 小時休息
+    // 先按日期排序、只比「相鄰日」，避免拿不連續的兩天誤算間隔
+    const _dayNo = (d) => Math.round(new Date(`${d}T00:00:00Z`).getTime() / 86400000)
+    const workSorted = empSchedules
+      .filter(s => s.shift && s.shift !== '休' && s.shift !== '例假')
+      .slice()
+      .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
+    for (let i = 1; i < workSorted.length; i++) {
+      const prev = workSorted[i - 1]
+      const curr = workSorted[i]
+      if (_dayNo(curr.date) - _dayNo(prev.date) !== 1) continue // 只檢查相鄰日
 
-        if (!prevTime || !currTime) continue
+      const prevTime = resolveShift(prev)
+      const currTime = resolveShift(curr)
+      if (!prevTime || !currTime) continue
 
-        const prevStart = prevTime.start
-        const prevEnd = prevTime.end
-        const currStart = currTime.start
-        const prevCrossesMidnight = prevEnd < prevStart // e.g., 22:00-06:00
+      const prevEnd = prevTime.end
+      const currStart = currTime.start
+      const prevCrossesMidnight = prevTime.end <= prevTime.start // e.g., 18:00~00:00
 
-        // Calculate actual gap
-        let gap
-        if (prevCrossesMidnight) {
-          gap = currStart - prevEnd
-        } else {
-          gap = currStart + (24 - prevEnd)
-        }
+      // prev 跨午夜 → 在 curr 當天 prevEnd 點下班；否則 prev 當天下班、curr 隔天上班
+      const gap = prevCrossesMidnight ? (currStart - prevEnd) : (currStart + (24 - prevEnd))
 
-        if (gap < LABOR_STANDARDS.shiftInterval.minHoursAgreed) {
-          errors.push({
-            employee: emp,
-            constraint: 'H4',
-            law: '勞基法 §34',
-            message: `${emp} ${prev.date}→${curr.date} 兩班之間休息 ${gap}h 過短（${prev.shift}→${curr.shift}）`,
-            severity: 'error',
-          })
-        } else if (gap < LABOR_STANDARDS.shiftInterval.minHours) {
-          warnings.push({
-            employee: emp,
-            constraint: 'H4',
-            law: '勞基法 §34',
-            message: `${emp} ${prev.date}→${curr.date} 兩班之間休息 ${gap}h 偏短（${prev.shift}→${curr.shift}）`,
-            severity: 'warning',
-          })
-        }
+      if (gap < LABOR_STANDARDS.shiftInterval.minHours) {
+        errors.push({
+          employee: emp,
+          constraint: 'H4',
+          law: '勞基法 §34',
+          message: `${emp} ${prev.date}→${curr.date} 兩班之間休息 ${gap.toFixed(1)}h，未達 ${LABOR_STANDARDS.shiftInterval.minHours}h（${prev.shift}→${curr.shift}）`,
+          severity: 'error',
+        })
       }
     }
   }

@@ -30,9 +30,14 @@ export default function BatchPayrollModal({ month, batchPreview, batchSaving, on
   const syncingRef = useRef(false)
   const [scrollW, setScrollW] = useState(2000)
   useEffect(() => {
-    const el = bodyScrollRef.current
-    if (el) setScrollW(el.scrollWidth)
-  }, [batchPreview])
+    const measure = () => {
+      const el = bodyScrollRef.current
+      if (el) setScrollW(Math.max(el.scrollWidth, 2000))
+    }
+    measure()
+    const r = requestAnimationFrame(measure)  // 等表格實際排版完再量一次
+    return () => cancelAnimationFrame(r)
+  }, [batchPreview, month])
   const syncFrom = (from, to) => {
     if (syncingRef.current) return
     syncingRef.current = true
@@ -179,7 +184,7 @@ export default function BatchPayrollModal({ month, batchPreview, batchSaving, on
           <div
             ref={topScrollRef}
             onScroll={() => syncFrom(topScrollRef, bodyScrollRef)}
-            style={{ overflowX: 'auto', overflowY: 'hidden', flexShrink: 0 }}
+            style={{ overflowX: 'scroll', overflowY: 'hidden', flexShrink: 0, height: 14, background: 'var(--bg-card)', borderRadius: 6 }}
           >
             <div style={{ width: scrollW, height: 1 }} />
           </div>

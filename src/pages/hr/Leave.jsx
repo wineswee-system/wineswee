@@ -40,6 +40,7 @@ export default function Leave() {
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
   const [deptFilter, setDeptFilter] = useState('')
+  const [leaveMonth, setLeaveMonth] = useState(() => new Date().toISOString().slice(0, 7))  // 預設當月，只載當月降載量
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -121,7 +122,7 @@ export default function Leave() {
   useEffect(() => {
     const orgId = profile?.organization_id
     Promise.all([
-      getLeaveRequests({ orgId }),
+      getLeaveRequests({ orgId, month: leaveMonth }),
       getActiveEmployees('id, name, dept, store_id, department_id, position, join_date, phone, signature_url, salary_type, weekly_hours, departments!department_id(name)', orgId),
       getDepartments(orgId),
       getLeaveStepSettings(),
@@ -160,7 +161,7 @@ export default function Leave() {
     }).finally(() => {
       setLoading(false)
     })
-  }, [])
+  }, [leaveMonth]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const set = (k, v) => {
     setForm(f => ({ ...f, [k]: v }))
@@ -577,6 +578,8 @@ export default function Leave() {
           <option value="">全部部門</option>
           {departments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
         </select>
+        <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap', marginLeft: 8 }}>📅 月份</span>
+        <input type="month" className="form-input" style={{ fontSize: 13 }} value={leaveMonth} onChange={e => setLeaveMonth(e.target.value)} title="只載入該月的請假單" />
       </div>
 
       <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>

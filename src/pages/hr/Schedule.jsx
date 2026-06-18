@@ -64,7 +64,7 @@ export default function Schedule() {
   const [scheduleLoading, setScheduleLoading] = useState(false)
   const [weekOffset, setWeekOffset] = useState(0)
   const [deptFilter, setDeptFilter] = useState('')
-  const [storeFilter, setStoreFilter] = useState('')
+  const [storeFilter, setStoreFilter] = useState(null)  // null=尚未選門市(進場先選才載)；''=全部門市；其他=店名
   const [editCell, setEditCell] = useState(null)
   const [focusedCell, setFocusedCell] = useState(null)  // { empName, date } 鍵盤導航的焦點
   const [selection, setSelection] = useState(null)       // { anchor: {empName, date}, end: {empName, date} } 拖曳框選
@@ -238,6 +238,7 @@ export default function Schedule() {
   }, [])
 
   useEffect(() => {
+    if (storeFilter === null) return  // 尚未選門市 → 先不載班表(避免一進去就撈/渲染全部)
     // Cancel any in-flight request from a previous month/store change
     scheduleAbortRef.current?.abort()
     const controller = new AbortController()
@@ -311,10 +312,11 @@ export default function Schedule() {
   })()
   const scopedLocations = isAdmin ? locations : locations.filter(l => scopedStoreIds.has(l.id))
 
-  // 非 admin 進來預設選自己第一間店（沒有「全部門市」可選）
+  // 進場「先選門市才載」：只有「非 admin 且剛好只有一間店」才自動選（省得他選），
+  // 其餘(admin / 多店督導)維持 null → 顯示「請先選擇門市」，避免一進去就載/渲染全部。
   useEffect(() => {
-    if (isAdmin || storeFilter || scopedLocations.length === 0) return
-    setStoreFilter(scopedLocations[0].name)
+    if (storeFilter !== null) return
+    if (!isAdmin && scopedLocations.length === 1) setStoreFilter(scopedLocations[0].name)
   }, [isAdmin, storeFilter, locations, myStoreIds, mySectionIds, authProfile?.store_id, authProfile?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const reloadMonthLocks = async () => {
@@ -1482,8 +1484,13 @@ export default function Schedule() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontSize: 14 }}>🏪</span>
           <select className="form-input" style={{ width: 200, padding: '8px 12px', fontSize: 13 }}
-            value={storeFilter} onChange={e => setStoreFilter(e.target.value)}>
-            {isAdmin && <option value="">全部門市</option>}
+            value={storeFilter === null ? '__PICK__' : (storeFilter === '' ? '__ALL__' : storeFilter)}
+            onChange={e => {
+              const v = e.target.value
+              setStoreFilter(v === '__ALL__' ? '' : v === '__PICK__' ? null : v)
+            }}>
+            {storeFilter === null && <option value="__PICK__" disabled>請選擇門市…</option>}
+            {isAdmin && <option value="__ALL__">全部門市</option>}
             {scopedLocations.map(l => <option key={l.id} value={l.name}>{l.name}</option>)}
           </select>
         </div>
@@ -1567,7 +1574,13 @@ export default function Schedule() {
         />
       )}
 
-      {mainTab === 'schedule' && (
+      {mainTab === 'schedule' && storeFilter === null && (
+        <div style={{ padding: 48, textAlign: 'center', color: 'var(--text-muted)', fontSize: 14 }}>
+          👆 請先在上方選擇門市（某一間或「全部門市」），才會載入班表
+        </div>
+      )}
+
+      {mainTab === 'schedule' && storeFilter !== null && (
         <div style={{ position: 'relative' }}>
           {scheduleLoading && (
             <div style={{

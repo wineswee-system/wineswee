@@ -41,6 +41,12 @@ export async function checkMissedClockout(date) {
 export const getLeaveRequests = (options = {}) => {
   let q = supabase.from('leave_requests').select('*').is('deleted_at', null).order('id')
   if (options.orgId) q = q.eq('organization_id', options.orgId)
+  if (options.month) {  // 'YYYY-MM' → 只撈 start_date 落在當月的(進場降載量)
+    const [y, m] = options.month.split('-').map(Number)
+    const start = `${options.month}-01`
+    const end = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10)  // 當月最後一天
+    q = q.gte('start_date', start).lte('start_date', end)
+  }
   return q.limit(options.limit ?? 500)
 }
 

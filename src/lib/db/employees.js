@@ -17,6 +17,13 @@ export const getEmployeesList = (orgId) => {
   return q
 }
 
+// 單一員工完整資料(詳情/編輯頁用 id 撈,不必載全部人)
+export const getEmployeeById = (id, orgId) => {
+  let q = supabase.from('employees').select('*, departments!department_id(name), stores!store_id(name)').eq('id', id)
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q.maybeSingle()
+}
+
 export const createEmployee = (data) =>
   supabase.from('employees').insert(data).select().single()
 

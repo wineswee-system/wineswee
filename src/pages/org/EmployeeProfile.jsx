@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
-import { getEmployees } from '../../lib/db'
+import { getEmployeeById, getEmployeesList } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -20,15 +20,15 @@ export default function EmployeeProfile() {
   useEffect(() => {
     const orgId = profile?.organization_id
     Promise.all([
-      getEmployees(orgId),
+      getEmployeeById(id, orgId),     // 只撈這一個人(完整)
+      getEmployeesList(orgId),        // 輕量名單(給主管下拉等用)
       supabase.from('stores').select('id, name, department_id, is_active').eq('is_active', true),
       supabase.from('departments').select('id, name, manager_id').order('id'),
-    ]).then(([eRes, sRes, dRes]) => {
-      const emps = eRes.data || []
-      setEmployees(emps)
+    ]).then(([oneRes, listRes, sRes, dRes]) => {
+      setEmployee(oneRes.data || null)
+      setEmployees(listRes.data || [])
       setStores(sRes.data || [])
       setDepartments(dRes.data || [])
-      setEmployee(emps.find(e => String(e.id) === String(id)) || null)
     }).finally(() => setLoading(false))
   }, [id, profile?.organization_id])
 

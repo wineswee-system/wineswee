@@ -159,6 +159,8 @@ DECLARE
   v_unpaid_days    numeric:=0;
   v_half_hours     numeric:=0;
   v_late_deduction numeric:=0;
+  v_early_mins      numeric:=0;
+  v_early_deduction numeric:=0;
   v_unpaid_deduct  numeric:=0;
   v_half_deduct    numeric:=0;
   v_absence_deduct numeric:=0;
@@ -221,6 +223,45 @@ BEGIN
   WHERE ar.employee_id = p_emp_id
     AND ar.date >= v_mstart AND ar.date <= v_mend;
 
+  -- ── 遲到/早退（per-minute = 分鐘 × 時薪/60；計件不扣）──
+  --   統一邏輯：有班表(actual_start/end)就用班表；admin 沒班表才退回固定 09:00–18:00(應下班 clamp(clock_in+9h,18:00,18:30))。
+  --   寬限(grace)看分類：admin 30 分、其他 0；非 admin 又沒班表 → 該日不算(ast/ae 為 NULL)。
+  --   時間用 EXTRACT(EPOCH FROM x::time)/60 → 離午夜分鐘；clock_out < clock_in 表跨午夜 +1440；班表跨午夜(ae<=ast)+1440。早打卡不給 credit。
+  IF NOT v_is_piece THEN
+    SELECT
+      COALESCE(SUM(GREATEST(0, ci - ast - grace)) FILTER (WHERE ast IS NOT NULL),0),
+      COALESCE(SUM(GREATEST(0, (ae + CASE WHEN ae <= ast THEN 1440 ELSE 0 END) - cot)) FILTER (WHERE ae IS NOT NULL AND has_out),0)
+      INTO v_late_mins, v_early_mins
+    FROM (
+      SELECT
+        EXTRACT(EPOCH FROM ar.clock_in::time)/60.0 AS ci,
+        (EXTRACT(EPOCH FROM ar.clock_out::time)/60.0)
+          + CASE WHEN ar.clock_out IS NOT NULL
+                  AND EXTRACT(EPOCH FROM ar.clock_out::time) < EXTRACT(EPOCH FROM ar.clock_in::time)
+                 THEN 1440 ELSE 0 END AS cot,
+        COALESCE(EXTRACT(EPOCH FROM s.actual_start::time)/60.0,
+                 CASE WHEN COALESCE(v_emp_category,'')='admin' THEN 540 ELSE NULL END) AS ast,
+        COALESCE(EXTRACT(EPOCH FROM s.actual_end::time)/60.0,
+                 CASE WHEN COALESCE(v_emp_category,'')='admin'
+                      THEN LEAST(GREATEST(EXTRACT(EPOCH FROM ar.clock_in::time)/60.0 + 540, 1080), 1110)
+                      ELSE NULL END) AS ae,
+        CASE WHEN COALESCE(v_emp_category,'')='admin' THEN 30 ELSE 0 END AS grace,
+        (ar.clock_out IS NOT NULL) AS has_out
+      FROM attendance_records ar
+      LEFT JOIN schedules s ON s.employee_id = ar.employee_id AND s.date = ar.date
+      WHERE ar.employee_id = p_emp_id AND ar.date >= v_mstart AND ar.date <= v_mend
+        AND ar.clock_in IS NOT NULL
+        -- 排除「有核准請假」的日子：請假提早走/晚到不該再扣早退/遲到（避免跟請假扣重複）
+        AND NOT EXISTS (
+          SELECT 1 FROM leave_requests lr
+          WHERE lr.employee_id = ar.employee_id AND lr.status = '已核准'
+            AND ar.date BETWEEN lr.start_date AND COALESCE(lr.end_date, lr.start_date)
+        )
+    ) x;
+    v_late_mins  := COALESCE(v_late_mins,0);
+    v_early_mins := COALESCE(v_early_mins,0);
+  END IF;
+
   -- ── 津貼 ──
   v_role_allow     := COALESCE(v_ss.supervisor_allowance,0) + COALESCE(v_ss.role_allowance,0);
   v_meal           := COALESCE(v_ss.meal_allowance,0);
@@ -245,7 +286,9 @@ BEGIN
   v_cross := CASE WHEN v_cross_struct > 0 THEN v_cross_struct ELSE v_cross_custom END;
 
   -- ── 本薪 ──
-  v_piece_count := COALESCE(v_ss.current_piece_count,0);
+  v_piece_count := COALESCE(
+    (SELECT pc.piece_count FROM employee_piece_counts pc WHERE pc.employee_id = p_emp_id AND pc.year_month = p_period),
+    v_ss.current_piece_count, 0);
   v_piece_rate  := COALESCE(v_ss.piece_rate,0);
   IF v_is_piece THEN
     v_base_salary := ceil(v_piece_count * v_piece_rate);
@@ -370,7 +413,8 @@ BEGIN
   ) b;
 
   -- ── 扣款金額 ──
-  v_late_deduction := floor(v_late_mins/30) * floor(v_hourly_rate * 0.5);
+  v_late_deduction  := floor(v_late_mins  * v_hourly_rate / 60.0);  -- per-minute,無條件捨去
+  v_early_deduction := floor(v_early_mins * v_hourly_rate / 60.0);
   v_unpaid_deduct  := CASE WHEN v_is_hourly THEN 0 ELSE floor(v_unpaid_hours * v_hourly_rate) END;
   v_half_deduct    := CASE WHEN v_is_hourly THEN 0 ELSE floor(v_half_hours * v_hourly_rate * 0.5) END;
   v_absence_deduct := v_unpaid_deduct + v_half_deduct;
@@ -442,7 +486,7 @@ BEGIN
   v_pension_self := round(v_wage_grade * LEAST(GREATEST(v_vol_rate,0),0.06));
 
   v_total_deduct := v_labor_emp + v_health_emp + v_pension_self + 0
-                  + (v_absence_deduct + v_late_deduction + v_legal_total);
+                  + (v_absence_deduct + v_late_deduction + v_early_deduction + v_legal_total);
   v_net := ceil(v_gross - v_total_deduct);
 
   -- ── partial month 保險 prorate（calculateInServiceDays）──
@@ -509,6 +553,8 @@ BEGIN
     'unpaidDeduction', v_unpaid_deduct,
     'halfPayDeduction', v_half_deduct,
     'lateDeduction', v_late_deduction,
+    'earlyLeaveDeduction', v_early_deduction,
+    'earlyLeaveMinutes', v_early_mins,
     'legal_deduction', v_legal_total,
     'health_ins_dependents', v_dependents,
     'pension_self_pct', COALESCE(v_emp.labor_pension_self_rate,0),
@@ -538,6 +584,54 @@ BEGIN
     'laborEmployer', v_labor_er,
     'healthEmployer', v_health_er,
     'pensionEmployer', v_pension_er
+  ) || jsonb_build_object(
+    -- ── 逐日明細（給公式視窗的明細表用）──
+    '_ot_rows', COALESCE((
+      SELECT jsonb_agg(jsonb_build_object('date', request_date, 'hours', ot_hours,
+        'category', COALESCE(NULLIF(ot_category,''), CASE extract(dow from request_date)::int WHEN 0 THEN 'weekly_off' WHEN 6 THEN 'restday' ELSE 'weekday' END)) ORDER BY request_date)
+      FROM overtime_requests WHERE employee_id=p_emp_id AND status='已核准' AND NOT COALESCE(is_exception,false)
+        AND request_date>=v_mstart AND request_date<=v_mend), '[]'::jsonb),
+    '_ot_exception_rows', COALESCE((
+      SELECT jsonb_agg(jsonb_build_object('date', request_date, 'hours', ot_hours,
+        'category', COALESCE(NULLIF(ot_category,''), CASE extract(dow from request_date)::int WHEN 0 THEN 'weekly_off' WHEN 6 THEN 'restday' ELSE 'weekday' END)) ORDER BY request_date)
+      FROM overtime_requests WHERE employee_id=p_emp_id AND status='已核准' AND COALESCE(is_exception,false)
+        AND request_date>=v_mstart AND request_date<=v_mend), '[]'::jsonb),
+    '_leave_rows', COALESCE((
+      SELECT jsonb_agg(jsonb_build_object('date', start_date, 'type', type, 'hours', hours, 'days', days) ORDER BY start_date)
+      FROM leave_requests WHERE employee_id=p_emp_id AND status='已核准'
+        AND start_date>=v_mstart AND start_date<=v_mend), '[]'::jsonb),
+    '_late_rows', COALESCE((
+      SELECT jsonb_agg(jsonb_build_object('date', dt, 'late_minutes', round(lm)) ORDER BY dt)
+      FROM (
+        SELECT y.dt, GREATEST(0, y.ci - y.ast - y.grace) AS lm
+        FROM (
+          SELECT ar.date AS dt,
+            EXTRACT(EPOCH FROM ar.clock_in::time)/60.0 AS ci,
+            COALESCE(EXTRACT(EPOCH FROM s.actual_start::time)/60.0, CASE WHEN COALESCE(v_emp_category,'')='admin' THEN 540 ELSE NULL END) AS ast,
+            CASE WHEN COALESCE(v_emp_category,'')='admin' THEN 30 ELSE 0 END AS grace
+          FROM attendance_records ar
+          LEFT JOIN schedules s ON s.employee_id=ar.employee_id AND s.date=ar.date
+          WHERE ar.employee_id=p_emp_id AND ar.date>=v_mstart AND ar.date<=v_mend AND ar.clock_in IS NOT NULL AND NOT v_is_piece
+            AND NOT EXISTS (SELECT 1 FROM leave_requests lr WHERE lr.employee_id=ar.employee_id AND lr.status='已核准' AND ar.date BETWEEN lr.start_date AND COALESCE(lr.end_date,lr.start_date))
+        ) y WHERE y.ast IS NOT NULL
+      ) q WHERE lm > 0), '[]'::jsonb),
+    '_early_rows', COALESCE((
+      SELECT jsonb_agg(jsonb_build_object('date', dt, 'early_minutes', round(em)) ORDER BY dt)
+      FROM (
+        SELECT y.dt, CASE WHEN y.ae IS NOT NULL AND y.has_out THEN GREATEST(0, (y.ae + CASE WHEN y.ae<=y.ast THEN 1440 ELSE 0 END) - y.cot) ELSE 0 END AS em
+        FROM (
+          SELECT ar.date AS dt,
+            EXTRACT(EPOCH FROM ar.clock_in::time)/60.0 AS ci,
+            (EXTRACT(EPOCH FROM ar.clock_out::time)/60.0) + CASE WHEN ar.clock_out IS NOT NULL AND EXTRACT(EPOCH FROM ar.clock_out::time)<EXTRACT(EPOCH FROM ar.clock_in::time) THEN 1440 ELSE 0 END AS cot,
+            COALESCE(EXTRACT(EPOCH FROM s.actual_start::time)/60.0, CASE WHEN COALESCE(v_emp_category,'')='admin' THEN 540 ELSE NULL END) AS ast,
+            COALESCE(EXTRACT(EPOCH FROM s.actual_end::time)/60.0, CASE WHEN COALESCE(v_emp_category,'')='admin' THEN LEAST(GREATEST(EXTRACT(EPOCH FROM ar.clock_in::time)/60.0+540,1080),1110) ELSE NULL END) AS ae,
+            (ar.clock_out IS NOT NULL) AS has_out
+          FROM attendance_records ar
+          LEFT JOIN schedules s ON s.employee_id=ar.employee_id AND s.date=ar.date
+          WHERE ar.employee_id=p_emp_id AND ar.date>=v_mstart AND ar.date<=v_mend AND ar.clock_in IS NOT NULL AND NOT v_is_piece
+            AND NOT EXISTS (SELECT 1 FROM leave_requests lr WHERE lr.employee_id=ar.employee_id AND lr.status='已核准' AND ar.date BETWEEN lr.start_date AND COALESCE(lr.end_date,lr.start_date))
+        ) y
+      ) q WHERE em > 0), '[]'::jsonb)
   );
 END $function$
 ;
@@ -878,6 +972,40 @@ BEGIN
   WHERE p.code = p_code
   LIMIT 1;
   RETURN COALESCE(v_eff, false);
+END $function$
+;
+
+-- ═══════════ enforce_payroll_requires_locked_schedule() ═══════════
+CREATE OR REPLACE FUNCTION public.enforce_payroll_requires_locked_schedule()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_store_id   INT;
+  v_store_name TEXT;
+BEGIN
+  SELECT e.store_id INTO v_store_id FROM employees e WHERE e.id = NEW.employee_id;
+
+  -- 沒門市（固定行政工時，無變動班表可鎖）→ 放行
+  IF v_store_id IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  -- 有門市 → 該月班表必須已鎖定
+  IF NOT EXISTS (
+    SELECT 1 FROM schedule_month_locks l
+    WHERE l.store_id = v_store_id
+      AND l.month = NEW.pay_period
+  ) THEN
+    SELECT name INTO v_store_name FROM stores WHERE id = v_store_id;
+    RAISE EXCEPTION '「%」% 班表尚未鎖定，無法結算薪資',
+      COALESCE(v_store_name, '門市#' || v_store_id), NEW.pay_period
+      USING HINT = '請先到排班頁鎖定此門市的該月份，再結算薪資';
+  END IF;
+
+  RETURN NEW;
 END $function$
 ;
 
@@ -2204,6 +2332,123 @@ BEGIN
 END $function$
 ;
 
+-- ═══════════ get_hr_dashboard(p_org integer, p_leave_warn integer, p_leave_crit integer, p_permit_warn integer, p_permit_crit integer, p_probation_warn integer) ═══════════
+CREATE OR REPLACE FUNCTION public.get_hr_dashboard(p_org integer, p_leave_warn integer DEFAULT 30, p_leave_crit integer DEFAULT 14, p_permit_warn integer DEFAULT 60, p_permit_crit integer DEFAULT 30, p_probation_warn integer DEFAULT 7)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_org       INT  := current_employee_org();
+  v_today     date := current_date;
+  v_leave     jsonb;
+  v_permit    jsonb;
+  v_prob      jsonb;
+  v_salary    jsonb := NULL;
+  v_cur_month text;
+  v_prev_month text;
+BEGIN
+  IF p_org IS DISTINCT FROM v_org THEN
+    RAISE EXCEPTION 'FORBIDDEN: 不可存取其他組織資料';
+  END IF;
+
+  -- 特休到期風險（annual；剩餘 = total + carry_over - used > 0；未來 warn 天內到期）
+  WITH lb AS (
+    SELECT b.employee_id, e.name,
+           (COALESCE(b.total_days,0) + COALESCE(b.carry_over_days,0) - COALESCE(b.used_days,0)) AS rem,
+           b.expires_at
+    FROM leave_balances b
+    JOIN employees e ON e.id = b.employee_id AND e.status = '在職'
+    WHERE b.organization_id = p_org
+      AND b.leave_type = 'annual'
+      AND b.expires_at IS NOT NULL
+      AND b.expires_at >= v_today
+      AND b.expires_at <= v_today + p_leave_warn
+      AND (COALESCE(b.total_days,0) + COALESCE(b.carry_over_days,0) - COALESCE(b.used_days,0)) > 0
+  )
+  SELECT jsonb_build_object(
+    'people',     COUNT(DISTINCT employee_id),
+    'crit',       COUNT(DISTINCT employee_id) FILTER (WHERE expires_at <= v_today + p_leave_crit),
+    'total_days', COALESCE(ROUND(SUM(rem), 1), 0),
+    'list',       COALESCE(jsonb_agg(jsonb_build_object(
+                    'name', name, 'days', ROUND(rem, 1), 'expires_at', expires_at
+                  ) ORDER BY expires_at), '[]'::jsonb)
+  ) INTO v_leave FROM lb;
+
+  -- 外籍工作證到期（warn 天內）
+  WITH wp AS (
+    SELECT name, work_permit_expiry AS exp
+    FROM employees
+    WHERE organization_id = p_org AND status = '在職'
+      AND work_permit_expiry IS NOT NULL
+      AND work_permit_expiry >= v_today
+      AND work_permit_expiry <= v_today + p_permit_warn
+  )
+  SELECT jsonb_build_object(
+    'people', COUNT(*),
+    'crit',   COUNT(*) FILTER (WHERE exp <= v_today + p_permit_crit),
+    'list',   COALESCE(jsonb_agg(jsonb_build_object('name', name, 'expires_at', exp) ORDER BY exp), '[]'::jsonb)
+  ) INTO v_permit FROM wp;
+
+  -- 試用期到期（warn 天內）
+  WITH pb AS (
+    SELECT name, probation_end AS pend
+    FROM employees
+    WHERE organization_id = p_org AND status = '在職'
+      AND probation_end IS NOT NULL
+      AND probation_end >= v_today
+      AND probation_end <= v_today + p_probation_warn
+  )
+  SELECT jsonb_build_object(
+    'people', COUNT(*),
+    'list',   COALESCE(jsonb_agg(jsonb_build_object('name', name, 'end', pend) ORDER BY pend), '[]'::jsonb)
+  ) INTO v_prob FROM pb;
+
+  -- ── 薪資成本（只給 admin/super_admin 或有 salary.view_all 權限者）──
+  IF current_employee_role() IN ('admin','super_admin') OR public.current_user_can('salary.view_all') THEN
+    SELECT max(month) INTO v_cur_month FROM salary_records WHERE organization_id = p_org;
+    IF v_cur_month IS NOT NULL THEN
+      v_prev_month := to_char(to_date(v_cur_month || '-01','YYYY-MM-DD') - interval '1 month', 'YYYY-MM');
+      SELECT jsonb_build_object(
+        'month',      v_cur_month,
+        'this_total', COALESCE(SUM(net_salary)   FILTER (WHERE month = v_cur_month), 0),
+        'last_total', COALESCE(SUM(net_salary)   FILTER (WHERE month = v_prev_month), 0),
+        'ot_total',   COALESCE(SUM(overtime_pay) FILTER (WHERE month = v_cur_month), 0)
+      ) INTO v_salary
+      FROM salary_records
+      WHERE organization_id = p_org AND month IN (v_cur_month, v_prev_month);
+
+      SELECT v_salary || jsonb_build_object('by_dept',
+        COALESCE(jsonb_agg(d ORDER BY (d->>'total')::numeric DESC), '[]'::jsonb))
+      INTO v_salary
+      FROM (
+        SELECT jsonb_build_object(
+                 'dept',  COALESCE(NULLIF(e.dept,''), '(未分部門)'),
+                 'total', SUM(sr.net_salary)
+               ) AS d
+        FROM salary_records sr
+        JOIN employees e ON e.id = sr.employee_id
+        WHERE sr.organization_id = p_org AND sr.month = v_cur_month
+        GROUP BY COALESCE(NULLIF(e.dept,''), '(未分部門)')
+      ) x;
+    END IF;
+  END IF;
+
+  RETURN jsonb_build_object(
+    'leave_expiry',     v_leave,
+    'permit_expiry',    v_permit,
+    'probation_ending', v_prob,
+    'salary_cost',      v_salary,
+    'thresholds', jsonb_build_object(
+      'leave_warn', p_leave_warn, 'leave_crit', p_leave_crit,
+      'permit_warn', p_permit_warn, 'permit_crit', p_permit_crit,
+      'probation_warn', p_probation_warn
+    )
+  );
+END $function$
+;
+
 -- ═══════════ get_payroll_transfer_file(p_period text, p_org integer) ═══════════
 CREATE OR REPLACE FUNCTION public.get_payroll_transfer_file(p_period text, p_org integer)
  RETURNS json
@@ -3087,6 +3332,39 @@ END
 $function$
 ;
 
+-- ═══════════ lock_schedule_month(p_store_id integer, p_month text) ═══════════
+CREATE OR REPLACE FUNCTION public.lock_schedule_month(p_store_id integer, p_month text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_emp_id INT;
+  v_start  DATE := (p_month || '-01')::date;
+  v_end    DATE := ((p_month || '-01')::date + INTERVAL '1 month - 1 day')::date;
+  v_count  INT;
+BEGIN
+  SELECT id INTO v_emp_id FROM employees
+   WHERE auth_user_id = auth.uid()
+      OR email = (SELECT email FROM auth.users WHERE id = auth.uid())
+   LIMIT 1;
+
+  UPDATE schedules s SET status = 'published'
+   WHERE s.date BETWEEN v_start AND v_end
+     AND s.employee IN (SELECT name FROM employees WHERE store_id = p_store_id)
+     AND s.status = 'draft';
+  GET DIAGNOSTICS v_count = ROW_COUNT;
+
+  INSERT INTO schedule_month_locks (store_id, month, locked_at, locked_by)
+  VALUES (p_store_id, p_month, now(), v_emp_id)
+  ON CONFLICT (store_id, month) DO UPDATE
+    SET locked_at = now(), locked_by = EXCLUDED.locked_by;
+
+  RETURN jsonb_build_object('ok', true, 'locked_rows', v_count, 'month', p_month);
+END $function$
+;
+
 -- ═══════════ preview_payroll(p_period text, p_org integer, p_store_filter text) ═══════════
 CREATE OR REPLACE FUNCTION public.preview_payroll(p_period text, p_org integer, p_store_filter text DEFAULT NULL::text)
  RETURNS json
@@ -3530,5 +3808,41 @@ AS $function$
   WHERE pol.targets_anon AND pol.anon_has_grant AND NOT pol.is_permissive
     AND pol.cmd IN ('SELECT', 'ALL')
 $function$
+;
+
+-- ═══════════ unlock_schedule_month(p_store_id integer, p_month text) ═══════════
+CREATE OR REPLACE FUNCTION public.unlock_schedule_month(p_store_id integer, p_month text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_role  TEXT;
+  v_start DATE := (p_month || '-01')::date;
+  v_end   DATE := ((p_month || '-01')::date + INTERVAL '1 month - 1 day')::date;
+  v_count INT;
+BEGIN
+  SELECT role INTO v_role FROM employees
+   WHERE auth_user_id = auth.uid()
+      OR email = (SELECT email FROM auth.users WHERE id = auth.uid())
+   LIMIT 1;
+
+  IF v_role NOT IN ('admin', 'super_admin') THEN
+    RAISE EXCEPTION '只有管理員（admin/super_admin）可以解鎖月份排班';
+  END IF;
+
+  PERFORM set_config('schedules.bypass_lock', 'on', true);
+
+  UPDATE schedules s SET status = 'draft'
+   WHERE s.date BETWEEN v_start AND v_end
+     AND s.employee IN (SELECT name FROM employees WHERE store_id = p_store_id)
+     AND s.status = 'published';
+  GET DIAGNOSTICS v_count = ROW_COUNT;
+
+  DELETE FROM schedule_month_locks WHERE store_id = p_store_id AND month = p_month;
+
+  RETURN jsonb_build_object('ok', true, 'unlocked_rows', v_count, 'month', p_month);
+END $function$
 ;
 

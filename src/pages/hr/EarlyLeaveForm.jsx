@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { Plus, Trash2 } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Plus, Trash2, Clock } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -152,22 +152,47 @@ export default function EarlyLeaveForm() {
   )
 }
 
-// 24 小時制時間選擇（時 00–23 + 分 00–59），不用原生 time picker 避免 AM/PM
+// 自訂 24 小時制時間 picker（單一框 → 點開選 時/分），不用原生 time 避免 AM/PM
 const HH = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'))
 const MM = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'))
 function Time24({ value, onChange }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
   const [hh = '', mm = ''] = (value || '').split(':')
+  useEffect(() => {
+    if (!open) return
+    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [open])
+  const colStyle = { maxHeight: 180, overflowY: 'auto', flex: 1 }
+  const cell = (sel) => ({
+    padding: '6px 0', textAlign: 'center', cursor: 'pointer', fontSize: 13,
+    fontWeight: sel ? 700 : 400,
+    background: sel ? 'var(--accent-cyan-dim)' : 'transparent',
+    color: sel ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+  })
   return (
-    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-      <select className="form-input" style={{ width: '100%' }} value={hh} onChange={e => onChange(`${e.target.value || '00'}:${mm || '00'}`)}>
-        <option value="">時</option>
-        {HH.map(h => <option key={h} value={h}>{h}</option>)}
-      </select>
-      <span style={{ color: 'var(--text-muted)' }}>:</span>
-      <select className="form-input" style={{ width: '100%' }} value={mm} onChange={e => onChange(`${hh || '00'}:${e.target.value || '00'}`)}>
-        <option value="">分</option>
-        {MM.map(m => <option key={m} value={m}>{m}</option>)}
-      </select>
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button type="button" className="form-input" onClick={() => setOpen(o => !o)}
+        style={{ width: '100%', textAlign: 'left', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ color: value ? 'var(--text-primary)' : 'var(--text-muted)' }}>{value || '選擇時間'}</span>
+        <Clock size={14} style={{ color: 'var(--text-muted)' }} />
+      </button>
+      {open && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50, marginTop: 4, display: 'flex',
+          background: 'var(--bg-card)', border: '1px solid var(--border-strong)', borderRadius: 8,
+          boxShadow: '0 8px 24px rgba(0,0,0,0.25)', overflow: 'hidden',
+        }}>
+          <div style={{ ...colStyle, borderRight: '1px solid var(--border-light)' }}>
+            {HH.map(h => <div key={h} style={cell(h === hh)} onClick={() => { onChange(`${h}:${mm || '00'}`) }}>{h}</div>)}
+          </div>
+          <div style={colStyle}>
+            {MM.map(m => <div key={m} style={cell(m === mm)} onClick={() => { onChange(`${hh || '00'}:${m}`); setOpen(false) }}>{m}</div>)}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

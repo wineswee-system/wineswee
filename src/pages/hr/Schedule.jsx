@@ -114,6 +114,7 @@ export default function Schedule() {
   const [showWizard, setShowWizard] = useState(false)
   const [wizardMode, setWizardMode] = useState('manual')
   const [myStoreIds, setMyStoreIds] = useState([])
+  const [mySectionIds, setMySectionIds] = useState([]) // 我督導的課 id（課長/督導管整課門市）
   const [showWizardDropdown, setShowWizardDropdown] = useState(false)
   const wizardDropdownRef = useRef(null)
   // Prevents cycleProbeDate from being reset when wizard fires storeFilter+month changes together
@@ -220,6 +221,9 @@ export default function Schedule() {
       if (authProfile?.id) {
         supabase.from('user_stores').select('store_id').eq('employee_id', authProfile.id)
           .then(({ data }) => setMyStoreIds((data || []).map(r => r.store_id)))
+        // 我督導的「課(section)」→ 用來把整課的門市納入可排範圍（課長/督導管整課）
+        supabase.from('department_sections').select('id').eq('supervisor_id', authProfile.id)
+          .then(({ data }) => setMySectionIds((data || []).map(r => r.id)))
       }
       const defs = sd.data || []
       setShiftDefs(defs)
@@ -299,7 +303,10 @@ export default function Schedule() {
   const scopedStoreIds = (() => {
     const ids = new Set(myStoreIds)
     if (authProfile?.store_id) ids.add(authProfile.store_id)
-    locations.forEach(l => { if (l.manager_id === authProfile?.id) ids.add(l.id) })
+    locations.forEach(l => {
+      if (l.manager_id === authProfile?.id) ids.add(l.id)            // 我當店長的店
+      if (l.section_id && mySectionIds.includes(l.section_id)) ids.add(l.id) // 我督導的課的店
+    })
     return ids
   })()
   const scopedLocations = isAdmin ? locations : locations.filter(l => scopedStoreIds.has(l.id))
@@ -308,7 +315,7 @@ export default function Schedule() {
   useEffect(() => {
     if (isAdmin || storeFilter || scopedLocations.length === 0) return
     setStoreFilter(scopedLocations[0].name)
-  }, [isAdmin, storeFilter, locations, myStoreIds, authProfile?.store_id, authProfile?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isAdmin, storeFilter, locations, myStoreIds, mySectionIds, authProfile?.store_id, authProfile?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const reloadMonthLocks = async () => {
     if (!currentStore) return

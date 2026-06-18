@@ -152,9 +152,13 @@ export default function EarlyLeaveForm() {
   )
 }
 
-// 自訂 24 小時制時間 picker（單一框 → 點開選 時/分），不用原生 time 避免 AM/PM
+// 自訂 24h 時間：可直接打數字(自動補冒號) 或 點開選 時/分。不用原生 time 避免 AM/PM
 const HH = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'))
 const MM = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'))
+function fmtTime24(raw) {
+  const d = String(raw).replace(/\D/g, '').slice(0, 4)
+  return d.length > 2 ? d.slice(0, 2) + ':' + d.slice(2) : d
+}
 function Time24({ value, onChange }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
@@ -174,11 +178,10 @@ function Time24({ value, onChange }) {
   })
   return (
     <div ref={ref} style={{ position: 'relative' }}>
-      <button type="button" className="form-input" onClick={() => setOpen(o => !o)}
-        style={{ width: '100%', textAlign: 'left', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ color: value ? 'var(--text-primary)' : 'var(--text-muted)' }}>{value || '選擇時間'}</span>
-        <Clock size={14} style={{ color: 'var(--text-muted)' }} />
-      </button>
+      <input className="form-input" type="text" inputMode="numeric" placeholder="例 15:00" maxLength={5}
+        style={{ width: '100%', paddingRight: 30 }}
+        value={value || ''} onChange={e => onChange(fmtTime24(e.target.value))} onFocus={() => setOpen(true)} />
+      <Clock size={14} style={{ position: 'absolute', right: 10, top: 11, color: 'var(--text-muted)', pointerEvents: 'none' }} />
       {open && (
         <div style={{
           position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50, marginTop: 4, display: 'flex',
@@ -186,10 +189,10 @@ function Time24({ value, onChange }) {
           boxShadow: '0 8px 24px rgba(0,0,0,0.25)', overflow: 'hidden',
         }}>
           <div style={{ ...colStyle, borderRight: '1px solid var(--border-light)' }}>
-            {HH.map(h => <div key={h} style={cell(h === hh)} onClick={() => { onChange(`${h}:${mm || '00'}`) }}>{h}</div>)}
+            {HH.map(h => <div key={h} style={cell(h === hh)} onMouseDown={e => e.preventDefault()} onClick={() => onChange(`${h}:${mm || '00'}`)}>{h}</div>)}
           </div>
           <div style={colStyle}>
-            {MM.map(m => <div key={m} style={cell(m === mm)} onClick={() => { onChange(`${hh || '00'}:${m}`); setOpen(false) }}>{m}</div>)}
+            {MM.map(m => <div key={m} style={cell(m === mm)} onMouseDown={e => e.preventDefault()} onClick={() => { onChange(`${hh || '00'}:${m}`); setOpen(false) }}>{m}</div>)}
           </div>
         </div>
       )}

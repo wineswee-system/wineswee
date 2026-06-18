@@ -6,6 +6,7 @@ import { getOvertimeRequests, createOvertimeRequest, updateOvertimeStatus } from
 import { createApprovalWorkflow, getWorkflowForRecord, advanceWorkflow } from '../../lib/workflowIntegration'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
+import Time24 from '../../components/Time24'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import AsyncButton from '../../components/AsyncButton'
 import ExtraSignerControls from '../../components/ExtraSignerControls'
@@ -594,19 +595,15 @@ export default function Overtime() {
               <>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <Field label="加班起時" required error={errors.start_time} errorMsg="請選起始時間">
-                    <input className="form-input" type="time" style={{ width: '100%' }}
-                      value={form.start_time || ''}
-                      onChange={e => {
-                        const v = e.target.value
+                    <Time24 value={form.start_time || ''}
+                      onChange={v => {
                         setForm(f => ({ ...f, start_time: v, hours: computeOvertimeHours(v, f.end_time, step) }))
                         clearError('start_time', setErrors)
                       }} />
                   </Field>
                   <Field label="加班訖時" required error={errors.end_time} errorMsg="請選結束時間">
-                    <input className="form-input" type="time" style={{ width: '100%' }}
-                      value={form.end_time || ''}
-                      onChange={e => {
-                        const v = e.target.value
+                    <Time24 value={form.end_time || ''}
+                      onChange={v => {
                         setForm(f => ({ ...f, end_time: v, hours: computeOvertimeHours(f.start_time, v, step) }))
                         clearError('end_time', setErrors)
                       }} />

@@ -3,6 +3,7 @@ import { ModalOverlay } from '../../../components/Modal'
 import { createPortal } from 'react-dom'
 import { ChevronLeft, ChevronRight, CalendarOff, AlertTriangle, Shield, Info } from 'lucide-react'
 import { getNetWorkHours, formatShiftLabel } from '../../../lib/scheduleUtils'
+import Time24 from '../../../components/Time24'
 
 const DAY_LABELS = ['一', '二', '三', '四', '五', '六', '日']
 
@@ -323,11 +324,9 @@ function ShiftEditPopup({ emp, date, shift, shiftDefs, SHIFT_TYPES, storeFilter,
     }} onMouseDown={e => e.stopPropagation()}>
       {/* Time pickers */}
       <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 8 }}>
-        <input type="time" className="form-input" value={startTime} onChange={e => setStartTime(e.target.value)}
-          style={{ flex: 1, padding: '6px 8px', fontSize: 13, fontWeight: 600 }} />
+        <Time24 value={startTime} onChange={setStartTime} style={{ flex: 1 }} />
         <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>~</span>
-        <input type="time" className="form-input" value={endTime} onChange={e => setEndTime(e.target.value)}
-          style={{ flex: 1, padding: '6px 8px', fontSize: 13, fontWeight: 600 }} />
+        <Time24 value={endTime} onChange={setEndTime} style={{ flex: 1 }} />
       </div>
 
       {/* Confirm button */}

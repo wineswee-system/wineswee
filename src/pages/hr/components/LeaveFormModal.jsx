@@ -2,6 +2,7 @@ import { useMemo, useState, useEffect } from 'react'
 import { Paperclip } from 'lucide-react'
 import Modal, { Field } from '../../../components/Modal'
 import SearchableSelect, { empOptions } from '../../../components/SearchableSelect'
+import Time24 from '../../../components/Time24'
 import { LEAVE_TYPES, getLeaveTypeInfo } from '../../../lib/leavePolicy'
 import { clearError } from '../../../lib/formValidation'
 import { countWorkDays, snapToStep, diffHours } from '../../../lib/leaveDaysCalc'
@@ -200,10 +201,10 @@ export default function LeaveFormModal({
       {form.unit === 'hour' && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <Field label="開始時間" required error={errors.start_time} errorMsg="請選開始時間">
-            <input className="form-input" type="time" style={{ width: '100%' }} value={form.start_time} onChange={e => { set('start_time', e.target.value); clearError('start_time', setErrors) }} />
+            <Time24 value={form.start_time} onChange={v => { set('start_time', v); clearError('start_time', setErrors) }} />
           </Field>
           <Field label="結束時間" required error={errors.end_time} errorMsg="請選結束時間">
-            <input className="form-input" type="time" style={{ width: '100%' }} value={form.end_time} onChange={e => { set('end_time', e.target.value); clearError('end_time', setErrors) }} />
+            <Time24 value={form.end_time} onChange={v => { set('end_time', v); clearError('end_time', setErrors) }} />
           </Field>
         </div>
       )}

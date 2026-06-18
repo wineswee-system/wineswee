@@ -3,6 +3,7 @@ import { Pencil, MapPin, Wifi, Clock, Building2 } from 'lucide-react'
 import { getStores, updateStore } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
+import Time24 from '../../components/Time24'
 import { geocodeAddress } from '../../lib/geocoding'
 import { toast } from '../../lib/toast'
 
@@ -389,22 +390,10 @@ export default function ClockRules() {
               <>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
                   <Field label="上班時間">
-                    <input
-                      className="form-input"
-                      type="time"
-                      style={{ width: '100%' }}
-                      value={form.office_hours_start}
-                      onChange={e => set('office_hours_start', e.target.value)}
-                    />
+                    <Time24 value={form.office_hours_start} onChange={v => set('office_hours_start', v)} />
                   </Field>
                   <Field label="下班時間">
-                    <input
-                      className="form-input"
-                      type="time"
-                      style={{ width: '100%' }}
-                      value={form.office_hours_end}
-                      onChange={e => set('office_hours_end', e.target.value)}
-                    />
+                    <Time24 value={form.office_hours_end} onChange={v => set('office_hours_end', v)} />
                   </Field>
                   <Field label="休息時間（分鐘）">
                     <input

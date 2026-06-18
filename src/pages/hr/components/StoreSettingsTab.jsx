@@ -3,6 +3,7 @@ import { Trash2, Pencil, Check, X, Plus } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
 import { WEEKEND_DAYS, WEEKDAY_DAYS, isWeekendDay, getRestMinutes, getNetWorkHours } from '../../../lib/scheduleUtils'
 import Modal, { Field } from '../../../components/Modal'
+import Time24 from '../../../components/Time24'
 
 import { toast } from '../../../lib/toast'
 import { confirm } from '../../../lib/confirm'
@@ -461,11 +462,11 @@ export default function StoreSettingsTab({
             </div>
             <div>
               <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>開始</label>
-              <input className="form-input" type="time" value={newSlot.start_time} onChange={e => setNewSlot(prev => ({ ...prev, start_time: e.target.value }))} style={{ width: 100, fontSize: 12 }} />
+              <Time24 value={newSlot.start_time} onChange={v => setNewSlot(prev => ({ ...prev, start_time: v }))} style={{ width: 110 }} />
             </div>
             <div>
               <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>結束</label>
-              <input className="form-input" type="time" value={newSlot.end_time} onChange={e => setNewSlot(prev => ({ ...prev, end_time: e.target.value }))} style={{ width: 100, fontSize: 12 }} />
+              <Time24 value={newSlot.end_time} onChange={v => setNewSlot(prev => ({ ...prev, end_time: v }))} style={{ width: 110 }} />
             </div>
             <div>
               <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>最少</label>
@@ -527,9 +528,9 @@ export default function StoreSettingsTab({
           {DAY_LABELS_FULL.map((label, i) => (
             <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0', borderBottom: '1px solid var(--border-subtle)' }}>
               <span style={{ width: 24, fontWeight: 700, color: i === 4 || i === 5 ? 'var(--accent-red)' : 'var(--text-primary)' }}>{label}</span>
-              <input className="form-input" type="time" style={{ width: 110 }} value={operatingHours[DAY_NAMES[i]]?.open || ''} onChange={e => setOperatingHours(prev => ({ ...prev, [DAY_NAMES[i]]: { ...prev[DAY_NAMES[i]], open: e.target.value } }))} />
+              <Time24 style={{ width: 120 }} value={operatingHours[DAY_NAMES[i]]?.open || ''} onChange={v => setOperatingHours(prev => ({ ...prev, [DAY_NAMES[i]]: { ...prev[DAY_NAMES[i]], open: v } }))} />
               <span style={{ color: 'var(--text-muted)' }}>~</span>
-              <input className="form-input" type="time" style={{ width: 110 }} value={operatingHours[DAY_NAMES[i]]?.close || ''} onChange={e => setOperatingHours(prev => ({ ...prev, [DAY_NAMES[i]]: { ...prev[DAY_NAMES[i]], close: e.target.value } }))} />
+              <Time24 style={{ width: 120 }} value={operatingHours[DAY_NAMES[i]]?.close || ''} onChange={v => setOperatingHours(prev => ({ ...prev, [DAY_NAMES[i]]: { ...prev[DAY_NAMES[i]], close: v } }))} />
             </div>
           ))}
           <button className="btn btn-primary btn-sm" style={{ marginTop: 12 }} onClick={async () => {
@@ -716,10 +717,10 @@ export default function StoreSettingsTab({
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Field label="上班時間" required>
-              <input className="form-input" type="time" style={{ width: '100%' }} value={shiftForm.start_time} onChange={e => setField('start_time', e.target.value)} />
+              <Time24 value={shiftForm.start_time} onChange={v => setField('start_time', v)} />
             </Field>
             <Field label="下班時間" required>
-              <input className="form-input" type="time" style={{ width: '100%' }} value={shiftForm.end_time} onChange={e => setField('end_time', e.target.value)} />
+              <Time24 value={shiftForm.end_time} onChange={v => setField('end_time', v)} />
             </Field>
           </div>
           <Field label="休息時間（自動計算）">

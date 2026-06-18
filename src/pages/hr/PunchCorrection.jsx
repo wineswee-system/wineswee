@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import AsyncButton from '../../components/AsyncButton'
+import Time24 from '../../components/Time24'
 import ExtraSignerControls from '../../components/ExtraSignerControls'
 import Modal, { Field } from '../../components/Modal'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
@@ -455,7 +456,7 @@ export default function PunchCorrection() {
               </select>
             </Field>
             <Field label="補登時間" required error={errors.correction_time} errorMsg="請選時間">
-              <input className="form-input" type="time" style={{ width: '100%' }} value={form.correction_time} onChange={e => { set('correction_time', e.target.value); clearError('correction_time', setErrors) }} />
+              <Time24 value={form.correction_time} onChange={v => { set('correction_time', v); clearError('correction_time', setErrors) }} />
             </Field>
           </div>
           <Field label="補打卡門市" required error={errors.store} errorMsg="請選門市">

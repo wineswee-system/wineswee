@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Plus, Search, UserMinus, UserPlus, Pencil, Mail, Upload, Building2, Trash2, Users } from 'lucide-react'
-import { getEmployees, createEmployee, updateEmployee, inviteEmployee } from '../../lib/db'
+import { getEmployeesList, createEmployee, updateEmployee, inviteEmployee } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
 import { createAssignment, rotatePrimary } from '../../lib/assignments'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -123,7 +123,7 @@ export default function Employees() {
 
   useEffect(() => {
     Promise.all([
-      getEmployees(),
+      getEmployeesList(),
       supabase.from('departments').select('*').order('name'),
       supabase.from('stores').select('*').order('name'),
     ]).then(([e, d, l]) => {
@@ -680,7 +680,7 @@ export default function Employees() {
           onClose={() => setShowCsvImport(false)}
           onDone={() => {
             // refresh employee list so counts/stat cards update
-            getEmployees().then(r => setEmployees(r.data || []))
+            getEmployeesList().then(r => setEmployees(r.data || []))
           }}
         />
       )}

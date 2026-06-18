@@ -7,6 +7,16 @@ export const getEmployees = (orgId) => {
   return q
 }
 
+// 員工「列表」用的輕量查詢：只撈列表會顯示的欄(避免 select * 把 105 欄全搬)。
+// 詳情/編輯頁 EmployeeProfile 會用 id 自己撈完整,故列表不需要全欄。
+export const getEmployeesList = (orgId) => {
+  let q = supabase.from('employees')
+    .select('id, name, name_en, dept, department_id, store, store_id, position, position_secondary, position_third, email, phone, employee_number, employment_type, join_date, resign_date, status, is_archived, avatar, avatar_url, departments!department_id(name), stores!store_id(name)')
+    .order('id')
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
+
 export const createEmployee = (data) =>
   supabase.from('employees').insert(data).select().single()
 

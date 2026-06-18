@@ -27,13 +27,15 @@
 
 BEGIN;
 
--- ── helpers（皆 service_role / admin 放行）──────────────────────────────────────
+-- ── helpers（皆 service_role / admin 放行；參數一律 bigint，int 欄位會自動 widen）──────
+-- ★ 用 bigint 是因為各表 organization_id/employee_id/store_id 有的是 int、有的是 bigint，
+--   宣告 int 會在 bigint 欄位上報「function does not exist」(PostgreSQL 不自動縮型)。
 CREATE OR REPLACE FUNCTION public.current_user_org()
-RETURNS int LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
-  SELECT organization_id FROM employees WHERE id = current_employee_id();
+RETURNS bigint LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT organization_id::bigint FROM employees WHERE id = current_employee_id();
 $$;
 
-CREATE OR REPLACE FUNCTION public.org_visible(p_org int)
+CREATE OR REPLACE FUNCTION public.org_visible(p_org bigint)
 RETURNS boolean LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $$
 BEGIN
   IF auth.role() = 'service_role' THEN RETURN true; END IF;
@@ -41,7 +43,7 @@ BEGIN
   RETURN p_org IS NOT NULL AND p_org = current_user_org();
 END $$;
 
-CREATE OR REPLACE FUNCTION public.can_see_own(p_emp_id int)
+CREATE OR REPLACE FUNCTION public.can_see_own(p_emp_id bigint)
 RETURNS boolean LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $$
 BEGIN
   IF auth.role() = 'service_role' THEN RETURN true; END IF;
@@ -49,7 +51,7 @@ BEGIN
   RETURN p_emp_id IS NOT NULL AND p_emp_id = current_employee_id();
 END $$;
 
-CREATE OR REPLACE FUNCTION public.can_see_store(p_store_id int)
+CREATE OR REPLACE FUNCTION public.can_see_store(p_store_id bigint)
 RETURNS boolean LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $$
 DECLARE v_me int := current_employee_id();
 BEGIN
@@ -62,10 +64,23 @@ BEGIN
   RETURN false;
 END $$;
 
-GRANT EXECUTE ON FUNCTION public.current_user_org()   TO authenticated, anon;
-GRANT EXECUTE ON FUNCTION public.org_visible(int)     TO authenticated, anon;
-GRANT EXECUTE ON FUNCTION public.can_see_own(int)     TO authenticated, anon;
-GRANT EXECUTE ON FUNCTION public.can_see_store(int)   TO authenticated, anon;
+-- can_see_request / can_insert_request 在 20260617160000 是 int 版；補 bigint 版(委派)
+-- 讓本支套在 employee_id 為 bigint 的表上也能解析。
+CREATE OR REPLACE FUNCTION public.can_see_request(p_applicant_emp_id bigint)
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT public.can_see_request(p_applicant_emp_id::int);
+$$;
+CREATE OR REPLACE FUNCTION public.can_insert_request(p_applicant_emp_id bigint)
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT public.can_insert_request(p_applicant_emp_id::int);
+$$;
+
+GRANT EXECUTE ON FUNCTION public.current_user_org()        TO authenticated, anon;
+GRANT EXECUTE ON FUNCTION public.org_visible(bigint)       TO authenticated, anon;
+GRANT EXECUTE ON FUNCTION public.can_see_own(bigint)       TO authenticated, anon;
+GRANT EXECUTE ON FUNCTION public.can_see_store(bigint)     TO authenticated, anon;
+GRANT EXECUTE ON FUNCTION public.can_see_request(bigint)   TO authenticated, anon;
+GRANT EXECUTE ON FUNCTION public.can_insert_request(bigint) TO authenticated, anon;
 
 CREATE OR REPLACE FUNCTION public._drop_all_policies(p_tbl text)
 RETURNS void LANGUAGE plpgsql AS $$
@@ -87,7 +102,7 @@ DECLARE
 BEGIN
   FOR i IN 1..array_length(tbls,1) LOOP
     t := tbls[i];
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name=t AND column_name='organization_id') THEN CONTINUE; END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name=t AND column_name='organization_id' AND data_type IN ('integer','bigint','smallint')) THEN CONTINUE; END IF;
     EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', t);
     PERFORM public._drop_all_policies(t);
     EXECUTE format('CREATE POLICY %I ON public.%I FOR SELECT USING (org_visible(organization_id))', t||'_org_sel', t);
@@ -103,7 +118,7 @@ DECLARE tbls text[] := ARRAY['roles','permissions']; i int; t text;
 BEGIN
   FOR i IN 1..array_length(tbls,1) LOOP
     t := tbls[i];
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name=t AND column_name='organization_id') THEN CONTINUE; END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name=t AND column_name='organization_id' AND data_type IN ('integer','bigint','smallint')) THEN CONTINUE; END IF;
     EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', t);
     PERFORM public._drop_all_policies(t);
     EXECUTE format('CREATE POLICY %I ON public.%I FOR SELECT USING (org_visible(organization_id))', t||'_org_sel', t);
@@ -136,7 +151,7 @@ DECLARE
 BEGIN
   FOR i IN 1..array_length(tbls,1) LOOP
     t := tbls[i];
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name=t AND column_name='employee_id') THEN CONTINUE; END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name=t AND column_name='employee_id' AND data_type IN ('integer','bigint','smallint')) THEN CONTINUE; END IF;
     EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', t);
     PERFORM public._drop_all_policies(t);
     EXECUTE format('CREATE POLICY %I ON public.%I FOR SELECT USING (can_see_request(employee_id))', t||'_v_sel', t);
@@ -152,7 +167,7 @@ DECLARE tbls text[] := ARRAY['salary_adjustments','severance_records','line_user
 BEGIN
   FOR i IN 1..array_length(tbls,1) LOOP
     t := tbls[i];
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name=t AND column_name='employee_id') THEN CONTINUE; END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name=t AND column_name='employee_id' AND data_type IN ('integer','bigint','smallint')) THEN CONTINUE; END IF;
     EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', t);
     PERFORM public._drop_all_policies(t);
     EXECUTE format('CREATE POLICY %I ON public.%I FOR SELECT USING (can_see_own(employee_id))', t||'_self_sel', t);
@@ -166,7 +181,7 @@ DECLARE tbls text[] := ARRAY['schedule_month_locks','shift_swaps','store_audits'
 BEGIN
   FOR i IN 1..array_length(tbls,1) LOOP
     t := tbls[i];
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name=t AND column_name='store_id') THEN CONTINUE; END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name=t AND column_name='store_id' AND data_type IN ('integer','bigint','smallint')) THEN CONTINUE; END IF;
     EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', t);
     PERFORM public._drop_all_policies(t);
     EXECUTE format('CREATE POLICY %I ON public.%I FOR SELECT USING (can_see_store(store_id))', t||'_st_sel', t);
@@ -184,7 +199,7 @@ UPDATE public.schedules s SET employee_id = e.id
 
 DO $$
 BEGIN
-  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='schedules' AND column_name='employee_id') THEN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='schedules' AND column_name='employee_id' AND data_type IN ('integer','bigint','smallint')) THEN
     ALTER TABLE public.schedules ENABLE ROW LEVEL SECURITY;
     PERFORM public._drop_all_policies('schedules');
     CREATE POLICY schedules_v_sel   ON public.schedules FOR SELECT USING (can_see_request(employee_id));

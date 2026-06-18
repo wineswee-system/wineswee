@@ -20,6 +20,7 @@ const CATEGORIES = [
       { icon: Clock,        name: '加班申請（事後）', desc: '已加完班的補登申請', color: 'var(--accent-orange)', dim: 'var(--accent-orange-dim)', action: '/hr/overtime' },
       // 預先加班、銷假 — 透過 builder 自訂建立（admin 進 /hr/form-builder 拉欄位即可）
       { icon: Fingerprint,  name: '忘刷補登', desc: '補登忘刷打卡紀錄', color: 'var(--accent-purple)', dim: 'var(--accent-purple-dim)', action: '/hr/punch-correction' },
+      { icon: AlarmClock,   name: '提早下班登記', desc: '店方安排員工提早下班（無簽核，當天不計早退扣款）', color: 'var(--accent-orange)', dim: 'var(--accent-orange-dim)', action: '/hr/early-leave', tag: '新' },
     ],
   },
   {

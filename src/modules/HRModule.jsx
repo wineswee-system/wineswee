@@ -4,6 +4,7 @@ import HRReport from '../pages/hr/HRReport'
 import Attendance from '../pages/hr/Attendance'
 import AttendanceDiffReport from '../pages/hr/AttendanceDiffReport'
 import PunchCorrection from '../pages/hr/PunchCorrection'
+import EarlyLeaveForm from '../pages/hr/EarlyLeaveForm'
 import Leave from '../pages/hr/Leave'
 import Overtime from '../pages/hr/Overtime'
 import Salary from '../pages/hr/Salary'
@@ -68,6 +69,7 @@ export default memo(function HRModule() {
       <Route path="attendance" element={<Attendance />} />
       <Route path="attendance-diff-report" element={<AttendanceDiffReport />} />
       <Route path="punch-correction" element={<PunchCorrection />} />
+      <Route path="early-leave" element={<EarlyLeaveForm />} />
       <Route path="leave" element={<Leave />} />
       <Route path="overtime" element={<Overtime />} />
       <Route path="salary" element={<Salary />} />

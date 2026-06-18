@@ -11,7 +11,7 @@ import {
   parseTime, getShiftHours, getNetWorkHours, effectiveEndHour, isNightShift, isAbsence,
   splitIntoWeeks,
   MIN_SHIFT_INTERVAL, MAX_CONSECUTIVE_WORK_DAYS, MIN_WEEKLY_REST_DAYS,
-  DAILY_MAX_HOURS, MONTHLY_OVERTIME_CAP, MONTHLY_REST_DAYS_TARGET,
+  DAILY_MAX_SPAN_HOURS, MONTHLY_OVERTIME_CAP, MONTHLY_REST_DAYS_TARGET,
 } from '../scheduleUtils'
 import { runProgrammaticSchedule } from '../schedulingAlgo'
 import { chat as geminiChat, isConfigured as geminiIsConfigured } from '../gemini'
@@ -143,8 +143,8 @@ function validateClientSide(assignments, data) {
         const def = shiftDefMap[a.shift]
         dailyHours += def ? getShiftHours(def) : 8
       }
-      if (dailyHours > DAILY_MAX_HOURS) {
-        violations.push({ employee: emp.name, constraint: 'H2', law: '勞基法 §32', message: `${emp.name} on ${date}: total ${dailyHours.toFixed(1)}h, max ${DAILY_MAX_HOURS}h`, severity: 'error' })
+      if (dailyHours > DAILY_MAX_SPAN_HOURS) {
+        violations.push({ employee: emp.name, constraint: 'H2', law: '單日工時上限', message: `${emp.name} on ${date}: total ${dailyHours.toFixed(1)}h, max ${DAILY_MAX_SPAN_HOURS}h`, severity: 'error' })
       }
     }
 

@@ -7,7 +7,7 @@ import {
   parseTime, getShiftHours, isAbsence,
   MONTHLY_OVERTIME_CAP, MONTHLY_REST_DAYS_TARGET,
   MIN_SHIFT_INTERVAL, MAX_CONSECUTIVE_WORK_DAYS, MIN_WEEKLY_REST_DAYS,
-  DAILY_MAX_HOURS,
+  DAILY_MAX_SPAN_HOURS,
 } from '../scheduleUtils'
 
 // ══════════════════════════════════════════════════════════════
@@ -112,7 +112,7 @@ ${offInfo || '  (無)'}
 
 ## 硬性規則 (不可違反)
 H1: 有請假的員工當天必須排休（使用對應假別代碼）
-H2: 每天工時 ≤${DAILY_MAX_HOURS}h (勞基法 §30,§32)
+H2: 每天工時 ≤${DAILY_MAX_SPAN_HOURS}h（公司規定，10 工作 + 1 休息）
 H3: 連續工作 ≤${MAX_CONSECUTIVE_WORK_DAYS} 天 (勞基法 §36 七休一)
 H4: 換班間隔 ≥${MIN_SHIFT_INTERVAL} 小時 (勞基法 §34)
 H5: 連續工作 4h 需休息 30 分鐘 (勞基法 §35)

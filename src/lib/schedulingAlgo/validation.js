@@ -1,7 +1,7 @@
 import {
   parseTime, getShiftHours, getNetWorkHours, effectiveEndHour, isNightShift, isAbsence,
   splitIntoWeeks, isWeekendDay, getWorkSystemConstraints,
-  DAILY_MAX_HOURS, MAX_CONSECUTIVE_WORK_DAYS, MAX_CONSECUTIVE_WORK_DAYS_FT,
+  DAILY_MAX_SPAN_HOURS, MAX_CONSECUTIVE_WORK_DAYS, MAX_CONSECUTIVE_WORK_DAYS_FT,
   MIN_SHIFT_INTERVAL, MONTHLY_OVERTIME_CAP,
   formatShiftLabel, parseShiftRange, isPartTime,
 } from '../scheduleUtils'
@@ -172,8 +172,8 @@ export function validateResult(assignments, data) {
     // H2: Daily hours
     for (const a of workEntries) {
       const def = lookupShiftDef(a.shift)
-      if (def && getShiftHours(def) > DAILY_MAX_HOURS) {
-        violations.push({ employee: emp.name, constraint: 'H2', law: '勞基法 §32', message: `${emp.name} ${a.date}: ${getShiftHours(def).toFixed(1)}h 超過每日上限 ${DAILY_MAX_HOURS}h`, severity: 'error' })
+      if (def && getShiftHours(def) > DAILY_MAX_SPAN_HOURS) {
+        violations.push({ employee: emp.name, constraint: 'H2', law: '單日工時上限', message: `${emp.name} ${a.date}: ${getShiftHours(def).toFixed(1)}h 超過單日上限 ${DAILY_MAX_SPAN_HOURS}h`, severity: 'error' })
       }
     }
 

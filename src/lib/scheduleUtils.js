@@ -452,6 +452,9 @@ export const WEEKLY_STANDARD_HOURS = 40
 /** Daily max hours (勞基法 §30 + §32) */
 export const DAILY_MAX_HOURS = 12
 
+/** 單日排班上限（公司規定）：最多 11h = 10 工作 + 1 休息。比 §32 的 12h 更嚴，全系統用這個。 */
+export const DAILY_MAX_SPAN_HOURS = 11
+
 /** Daily max NORMAL hours for flexible work systems (勞基法 §30-3) */
 export const DAILY_MAX_NORMAL_HOURS_FLEX = 10
 

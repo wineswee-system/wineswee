@@ -34,6 +34,7 @@ export default function MonthScheduleTable({
   violationsByEmp = {},   // empName → { errors: N, warnings: N }
   onClickEmployeeBadge,   // 點 badge 開合規 modal
   lockedDates = new Set(),  // Set<'YYYY-MM-DD'> — 鎖定（已發布）的日期，cell 不可編輯
+  onReorder,              // (draggedId, targetId) => void — 拖拉調整員工顯示順序
 }) {
   const isDateLocked = (date) => lockedDates && lockedDates.has(date)
   // Group employees by store when no store filter.
@@ -185,6 +186,7 @@ export default function MonthScheduleTable({
                       violationsByEmp={violationsByEmp}
                       onClickEmployeeBadge={onClickEmployeeBadge}
                       lockedDates={lockedDates}
+                      onReorder={onReorder}
                     />
                   )
                 })
@@ -220,6 +222,7 @@ export default function MonthScheduleTable({
                     violationsByEmp={violationsByEmp}
                     onClickEmployeeBadge={onClickEmployeeBadge}
                     lockedDates={lockedDates}
+                    onReorder={onReorder}
                   />
                 ))
               )}
@@ -264,6 +267,7 @@ function EmployeeRow({
   pendingLeaveMap = {}, schedules = [],
   violationsByEmp = {}, onClickEmployeeBadge,
   lockedDates = new Set(),
+  onReorder,
 }) {
   const isDateLocked = (date) => lockedDates && lockedDates.has(date)
   const v = violationsByEmp[emp.name] || { errors: 0, warnings: 0 }
@@ -279,11 +283,26 @@ function EmployeeRow({
 
   return (
     <tr style={{ height: 42, borderBottom: '1px solid var(--border-light)' }}>
-      <td style={{
-        position: 'sticky', left: 0, zIndex: 5, background: 'var(--bg-card)',
-        padding: '4px 8px', borderRight: '1px solid var(--border-light)',
-      }}>
+      <td
+        onDragOver={onReorder && canEditSchedule ? (e => e.preventDefault()) : undefined}
+        onDrop={onReorder && canEditSchedule ? (e => {
+          e.preventDefault()
+          const id = Number(e.dataTransfer.getData('text/plain'))
+          if (id) onReorder(id, emp.id)
+        }) : undefined}
+        style={{
+          position: 'sticky', left: 0, zIndex: 5, background: 'var(--bg-card)',
+          padding: '4px 8px', borderRight: '1px solid var(--border-light)',
+        }}>
         <div style={{ fontWeight: 600, fontSize: 11, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 4 }}>
+          {onReorder && canEditSchedule && (
+            <span
+              draggable
+              onDragStart={e => { e.dataTransfer.setData('text/plain', String(emp.id)); e.dataTransfer.effectAllowed = 'move' }}
+              title="拖拉調整順序"
+              style={{ cursor: 'grab', color: 'var(--text-muted)', fontSize: 11, lineHeight: '11px', userSelect: 'none' }}
+            >⠿</span>
+          )}
           <span>{emp.name}{isPT && <span style={{ fontSize: 9, color: '#818cf8', marginLeft: 2 }}>(PT)</span>}</span>
           {(v.errors > 0 || v.warnings > 0) && (
             <span

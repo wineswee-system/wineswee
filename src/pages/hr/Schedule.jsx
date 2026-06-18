@@ -192,7 +192,7 @@ export default function Schedule() {
     Promise.all([
       // 不過濾 status：要支援「看歷史月份時，當時還在職、現在已離職」的員工顯示
       // 由 filtered 的 join_date/resign_date 範圍過濾掉跟 view 沒重疊的人
-      supabase.from('employees').select('id, name, dept, store, supervisor, department_id, position, store_id, employment_type, schedule_priority, can_open, can_close, additional_stores, weekly_target_hours, personal_hour_cap, join_date, resign_date, status').order('name'),
+      supabase.from('employees').select('id, name, dept, store, supervisor, department_id, position, store_id, employment_type, schedule_priority, schedule_sort, can_open, can_close, additional_stores, weekly_target_hours, personal_hour_cap, join_date, resign_date, status').order('name'),
       supabase.from('departments').select('*').order('name'),
       supabase.from('stores').select('*').order('name'),
       supabase.from('shift_definitions').select('*').order('sort_order'),
@@ -1089,7 +1089,25 @@ export default function Schedule() {
     (storeFilter === '' || e.store === storeFilter) &&
     (!e.join_date   || e.join_date   <= viewEnd) &&   // 4/30 之後入職 → 4 月不顯示
     (!e.resign_date || e.resign_date >= viewStart)    // 4/1 前就已離職 → 4 月不顯示
+  ).sort((a, b) =>   // 顯示順序：schedule_sort（可拖拉調整）→ 沒設的排後面 → 再按姓名
+    (a.schedule_sort ?? 9999) - (b.schedule_sort ?? 9999) || (a.name || '').localeCompare(b.name || '')
   )
+
+  // 拖拉調整同店員工顯示順序 → 寫回 schedule_sort（store/課管理者才可）
+  const reorderEmployees = async (draggedId, targetId) => {
+    if (!draggedId || !targetId || draggedId === targetId) return
+    const dragged = employees.find(e => e.id === draggedId)
+    const target  = employees.find(e => e.id === targetId)
+    if (!dragged || !target || dragged.store !== target.store) return // 只允許同店內調整
+    const ids = filtered.filter(e => e.store === dragged.store).map(e => e.id)
+    const from = ids.indexOf(draggedId), to = ids.indexOf(targetId)
+    if (from < 0 || to < 0) return
+    ids.splice(to, 0, ids.splice(from, 1)[0]) // 把 dragged 移到 target 位置
+    const orderMap = Object.fromEntries(ids.map((id, i) => [id, i + 1]))
+    setEmployees(prev => prev.map(e => orderMap[e.id] ? { ...e, schedule_sort: orderMap[e.id] } : e)) // 樂觀更新
+    const { error } = await supabase.rpc('reorder_employees', { p_emp_ids: ids })
+    if (error) toast.error('順序儲存失敗：' + error.message)
+  }
 
   const getShiftStyle = (shift) => {
     if (isAbsence(shift)) {
@@ -1583,6 +1601,7 @@ export default function Schedule() {
           handleSetShift={handleSetShift}
           handleDeleteShift={handleDeleteShift}
           canEditSchedule={canEditSchedule}
+          onReorder={reorderEmployees}
           getStoreShifts={getStoreShifts}
           storeFilter={storeFilter}
           holidaySet={holidaySet}

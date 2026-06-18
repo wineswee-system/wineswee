@@ -568,6 +568,13 @@ export default function ScheduleBuilderGrid({
                           if (cellLocked) return  // 鎖定的 cell 不開 popup 不多選
                           // ctrl/cmd/shift → 多選，攔截 popup
                           if (handleCellSelect(e, emp.name, date)) return
+                          // 單擊 = 選取這格（不開編輯，跟外面手動填班一致；雙擊才開編輯）
+                          setSelectedCells(new Set([cellKey(emp.name, date)]))
+                          setLastClicked({ empName: emp.name, date })
+                        }}
+                        onDoubleClick={(e) => {
+                          if (cellLocked) return
+                          e.preventDefault()
                           setEditCell({ empName: emp.name, date })
                         }}
                         title={cellLocked ? '此排班已發布鎖定' : undefined}

@@ -27,14 +27,10 @@ const OvertimeExceptionImport = lazy(() => import('./pages/hr/OvertimeExceptionI
 import { ALL_MODULES } from './modules/index'
 import { renderModule } from './modules/renderModule'
 
-// ── Route-level access control — 5 roles ──
-const ROLE_ROUTES = {
-  store_staff:  ['/', '/hr/my-schedule', '/hr/leave', '/hr/overtime', '/hr/punch-correction', '/hr/attendance', '/hr/self-service', '/hr/leave-balances', '/hr/forms', '/lms'],
-  office_staff: ['/', '/hr/my-schedule', '/hr/leave', '/hr/overtime', '/hr/punch-correction', '/hr/attendance', '/hr/self-service', '/hr/leave-balances', '/hr/schedule', '/hr/leave-calendar', '/hr/salary', '/hr/salary-structures', '/hr/payroll', '/hr/forms', '/hr/insurance-grade', '/hr/labor-law-rates', '/process', '/org', '/lms'],
-  manager:      ['/', '/hr', '/org', '/process', '/lms'],
-  admin:        ['/', '/hr', '/org', '/process', '/system', '/analytics', '/lms'],
-  super_admin:  null, // all
-}
+// Route-level access is now fully driven by each module's `perm` field in
+// src/modules/index.js (consistent with Sidebar's nav.* permission checks).
+// ROLE_ROUTES was removed — it was non-functional (modulePrefix.startsWith('/')
+// always matched '/') and diverged from per-employee permission overrides.
 
 // ── Error Boundary ──
 class ErrorBoundary extends React.Component {
@@ -67,21 +63,15 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-// ── AdminApp (uses ROLE_ROUTES) ──
+// ── AdminApp ──
 function AdminApp() {
-  const { role, hasPermission, isSuperAdmin } = useAuth()
+  const { hasPermission, isSuperAdmin } = useAuth()
   const [showOnboarding, setShowOnboarding] = useState(() => !localStorage.getItem('sme_onboarded'))
-  const roleName = role?.name || 'store_staff'
-  const allowed = roleName in ROLE_ROUTES ? ROLE_ROUTES[roleName] : ROLE_ROUTES['store_staff']
-  // Module-level access check: '/hr/leave' in allowed → can enter '/hr' module
-  // Page-level filtering is handled by Sidebar's ROLE_ALLOWED_PATHS
-  // Note: this is a UX layer only — server-side RLS is the true enforcement layer.
-  const canAccess = (modulePrefix) => {
-    if (allowed === null) return true
-    return allowed.some(r => r === modulePrefix || r.startsWith(modulePrefix + '/') || modulePrefix.startsWith(r))
-  }
-  // Combines route whitelist with explicit permission code for sensitive modules
-  const canAccessWithPerm = (modulePrefix, permCode) => canAccess(modulePrefix) && hasPermission(permCode)
+  // Module access is gated by each module's `perm` field in src/modules/index.js,
+  // using the same nav.* permissions as the Sidebar (consistent + override-aware).
+  // RLS remains the true enforcement layer; this is the UX gate.
+  const canAccess = () => true
+  const canAccessWithPerm = (_modulePrefix, permCode) => hasPermission(permCode)
   const blocked = <Navigate to="/" replace />
 
   return (

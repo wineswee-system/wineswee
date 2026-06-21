@@ -166,6 +166,9 @@ export default function EmployeePermissions() {
   const [loading, setLoading] = useState(true)
   const [loadingPerms, setLoadingPerms] = useState(false)
   const [savingIds, setSavingIds] = useState(new Set())  // 哪些 permission_id 正在 save
+  // Revoke reason dialog: populated when a toggle would write mode='revoke'
+  const [revokeDialog, setRevokeDialog] = useState(null)  // null | { resolve: fn }
+  const [revokeReason, setRevokeReason] = useState('')
 
   // 批次模式：勾選多位員工一起套用同樣的開/關
   // 規則：單擊員工 row → 切換為單選編輯（清空 batch set）
@@ -454,7 +457,7 @@ const { error } = await supabase.rpc('admin_force_logout', { p_emp_id: selectedE
   }, [visibleFeatures])
 
   // 對單一 perm 做樂觀切換（內部用，給 handleFeatureToggle 呼叫）
-  const togglePermOptimistic = async (perm, targetEffective) => {
+  const togglePermOptimistic = async (perm, targetEffective, reason = null) => {
     let nextMode, optimisticSource
     if (targetEffective && !perm.effective) {
       // 要開但目前是關
@@ -487,7 +490,7 @@ const { error } = await supabase.rpc('admin_force_logout', { p_emp_id: selectedE
       p_emp_id:  selectedEmp.id,
       p_perm_id: perm.permission_id,
       p_mode:    nextMode,
-      p_reason:  null,
+      p_reason:  reason || null,
     })
     return { ok: !error && data?.ok !== false, error, data }
   }
@@ -522,6 +525,21 @@ const { error } = await supabase.rpc('admin_force_logout', { p_emp_id: selectedE
       if (targetEdit) targetView = true     // 修改 ON → 強制 查詢 ON
     }
 
+    // When a permission is going from ON→OFF due to role-default (mode='revoke'),
+    // require a written reason so the override audit trail is meaningful.
+    const willRevoke = (
+      (viewPerm && !targetView && viewPerm.effective && viewPerm.source === 'role') ||
+      (editPerm && !targetEdit && editPerm.effective && editPerm.source === 'role')
+    )
+    let reason = null
+    if (willRevoke) {
+      reason = await new Promise(resolve => {
+        setRevokeReason('')
+        setRevokeDialog({ resolve })
+      })
+      if (reason === null) return  // user cancelled
+    }
+
     // 標記正在 save（讓兩個 toggle 都 disable）
     const ids = []
     if (viewPerm) ids.push(viewPerm.permission_id)
@@ -530,8 +548,8 @@ const { error } = await supabase.rpc('admin_force_logout', { p_emp_id: selectedE
 
     // 平行打 RPC
     const tasks = []
-    if (viewPerm) tasks.push(togglePermOptimistic(viewPerm, targetView))
-    if (editPerm) tasks.push(togglePermOptimistic(editPerm, targetEdit))
+    if (viewPerm) tasks.push(togglePermOptimistic(viewPerm, targetView, reason))
+    if (editPerm) tasks.push(togglePermOptimistic(editPerm, targetEdit, reason))
     const results = await Promise.all(tasks)
 
     setSavingIds(s => {
@@ -587,6 +605,7 @@ const { error } = await supabase.rpc('admin_force_logout', { p_emp_id: selectedE
   }
 
   return (
+    <>
     <div className="fade-in">
       <div className="page-header">
         <h2><span className="header-icon">🔐</span> 員工個別權限</h2>
@@ -885,5 +904,54 @@ const { error } = await supabase.rpc('admin_force_logout', { p_emp_id: selectedE
         </div>
       </div>
     </div>
+
+    {/* ── Revoke reason dialog ── */}
+    {revokeDialog && (
+      <div style={{
+        position: 'fixed', inset: 0, zIndex: 9000,
+        background: 'rgba(0,0,0,0.55)', display: 'flex',
+        alignItems: 'center', justifyContent: 'center', padding: 24,
+      }}>
+        <div className="card" style={{ width: '100%', maxWidth: 440, padding: 24 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>
+            <ShieldOff size={16} style={{ marginRight: 6, verticalAlign: -2, color: 'var(--accent-red)' }} />
+            禁用原因
+          </div>
+          <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 14, lineHeight: 1.6 }}>
+            您正在禁用一項員工原本透過角色擁有的權限。請說明禁用原因（將記錄在稽核日誌中）。
+          </p>
+          <textarea
+            autoFocus
+            className="form-input"
+            rows={3}
+            placeholder="例：該員工暫時調離此職務，暫停費用審核權限…"
+            value={revokeReason}
+            onChange={e => setRevokeReason(e.target.value)}
+            style={{ width: '100%', resize: 'vertical', fontSize: 13 }}
+          />
+          <div style={{ display: 'flex', gap: 10, marginTop: 16, justifyContent: 'flex-end' }}>
+            <button
+              onClick={() => { revokeDialog.resolve(null); setRevokeDialog(null) }}
+              className="btn btn-secondary"
+              style={{ fontSize: 13 }}>
+              取消
+            </button>
+            <button
+              onClick={() => {
+                const r = revokeReason.trim()
+                if (!r) { return }
+                revokeDialog.resolve(r)
+                setRevokeDialog(null)
+              }}
+              disabled={!revokeReason.trim()}
+              className="btn btn-danger"
+              style={{ fontSize: 13 }}>
+              確認禁用
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   )
 }

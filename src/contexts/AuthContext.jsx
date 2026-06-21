@@ -99,6 +99,28 @@ export function AuthProvider({ children }) {
     return () => subscription.unsubscribe()
   }, [loadProfile])
 
+  // Mid-session permission refresh: Realtime on employee_permissions
+  // When admin grants/revokes a perm, the affected employee's session updates
+  // immediately without needing a force-logout.
+  useEffect(() => {
+    const empId = profile?.id
+    if (!empId) return
+    const refreshPerms = async () => {
+      const { data } = await supabase.rpc('get_employee_effective_permissions', { p_emp_id: empId })
+      if (data) setPermissions(data.filter(p => p.effective).map(p => p.code).filter(Boolean))
+    }
+    const channel = supabase
+      .channel(`perms-refresh-${empId}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'employee_permissions',
+        filter: `employee_id=eq.${empId}`,
+      }, refreshPerms)
+      .subscribe()
+    return () => supabase.removeChannel(channel)
+  }, [profile?.id])
+
   // 強制登出：Realtime + polling 雙保險
   useEffect(() => {
     const empId = profile?.id

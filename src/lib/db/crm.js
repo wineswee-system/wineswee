@@ -118,3 +118,150 @@ export const updateCRMWorkflow = (id, data) =>
 
 export const deleteCRMWorkflow = (id) =>
   supabase.from('crm_workflows').delete().eq('id', id)
+
+// ── Member Groups ──────────────────────────────────────────
+export const getMemberGroups = (orgId) => {
+  let q = supabase.from('member_groups').select('*').order('created_at', { ascending: false })
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
+
+export const getMemberGroupById = (id) =>
+  supabase.from('member_groups').select('*').eq('id', id).single()
+
+export const createMemberGroup = (data) =>
+  supabase.from('member_groups').insert(data).select().single()
+
+export const updateMemberGroup = (id, data) =>
+  supabase.from('member_groups')
+    .update({ ...data, updated_at: new Date().toISOString() })
+    .eq('id', id).select().single()
+
+export const deleteMemberGroup = (id) =>
+  supabase.from('member_groups').delete().eq('id', id)
+
+export const getMemberGroupMembers = (groupId) =>
+  supabase.from('member_group_members')
+    .select('*, members(id, name, phone, level, lifetime_spend, lifetime_points, available_points)')
+    .eq('group_id', groupId)
+    .order('added_at', { ascending: false })
+
+export const addStaticGroupMember = (groupId, memberId) =>
+  supabase.from('member_group_members')
+    .insert({ group_id: groupId, member_id: memberId })
+    .select().single()
+
+export const removeStaticGroupMember = (groupId, memberId) =>
+  supabase.from('member_group_members')
+    .delete().eq('group_id', groupId).eq('member_id', memberId)
+
+export const refreshMemberGroup = (groupId) =>
+  supabase.rpc('refresh_member_group', { p_group_id: groupId })
+
+export const previewMemberGroup = (orgId, criteria) =>
+  supabase.rpc('preview_member_group', { p_organization_id: orgId, p_criteria: criteria })
+
+// ── Surveys ────────────────────────────────────────────────
+export const getSurveys = (orgId) => {
+  let q = supabase.from('surveys').select('*, member_levels(id, name, icon)').order('created_at', { ascending: false })
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
+
+export const getSurveyById = (id) =>
+  supabase.from('surveys').select('*, member_levels(id, name, icon)').eq('id', id).single()
+
+export const createSurvey = (data) =>
+  supabase.from('surveys').insert(data).select().single()
+
+export const updateSurvey = (id, data) =>
+  supabase.from('surveys').update({ ...data, updated_at: new Date().toISOString() }).eq('id', id).select().single()
+
+export const deleteSurvey = (id) =>
+  supabase.from('surveys').delete().eq('id', id)
+
+// ── Survey Questions ───────────────────────────────────────
+export const getSurveyQuestions = (surveyId) =>
+  supabase.from('survey_questions').select('*').eq('survey_id', surveyId).order('sort_order', { ascending: true })
+
+export const createSurveyQuestion = (data) =>
+  supabase.from('survey_questions').insert(data).select().single()
+
+export const updateSurveyQuestion = (id, data) =>
+  supabase.from('survey_questions').update(data).eq('id', id).select().single()
+
+export const deleteSurveyQuestion = (id) =>
+  supabase.from('survey_questions').delete().eq('id', id)
+
+export const reorderSurveyQuestions = (questions) =>
+  Promise.all(questions.map((q, i) =>
+    supabase.from('survey_questions').update({ sort_order: i }).eq('id', q.id)
+  ))
+
+// ── Survey Invitations ─────────────────────────────────────
+export const getSurveyInvitations = (surveyId, { status } = {}) => {
+  let q = supabase.from('survey_invitations')
+    .select('*, members(id, name, phone, level)')
+    .eq('survey_id', surveyId)
+    .order('created_at', { ascending: false })
+  if (status) q = q.eq('status', status)
+  return q
+}
+
+// ── Survey Results ─────────────────────────────────────────
+export const getSurveyResults = (surveyId) =>
+  supabase.from('survey_responses')
+    .select('*, survey_questions(id, type, question, options, sort_order)')
+    .eq('survey_id', surveyId)
+    .order('created_at', { ascending: false })
+
+export const getSurveyResponseSummary = (surveyId) =>
+  supabase.rpc('get_survey_response_summary', { p_survey_id: surveyId })
+
+// ── Pilot Runs ─────────────────────────────────────────────
+export const getPilotRuns = (orgId) => {
+  let q = supabase.from('pilot_runs')
+    .select('*, surveys(id, name, status), member_groups(id, name, type)')
+    .order('created_at', { ascending: false })
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
+
+export const getPilotRunById = (id) =>
+  supabase.from('pilot_runs')
+    .select('*, surveys(id, name, status), member_groups(id, name, type)')
+    .eq('id', id).single()
+
+export const createPilotRun = (data) =>
+  supabase.from('pilot_runs').insert(data).select().single()
+
+export const updatePilotRun = (id, data) =>
+  supabase.from('pilot_runs')
+    .update({ ...data, updated_at: new Date().toISOString() })
+    .eq('id', id).select().single()
+
+export const deletePilotRun = (id) =>
+  supabase.from('pilot_runs').delete().eq('id', id)
+
+export const launchPilotRun = (pilotRunId) =>
+  supabase.rpc('launch_pilot_run', { p_pilot_run_id: pilotRunId })
+
+export const approvePilotRun = (id, notes, decidedBy) =>
+  supabase.from('pilot_runs').update({
+    decision:       'approve',
+    decision_notes: notes || null,
+    decided_at:     new Date().toISOString(),
+    decided_by:     decidedBy || null,
+    status:         'approved',
+    updated_at:     new Date().toISOString(),
+  }).eq('id', id).select().single()
+
+export const rejectPilotRun = (id, notes, decidedBy) =>
+  supabase.from('pilot_runs').update({
+    decision:       'reject',
+    decision_notes: notes || null,
+    decided_at:     new Date().toISOString(),
+    decided_by:     decidedBy || null,
+    status:         'rejected',
+    updated_at:     new Date().toISOString(),
+  }).eq('id', id).select().single()

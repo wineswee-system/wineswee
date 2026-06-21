@@ -44,22 +44,37 @@ export const deleteWorkflowInstance = (id, orgId) => {
   return q
 }
 
+// Workflow steps live in the tasks table (task_type='process_step').
+// These wrappers keep call-site compatibility while targeting tasks.
 export const getWorkflowSteps = (instanceId) => {
-  const q = supabase.from('workflow_steps').select('*').order('step_order')
-  return instanceId ? q.eq('instance_id', instanceId) : q
+  const q = supabase.from('tasks').select('*').order('step_order')
+  return instanceId ? q.eq('workflow_instance_id', instanceId) : q
 }
 
-export const createWorkflowStep = (data) =>
-  supabase.from('workflow_steps').insert(data).select().single()
+export const createWorkflowStep = (data) => {
+  const { instance_id, ...rest } = data
+  return supabase
+    .from('tasks')
+    .insert({ ...rest, workflow_instance_id: instance_id ?? rest.workflow_instance_id, task_type: 'process_step' })
+    .select()
+    .single()
+}
 
 export const createWorkflowStepsBatch = (rows) =>
-  supabase.from('workflow_steps').insert(rows).select()
+  supabase
+    .from('tasks')
+    .insert(rows.map(({ instance_id, ...rest }) => ({
+      ...rest,
+      workflow_instance_id: instance_id ?? rest.workflow_instance_id,
+      task_type: 'process_step',
+    })))
+    .select()
 
 export const updateWorkflowStep = (id, data) =>
-  supabase.from('workflow_steps').update(data).eq('id', id).select().single()
+  supabase.from('tasks').update(data).eq('id', id).select().single()
 
 export const deleteWorkflowStep = (id) =>
-  supabase.from('workflow_steps').delete().eq('id', id)
+  supabase.from('tasks').delete().eq('id', id)
 
 export const getWorkflowCategories = () =>
   supabase.from('workflow_categories').select('*').eq('scope', 'workflow').order('sort_order').order('id')

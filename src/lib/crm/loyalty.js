@@ -121,6 +121,40 @@ export function refundPoints(member, refundAmount, originalTotal, reason = '退�
   }
 }
 
+// ============================================================
+// DB-driven tier & points computation (Sprint 1+)
+// These take member_levels rows fetched from DB.
+// The hard-coded functions above remain for backward compat.
+// ============================================================
+
+/**
+ * DB-driven points earned — uses levelRow.point_multiplier from member_levels table.
+ * Base rate: 1 point per NT$10 consumed.
+ */
+export function computePointsEarned(amount, levelRow) {
+  const multiplier = levelRow?.point_multiplier ?? 1
+  return Math.floor(Math.floor(amount / 10) * multiplier)
+}
+
+/**
+ * DB-driven tier resolution — iterates member_levels rows (ranked lowest first)
+ * and returns the highest level the member qualifies for.
+ * Criteria types: 'lifetime_spend', 'lifetime_points', 'manual' (skipped).
+ */
+export function computeTierFromLevels(lifetimeSpent, lifetimePoints, levels) {
+  if (!levels?.length) return null
+  let best = levels[0]
+  for (const lvl of levels) {
+    if (lvl.criteria_type === 'manual') continue
+    const qualifies =
+      lvl.criteria_type === 'lifetime_spend'    ? lifetimeSpent  >= (lvl.criteria_value || 0)
+      : lvl.criteria_type === 'lifetime_points' ? lifetimePoints >= (lvl.criteria_value || 0)
+      : false
+    if (qualifies) best = lvl
+  }
+  return best
+}
+
 /**
  * Generate referral code
  */

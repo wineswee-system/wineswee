@@ -205,6 +205,41 @@ export const getAllPointTransactions = (orgId) => {
 export const createPointTransaction = (data) =>
   supabase.from('point_transactions').insert(data).select().single()
 
+// ── Member Levels ──────────────────────────────────────────
+export const getMemberLevels = (orgId) => {
+  let q = supabase.from('member_levels').select('*').order('rank', { ascending: true })
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
+
+export const getMemberLevelById = (id) =>
+  supabase.from('member_levels').select('*').eq('id', id).single()
+
+export const createMemberLevel = (data) =>
+  supabase.from('member_levels').insert(data).select().single()
+
+export const updateMemberLevel = (id, data) =>
+  supabase.from('member_levels').update(data).eq('id', id).select().single()
+
+export const deleteMemberLevel = (id) =>
+  supabase.from('member_levels').delete().eq('id', id)
+
+// ── Member Purchases ───────────────────────────────────────
+export const getMemberPurchases = (memberId) =>
+  supabase.from('member_purchases')
+    .select('*, member_purchase_lines(*)')
+    .eq('member_id', memberId)
+    .order('purchased_at', { ascending: false })
+
+export const getMemberPurchaseLines = (purchaseId) =>
+  supabase.from('member_purchase_lines').select('*, skus(code, name)').eq('purchase_id', purchaseId)
+
+export const createMemberPurchase = (data) =>
+  supabase.from('member_purchases').insert(data).select().single()
+
+export const createMemberPurchaseLines = (lines) =>
+  supabase.from('member_purchase_lines').insert(lines).select()
+
 export const getReferralCodes = (orgId) => {
   let q = supabase.from('referral_codes').select('*').order('id', { ascending: false })
   if (orgId) q = q.eq('organization_id', orgId)

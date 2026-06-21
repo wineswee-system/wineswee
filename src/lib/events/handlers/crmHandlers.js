@@ -1,5 +1,5 @@
 import { supabase } from '../../supabase.js'
-import { calculatePointsEarned, calculateTier, refundPoints } from '../../crmEngine.js'
+import { calculatePointsEarned, calculateTier, refundPoints, computePointsEarned, computeTierFromLevels } from '../../crmEngine.js'
 
 /**
  * CRM event handlers.
@@ -36,7 +36,7 @@ export function registerCRMHandlers(bus) {
     })
   })
 
-  // ── POS transaction completed → update loyalty points ──
+  // ── POS transaction completed → update loyalty points (DB-driven tiers) ──
   bus.subscribe('pos.transaction.completed', async function onPOSTransactionUpdateLoyalty(event) {
     const { customer_id, total, store } = event.payload
     if (!customer_id) return
@@ -49,54 +49,119 @@ export function registerCRMHandlers(bus) {
 
     if (!member) return
 
-    const pointsEarned = calculatePointsEarned(total, member.level)
-    const newTotalPoints = (member.total_points || 0) + pointsEarned
+    // Fetch DB-driven tiers for this org (fallback to legacy calculation if none configured)
+    const { data: levels } = member.organization_id
+      ? await supabase.from('member_levels').select('*').eq('organization_id', member.organization_id).order('rank', { ascending: true })
+      : { data: null }
+
+    let pointsEarned, newLifetimeSpend, newLifetimePoints, newLevel
+
+    if (levels?.length) {
+      const currentLevel = levels.find(l => l.id === member.level_id) || levels[0]
+      pointsEarned    = computePointsEarned(total, currentLevel)
+      newLifetimeSpend  = (member.lifetime_spend  || member.total_spent  || 0) + total
+      newLifetimePoints = (member.lifetime_points || member.total_points || 0) + pointsEarned
+      newLevel = computeTierFromLevels(newLifetimeSpend, newLifetimePoints, levels) || currentLevel
+    } else {
+      // Fallback: legacy hard-coded tiers
+      pointsEarned    = calculatePointsEarned(total, member.level)
+      newLifetimeSpend  = (member.total_spent  || 0) + total
+      newLifetimePoints = (member.total_points || 0) + pointsEarned
+      const legacyTier = calculateTier(newLifetimeSpend, newLifetimePoints)
+      newLevel = { id: null, name: legacyTier.level }
+    }
+
     const newAvailablePoints = (member.available_points || 0) + pointsEarned
-    const newTotalSpent = (member.total_spent || 0) + total
-    const newTier = calculateTier(newTotalSpent, newTotalPoints)
+    const tierChanged = levels?.length
+      ? newLevel.id !== (member.level_id ?? null)
+      : newLevel.name !== member.level
 
     await Promise.all([
       supabase.from('members').update({
-        total_points: newTotalPoints,
+        total_points:     newLifetimePoints,
         available_points: newAvailablePoints,
-        total_spent: newTotalSpent,
-        level: newTier.level,
+        total_spent:      newLifetimeSpend,
+        level:            newLevel.name,
+        lifetime_spend:   newLifetimeSpend,
+        lifetime_points:  newLifetimePoints,
+        ...(newLevel.id ? { level_id: newLevel.id } : {}),
         visit_count: (member.visit_count || 0) + 1,
         last_visit: new Date().toISOString().slice(0, 10),
       }).eq('id', member.id),
 
       supabase.from('point_transactions').insert({
-        member_id: member.id,
-        type: 'earn',
-        points: pointsEarned,
-        balance: newAvailablePoints,
-        reference: `POS-${event.id || Date.now()}`,
-        description: `POS消費累點 ($${total.toLocaleString()})`,
+        member_id:       member.id,
+        organization_id: member.organization_id || null,
+        type:            'earn',
+        points:          pointsEarned,
+        balance:         newAvailablePoints,
+        reference:       `POS-${event.id || Date.now()}`,
+        description:     `POS消費累點 ($${total.toLocaleString()})`,
       }),
     ])
 
-    if (newTier.level !== member.level) {
+    if (tierChanged && newLevel.id) {
+      await supabase.from('member_level_history').insert({
+        member_id:       member.id,
+        organization_id: member.organization_id || null,
+        from_level_id:   member.level_id || null,
+        to_level_id:     newLevel.id,
+        from_level_name: member.level || null,
+        to_level_name:   newLevel.name,
+        reason:          'upgrade',
+      })
+
       await bus.publish('crm.member.tier_upgraded', {
-        member_id: String(member.id),
-        member_name: member.name,
-        old_tier: member.level,
-        new_tier: newTier.level,
+        member_id:    String(member.id),
+        member_name:  member.name,
+        old_tier:     member.level,
+        new_tier:     newLevel.name,
+        new_level_id: newLevel.id || null,
       }, {
-        causation_id: event.id,
-        correlation_id: event.metadata?.correlation_id,
+        causation_id:    event.id,
+        correlation_id:  event.metadata?.correlation_id,
       })
     }
 
     await bus.publish('crm.points.earned', {
-      member_id: String(member.id),
+      member_id:   String(member.id),
       member_name: member.name,
-      points: pointsEarned,
-      balance: newAvailablePoints,
-      source: 'pos_transaction',
+      points:      pointsEarned,
+      balance:     newAvailablePoints,
+      source:      'pos_transaction',
     }, {
-      causation_id: event.id,
+      causation_id:   event.id,
       correlation_id: event.metadata?.correlation_id,
     })
+  })
+
+  // ── POS transaction completed → record member_purchase + lines ──
+  bus.subscribe('pos.transaction.completed', async function onPOSTransactionRecordPurchase(event) {
+    const { customer_id, total, store_id, transaction_id, payment_method, items } = event.payload
+    if (!customer_id || !items?.length) return
+
+    const { data: purchase, error } = await supabase.from('member_purchases').insert({
+      member_id: customer_id,
+      store_id: store_id || null,
+      transaction_id: transaction_id || null,
+      total_amount: total,
+      payment_method: payment_method || null,
+    }).select().single()
+
+    if (error || !purchase) return
+
+    const lines = items.map(item => ({
+      purchase_id: purchase.id,
+      product_id: item.product_id || item.sku_id || null,
+      product_name: item.product_name || item.name || '',
+      product_category: item.product_category || item.category || null,
+      product_type: item.product_type || null,
+      qty: item.qty ?? item.quantity ?? 1,
+      unit_price: item.unit_price ?? item.price ?? 0,
+      subtotal: item.subtotal ?? (item.qty ?? 1) * (item.unit_price ?? item.price ?? 0),
+    }))
+
+    await supabase.from('member_purchase_lines').insert(lines)
   })
 
   // ── POS transaction refunded → reverse loyalty points ──
@@ -366,6 +431,61 @@ export function registerCRMHandlers(bus) {
     }).then(({ error }) => {
       if (error) console.warn('[CRM] Points reversed notification failed:', error.message)
     })
+  })
+
+  // ── POS transaction completed → queue survey invitations ──
+  bus.subscribe('pos.transaction.completed', async function onPurchaseRecordedQueueSurvey(event) {
+    const { customer_id, total, store_id, transaction_id } = event.payload
+    if (!customer_id) return
+
+    const { data: member } = await supabase.from('members').select('id, level_id, lifetime_spend, organization_id').eq('id', customer_id).maybeSingle()
+    if (!member) return
+
+    const orgId = member.organization_id
+    if (!orgId) return
+
+    const { data: activeSurveys } = await supabase
+      .from('surveys')
+      .select('id, trigger_delay_hours, expires_in_days, min_purchase_amount, target_level_id')
+      .eq('organization_id', orgId)
+      .eq('status', 'active')
+      .eq('trigger_type', 'post_purchase')
+
+    if (!activeSurveys?.length) return
+
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+
+    for (const survey of activeSurveys) {
+      // Check eligibility
+      if (survey.min_purchase_amount != null && total < survey.min_purchase_amount) continue
+      if (survey.target_level_id && member.level_id !== survey.target_level_id) continue
+
+      // 30-day dedup: skip if member already has a non-pilot invitation for this survey in last 30 days
+      const { data: existing } = await supabase
+        .from('survey_invitations')
+        .select('id')
+        .eq('survey_id', survey.id)
+        .eq('member_id', customer_id)
+        .is('pilot_run_id', null)
+        .gte('created_at', thirtyDaysAgo)
+        .limit(1)
+
+      if (existing?.length) continue
+
+      const sendAfter = new Date(Date.now() + (survey.trigger_delay_hours || 24) * 60 * 60 * 1000).toISOString()
+      const expiresAt = new Date(Date.now() + ((survey.trigger_delay_hours || 24) + (survey.expires_in_days || 7) * 24) * 60 * 60 * 1000).toISOString()
+
+      await supabase.from('survey_invitations').insert({
+        survey_id:       survey.id,
+        member_id:       customer_id,
+        organization_id: orgId,
+        purchase_id:     null,
+        status:          'pending',
+        send_after:      sendAfter,
+        expires_at:      expiresAt,
+        pilot_run_id:    null,
+      })
+    }
   })
 
   // ── Finance payment recorded → update customer payment history ──

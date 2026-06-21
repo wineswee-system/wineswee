@@ -15,6 +15,10 @@ import Activities from '../pages/crm/Activities'
 import Leads from '../pages/crm/Leads'
 import Reports from '../pages/crm/Reports'
 import Contacts from '../pages/crm/Contacts'
+import Levels from '../pages/crm/Levels'
+import Groups from '../pages/crm/Groups'
+import Surveys from '../pages/crm/Surveys'
+import PilotRuns from '../pages/crm/PilotRuns'
 
 export default function CRMModule() {
   return (
@@ -29,6 +33,10 @@ export default function CRMModule() {
       <Route path="drip-campaigns" element={<DripCampaigns />} />
       <Route path="service" element={<Service />} />
       <Route path="members" element={<Members />} />
+      <Route path="levels" element={<Levels />} />
+      <Route path="groups" element={<Groups />} />
+      <Route path="surveys" element={<Surveys />} />
+      <Route path="pilots" element={<PilotRuns />} />
       <Route path="forms" element={<FormBuilder />} />
       <Route path="workflows" element={<WorkflowBuilder />} />
       <Route path="messages" element={<MessageLog />} />

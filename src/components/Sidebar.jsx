@@ -10,7 +10,7 @@ import {
   Sparkles,
   // ── 補 systemItems / superAdminItems 需要的 icon（老闆 refactor 時漏掉）──
   Award, BarChart3, FileText, Truck,
-  Package, Monitor, GitBranch,
+  Package, Monitor, GitBranch, Smartphone,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import FontSizeControl from './FontSizeControl'
@@ -65,7 +65,7 @@ const systemItems = [
   { icon: FileText, label: '表單建立器', path: '/system/form-builder' },
   { icon: UserCog, label: '使用者管理', path: '/system/users' },
   { icon: Shield, label: '員工個別權限', path: '/system/employee-permissions' },
-  { icon: Building2, label: '租戶管理', path: '/system/tenants' },
+  { icon: Building2, label: '租戶管理', path: '/system/tenants', perm: 'system.tenant_manage' },
   { icon: Zap, label: '觸發器', path: '/system/triggers' },
   { icon: Bell, label: '通知管理', path: '/system/notifications' },
   { icon: ScrollText, label: '操作紀錄', path: '/system/audit' },
@@ -89,6 +89,7 @@ const superAdminItems = [
   { icon: Activity, label: '使用者活動', path: '/super-admin/user-activity' },
   { icon: GitBranch, label: '變更日誌', path: '/super-admin/changelog' },
   { icon: Sparkles, label: 'AI 使用量', path: '/super-admin/ai-usage' },
+  { icon: Smartphone, label: '會員 App', path: '/super-admin/member-app' },
 ]
 
 // ── Route prefix → group key mapping ──
@@ -573,7 +574,7 @@ export default function Sidebar() {
         {isSystemGroup && (
           <div className="nav-section">
             <div className="nav-section-label">系統與整合</div>
-            {systemItems.map((item) => {
+            {systemItems.filter(item => !item.perm || hasPermission(item.perm)).map((item) => {
               const Icon = item.icon
               return (
                 <NavLink
@@ -617,8 +618,8 @@ export default function Sidebar() {
 
       {/* ── Sidebar Footer: User + System ── */}
       <div className="sidebar-footer">
-        {/* System settings link */}
-        {!isSystemGroup && (
+        {/* System settings link — only for roles with system.admin permission */}
+        {!isSystemGroup && hasPermission('system.admin') && (
           <button
             className="sidebar-system-btn"
             onClick={() => { setActiveGroup('system'); handleNavClick() }}

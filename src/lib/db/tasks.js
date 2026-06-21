@@ -7,6 +7,11 @@ export const getTasks = (filters = {}) => {
   if (filters.assignee_id) q = q.eq('assignee_id', filters.assignee_id)
   if (filters.status) q = q.in('status', Array.isArray(filters.status) ? filters.status : [filters.status])
   if (filters.bucket) q = q.eq('bucket', filters.bucket)
+  if (filters.task_type) q = q.eq('task_type', filters.task_type)
+  if (filters.section_id) q = q.eq('section_id', filters.section_id)
+  if (filters.parent_task_id !== undefined) q = filters.parent_task_id === null
+    ? q.is('parent_task_id', null)
+    : q.eq('parent_task_id', filters.parent_task_id)
   return q
 }
 

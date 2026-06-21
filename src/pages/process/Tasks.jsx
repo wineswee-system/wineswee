@@ -51,7 +51,8 @@ export default function Tasks() {
   const [filterProject, setFilterProject] = useState('')
   const [filterWorkflow, setFilterWorkflow] = useState('')
   const [workflowDefs, setWorkflowDefs] = useState([])
-  const [form, setForm] = useState({ title: '', workflow: '', assignee: '', due_date: '', planned_start: '', store: '', role: '', priority: '中', bucket: '一般工作', description: '', approval_mode: 'none', approval_chain_id: '', confirmation_approvers: [], confirmation_mode: 'parallel', required_forms: [] })
+  const [formSections, setFormSections] = useState([])
+  const [form, setForm] = useState({ title: '', workflow: '', assignee: '', due_date: '', planned_start: '', store: '', role: '', priority: '中', bucket: '一般工作', task_type: 'task', project_id: '', section_id: '', description: '', approval_mode: 'none', approval_chain_id: '', confirmation_approvers: [], confirmation_mode: 'parallel', required_forms: [] })
   const [pendingFiles, setPendingFiles] = useState([])
   const [uploadingFiles, setUploadingFiles] = useState(false)
   const newTaskFileRef = useRef(null)
@@ -109,6 +110,13 @@ export default function Tasks() {
 
   // Live-sync: reflect DB changes made by other users or tabs without a full refresh
   useRealtimeTasks(setTasks)
+
+  // Load sections for the selected project in the create form
+  useEffect(() => {
+    if (!form.project_id) { setFormSections([]); return }
+    supabase.from('project_sections').select('id, name').eq('project_id', form.project_id).order('sort_order')
+      .then(({ data }) => setFormSections(data || []))
+  }, [form.project_id])
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
@@ -182,6 +190,9 @@ export default function Tasks() {
       role: form.role || null,
       priority: form.priority,
       bucket: form.bucket || null,
+      task_type: form.task_type || 'task',
+      project_id: form.project_id ? Number(form.project_id) : null,
+      section_id: form.section_id ? Number(form.section_id) : null,
       description: form.description || null,
       approval_chain_id: chainId,
       confirmation_mode: form.approval_mode === 'people' ? (form.confirmation_mode || 'parallel') : null,
@@ -244,7 +255,7 @@ export default function Tasks() {
       }
       setTasks(prev => [data, ...prev])
       setShowModal(false)
-      setForm({ title: '', workflow: '', assignee: '', due_date: '', planned_start: '', store: '', role: '', priority: '中', bucket: '一般工作', description: '', approval_mode: 'none', approval_chain_id: '', confirmation_approvers: [], confirmation_mode: 'parallel', required_forms: [] })
+      setForm({ title: '', workflow: '', assignee: '', due_date: '', planned_start: '', store: '', role: '', priority: '中', bucket: '一般工作', task_type: 'task', project_id: '', section_id: '', description: '', approval_mode: 'none', approval_chain_id: '', confirmation_approvers: [], confirmation_mode: 'parallel', required_forms: [] })
     }
   }
 
@@ -620,8 +631,31 @@ export default function Tasks() {
                   : ['一般工作', '私人工作', '工作流程'].map(b => <option key={b}>{b}</option>)}
               </select>
             </Field>
+            <Field label="任務類型">
+              <select className="form-input" style={{ width: '100%' }} value={form.task_type} onChange={e => set('task_type', e.target.value)}>
+                <option value="task">一般任務</option>
+                <option value="milestone">里程碑</option>
+                <option value="approval">審批</option>
+                <option value="process_step">SOP 步驟</option>
+              </select>
+            </Field>
             <Field label="角色">
               <input className="form-input" type="text" style={{ width: '100%' }} placeholder="例：店長、主管..." value={form.role} onChange={e => set('role', e.target.value)} />
+            </Field>
+            <Field label="所屬專案">
+              <select className="form-input" style={{ width: '100%' }} value={form.project_id}
+                onChange={e => { set('project_id', e.target.value); set('section_id', '') }}>
+                <option value="">— 選擇專案 —</option>
+                {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </Field>
+            <Field label="區段">
+              <select className="form-input" style={{ width: '100%' }} value={form.section_id}
+                onChange={e => set('section_id', e.target.value)}
+                disabled={!form.project_id || formSections.length === 0}>
+                <option value="">— 選擇區段 —</option>
+                {formSections.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
             </Field>
             <Field label="所屬流程">
               <select className="form-input" style={{ width: '100%' }} value={form.workflow} onChange={e => set('workflow', e.target.value)}>

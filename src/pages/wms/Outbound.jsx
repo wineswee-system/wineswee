@@ -25,6 +25,7 @@ export default function Outbound() {
   const [showModal, setShowModal] = useState(false)
   const [form, setForm] = useState({ order_number: '', customer: '', carrier: CARRIERS[0], warehouse_id: '', due_date: '', status: '待揀貨', items: [{ sku_name: '', quantity: 1, unit: '個' }], notes: '' })
   const [highlightItem, setHighlightItem] = useState(null)
+  const [fefoLots, setFefoLots] = useState({})
 
   useEffect(() => {
     const orgId = profile?.organization_id
@@ -47,12 +48,34 @@ export default function Outbound() {
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
+  const loadFefoLots = async (orderId, skuCodes) => {
+    const { data: skuData } = await supabase.from('skus').select('id, code').in('code', skuCodes)
+    if (!skuData?.length) return
+    const skuIdToCode = Object.fromEntries(skuData.map(s => [s.id, s.code]))
+    const { data: lots } = await supabase
+      .from('inventory_lots')
+      .select('lot_number, expiry_date, quantity, sku_id')
+      .in('sku_id', skuData.map(s => s.id))
+      .gt('quantity', 0)
+      .order('expiry_date', { ascending: true, nullsFirst: false })
+    // Take the first lot per SKU (earliest non-expired, or earliest overall)
+    const fefoByCode = {}
+    for (const lot of (lots || [])) {
+      const code = skuIdToCode[lot.sku_id]
+      if (code && !fefoByCode[code]) fefoByCode[code] = lot
+    }
+    setFefoLots(prev => ({ ...prev, [orderId]: fefoByCode }))
+  }
+
   const toggleExpand = async (id) => {
     if (expanded === id) { setExpanded(null); return }
     setExpanded(id)
     if (!items[id]) {
       const { data } = await supabase.from('outbound_items').select('*').eq('outbound_order_id', id)
-      setItems(prev => ({ ...prev, [id]: data || [] }))
+      const orderItems = data || []
+      setItems(prev => ({ ...prev, [id]: orderItems }))
+      const skuCodes = [...new Set(orderItems.map(i => i.sku_code).filter(Boolean))]
+      if (skuCodes.length > 0) loadFefoLots(id, skuCodes)
     }
   }
 
@@ -245,18 +268,37 @@ export default function Outbound() {
                   ) : (
                     <div className="data-table-wrapper">
                       <table className="data-table">
-                        <thead><tr><th>品號</th><th>品名</th><th>應揀數量</th><th>實揀數量</th><th>儲位</th><th>狀態</th></tr></thead>
+                        <thead><tr><th>品號</th><th>品名</th><th>應揀數量</th><th>實揀數量</th><th>FEFO 批號</th><th>儲位</th><th>狀態</th></tr></thead>
                         <tbody>
-                          {items[o.id].map(item => (
+                          {items[o.id].map(item => {
+                            const fefo = fefoLots[o.id]?.[item.sku_code]
+                            const today = new Date().toISOString().split('T')[0]
+                            const soonDate = new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0]
+                            const isExpiringSoon = fefo?.expiry_date && fefo.expiry_date <= soonDate
+                            const isExpired = fefo?.expiry_date && fefo.expiry_date < today
+                            return (
                             <tr key={item.id} style={highlightItem === item.id ? { background: 'rgba(34,197,94,0.15)', transition: 'background 0.3s' } : {}}>
                               <td style={{ fontFamily: 'monospace' }}>{item.sku_code}</td>
                               <td>{item.sku_name}</td>
                               <td>{item.quantity}</td>
                               <td style={{ fontWeight: 600, color: item.picked_qty >= item.quantity ? 'var(--accent-green)' : 'var(--text-primary)' }}>{item.picked_qty}</td>
+                              <td style={{ fontSize: 11 }}>
+                                {fefo ? (
+                                  <div>
+                                    <div style={{ fontFamily: 'monospace', fontWeight: 600, color: isExpired ? 'var(--accent-red)' : 'var(--text-primary)' }}>{fefo.lot_number}</div>
+                                    {fefo.expiry_date && (
+                                      <div style={{ fontSize: 10, color: isExpired ? 'var(--accent-red)' : isExpiringSoon ? 'var(--accent-orange)' : 'var(--text-muted)' }}>
+                                        效期 {fefo.expiry_date}
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : <span style={{ color: 'var(--text-muted)' }}>-</span>}
+                              </td>
                               <td style={{ fontSize: 12 }}>{item.bin_code || '-'}</td>
                               <td><span className={`badge ${item.status === '已揀貨' ? 'badge-success' : 'badge-warning'}`}><span className="badge-dot"></span>{item.status}</span></td>
                             </tr>
-                          ))}
+                            )
+                          })}
                         </tbody>
                       </table>
                     </div>

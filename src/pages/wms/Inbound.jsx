@@ -10,7 +10,10 @@ import Modal, { Field } from '../../components/Modal'
 import BarcodeInput from '../../components/BarcodeInput'
 
 import { toast } from '../../lib/toast'
+
 const STATUSES = ['待到貨', '收貨中', '已完成', '異常']
+const LANDED_TYPES = { freight: '運費', duty: '關稅', insurance: '保險費', other: '其他費用' }
+const LANDED_ALLOC = { by_value: '按價值分攤', by_qty: '按數量分攤', by_weight: '按重量分攤' }
 
 export default function Inbound() {
   const { profile } = useAuth()
@@ -26,6 +29,9 @@ export default function Inbound() {
   const [scanCount, setScanCount] = useState(0)
   const [lastScannedSku, setLastScannedSku] = useState(null)
   const [highlightItem, setHighlightItem] = useState(null)
+  const [landedCosts, setLandedCosts] = useState({})
+  const [landedForm, setLandedForm] = useState(null)
+  const [landedDraft, setLandedDraft] = useState({ cost_type: 'freight', amount: '', allocation_method: 'by_value', notes: '' })
 
   useEffect(() => {
     const orgId = profile?.organization_id
@@ -50,9 +56,57 @@ export default function Inbound() {
     if (expanded === id) { setExpanded(null); return }
     setExpanded(id)
     if (!items[id]) {
-      const { data } = await supabase.from('inbound_items').select('*').eq('inbound_order_id', id)
-      setItems(prev => ({ ...prev, [id]: data || [] }))
+      const [{ data: itemData }, { data: costData }] = await Promise.all([
+        supabase.from('inbound_items').select('*').eq('inbound_order_id', id),
+        supabase.from('landed_costs').select('*').eq('inbound_order_id', id).order('created_at'),
+      ])
+      setItems(prev => ({ ...prev, [id]: itemData || [] }))
+      setLandedCosts(prev => ({ ...prev, [id]: costData || [] }))
     }
+  }
+
+  const addLandedCost = async (orderId) => {
+    if (!landedDraft.amount || Number(landedDraft.amount) <= 0) return
+    const { data, error } = await supabase.from('landed_costs').insert({
+      inbound_order_id: orderId,
+      cost_type: landedDraft.cost_type,
+      amount: Number(landedDraft.amount),
+      allocation_method: landedDraft.allocation_method,
+      notes: landedDraft.notes || null,
+      organization_id: profile?.organization_id,
+    }).select().single()
+    if (error) { toast.error('新增失敗'); return }
+    setLandedCosts(prev => ({ ...prev, [orderId]: [...(prev[orderId] || []), data] }))
+    setLandedForm(null)
+    setLandedDraft({ cost_type: 'freight', amount: '', allocation_method: 'by_value', notes: '' })
+    toast.success('已新增落地成本')
+  }
+
+  const calcLandedAlloc = (orderId) => {
+    const orderItems = (items[orderId] || []).filter(i => (i.received_qty || 0) > 0)
+    const costs = landedCosts[orderId] || []
+    if (!orderItems.length || !costs.length) return {}
+    const totalLanded = costs.reduce((s, c) => s + Number(c.amount), 0)
+    const totalValue = orderItems.reduce((s, i) => s + (i.received_qty || 0) * (i.unit_cost || i.unit_price || 0), 0)
+    const totalQty = orderItems.reduce((s, i) => s + (i.received_qty || 0), 0)
+    const alloc = {}
+    for (const item of orderItems) {
+      let share = 0
+      const byValue = costs.filter(c => c.allocation_method === 'by_value')
+      const byQty = costs.filter(c => c.allocation_method !== 'by_value')
+      if (byValue.length && totalValue > 0) {
+        const itemValue = (item.received_qty || 0) * (item.unit_cost || item.unit_price || 0)
+        share += byValue.reduce((s, c) => s + Number(c.amount), 0) * (itemValue / totalValue)
+      }
+      if (byQty.length && totalQty > 0) {
+        share += byQty.reduce((s, c) => s + Number(c.amount), 0) * ((item.received_qty || 0) / totalQty)
+      }
+      alloc[item.id] = {
+        total: Math.round(share * 100) / 100,
+        perUnit: item.received_qty > 0 ? Math.round((share / item.received_qty) * 100) / 100 : 0,
+      }
+    }
+    return alloc
   }
 
   const handleSubmit = async () => {
@@ -71,7 +125,8 @@ export default function Inbound() {
     if (data) setOrders(prev => prev.map(o => o.id === id ? data : o))
   }
 
-  const updateItemQty = async (orderId, itemId, qty) => {
+  const updateItemQty = async (orderId, itemId, qtyInput, purchaseUomQty = 1) => {
+    const qty = qtyInput * purchaseUomQty
     const { data } = await supabase.from('inbound_items').update({ received_qty: qty, status: '已收貨' }).eq('id', itemId).select().single()
     if (data) {
       setItems(prev => ({ ...prev, [orderId]: prev[orderId].map(i => i.id === itemId ? data : i) }))
@@ -101,8 +156,9 @@ export default function Inbound() {
       i.sku_code?.toLowerCase() === code.toLowerCase()
     )
     if (matched) {
-      const newQty = (matched.received_qty || 0) + 1
-      await updateItemQty(expanded, matched.id, newQty)
+      const uomQty = matched.purchase_uom_qty > 1 ? matched.purchase_uom_qty : 1
+      const newBaseQty = (matched.received_qty || 0) + uomQty
+      await updateItemQty(expanded, matched.id, newBaseQty, 1)
       setScanCount(prev => prev + 1)
       setLastScannedSku(matched.sku_code)
       setHighlightItem(matched.id)
@@ -195,33 +251,124 @@ export default function Inbound() {
               <div style={{ borderTop: '1px solid var(--border-subtle)', padding: '12px 16px' }}>
                 {(items[o.id] || []).length === 0 ? (
                   <div style={{ color: 'var(--text-muted)', fontSize: 13, textAlign: 'center', padding: '8px 0' }}>尚無明細</div>
-                ) : (
-                  <div className="data-table-wrapper">
-                    <table className="data-table">
-                      <thead><tr><th>品號</th><th>品名</th><th>預計數量</th><th>實收數量</th><th>指定儲位</th><th>狀態</th></tr></thead>
-                      <tbody>
-                        {items[o.id].map(item => (
-                          <tr key={item.id} style={highlightItem === item.id ? { background: 'rgba(34,197,94,0.15)', transition: 'background 0.3s' } : {}}>
-                            <td style={{ fontFamily: 'monospace' }}>{item.sku_code}</td>
-                            <td>{item.sku_name}</td>
-                            <td>{item.expected_qty}</td>
-                            <td>
-                              <input
-                                className="form-input"
-                                type="number"
-                                style={{ width: 80, padding: '2px 6px', fontSize: 12 }}
-                                defaultValue={item.received_qty}
-                                onBlur={e => updateItemQty(o.id, item.id, Number(e.target.value))}
-                              />
-                            </td>
-                            <td style={{ fontSize: 12 }}>{item.bin_code || '-'}</td>
-                            <td><span className={`badge ${item.status === '已收貨' ? 'badge-success' : 'badge-warning'}`}><span className="badge-dot"></span>{item.status}</span></td>
+                ) : (<>
+                  {(() => {
+                    const alloc = calcLandedAlloc(o.id)
+                    const hasAlloc = Object.keys(alloc).length > 0
+                    return (
+                    <div className="data-table-wrapper">
+                      <table className="data-table">
+                        <thead>
+                          <tr>
+                            <th>品號</th><th>品名</th><th>預計數量</th>
+                            <th>實收數量</th>
+                            {hasAlloc && <th>落地成本/件</th>}
+                            <th>指定儲位</th><th>狀態</th>
                           </tr>
+                        </thead>
+                        <tbody>
+                          {items[o.id].map(item => {
+                            const uomQty = Number(item.purchase_uom_qty) > 1 ? Number(item.purchase_uom_qty) : 1
+                            const hasUom = item.purchase_uom && uomQty > 1
+                            const displayInput = hasUom ? Math.round((item.received_qty || 0) / uomQty) : (item.received_qty || 0)
+                            return (
+                            <tr key={item.id} style={highlightItem === item.id ? { background: 'rgba(34,197,94,0.15)', transition: 'background 0.3s' } : {}}>
+                              <td style={{ fontFamily: 'monospace' }}>{item.sku_code}</td>
+                              <td>{item.sku_name}</td>
+                              <td>{item.expected_qty}{hasUom && <span style={{ color: 'var(--text-muted)', fontSize: 10, marginLeft: 4 }}>件</span>}</td>
+                              <td>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                  <input
+                                    className="form-input"
+                                    type="number"
+                                    style={{ width: 72, padding: '2px 6px', fontSize: 12 }}
+                                    key={item.id + '_' + item.received_qty}
+                                    defaultValue={displayInput}
+                                    onBlur={e => updateItemQty(o.id, item.id, Number(e.target.value), uomQty)}
+                                  />
+                                  {hasUom && (
+                                    <div style={{ fontSize: 10, lineHeight: 1.3 }}>
+                                      <div style={{ color: 'var(--accent-cyan)', fontWeight: 600 }}>{item.purchase_uom}</div>
+                                      <div style={{ color: 'var(--text-muted)' }}>={displayInput * uomQty} {item.unit || '件'}</div>
+                                    </div>
+                                  )}
+                                </div>
+                              </td>
+                              {hasAlloc && (
+                                <td style={{ fontSize: 11, color: alloc[item.id] ? 'var(--accent-orange)' : 'var(--text-muted)' }}>
+                                  {alloc[item.id] ? `+$${alloc[item.id].perUnit}` : '-'}
+                                </td>
+                              )}
+                              <td style={{ fontSize: 12 }}>{item.bin_code || '-'}</td>
+                              <td><span className={`badge ${item.status === '已收貨' ? 'badge-success' : 'badge-warning'}`}><span className="badge-dot"></span>{item.status}</span></td>
+                            </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    )
+                  })()}
+
+                  {/* ── 落地成本面板 ── */}
+                  <div style={{ marginTop: 16, borderTop: '1px solid var(--border-subtle)', paddingTop: 12 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontWeight: 600, fontSize: 13 }}>落地成本</span>
+                        {(landedCosts[o.id] || []).length > 0 && (
+                          <span style={{ fontWeight: 700, color: 'var(--accent-orange)' }}>
+                            合計 ${(landedCosts[o.id] || []).reduce((s, c) => s + Number(c.amount), 0).toLocaleString()}
+                          </span>
+                        )}
+                      </div>
+                      <button className="btn btn-secondary" style={{ fontSize: 11, padding: '2px 8px' }}
+                        onClick={() => setLandedForm(landedForm === o.id ? null : o.id)}>
+                        {landedForm === o.id ? '取消' : '+ 新增費用'}
+                      </button>
+                    </div>
+
+                    {(landedCosts[o.id] || []).length > 0 && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+                        {landedCosts[o.id].map(lc => (
+                          <div key={lc.id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', background: 'var(--accent-orange-dim)', borderRadius: 8, fontSize: 12 }}>
+                            <span style={{ color: 'var(--accent-orange)', fontWeight: 600 }}>{LANDED_TYPES[lc.cost_type]}</span>
+                            <span style={{ fontWeight: 700 }}>NT${Number(lc.amount).toLocaleString()}</span>
+                            <span style={{ color: 'var(--text-muted)', fontSize: 10 }}>{LANDED_ALLOC[lc.allocation_method]}</span>
+                          </div>
                         ))}
-                      </tbody>
-                    </table>
+                      </div>
+                    )}
+
+                    {landedForm === o.id && (
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: 8, alignItems: 'end', padding: '10px 12px', background: 'var(--bg-main)', borderRadius: 8, marginBottom: 8 }}>
+                        <div>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>費用類型</div>
+                          <select className="form-input" style={{ width: '100%', fontSize: 12 }} value={landedDraft.cost_type}
+                            onChange={e => setLandedDraft(d => ({ ...d, cost_type: e.target.value }))}>
+                            {Object.entries(LANDED_TYPES).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>金額 (NT$)</div>
+                          <input className="form-input" type="number" style={{ width: '100%', fontSize: 12 }} placeholder="0"
+                            value={landedDraft.amount} onChange={e => setLandedDraft(d => ({ ...d, amount: e.target.value }))} />
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>分攤方式</div>
+                          <select className="form-input" style={{ width: '100%', fontSize: 12 }} value={landedDraft.allocation_method}
+                            onChange={e => setLandedDraft(d => ({ ...d, allocation_method: e.target.value }))}>
+                            {Object.entries(LANDED_ALLOC).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                          </select>
+                        </div>
+                        <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={() => addLandedCost(o.id)}>確認</button>
+                      </div>
+                    )}
+
+                    {(landedCosts[o.id] || []).length === 0 && landedForm !== o.id && (
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>尚無落地成本（運費、關稅、保險費等）</div>
+                    )}
                   </div>
-                )}
+                </>)}
               </div>
             )}
           </div>

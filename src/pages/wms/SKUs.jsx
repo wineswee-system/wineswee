@@ -57,7 +57,8 @@ export default function SKUs() {
   const [viewMode, setViewMode] = useState('all') // 'all', 'parents', 'variants'
   const [form, setForm] = useState({
     code: '', name: '', barcode: '', unit: '件', weight: '', length: '', width: '', height: '',
-    category: CATEGORIES[0], costing_method: 'WEIGHTED_AVG', unit_cost: ''
+    category: CATEGORIES[0], costing_method: 'WEIGHTED_AVG', unit_cost: '',
+    purchase_uom: '', purchase_uom_qty: 1,
   })
 
   useEffect(() => {
@@ -73,6 +74,8 @@ export default function SKUs() {
       status: '啟用',
       barcode: form.barcode || generateBarcode(),
       unit_cost: form.unit_cost ? Number(form.unit_cost) : 0,
+      purchase_uom: form.purchase_uom || null,
+      purchase_uom_qty: form.purchase_uom && Number(form.purchase_uom_qty) > 1 ? Number(form.purchase_uom_qty) : 1,
     }
     const { data } = await supabase.from('skus').insert(submitData).select().single()
     if (data) {
@@ -80,7 +83,8 @@ export default function SKUs() {
       setShowModal(false)
       setForm({
         code: '', name: '', barcode: '', unit: '件', weight: '', length: '', width: '', height: '',
-        category: CATEGORIES[0], costing_method: 'WEIGHTED_AVG', unit_cost: ''
+        category: CATEGORIES[0], costing_method: 'WEIGHTED_AVG', unit_cost: '',
+        purchase_uom: '', purchase_uom_qty: 1,
       })
     }
   }
@@ -190,7 +194,7 @@ export default function SKUs() {
         </div>
         <div className="data-table-wrapper">
           <table className="data-table">
-            <thead><tr><th>品號</th><th>品名</th><th>條碼</th><th>分類</th><th>單位</th><th>成本方法</th><th>單位成本</th><th>重量(kg)</th><th>材積(cm)</th><th>狀態</th><th>變體</th></tr></thead>
+            <thead><tr><th>品號</th><th>品名</th><th>條碼</th><th>分類</th><th>基本單位</th><th>進貨單位</th><th>成本方法</th><th>單位成本</th><th>重量(kg)</th><th>材積(cm)</th><th>狀態</th><th>變體</th></tr></thead>
             <tbody>
               {filtered.length === 0 && <tr><td colSpan={11} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>尚無商品資料</td></tr>}
               {filtered.map(s => {
@@ -215,6 +219,12 @@ export default function SKUs() {
                     <td><BarcodeVisual code={s.barcode} /></td>
                     <td><span className="badge badge-cyan">{s.category}</span></td>
                     <td>{s.unit}</td>
+                    <td style={{ fontSize: 12 }}>
+                      {s.purchase_uom && s.purchase_uom !== s.unit
+                        ? <span><span style={{ fontWeight: 600 }}>{s.purchase_uom}</span><span style={{ color: 'var(--text-muted)', marginLeft: 4 }}>×{s.purchase_uom_qty || 1}{s.unit}</span></span>
+                        : <span style={{ color: 'var(--text-muted)' }}>-</span>
+                      }
+                    </td>
                     <td>
                       <span className="badge badge-info">
                         {COSTING_METHODS.find(m => m.value === s.costing_method)?.label || s.costing_method || '加權平均'}
@@ -312,12 +322,28 @@ export default function SKUs() {
             <Field label="單位成本"><input className="form-input" type="number" style={{ width: '100%' }} placeholder="0" value={form.unit_cost} onChange={e => set('unit_cost', e.target.value)} /></Field>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12 }}>
-            <Field label="單位"><input className="form-input" type="text" style={{ width: '100%' }} placeholder="件" value={form.unit} onChange={e => set('unit', e.target.value)} /></Field>
+            <Field label="基本單位"><input className="form-input" type="text" style={{ width: '100%' }} placeholder="件" value={form.unit} onChange={e => set('unit', e.target.value)} /></Field>
             <Field label="重量(kg)"><input className="form-input" type="number" style={{ width: '100%' }} placeholder="0.5" value={form.weight} onChange={e => set('weight', e.target.value)} /></Field>
             <Field label="長(cm)"><input className="form-input" type="number" style={{ width: '100%' }} placeholder="10" value={form.length} onChange={e => set('length', e.target.value)} /></Field>
             <Field label="寬(cm)"><input className="form-input" type="number" style={{ width: '100%' }} placeholder="10" value={form.width} onChange={e => set('width', e.target.value)} /></Field>
           </div>
           <Field label="高(cm)"><input className="form-input" type="number" style={{ width: '100%' }} placeholder="10" value={form.height} onChange={e => set('height', e.target.value)} /></Field>
+          <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 12, marginTop: 4 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 8 }}>進貨計量單位（Multi-UOM）</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <Field label="進貨單位">
+                <input className="form-input" type="text" style={{ width: '100%' }} placeholder="箱（留空=同基本單位）" value={form.purchase_uom} onChange={e => set('purchase_uom', e.target.value)} />
+              </Field>
+              <Field label={`1 ${form.purchase_uom || '進貨單位'} = ? ${form.unit || '件'}`}>
+                <input className="form-input" type="number" style={{ width: '100%' }} min="1" step="1" placeholder="12" value={form.purchase_uom_qty} onChange={e => set('purchase_uom_qty', e.target.value)} disabled={!form.purchase_uom} />
+              </Field>
+            </div>
+            {form.purchase_uom && Number(form.purchase_uom_qty) > 1 && (
+              <div style={{ fontSize: 12, color: 'var(--accent-cyan)', padding: '4px 8px', background: 'var(--accent-cyan-dim)', borderRadius: 6, marginTop: 4 }}>
+                收貨時輸入：箱數 × {form.purchase_uom_qty} = 入庫{form.unit || '件'}數
+              </div>
+            )}
+          </div>
         </Modal>
       )}
     </div>

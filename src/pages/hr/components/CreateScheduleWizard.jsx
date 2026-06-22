@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { supabase } from '../../../lib/supabase'
 import { getCycleFor } from '../../../lib/scheduleUtils'
 import { useAuth } from '../../../contexts/AuthContext'
@@ -382,7 +383,7 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
 
   const canNext1 = selectedStoreIds.size > 0 && selectedPeriod
 
-  return (
+  return createPortal((
     <div style={{
       position: 'fixed', inset: 0, zIndex: 9000,
       background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)',
@@ -848,7 +849,7 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
         </div>{/* /Body */}
       </div>
     </div>
-  )
+  ), document.body)
 }
 
 function SummaryRow({ label, children }) {

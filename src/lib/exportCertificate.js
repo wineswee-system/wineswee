@@ -67,7 +67,7 @@ export function exportEmployeeCertificate({ type, employee = {}, org = {} }) {
   h1.title { text-align: center; font-size: 26px; letter-spacing: 8px; margin: 36px 0 40px; font-weight: 700; }
   .body { font-size: 17px; line-height: 2.4; text-align: justify; text-indent: 0; }
   .body b { font-weight: 700; }
-  .sign { margin-top: 64px; font-size: 15px; line-height: 2.1; width: 360px; margin-left: auto; }
+  .sign { margin-top: 64px; font-size: 15px; line-height: 2.1; width: fit-content; max-width: 100%; margin-left: auto; white-space: nowrap; }
   .sign .seal { color: #b91c1c; }
   .date { margin-top: 40px; text-align: right; font-size: 16px; }
   @media print { .toolbar { display: none; } .page { border: none; padding: 40px 56px; } body { padding: 0; } }

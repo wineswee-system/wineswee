@@ -43,6 +43,10 @@ export const groupNav = {
         { icon: TrendingUp, label: '銷售漏斗', path: '/crm/pipeline' },
         { icon: Calendar, label: '活動排程', path: '/crm/activities' },
         { icon: Award, label: '會員管理', path: '/crm/members' },
+        { icon: Award, label: '會員等級設定', path: '/crm/levels' },
+        { icon: Users, label: '會員群組', path: '/crm/groups' },
+        { icon: FileText, label: '問卷管理', path: '/crm/surveys' },
+        { icon: Sparkles, label: 'Pilot 試跑', path: '/crm/pilots' },
       ]
     },
     {

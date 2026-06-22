@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Plus, Edit2, DollarSign, Users, X } from 'lucide-react'
+import { Plus, Edit2, DollarSign, Users, X, Download } from 'lucide-react'
+import * as XLSX from 'xlsx'
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
@@ -61,6 +62,8 @@ export default function SalaryStructures() {
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
   const [deptFilter, setDeptFilter] = useState('')
+  const [statusFilter, setStatusFilter] = useState('active')  // active=在職(非離職) / resigned=離職 / all=全部
+  const [exporting, setExporting] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [showModal, setShowModal] = useState(false)
@@ -72,7 +75,8 @@ export default function SalaryStructures() {
     setLoading(true)
     Promise.all([
       supabase.from('salary_structures').select('*').eq('organization_id', orgId).order('id', { ascending: false }),
-      supabase.from('employees').select('id, name, name_en, dept, store, position, department_id, store_id, departments!department_id(name), stores!store_id(name)').eq('status', '在職').eq('organization_id', orgId).order('name'),
+      // 載入「全部狀態」員工 → 離職者的薪資結構也看得到名字、可篩在職/離職（下拉仍只給在職）
+      supabase.from('employees').select('id, name, name_en, employee_number, status, resign_date, dept, store, position, department_id, store_id, departments!department_id(name), stores!store_id(name)').eq('organization_id', orgId).order('name'),
       supabase.from('departments').select('*').eq('organization_id', orgId).order('name'),
     ]).then(([s, e, d]) => {
       setStructures(s.data || [])
@@ -97,12 +101,14 @@ export default function SalaryStructures() {
   }, [employees])
 
   const filtered = useMemo(() => {
-    if (!deptFilter) return structures
     return structures.filter(s => {
       const emp = empMap[s.employee_id]
-      return emp && emp.dept === deptFilter
+      if (deptFilter && !(emp && emp.dept === deptFilter)) return false
+      if (statusFilter === 'active'   && !(emp && emp.status !== '離職')) return false
+      if (statusFilter === 'resigned' && !(emp && emp.status === '離職')) return false
+      return true
     })
-  }, [structures, deptFilter, empMap])
+  }, [structures, deptFilter, statusFilter, empMap])
 
   // Summary cards
   const totalConfigured = new Set(structures.map(s => s.employee_id)).size
@@ -212,6 +218,69 @@ export default function SalaryStructures() {
     }
   }
 
+  // 匯出薪資架構 + 匯款帳戶（Excel）— 依目前篩選(部門/在職狀態)匯出
+  const handleExport = async () => {
+    setExporting(true)
+    try {
+      // 銀行帳號在 RLS 鎖 admin 的表，走 SECURITY DEFINER RPC 撈
+      const { data: banks, error: bErr } = await supabase.rpc('list_employee_bank_accounts', { p_org: orgId })
+      if (bErr) throw bErr
+      const bankMap = {}
+      ;(Array.isArray(banks) ? banks : []).forEach(b => { bankMap[b.employee_id] = b })
+      const catLabel = (s) => {
+        const cat = s.employment_category || (s.salary_type === 'hourly' ? 'parttime' : 'regular')
+        return EMPLOYMENT_CATEGORY_LABELS[cat] || cat
+      }
+      const rows = filtered.map(s => {
+        const emp = empMap[s.employee_id] || {}
+        const bank = bankMap[s.employee_id] || {}
+        const custom = Array.isArray(s.custom_allowances)
+          ? s.custom_allowances.map(c => `${c.name}:${Number(c.amount) || 0}`).join('、') : ''
+        return {
+          '員工編號': emp.employee_number || '',
+          '姓名': emp.name || `#${s.employee_id}`,
+          '在職狀態': emp.status || '',
+          '離職日': emp.resign_date || '',
+          '部門': emp.dept || '',
+          '門市': emp.store || '',
+          '員工分類': catLabel(s),
+          '本薪': Number(s.base_salary) || 0,
+          '申報底薪': s.base_insured != null ? Number(s.base_insured) : '',
+          '時薪': Number(s.hourly_rate) || 0,
+          '件單價': Number(s.piece_rate) || 0,
+          '本月件數': Number(s.current_piece_count) || 0,
+          '主管加給': Number(s.supervisor_allowance) || 0,
+          '夜班津貼': Number(s.night_shift_allowance) || 0,
+          '跨區津貼': Number(s.cross_store_allowance) || 0,
+          '餐費津貼': Number(s.meal_allowance) || 0,
+          '交通津貼': Number(s.transport_allowance) || 0,
+          '全勤獎金': Number(s.attendance_bonus) || 0,
+          '其他自訂津貼': custom,
+          // 銀行代號/帳號維持文字，避免 Excel 變科學記號或吃掉開頭 0
+          '銀行代號': String(bank.bank_code || ''),
+          '銀行': bank.bank_name || '',
+          '分行': bank.bank_branch || '',
+          '帳號': String(bank.bank_account || ''),
+          '戶名': bank.account_holder || '',
+          '生效日': s.effective_from || '',
+          '備註': s.notes || '',
+        }
+      })
+      if (rows.length === 0) { toast.warning('目前篩選沒有資料可匯出'); return }
+      const ws = XLSX.utils.json_to_sheet(rows, { header: Object.keys(rows[0]) })
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, ws, '薪資架構')
+      const tag = statusFilter === 'active' ? '在職' : statusFilter === 'resigned' ? '離職' : '全部'
+      XLSX.writeFile(wb, `薪資架構與匯款帳戶_${tag}_${new Date().toISOString().slice(0, 10)}.xlsx`)
+      toast.success(`已匯出 ${rows.length} 筆`)
+    } catch (err) {
+      console.error('Export failed:', err)
+      toast.error('匯出失敗：' + (err.message || '未知錯誤'))
+    } finally {
+      setExporting(false)
+    }
+  }
+
   if (loading) return <LoadingSpinner />
   if (error) return (
     <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}>
@@ -228,9 +297,14 @@ export default function SalaryStructures() {
             <h2 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>薪資結構管理</h2>
             <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '4px 0 0' }}>設定員工底薪、津貼及薪資類型</p>
           </div>
-          <button className="btn btn-primary" onClick={openAdd} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Plus size={16} /> 新增薪資結構
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button className="btn btn-secondary" onClick={handleExport} disabled={exporting} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Download size={16} /> {exporting ? '匯出中…' : '匯出 Excel'}
+            </button>
+            <button className="btn btn-primary" onClick={openAdd} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Plus size={16} /> 新增薪資結構
+            </button>
+          </div>
         </div>
       </div>
 
@@ -252,13 +326,20 @@ export default function SalaryStructures() {
         </div>
       </div>
 
-      {/* Dept Filter */}
-      <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
+      {/* Filters */}
+      <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <label style={{ fontSize: 13, color: 'var(--text-muted)' }}>部門篩選：</label>
         <select className="form-input" value={deptFilter} onChange={e => setDeptFilter(e.target.value)} style={{ width: 180 }}>
           <option value="">全部部門</option>
           {departments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
         </select>
+        <label style={{ fontSize: 13, color: 'var(--text-muted)', marginLeft: 8 }}>在職狀態：</label>
+        <select className="form-input" value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{ width: 140 }}>
+          <option value="active">在職</option>
+          <option value="resigned">離職</option>
+          <option value="all">全部</option>
+        </select>
+        <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 'auto' }}>共 {filtered.length} 筆</span>
       </div>
 
       {/* Table */}
@@ -267,19 +348,35 @@ export default function SalaryStructures() {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-tertiary)' }}>
-                {['員工', '部門', '門市', '薪資類型', '本薪 / 投保', '主管/夜班/跨區', '餐費/交通', '全勤', '其他津貼', '生效日', '操作'].map(h => (
+                {['員工', '狀態', '部門', '門市', '薪資類型', '本薪 / 投保', '主管/夜班/跨區', '餐費/交通', '全勤', '其他津貼', '生效日', '操作'].map(h => (
                   <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 600, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={11} style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>尚無薪資結構資料</td></tr>
+                <tr><td colSpan={12} style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>尚無薪資結構資料</td></tr>
               ) : filtered.map(s => {
                 const emp = empMap[s.employee_id]
                 return (
                   <tr key={s.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                     <td style={{ padding: '10px 14px', fontWeight: 600 }}>{emp?.name || `#${s.employee_id}`}</td>
+                    <td style={{ padding: '10px 14px' }}>
+                      {(() => {
+                        const st = emp?.status || '—'
+                        const isResigned = st === '離職'
+                        const c = isResigned
+                          ? { bg: 'var(--accent-red-dim)', fg: 'var(--accent-red)' }
+                          : st === '試用'
+                            ? { bg: 'var(--accent-orange-dim)', fg: 'var(--accent-orange)' }
+                            : { bg: 'var(--accent-green-dim)', fg: 'var(--accent-green)' }
+                        return (
+                          <span style={{ padding: '2px 8px', borderRadius: 6, fontSize: 12, fontWeight: 600, background: c.bg, color: c.fg, whiteSpace: 'nowrap' }}>
+                            {st}{isResigned && emp?.resign_date ? ` ${emp.resign_date.slice(5)}` : ''}
+                          </span>
+                        )
+                      })()}
+                    </td>
                     <td style={{ padding: '10px 14px' }}>{emp?.dept || '-'}</td>
                     <td style={{ padding: '10px 14px' }}>{emp?.store || '-'}</td>
                     <td style={{ padding: '10px 14px' }}>

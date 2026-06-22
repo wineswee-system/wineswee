@@ -25,6 +25,8 @@ export async function computeBatchPayroll({ month, orgId, employees, storeFilter
 
   // 跨店打卡支援：員工是「primary store=該店」或「additional_stores 含該店」都算
   // 加掛入職日過濾：入職日 > 月末 的員工不入該月薪資（例：5/15 入職的人不該出現在 4 月薪資）
+  // 加掛離職過濾：以計薪月份為準，在職 OR 當月離職才算（對齊 generate_payroll/preview_payroll）
+  //   → 6月薪資不會撈到4/5月離職的人
   const scopedEmployees = (storeFilter
     ? employees.filter(e =>
         e.store === storeFilter
@@ -32,6 +34,8 @@ export async function computeBatchPayroll({ month, orgId, employees, storeFilter
       )
     : employees
   ).filter(e => !e.join_date || e.join_date <= monthEnd)
+   .filter(e => e.status === '在職'
+     || (e.status === '離職' && e.resign_date && e.resign_date >= monthStart && e.resign_date <= monthEnd))
 
   // 補休過期：拉所有 scopedEmployees 在月底之前到期、status='active' 的 ledger
   // 月結時 generate_payroll 會把這些自動兌現加進加班費 → 預覽也要顯示

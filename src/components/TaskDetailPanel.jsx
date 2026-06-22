@@ -642,15 +642,43 @@ function TaskFormBindingsBlock({ bindings }) {
     '已退回': { bg: 'rgba(239,68,68,0.15)',    color: 'var(--accent-red)',    icon: '❌' },
     '已完成': { bg: 'rgba(34,197,94,0.15)',    color: 'var(--accent-green)',  icon: '✅' },
   }
+  // 驗收段（核銷/入庫驗收）對應的「申請段」型別
+  const applyTypeFor = (ft) =>
+    ft === 'expense_settle' ? 'expense_apply'
+    : ft === 'goods_transfer_receipt' ? 'goods_transfer_apply'
+    : null
+  // 驗收段在「同任務的申請段尚未完成」時鎖定（純 UX；真實 gate 在 DB record 層）
+  const isLocked = (b) => {
+    const at = applyTypeFor(b.form_type)
+    if (!at) return false
+    const sib = bindings.find(x => x.form_type === at)
+    return sib ? sib.status !== '已完成' : false  // 無對應申請段 → 不鎖（獨立驗收，靠 record gate）
+  }
+  // 該卡片的動作狀態
+  const actionFor = (b) => {
+    if (isLocked(b)) return { label: '🔒 申請核准後解鎖', clickable: false }
+    if (b.form_type === 'expense_settle')
+      return b.form_id ? { label: '→ 去核銷', clickable: true } : { label: '等申請建立', clickable: false }
+    if (b.form_type === 'goods_transfer_receipt')
+      return b.form_id ? { label: '→ 去驗收', clickable: true } : { label: '等申請建立', clickable: false }
+    if (!b.form_id) return { label: '→ 去填寫', clickable: true }
+    return { label: '', clickable: false }  // 已認領的整單/申請段 → 只查狀態
+  }
   const navTo = (b) => {
-    // 帶 binding_id 跳轉到對應表單頁，submit 時表單頁負責寫回 linked_binding_id
-    const u = b.form_id
-      ? null  // 已有 form_id 表示已認領 → 點卡只是查狀態
-      : (b.form_type === 'expense_request' ? `/process/expense-requests?binding_id=${b.id}`
+    if (!actionFor(b).clickable) return
+    let u = null
+    if (b.form_type === 'expense_settle') {
+      u = b.form_id ? `/process/expense-requests?focus=${b.form_id}&settle=1` : null
+    } else if (b.form_type === 'goods_transfer_receipt') {
+      u = b.form_id ? `/process/transfer-requests?focus=${b.form_id}&receipt=1` : null
+    } else {
+      // 申請段 / 整單 / 其他：帶 binding_id 跳轉，submit 時表單頁寫回 linked_binding_id
+      u = (b.form_type === 'expense_request' || b.form_type === 'expense_apply') ? `/process/expense-requests?binding_id=${b.id}`
         : b.form_type === 'expense'         ? `/process/expenses?binding_id=${b.id}`
         : b.form_type === 'store_audit'     ? `/process/store-audits?new=1&binding_id=${b.id}`
-        : b.form_type === 'goods_transfer'  ? `/process/transfer-requests?new=1&binding_id=${b.id}`
-        : `/process/forms/custom/${b.form_template_id}?binding_id=${b.id}`)
+        : (b.form_type === 'goods_transfer' || b.form_type === 'goods_transfer_apply') ? `/process/transfer-requests?new=1&binding_id=${b.id}`
+        : `/process/forms/custom/${b.form_template_id}?binding_id=${b.id}`
+    }
     if (u) window.open(u, '_blank')
   }
   const completed = bindings.filter(b => b.status === '已完成').length
@@ -663,12 +691,15 @@ function TaskFormBindingsBlock({ bindings }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {bindings.map(b => {
           const s = STATUS_STYLE[b.status] || STATUS_STYLE['未填']
+          const act = actionFor(b)
+          const locked = isLocked(b)
           return (
             <div key={b.id} onClick={() => navTo(b)}
               style={{
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                 padding: '8px 12px', borderRadius: 6, background: 'var(--bg-card)',
-                cursor: b.form_id ? 'default' : 'pointer',
+                cursor: act.clickable ? 'pointer' : 'default',
+                opacity: locked ? 0.6 : 1,
                 border: '1px solid var(--border-subtle)',
               }}>
               <div>
@@ -682,8 +713,8 @@ function TaskFormBindingsBlock({ bindings }) {
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ padding: '3px 10px', borderRadius: 12, fontSize: 11, fontWeight: 700, background: s.bg, color: s.color }}>{b.status}</span>
-                {!b.form_id && (
-                  <span style={{ fontSize: 11, color: 'var(--accent-cyan)', fontWeight: 600 }}>→ 去填寫</span>
+                {act.label && (
+                  <span style={{ fontSize: 11, color: locked ? 'var(--text-muted)' : 'var(--accent-cyan)', fontWeight: 600 }}>{act.label}</span>
                 )}
               </div>
             </div>

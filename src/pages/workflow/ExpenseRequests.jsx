@@ -121,9 +121,15 @@ export default function ExpenseRequests() {
     if (!focus || !requests.length) return
     const row = requests.find(r => r.id === Number(focus))
     if (row) {
-      openDetail(row)
+      // 任務「核銷(驗收)步驟」帶 ?settle=1 → 可核銷狀態直接開核銷 modal，否則開明細
+      const wantSettle = searchParams.get('settle') === '1'
+      if (wantSettle && (row.status === '已核准' || row.status === '核銷已退回')) {
+        openSettle(row)
+      } else {
+        openDetail(row)
+      }
       // 清掉 URL param 避免重整時又跳出來
-      setSearchParams(sp => { const x = new URLSearchParams(sp); x.delete('focus'); return x }, { replace: true })
+      setSearchParams(sp => { const x = new URLSearchParams(sp); x.delete('focus'); x.delete('settle'); return x }, { replace: true })
     }
   }, [requests, searchParams]) // eslint-disable-line react-hooks/exhaustive-deps
 

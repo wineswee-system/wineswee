@@ -1,8 +1,9 @@
-﻿import { useState, useEffect } from 'react'
+﻿import { useState, useEffect, Fragment } from 'react'
 import { ModalOverlay } from '../../components/Modal'
 import { createPortal } from 'react-dom'
 import { Plus, X, CheckCircle, Package, Truck, ClipboardList } from 'lucide-react'
 import { getPickLists, createPickList, updatePickList, getPackLists, createPackList, updatePackList, getSalesOrders, getWarehouses } from '../../lib/db'
+import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { useOrgId } from '../../contexts/AuthContext'
 
@@ -20,6 +21,35 @@ export default function PickPackShip() {
   const [tab, setTab] = useState('pick') // pick | pack
   const [showCreatePick, setShowCreatePick] = useState(false)
   const [pickForm, setPickForm] = useState({ sales_order_id: '', warehouse_id: '', picker: '' })
+  const [expanded, setExpanded] = useState(null)   // 展開中的揀貨單 id
+  const [fefoLots, setFefoLots] = useState({})     // { pickId: { sku_code: lot } } — 最快到期批號
+
+  // FEFO：撈該揀貨單各品項「最快到期」的批號(先進先出提示給揀貨員)
+  const loadFefoLots = async (pickId, skuCodes) => {
+    const codes = (skuCodes || []).filter(Boolean)
+    if (!codes.length) return
+    const { data: skuData } = await supabase.from('skus').select('id, code').in('code', codes)
+    if (!skuData?.length) return
+    const skuIdToCode = Object.fromEntries(skuData.map(s => [s.id, s.code]))
+    const { data: lots } = await supabase
+      .from('inventory_lots')
+      .select('lot_number, expiry_date, quantity, sku_id')
+      .in('sku_id', skuData.map(s => s.id))
+      .gt('quantity', 0)
+      .order('expiry_date', { ascending: true, nullsFirst: false })
+    const byCode = {}
+    for (const lot of (lots || [])) {
+      const code = skuIdToCode[lot.sku_id]
+      if (code && !byCode[code]) byCode[code] = lot  // 取每個品項第一筆(最快到期)
+    }
+    setFefoLots(prev => ({ ...prev, [pickId]: byCode }))
+  }
+
+  const toggleExpand = (pick) => {
+    if (expanded === pick.id) { setExpanded(null); return }
+    setExpanded(pick.id)
+    if (!fefoLots[pick.id]) loadFefoLots(pick.id, (pick.items || []).map(i => i.sku_code))
+  }
 
   const load = async () => {
     setLoading(true)
@@ -160,9 +190,16 @@ export default function PickPackShip() {
                 const so = salesOrders.find(o => o.id === pick.sales_order_id)
                 const wh = warehouses.find(w => w.id === pick.warehouse_id)
                 const items = pick.items || []
+                const isOpen = expanded === pick.id
+                const fefo = fefoLots[pick.id] || {}
+                const soon = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10)
                 return (
-                  <tr key={pick.id}>
-                    <td style={{ fontFamily: 'monospace', fontWeight: 600 }}>{pick.pick_number}</td>
+                  <Fragment key={pick.id}>
+                  <tr style={{ cursor: 'pointer' }} onClick={() => toggleExpand(pick)}>
+                    <td style={{ fontFamily: 'monospace', fontWeight: 600 }}>
+                      <span style={{ display: 'inline-block', width: 14, color: 'var(--text-muted)' }}>{isOpen ? '▾' : '▸'}</span>
+                      {pick.pick_number}
+                    </td>
                     <td>{so?.order_number || '-'}</td>
                     <td>{wh?.name || '-'}</td>
                     <td>{pick.picker || '-'}</td>
@@ -170,7 +207,7 @@ export default function PickPackShip() {
                     <td>
                       <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 12, fontWeight: 600, background: `color-mix(in srgb, ${statusColor(pick.status)} 15%, transparent)`, color: statusColor(pick.status) }}>{pick.status}</span>
                     </td>
-                    <td>
+                    <td onClick={e => e.stopPropagation()}>
                       <div style={{ display: 'flex', gap: 4 }}>
                         {pick.status === '待揀貨' && (
                           <button className="btn btn-primary" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => startPicking(pick)}>開始揀貨</button>
@@ -183,6 +220,36 @@ export default function PickPackShip() {
                       </div>
                     </td>
                   </tr>
+                  {isOpen && (
+                    <tr key={pick.id + '-detail'}>
+                      <td colSpan={7} style={{ background: 'var(--bg-secondary)', padding: '8px 16px' }}>
+                        <table className="data-table" style={{ margin: 0, fontSize: 12 }}>
+                          <thead><tr><th>品號</th><th>品名</th><th>應揀數量</th><th>建議批號 (FEFO)</th><th>到期日</th></tr></thead>
+                          <tbody>
+                            {items.length === 0 ? (
+                              <tr><td colSpan={5} style={{ color: 'var(--text-muted)' }}>此單無品項</td></tr>
+                            ) : items.map((it, idx) => {
+                              const lot = fefo[it.sku_code]
+                              const expired = lot?.expiry_date && lot.expiry_date < soon.slice(0, 10)
+                              const isExpired = lot?.expiry_date && lot.expiry_date < new Date().toISOString().slice(0, 10)
+                              return (
+                                <tr key={idx}>
+                                  <td style={{ fontFamily: 'monospace' }}>{it.sku_code}</td>
+                                  <td>{it.name || '-'}</td>
+                                  <td>{it.qty_ordered ?? it.qty ?? '-'}</td>
+                                  <td style={{ fontFamily: 'monospace', fontWeight: 600 }}>{lot?.lot_number || <span style={{ color: 'var(--text-muted)' }}>無庫存批號</span>}</td>
+                                  <td style={{ color: isExpired ? 'var(--accent-red)' : expired ? 'var(--accent-orange)' : 'var(--text-secondary)', fontWeight: (expired || isExpired) ? 700 : 400 }}>
+                                    {lot?.expiry_date || '-'}{isExpired ? ' (已過期)' : expired ? ' (即將到期)' : ''}
+                                  </td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
                 )
               })}
             </tbody>

@@ -410,8 +410,12 @@ export default function StoreBonus() {
                           style={{ width: f.value_type === 'text' ? 90 : 64, padding: 4, fontSize: 12, textAlign: f.value_type === 'text' ? 'left' : 'right' }} />
                       </td>
                     ))}
-                    <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--accent-cyan)' }}>
+                    <td style={{ textAlign: 'right', fontWeight: 700, color: e.eligible === false ? 'var(--text-muted)' : 'var(--accent-cyan)' }}
+                      title={`當月工時 ${Number(e.work_hours || 0)}h`}>
                       {Number(e.net_bonus).toLocaleString()}
+                      {e.eligible === false && e.ineligible_reason && (
+                        <div style={{ fontSize: 10, color: 'var(--accent-red)', fontWeight: 600 }}>⚠ {e.ineligible_reason}</div>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -504,6 +508,8 @@ function RoleConfigModal({ config, orgId, onClose, onSaved }) {
         major_offense_deduct: Number(r.major_offense_deduct) || 0,
         punch_deduct_start:   Number(r.punch_deduct_start) || 5,
         punch_deduct_amount:  Number(r.punch_deduct_amount) || 0,
+        min_work_hours:        Number(r.min_work_hours) || 0,
+        bonus_from_next_month: !!r.bonus_from_next_month,
       }).eq('id', r.id)
     }
     toast.success('已儲存')
@@ -521,7 +527,7 @@ function RoleConfigModal({ config, orgId, onClose, onSaved }) {
             <thead>
               <tr>
                 <th>角色</th><th>權重</th><th>小功獎金/筆</th><th>大功獎金/筆</th><th>達標獎金</th>
-                <th>缺失扣/筆</th><th>小過扣/筆</th><th>大過扣/筆</th><th>補卡第幾次起扣</th><th>補卡扣/次</th>
+                <th>缺失扣/筆</th><th>小過扣/筆</th><th>大過扣/筆</th><th>補卡第幾次起扣</th><th>補卡扣/次</th><th>最低工時</th><th>次月起領</th>
               </tr>
             </thead>
             <tbody>
@@ -537,6 +543,11 @@ function RoleConfigModal({ config, orgId, onClose, onSaved }) {
                   <td><Input value={r.major_offense_deduct} step="100" onChange={v => setRows(rs => rs.map((x, j) => i === j ? { ...x, major_offense_deduct: v } : x))} /></td>
                   <td><Input value={r.punch_deduct_start} onChange={v => setRows(rs => rs.map((x, j) => i === j ? { ...x, punch_deduct_start: v } : x))} /></td>
                   <td><Input value={r.punch_deduct_amount} step="50" onChange={v => setRows(rs => rs.map((x, j) => i === j ? { ...x, punch_deduct_amount: v } : x))} /></td>
+                  <td><Input value={r.min_work_hours} step="1" onChange={v => setRows(rs => rs.map((x, j) => i === j ? { ...x, min_work_hours: v } : x))} /></td>
+                  <td style={{ textAlign: 'center' }}>
+                    <input type="checkbox" checked={!!r.bonus_from_next_month}
+                      onChange={e => setRows(rs => rs.map((x, j) => i === j ? { ...x, bonus_from_next_month: e.target.checked } : x))} />
+                  </td>
                 </tr>
               ))}
             </tbody>

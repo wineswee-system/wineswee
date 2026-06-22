@@ -121,9 +121,11 @@ export default function StoreBonus() {
     setSaving(true)
     const patch = {
       role:                   emp.role,
-      merit_count:            Number(emp.merit_count) || 0,
+      minor_merit_count:      Number(emp.minor_merit_count) || 0,
+      major_merit_count:      Number(emp.major_merit_count) || 0,
       absence_count:          Number(emp.absence_count) || 0,
       minor_offense_count:    Number(emp.minor_offense_count) || 0,
+      major_offense_count:    Number(emp.major_offense_count) || 0,
       punch_correction_count: Number(emp.punch_correction_count) || 0,
       prev_month_supplement:  Number(emp.prev_month_supplement) || 0,
       custom_values:          emp.custom_values || {},
@@ -326,10 +328,12 @@ export default function StoreBonus() {
                   <th>個人比</th>
                   <th>損益獎金</th>
                   <th>達標</th>
-                  <th>記功次</th>
-                  <th>記功獎金</th>
+                  <th>小功次</th>
+                  <th>大功次</th>
+                  <th>功獎金</th>
                   <th>缺失</th>
                   <th>小過</th>
+                  <th>大過</th>
                   <th>補卡次</th>
                   <th>稽核扣</th>
                   <th>補卡扣</th>
@@ -361,8 +365,12 @@ export default function StoreBonus() {
                       {e.target_bonus > 0 ? Number(e.target_bonus).toLocaleString() : '—'}
                     </td>
                     <td>
-                      <Input n disabled={isFinalized} value={e.merit_count}
-                        onChange={v => handleEmpFieldChange(e.id, 'merit_count', v)} />
+                      <Input n disabled={isFinalized} value={e.minor_merit_count}
+                        onChange={v => handleEmpFieldChange(e.id, 'minor_merit_count', v)} />
+                    </td>
+                    <td>
+                      <Input n disabled={isFinalized} value={e.major_merit_count}
+                        onChange={v => handleEmpFieldChange(e.id, 'major_merit_count', v)} />
                     </td>
                     <td style={{ textAlign: 'right', color: 'var(--accent-green)' }}>
                       {e.merit_bonus > 0 ? Number(e.merit_bonus).toLocaleString() : '—'}
@@ -374,6 +382,10 @@ export default function StoreBonus() {
                     <td>
                       <Input n disabled={isFinalized} value={e.minor_offense_count}
                         onChange={v => handleEmpFieldChange(e.id, 'minor_offense_count', v)} />
+                    </td>
+                    <td>
+                      <Input n disabled={isFinalized} value={e.major_offense_count}
+                        onChange={v => handleEmpFieldChange(e.id, 'major_offense_count', v)} />
                     </td>
                     <td>
                       <Input n disabled={isFinalized} value={e.punch_correction_count}
@@ -410,8 +422,9 @@ export default function StoreBonus() {
                   <td style={{ textAlign: 'right' }}>{totals.profit.toLocaleString()}</td>
                   <td style={{ textAlign: 'right' }}>{totals.target.toLocaleString()}</td>
                   <td></td>
+                  <td></td>
                   <td style={{ textAlign: 'right' }}>{totals.merit.toLocaleString()}</td>
-                  <td colSpan={3}></td>
+                  <td colSpan={4}></td>
                   <td style={{ textAlign: 'right', color: 'var(--accent-red)' }}>
                     {totals.audit < 0 ? `(${Math.abs(totals.audit).toLocaleString()})` : 0}
                   </td>
@@ -483,10 +496,12 @@ function RoleConfigModal({ config, orgId, onClose, onSaved }) {
     for (const r of rows) {
       await supabase.from('store_bonus_role_config').update({
         weight:               Number(r.weight) || 0,
-        merit_amount:         Number(r.merit_amount) || 0,
+        minor_merit_amount:   Number(r.minor_merit_amount) || 0,
+        major_merit_amount:   Number(r.major_merit_amount) || 0,
         target_bonus_amount:  Number(r.target_bonus_amount) || 0,
         absence_deduct:       Number(r.absence_deduct) || 0,
         minor_offense_deduct: Number(r.minor_offense_deduct) || 0,
+        major_offense_deduct: Number(r.major_offense_deduct) || 0,
         punch_deduct_start:   Number(r.punch_deduct_start) || 5,
         punch_deduct_amount:  Number(r.punch_deduct_amount) || 0,
       }).eq('id', r.id)
@@ -505,8 +520,8 @@ function RoleConfigModal({ config, orgId, onClose, onSaved }) {
           <table className="data-table" style={{ marginTop: 8 }}>
             <thead>
               <tr>
-                <th>角色</th><th>權重</th><th>記功獎金/筆</th><th>達標獎金</th>
-                <th>缺失扣/筆</th><th>小過扣/筆</th><th>補卡第幾次起扣</th><th>補卡扣/次</th>
+                <th>角色</th><th>權重</th><th>小功獎金/筆</th><th>大功獎金/筆</th><th>達標獎金</th>
+                <th>缺失扣/筆</th><th>小過扣/筆</th><th>大過扣/筆</th><th>補卡第幾次起扣</th><th>補卡扣/次</th>
               </tr>
             </thead>
             <tbody>
@@ -514,10 +529,12 @@ function RoleConfigModal({ config, orgId, onClose, onSaved }) {
                 <tr key={r.id}>
                   <td><b>{r.role}</b></td>
                   <td><Input value={r.weight} step="0.1" onChange={v => setRows(rs => rs.map((x, j) => i === j ? { ...x, weight: v } : x))} /></td>
-                  <td><Input value={r.merit_amount} step="100" onChange={v => setRows(rs => rs.map((x, j) => i === j ? { ...x, merit_amount: v } : x))} /></td>
+                  <td><Input value={r.minor_merit_amount} step="100" onChange={v => setRows(rs => rs.map((x, j) => i === j ? { ...x, minor_merit_amount: v } : x))} /></td>
+                  <td><Input value={r.major_merit_amount} step="100" onChange={v => setRows(rs => rs.map((x, j) => i === j ? { ...x, major_merit_amount: v } : x))} /></td>
                   <td><Input value={r.target_bonus_amount} step="100" onChange={v => setRows(rs => rs.map((x, j) => i === j ? { ...x, target_bonus_amount: v } : x))} /></td>
                   <td><Input value={r.absence_deduct} step="100" onChange={v => setRows(rs => rs.map((x, j) => i === j ? { ...x, absence_deduct: v } : x))} /></td>
                   <td><Input value={r.minor_offense_deduct} step="100" onChange={v => setRows(rs => rs.map((x, j) => i === j ? { ...x, minor_offense_deduct: v } : x))} /></td>
+                  <td><Input value={r.major_offense_deduct} step="100" onChange={v => setRows(rs => rs.map((x, j) => i === j ? { ...x, major_offense_deduct: v } : x))} /></td>
                   <td><Input value={r.punch_deduct_start} onChange={v => setRows(rs => rs.map((x, j) => i === j ? { ...x, punch_deduct_start: v } : x))} /></td>
                   <td><Input value={r.punch_deduct_amount} step="50" onChange={v => setRows(rs => rs.map((x, j) => i === j ? { ...x, punch_deduct_amount: v } : x))} /></td>
                 </tr>

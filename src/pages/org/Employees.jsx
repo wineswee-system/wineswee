@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Search, UserMinus, UserPlus, Pencil, Mail, Upload, Building2, Trash2, Users } from 'lucide-react'
+import { Plus, Search, UserMinus, UserPlus, Pencil, Mail, Upload, Building2, Trash2, Users, FileText } from 'lucide-react'
+import { exportEmployeeCertificate } from '../../lib/exportCertificate'
 import { getEmployeesList, createEmployee, updateEmployee, inviteEmployee } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
 import { createAssignment, rotatePrimary } from '../../lib/assignments'
@@ -81,6 +82,7 @@ export default function Employees() {
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
   const [locations, setLocations] = useState([])
+  const [orgInfo, setOrgInfo] = useState(null)  // 公司資料（開立證明用）
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [search, setSearch] = useState('')
@@ -128,12 +130,16 @@ export default function Employees() {
       getEmployeesList(),
       supabase.from('departments').select('*').order('name'),
       supabase.from('stores').select('*').order('name'),
-    ]).then(([e, d, l]) => {
+      profile?.organization_id
+        ? supabase.from('organizations').select('name, tax_id, contact_person, address, phone, logo_url').eq('id', profile.organization_id).maybeSingle()
+        : Promise.resolve({ data: null }),
+    ]).then(([e, d, l, org]) => {
       const depts = d.data || []
       const locs = l.data || []
       setEmployees(e.data || [])
       setDepartments(depts)
       setLocations(locs)
+      setOrgInfo(org?.data || null)
       setForm(f => ({ ...f, department_id: depts[0]?.id || null, store_id: locs[0]?.id || null }))
     }).catch(err => {
       console.error('Failed to load data:', err)
@@ -253,6 +259,28 @@ export default function Employees() {
     } catch (err) {
       toast.error('發送失敗：' + err.message)
     }
+  }
+
+  // 開立在職 / 離職證明（列表沒撈 id_number/birth_date，點擊時補抓）
+  const handleCertificate = async (emp) => {
+    const type = emp.status === '離職' ? 'separation' : 'employment'
+    if (type === 'separation' && !emp.resign_date) { toast.error('此員工沒有離職日，無法開立離職證明'); return }
+    const { data: full } = await supabase.from('employees')
+      .select('id_number, birth_date').eq('id', emp.id).maybeSingle()
+    exportEmployeeCertificate({
+      type,
+      employee: {
+        name: emp.name,
+        id_number: full?.id_number || '',
+        birth_date: full?.birth_date || '',
+        join_date: emp.join_date,
+        resign_date: emp.resign_date,
+        position: emp.position,
+        dept: deptName(emp.department_id) || emp.dept,
+        store: storeName(emp.store_id) || emp.store,
+      },
+      org: orgInfo || {},
+    })
   }
 
   // 離職
@@ -602,6 +630,11 @@ export default function Employees() {
                   </td>
                   <td>
                     <div style={{ display: 'flex', gap: 6 }}>
+                      <button className="btn btn-sm btn-secondary" style={{ width: 'auto', padding: '4px 10px', fontSize: 11 }}
+                        title={e.status === '離職' ? '開立離職證明' : '開立在職證明'}
+                        onClick={ev => { ev.stopPropagation(); handleCertificate(e) }}>
+                        <FileText size={12} /> {e.status === '離職' ? '離職證明' : '在職證明'}
+                      </button>
                       {e.email && e.status === '在職' && (
                         <button className="btn btn-sm btn-secondary" style={{ width: 'auto', padding: '4px 10px', fontSize: 11, color: 'var(--accent-cyan)' }}
                           onClick={ev => { ev.stopPropagation(); handleInvite(e) }}>

@@ -103,6 +103,8 @@ export default function Employees() {
     name: '', name_en: '', department_id: null, position: '', position_secondary: '', position_third: '',
     store_id: null, email: '', phone: '', join_date: '', status: '在職', employment_type: '正職',
     employment_category: 'regular', salary_type: 'monthly', base_salary: '', hourly_rate: '', weekly_hours: '40',
+    piece_rate: '',  // 計件單價(存 salary_structures)
+    labor_insurance: true, health_insurance: true, pension: true,  // 勞健保/勞退 預設投保
     emergency_contact_name: '', emergency_contact_phone: '', emergency_contact_relation: '',
     bank_code: '', bank_account: '',
     role: '', supervisor_id: null,
@@ -152,8 +154,9 @@ export default function Employees() {
       // 角色：UI 手動指定優先；沒指定則 fallback 用 position 推
       const role = form.role || posInfo?.level || 'store_staff'
       const ROLE_ID_MAP = { super_admin: 1, admin: 2, manager: 3, office_staff: 4, store_staff: 5 }
-      // employment_category 屬於 salary_structures，不寫進 employees 表
-      const { employment_category: _cat, ...formForEmployee } = form
+      // employment_category / piece_rate 屬於 salary_structures，不寫進 employees 表
+      // (labor_insurance/health_insurance/pension 是 employees 欄位，留著一起寫)
+      const { employment_category: _cat, piece_rate: _pr, ...formForEmployee } = form
       const payload = {
         ...formForEmployee,
         salary_type: _cat === 'parttime' ? 'hourly' : 'monthly',
@@ -181,10 +184,23 @@ export default function Employees() {
           start_date: data.join_date || new Date().toISOString().slice(0, 10),
           is_active: data.status === '在職',
         })
+        // ★ 建立薪資結構（真理源）— 員工分類/月底薪/時薪/計件單價存這裡，不然填了不生效
+        const { error: ssErr } = await supabase.from('salary_structures').insert({
+          employee_id: data.id,
+          organization_id: data.organization_id || profile?.organization_id || null,
+          employment_category: form.employment_category || 'regular',
+          salary_type: form.employment_category === 'parttime' ? 'hourly' : 'monthly',
+          base_salary: Number(form.base_salary) || 0,
+          hourly_rate: Number(form.hourly_rate) || 0,
+          piece_rate: Number(form.piece_rate) || 0,
+        })
+        if (ssErr) { console.warn('salary_structures 建立失敗:', ssErr); toast.error('員工已建立，但薪資結構未建立：' + ssErr.message) }
         setForm({
           name: '', name_en: '', department_id: departments[0]?.id || null, position: '', position_secondary: '', position_third: '',
           store_id: locations[0]?.id || null, email: '', phone: '', join_date: '', status: '在職', employment_type: '正職',
           employment_category: 'regular', salary_type: 'monthly', base_salary: '', hourly_rate: '', weekly_hours: '40',
+          piece_rate: '',
+          labor_insurance: true, health_insurance: true, pension: true,
           emergency_contact_name: '', emergency_contact_phone: '', emergency_contact_relation: '',
           bank_code: '', bank_account: '',
           role: '', supervisor_id: null,

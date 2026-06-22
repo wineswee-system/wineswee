@@ -269,6 +269,10 @@ export default function EmployeeFormModal({
             <Field label="時薪 (NT$)">
               <input className="form-input" type="number" style={{ width: '100%' }} placeholder="183" value={form.hourly_rate} onChange={e => set('hourly_rate', e.target.value)} />
             </Field>
+          ) : form.employment_category === 'piece' ? (
+            <Field label="每件單價 (NT$)">
+              <input className="form-input" type="number" style={{ width: '100%' }} placeholder="2000" value={form.piece_rate} onChange={e => set('piece_rate', e.target.value)} />
+            </Field>
           ) : (
             <Field label="月底薪 (NT$)">
               <input className="form-input" type="number" style={{ width: '100%' }} placeholder="28000" value={form.base_salary} onChange={e => set('base_salary', e.target.value)} />
@@ -278,6 +282,19 @@ export default function EmployeeFormModal({
         <Field label="每週工時上限">
           <input className="form-input" type="number" style={{ width: '100%' }} placeholder="40" value={form.weekly_hours} onChange={e => set('weekly_hours', e.target.value)} />
         </Field>
+        {/* 投保設定（寫入 employees，計薪依此判斷扣不扣勞健保/勞退） */}
+        <div style={{ marginTop: 12, display: 'flex', gap: 18, flexWrap: 'wrap' }}>
+          {[
+            { key: 'labor_insurance', label: '投保勞保' },
+            { key: 'health_insurance', label: '投保健保' },
+            { key: 'pension', label: '提繳勞退' },
+          ].map(it => (
+            <label key={it.key} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer', color: 'var(--text-secondary)' }}>
+              <input type="checkbox" checked={form[it.key] ?? true} onChange={e => set(it.key, e.target.checked)} />
+              {it.label}
+            </label>
+          ))}
+        </div>
       </div>
     </Modal>
   )

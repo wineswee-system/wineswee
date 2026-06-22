@@ -33,18 +33,30 @@ export default function StoreBonus() {
   const [monthly, setMonthly] = useState(null)
   const [employees, setEmployees] = useState([])
   const [roleConfig, setRoleConfig] = useState([])
+  const [customFields, setCustomFields] = useState([])  // 自訂欄位定義（org 層，is_active）
   const [showConfig, setShowConfig] = useState(false)
+  const [showCustomFields, setShowCustomFields] = useState(false)
 
-  // 載入門市清單 + role config
+  const reloadCustomFields = () => {
+    const orgId = profile?.organization_id
+    if (!orgId) return
+    supabase.from('store_bonus_custom_fields').select('*')
+      .eq('organization_id', orgId).eq('is_active', true).order('sort_order')
+      .then(({ data }) => setCustomFields(data || []))
+  }
+
+  // 載入門市清單 + role config + 自訂欄位
   useEffect(() => {
     const orgId = profile?.organization_id
     if (!orgId) return
     Promise.all([
       supabase.from('stores').select('id, name').eq('organization_id', orgId).order('name'),
       supabase.from('store_bonus_role_config').select('*').eq('organization_id', orgId).order('weight', { ascending: false }),
-    ]).then(([s, c]) => {
+      supabase.from('store_bonus_custom_fields').select('*').eq('organization_id', orgId).eq('is_active', true).order('sort_order'),
+    ]).then(([s, c, cf]) => {
       setStores(s.data || [])
       setRoleConfig(c.data || [])
+      setCustomFields(cf.data || [])
       setLoading(false)
     })
   }, [profile?.organization_id])
@@ -98,6 +110,13 @@ export default function StoreBonus() {
     setEmployees(prev => prev.map(e => e.id === empId ? { ...e, [field]: value } : e))
   }
 
+  // 自訂欄位值（存進 custom_values JSONB，key = 欄位 id）
+  const handleEmpCustomChange = (empId, fieldId, value) => {
+    setEmployees(prev => prev.map(e => e.id === empId
+      ? { ...e, custom_values: { ...(e.custom_values || {}), [fieldId]: value } }
+      : e))
+  }
+
   const handleSaveEmp = async (emp) => {
     setSaving(true)
     const patch = {
@@ -107,6 +126,7 @@ export default function StoreBonus() {
       minor_offense_count:    Number(emp.minor_offense_count) || 0,
       punch_correction_count: Number(emp.punch_correction_count) || 0,
       prev_month_supplement:  Number(emp.prev_month_supplement) || 0,
+      custom_values:          emp.custom_values || {},
       notes:                  emp.notes || null,
     }
     // role 改了的話 weight 也要更新
@@ -195,6 +215,9 @@ export default function StoreBonus() {
             <p>選店 + 月份 → 輸入業績與扣項 → 重算 → 結算發放</p>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-secondary" onClick={() => setShowCustomFields(true)}>
+              <Plus size={14} /> 自訂欄位
+            </button>
             <button className="btn btn-secondary" onClick={() => setShowConfig(true)}>
               <Settings size={14} /> 角色 / 扣項設定
             </button>
@@ -311,6 +334,11 @@ export default function StoreBonus() {
                   <th>稽核扣</th>
                   <th>補卡扣</th>
                   <th>前月補發</th>
+                  {customFields.map(f => (
+                    <th key={f.id} title={f.effect === 'add' ? '加項（進應發）' : f.effect === 'deduct' ? '扣項（進應發）' : '僅記錄'}>
+                      {f.effect === 'add' ? '➕' : f.effect === 'deduct' ? '➖' : ''}{f.name}
+                    </th>
+                  ))}
                   <th>應發</th>
                 </tr>
               </thead>
@@ -361,6 +389,15 @@ export default function StoreBonus() {
                       <Input n disabled={isFinalized} value={e.prev_month_supplement}
                         onChange={v => handleEmpFieldChange(e.id, 'prev_month_supplement', v)} step="100" />
                     </td>
+                    {customFields.map(f => (
+                      <td key={f.id}>
+                        <input className="form-input" type={f.value_type === 'text' ? 'text' : 'number'}
+                          disabled={isFinalized}
+                          value={(e.custom_values?.[f.id]) ?? ''}
+                          onChange={ev => handleEmpCustomChange(e.id, f.id, ev.target.value)}
+                          style={{ width: f.value_type === 'text' ? 90 : 64, padding: 4, fontSize: 12, textAlign: f.value_type === 'text' ? 'left' : 'right' }} />
+                      </td>
+                    ))}
                     <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--accent-cyan)' }}>
                       {Number(e.net_bonus).toLocaleString()}
                     </td>
@@ -382,6 +419,7 @@ export default function StoreBonus() {
                     {totals.punch < 0 ? `(${Math.abs(totals.punch).toLocaleString()})` : 0}
                   </td>
                   <td style={{ textAlign: 'right' }}>{totals.suppl.toLocaleString()}</td>
+                  {customFields.map(f => <td key={f.id}></td>)}
                   <td style={{ textAlign: 'right', fontWeight: 800, color: 'var(--accent-cyan)' }}>
                     {totals.net.toLocaleString()}
                   </td>
@@ -406,6 +444,15 @@ export default function StoreBonus() {
               .then(({ data }) => setRoleConfig(data || []))
             setShowConfig(false)
           }}
+        />
+      )}
+
+      {/* 自訂欄位設定 modal */}
+      {showCustomFields && (
+        <CustomFieldsModal
+          orgId={profile?.organization_id}
+          onClose={() => setShowCustomFields(false)}
+          onSaved={() => { reloadCustomFields(); loadMonthly() }}
         />
       )}
     </div>
@@ -481,6 +528,142 @@ function RoleConfigModal({ config, orgId, onClose, onSaved }) {
         <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
           <button className="btn btn-secondary" onClick={onClose}>取消</button>
           <button className="btn btn-primary" onClick={handleSave}>儲存</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── 自訂欄位管理 modal（新增 / 定義 / 上下移排序 / 刪除）──────────────────────
+const EFFECT_LABEL = { none: '僅記錄', add: '加項（進應發）', deduct: '扣項（進應發）' }
+function CustomFieldsModal({ orgId, onClose, onSaved }) {
+  const [rows, setRows] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    if (!orgId) return
+    supabase.from('store_bonus_custom_fields').select('*')
+      .eq('organization_id', orgId).eq('is_active', true).order('sort_order')
+      .then(({ data }) => { setRows(data || []); setLoading(false) })
+  }, [orgId])
+
+  const patchRow = (i, patch) => setRows(rs => rs.map((x, j) => {
+    if (i !== j) return x
+    const next = { ...x, ...patch }
+    // 進計算的欄位強制數字型別
+    if (next.effect !== 'none') next.value_type = 'number'
+    return next
+  }))
+
+  const addRow = () => setRows(rs => [...rs, {
+    _new: true, name: '', value_type: 'number', effect: 'none', sort_order: rs.length, is_active: true,
+  }])
+
+  const move = (i, dir) => setRows(rs => {
+    const j = i + dir
+    if (j < 0 || j >= rs.length) return rs
+    const next = [...rs];[next[i], next[j]] = [next[j], next[i]]; return next
+  })
+
+  const removeRow = (i) => setRows(rs => rs.map((x, j) => i === j ? { ...x, _deleted: true } : x))
+
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      const visible = rows.filter(r => !r._deleted)
+      // 刪除（既有且標記刪除）
+      for (const r of rows.filter(r => r._deleted && r.id)) {
+        await supabase.from('store_bonus_custom_fields').delete().eq('id', r.id)
+      }
+      // 新增 / 更新（sort_order 用顯示順序 index）
+      for (let i = 0; i < visible.length; i++) {
+        const r = visible[i]
+        if (!r.name || !r.name.trim()) continue
+        const payload = {
+          name: r.name.trim(),
+          value_type: r.effect !== 'none' ? 'number' : r.value_type,
+          effect: r.effect,
+          sort_order: i,
+          is_active: true,
+        }
+        if (r._new) {
+          await supabase.from('store_bonus_custom_fields').insert({ ...payload, organization_id: orgId })
+        } else {
+          await supabase.from('store_bonus_custom_fields').update(payload).eq('id', r.id)
+        }
+      }
+      toast.success('已儲存自訂欄位，記得回表格按「重算」更新應發')
+      onSaved?.()
+      onClose()
+    } catch (err) {
+      toast.error('儲存失敗：' + (err.message || '未知錯誤'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const visible = rows.filter(r => !r._deleted)
+
+  return (
+    <div onClick={onClose} style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+    }}>
+      <div onClick={e => e.stopPropagation()} className="card" style={{ padding: 20, width: 680, maxWidth: '95vw', maxHeight: '85vh', overflow: 'auto' }}>
+        <h3 style={{ marginTop: 0 }}>➕ 自訂欄位</h3>
+        <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 0 }}>
+          欄位會出現在員工獎金表（「前月補發」與「應發」之間）。效果設「加項/扣項」會直接進「應發」計算（限數字）。
+        </p>
+        {loading ? <div style={{ padding: 20 }}>載入中…</div> : (
+          <div className="data-table-wrapper">
+            <table className="data-table" style={{ marginTop: 8 }}>
+              <thead>
+                <tr><th style={{ width: 36 }}>順序</th><th>欄位名稱</th><th>型別</th><th>效果</th><th style={{ width: 60 }}>操作</th></tr>
+              </thead>
+              <tbody>
+                {visible.length === 0 ? (
+                  <tr><td colSpan={5} style={{ padding: 16, textAlign: 'center', color: 'var(--text-muted)' }}>尚無自訂欄位</td></tr>
+                ) : visible.map((r, i) => (
+                  <tr key={r.id ?? `new-${i}`}>
+                    <td style={{ whiteSpace: 'nowrap' }}>
+                      <button className="btn btn-secondary" style={{ padding: '2px 6px', fontSize: 11 }} disabled={i === 0} onClick={() => move(i, -1)}>↑</button>
+                      <button className="btn btn-secondary" style={{ padding: '2px 6px', fontSize: 11, marginLeft: 2 }} disabled={i === visible.length - 1} onClick={() => move(i, 1)}>↓</button>
+                    </td>
+                    <td>
+                      <input className="form-input" style={{ width: '100%', padding: 4, fontSize: 13 }} placeholder="例：特別獎勵"
+                        value={r.name} onChange={e => patchRow(rows.indexOf(r), { name: e.target.value })} />
+                    </td>
+                    <td>
+                      <select className="form-input" style={{ padding: 4, fontSize: 12 }} value={r.value_type}
+                        disabled={r.effect !== 'none'}
+                        onChange={e => patchRow(rows.indexOf(r), { value_type: e.target.value })}>
+                        <option value="number">數字</option>
+                        <option value="text">文字</option>
+                      </select>
+                    </td>
+                    <td>
+                      <select className="form-input" style={{ padding: 4, fontSize: 12 }} value={r.effect}
+                        onChange={e => patchRow(rows.indexOf(r), { effect: e.target.value })}>
+                        <option value="none">{EFFECT_LABEL.none}</option>
+                        <option value="add">{EFFECT_LABEL.add}</option>
+                        <option value="deduct">{EFFECT_LABEL.deduct}</option>
+                      </select>
+                    </td>
+                    <td>
+                      <button className="btn btn-secondary" style={{ padding: '2px 8px', fontSize: 11, color: 'var(--accent-red)' }}
+                        onClick={() => removeRow(rows.indexOf(r))}>刪除</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <button className="btn btn-secondary" style={{ marginTop: 10 }} onClick={addRow}><Plus size={14} /> 新增欄位</button>
+        <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <button className="btn btn-secondary" onClick={onClose}>取消</button>
+          <AsyncButton className="btn btn-primary" onClick={handleSave} busyLabel="儲存中…" disabled={saving}>儲存</AsyncButton>
         </div>
       </div>
     </div>

@@ -1156,17 +1156,19 @@ export default function Schedule() {
                     </span>
                     {!locked && canEditSchedule && (
                       <button onClick={() => handleLockMonth(m)} style={{
-                        padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700,
+                        display: 'inline-flex', alignItems: 'center', gap: 5,
+                        padding: '7px 16px', borderRadius: 8, fontSize: 13, fontWeight: 700, lineHeight: 1,
                         background: 'var(--accent-green-dim)', color: 'var(--accent-green)',
                         border: '1px solid var(--accent-green)', cursor: 'pointer',
-                      }} title={`鎖定 ${m} 班表（鎖定後該月薪資才能結算）`}>鎖定</button>
+                      }} title={`鎖定 ${m} 班表（鎖定後該月薪資才能結算）`}>🔒 鎖定 {m}</button>
                     )}
                     {locked && isAdmin && (
                       <button onClick={() => handleUnlockMonth(m)} style={{
-                        padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700,
+                        display: 'inline-flex', alignItems: 'center', gap: 5,
+                        padding: '7px 16px', borderRadius: 8, fontSize: 13, fontWeight: 700, lineHeight: 1,
                         background: 'rgba(245,158,11,0.12)', color: 'var(--accent-orange)',
                         border: '1px solid var(--accent-orange)', cursor: 'pointer',
-                      }} title="解鎖（admin 才看得到）">解鎖</button>
+                      }} title="解鎖（admin 才看得到）">🔓 解鎖 {m}</button>
                     )}
                   </span>
                 )

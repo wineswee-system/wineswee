@@ -6,6 +6,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { calculateLaborInsurance, calculateHealthInsurance, calculateLaborPension, calculateMonthlyWithholding, calculateNetSalary, calculateInServiceDays } from '../../lib/payroll'
 import { loadInsuranceBrackets } from '../../lib/insuranceBrackets'
 import { exportSalaryPdf } from '../../lib/exportPdf'
+import * as XLSX from 'xlsx'
 import { getEffectiveBenefits, calculateBonus, getStoreIdByName } from '../../lib/benefitPolicy'
 import { computeBatchPayroll } from '../../lib/payrollCalc'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -425,7 +426,8 @@ export default function Salary() {
   const handleBatchSaveAsDraft = () => handleBatchSaveCore('draft')
 
   // ── 匯出代發薪匯款檔（admin）──
-  // 本月 salary_records 實領 + employee_bank_accounts 帳號 → CSV(BOM,Excel 不亂碼)
+  // 本月 salary_records 實領 + employee_bank_accounts 帳號 → Excel(.xlsx)
+  // 欄位：身分證字號 / 帳號 / 金額 / 姓名
   const handleExportTransfer = async () => {
     const { data, error } = await supabase.rpc('get_payroll_transfer_file', { p_period: month, p_org: orgId })
     if (error) { toast.error('匯出失敗：' + error.message); return }
@@ -435,19 +437,17 @@ export default function Salary() {
     const missing = all.filter(r => !r.has_account)
     if (pay.length === 0) { toast.error('沒有可匯款的資料(都缺帳號?)'); return }
 
-    const cell = (v) => { const s = String(v ?? ''); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s }
-    const header = ['員工編號', '戶名', '銀行代號', '分行', '帳號', '金額']
-    const lines = [header.join(',')]
-    for (const r of pay) {
-      const code = (String(r.bank_code || '').match(/\d+/) || [''])[0]   // "822 中國信託" → "822"
-      lines.push([r.employee_number || '', r.name || '', code, r.bank_branch || '', r.bank_account || '', Math.round(Number(r.amount) || 0)].map(cell).join(','))
-    }
-    const csv = '﻿' + lines.join('\r\n')
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url; a.download = `代發薪_${month}.csv`; a.click()
-    URL.revokeObjectURL(url)
+    // 身分證字號 / 帳號 維持文字格式（避免 Excel 把長帳號變科學記號、或吃掉開頭 0）
+    const rows = pay.map(r => ({
+      '身分證字號': String(r.id_number || ''),
+      '帳號':       String(r.bank_account || ''),
+      '金額':       Math.round(Number(r.amount) || 0),
+      '姓名':       r.name || '',
+    }))
+    const ws = XLSX.utils.json_to_sheet(rows, { header: ['身分證字號', '帳號', '金額', '姓名'] })
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, '代發薪')
+    XLSX.writeFile(wb, `代發薪_${month}.xlsx`)
 
     if (missing.length) toast.error(`已匯出 ${pay.length} 筆;⚠️ ${missing.length} 人缺帳號未列入：${missing.map(m => m.name).join('、')}`)
     else toast.success(`已匯出 ${pay.length} 筆代發薪資料`)

@@ -21,6 +21,7 @@ import { diffAndLogTask } from '../lib/taskAudit'
 import { fmtDateTimeTW } from '../lib/datetime'
 
 import TaskRelationsTab from './tasks/TaskRelationsTab'
+import TaskFormsTab from './tasks/TaskFormsTab'
 import TaskApprovalTab from './tasks/TaskApprovalTab'
 import TaskDiscussionTab from './tasks/TaskDiscussionTab'
 import TaskAttachmentsTab from './tasks/TaskAttachmentsTab'
@@ -354,6 +355,7 @@ export default function TaskDetailPanel({
             const subtaskLabel = allItems.length > 0 ? `子任務 ${doneCount}/${allItems.length}` : '子任務'
             return [
               { id: 'basic',       label: '基本' },
+              { id: 'forms',       label: formBindings.length > 0 ? `表單 (${formBindings.length})` : '表單' },
               { id: 'subtasks',    label: subtaskLabel },
               { id: 'relations',   label: '關聯' },
               { id: 'approval',    label: '簽核' },
@@ -377,6 +379,15 @@ export default function TaskDetailPanel({
 
         {/* ── Body (scrollable) ── */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
+
+          {/* ═══ 表單 Tab ═══ */}
+          {activeTab === 'forms' && (
+            <TaskFormsTab
+              task={task}
+              formBindings={formBindings}
+              setFormBindings={setFormBindings}
+            />
+          )}
 
           {/* ═══ Basic Tab ═══ */}
           {activeTab === 'basic' && (
@@ -541,10 +552,6 @@ export default function TaskDetailPanel({
                 )}
               </div>
 
-              {/* 綁定表單清單（流程 step 設定的必填表單）*/}
-              {formBindings.length > 0 && (
-                <TaskFormBindingsBlock bindings={formBindings} taskId={task.id} />
-              )}
             </>
           )}
 
@@ -574,8 +581,6 @@ export default function TaskDetailPanel({
               sopTemplates={sopTemplates}
               triggeredInstances={triggeredInstances}
               setTriggeredInstances={setTriggeredInstances}
-              formBindings={formBindings}
-              setFormBindings={setFormBindings}
               form={form}
               setAndDirty={setAndDirty}
               allWorkflowInstances={allWorkflowInstances}
@@ -954,97 +959,6 @@ function SubtasksTab({ task, linkedChecklists, checklistItemsMap, setChecklistIt
           </div>
         )
       })}
-    </div>
-  )
-}
-
-// ─── 綁定表單顯示元件（流程任務內的「需完成事項」清單）───
-function TaskFormBindingsBlock({ bindings }) {
-  const STATUS_STYLE = {
-    '未填':   { bg: 'var(--glass-light)',       color: 'var(--text-muted)',    icon: '⚪' },
-    '簽核中': { bg: 'var(--accent-orange-dim)', color: 'var(--accent-orange)', icon: '🔵' },
-    '已退回': { bg: 'var(--accent-red-dim)',    color: 'var(--accent-red)',    icon: '❌' },
-    '已完成': { bg: 'var(--accent-green-dim)',  color: 'var(--accent-green)',  icon: '✅' },
-  }
-  // 驗收段（核銷/入庫驗收）對應的「申請段」型別
-  const applyTypeFor = (ft) =>
-    ft === 'expense_settle' ? 'expense_apply'
-    : ft === 'goods_transfer_receipt' ? 'goods_transfer_apply'
-    : null
-  // 驗收段在「同任務的申請段尚未完成」時鎖定（純 UX；真實 gate 在 DB record 層）
-  const isLocked = (b) => {
-    const at = applyTypeFor(b.form_type)
-    if (!at) return false
-    const sib = bindings.find(x => x.form_type === at)
-    return sib ? sib.status !== '已完成' : false  // 無對應申請段 → 不鎖（獨立驗收，靠 record gate）
-  }
-  // 該卡片的動作狀態
-  const actionFor = (b) => {
-    if (isLocked(b)) return { label: '🔒 申請核准後解鎖', clickable: false }
-    if (b.form_type === 'expense_settle')
-      return b.form_id ? { label: '→ 去核銷', clickable: true } : { label: '等申請建立', clickable: false }
-    if (b.form_type === 'goods_transfer_receipt')
-      return b.form_id ? { label: '→ 去驗收', clickable: true } : { label: '等申請建立', clickable: false }
-    if (!b.form_id) return { label: '→ 去填寫', clickable: true }
-    return { label: '', clickable: false }  // 已認領的整單/申請段 → 只查狀態
-  }
-  const navTo = (b) => {
-    if (!actionFor(b).clickable) return
-    let u = null
-    if (b.form_type === 'expense_settle') {
-      u = b.form_id ? `/process/expense-requests?focus=${b.form_id}&settle=1` : null
-    } else if (b.form_type === 'goods_transfer_receipt') {
-      u = b.form_id ? `/process/transfer-requests?focus=${b.form_id}&receipt=1` : null
-    } else {
-      // 申請段 / 整單 / 其他：帶 binding_id 跳轉，submit 時表單頁寫回 linked_binding_id
-      u = (b.form_type === 'expense_request' || b.form_type === 'expense_apply') ? `/process/expense-requests?binding_id=${b.id}`
-        : b.form_type === 'expense'         ? `/process/expenses?binding_id=${b.id}`
-        : b.form_type === 'store_audit'     ? `/process/store-audits?new=1&binding_id=${b.id}`
-        : (b.form_type === 'goods_transfer' || b.form_type === 'goods_transfer_apply') ? `/process/transfer-requests?new=1&binding_id=${b.id}`
-        : `/process/forms/custom/${b.form_template_id}?binding_id=${b.id}`
-    }
-    if (u) window.open(u, '_blank')
-  }
-  const completed = bindings.filter(b => b.status === '已完成').length
-  return (
-    <div style={{ marginBottom: 16, padding: 12, background: 'var(--glass-light)', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>📋 需完成表單</span>
-        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{completed}/{bindings.length} 完成</span>
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {bindings.map(b => {
-          const s = STATUS_STYLE[b.status] || STATUS_STYLE['未填']
-          const act = actionFor(b)
-          const locked = isLocked(b)
-          return (
-            <div key={b.id} onClick={() => navTo(b)}
-              style={{
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                padding: '8px 12px', borderRadius: 6, background: 'var(--bg-card)',
-                cursor: act.clickable ? 'pointer' : 'default',
-                opacity: locked ? 0.6 : 1,
-                border: '1px solid var(--border-subtle)',
-              }}>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 600 }}>
-                  {s.icon} {b.form_label}
-                  {b.form_id && <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--text-muted)' }}>#{b.form_id}</span>}
-                </div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                  完成條件：{b.required_status}
-                </div>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ padding: '3px 10px', borderRadius: 12, fontSize: 11, fontWeight: 700, background: s.bg, color: s.color }}>{b.status}</span>
-                {act.label && (
-                  <span style={{ fontSize: 11, color: locked ? 'var(--text-muted)' : 'var(--accent-cyan)', fontWeight: 600 }}>{act.label}</span>
-                )}
-              </div>
-            </div>
-          )
-        })}
-      </div>
     </div>
   )
 }

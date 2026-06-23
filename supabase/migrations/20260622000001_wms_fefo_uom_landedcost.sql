@@ -13,6 +13,21 @@ ALTER TABLE public.skus
   ADD COLUMN IF NOT EXISTS sale_uom_qty      NUMERIC(10,4) DEFAULT 1;
 
 -- ─── 2. FEFO: expiry_date on inventory_cost_layers ──────────
+-- Create the table if it was never migrated (remote may have been bootstrapped via schema dump)
+CREATE TABLE IF NOT EXISTS public.inventory_cost_layers (
+  id                 SERIAL PRIMARY KEY,
+  sku_id             INT    NOT NULL REFERENCES public.skus(id) ON DELETE CASCADE,
+  warehouse_id       INT    REFERENCES public.warehouses(id) ON DELETE SET NULL,
+  quantity_remaining NUMERIC(14,4) NOT NULL DEFAULT 0,
+  unit_cost          NUMERIC(14,4) NOT NULL DEFAULT 0,
+  source_type        TEXT   DEFAULT 'purchase' CHECK (source_type IN ('purchase', 'manufacturing', 'adjustment')),
+  source_id          INT,
+  lot_number         TEXT,
+  receipt_date       DATE   NOT NULL DEFAULT CURRENT_DATE,
+  organization_id    INT    REFERENCES public.organizations(id) ON DELETE SET NULL,
+  created_at         TIMESTAMPTZ DEFAULT now()
+);
+
 -- Allows the costing engine to pick the earliest-expiring layer first
 ALTER TABLE public.inventory_cost_layers
   ADD COLUMN IF NOT EXISTS expiry_date DATE;

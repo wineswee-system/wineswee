@@ -25,6 +25,7 @@ import { notifyWatchers } from '../../lib/mentions'
 import ChangelogPanel from '../ChangelogPanel'
 import TaskWatchers from './TaskWatchers'
 import TaskRelationsTab from './TaskRelationsTab'
+import TaskFormsTab from './TaskFormsTab'
 import TaskApprovalTab from './TaskApprovalTab'
 import TaskDiscussionTab from './TaskDiscussionTab'
 import TaskAttachmentsTab from './TaskAttachmentsTab'
@@ -354,6 +355,7 @@ export default function TaskModal({
         }}>
           {[
             { id: 'basic',      label: '基本' },
+            { id: 'forms',      label: formBindings.length > 0 ? `表單 (${formBindings.length})` : '表單' },
             { id: 'relations',  label: '關聯' },
             { id: 'approval',     label: '簽核' },
             { id: 'attachments',  label: `附件 (${attachments.length})` },
@@ -554,6 +556,15 @@ export default function TaskModal({
             </>
           )}
 
+          {/* ═══ 表單 Tab ═══ */}
+          {activeTab === 'forms' && (
+            <TaskFormsTab
+              task={task}
+              formBindings={formBindings}
+              setFormBindings={setFormBindings}
+            />
+          )}
+
           {/* ═══ 關聯 Tab ═══ */}
           {activeTab === 'relations' && (
             <TaskRelationsTab
@@ -569,9 +580,6 @@ export default function TaskModal({
               sopTemplates={sopTemplates}
               triggeredInstances={triggeredInstances}
               setTriggeredInstances={setTriggeredInstances}
-              // ── 新增：綁定表單 + 工作流 / 專案 ──
-              formBindings={formBindings}
-              setFormBindings={setFormBindings}
               form={form}
               setAndDirty={setAndDirty}
               allWorkflowInstances={allWorkflowInstances}

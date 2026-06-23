@@ -109,6 +109,14 @@ export async function updateOrderItemQty(itemId, quantity) {
     .single()
 }
 
+export async function getOrder(orderId) {
+  return supabase
+    .from('pos_orders')
+    .select('id, status, order_number, guest_count, note, table_id, reservation_id, opened_at')
+    .eq('id', orderId)
+    .single()
+}
+
 export async function submitToKitchen(orderId) {
   const { error } = await supabase
     .from('pos_order_items')
@@ -124,4 +132,111 @@ export async function submitToKitchen(orderId) {
     .eq('id', orderId)
     .select('id, status')
     .single()
+}
+
+export async function cancelOrderItem(itemId) {
+  return supabase.from('pos_order_items').delete().eq('id', itemId)
+}
+
+export async function voidOrder(orderId) {
+  return supabase
+    .from('pos_orders')
+    .update({ status: 'voided' })
+    .eq('id', orderId)
+}
+
+// Creates a pos_payments row, marks order paid, invalidates QR session, completes linked reservation
+export async function completePayment({ orderId, storeId, orgId, employeeId, amount, method, carrierType = null, carrierId = null, splitIndex = 1, splitTotal = 1 }) {
+  const { data: payment, error: payErr } = await supabase
+    .from('pos_payments')
+    .insert({
+      organization_id: orgId,
+      store_id: storeId,
+      order_id: orderId,
+      amount,
+      payment_method: method,
+      carrier_type: carrierType || null,
+      carrier_number: carrierId || null,
+      invoice_status: 'pending',
+      split_index: splitIndex,
+      split_total: splitTotal,
+      employee_id: employeeId,
+    })
+    .select('id, amount, payment_method, invoice_status, paid_at')
+    .single()
+
+  if (payErr) return { error: payErr }
+
+  await supabase
+    .from('pos_orders')
+    .update({ status: 'paid', paid_at: new Date().toISOString() })
+    .eq('id', orderId)
+
+  const { data: order } = await supabase
+    .from('pos_orders')
+    .select('reservation_id')
+    .eq('id', orderId)
+    .single()
+
+  await supabase
+    .from('qr_order_sessions')
+    .update({ revoked_at: new Date().toISOString() })
+    .eq('order_id', orderId)
+    .is('revoked_at', null)
+
+  if (order?.reservation_id) {
+    await supabase
+      .from('reservations')
+      .update({ status: 'completed' })
+      .eq('id', order.reservation_id)
+  }
+
+  return { data: payment }
+}
+
+export async function getLastPayment(orderId) {
+  return supabase
+    .from('pos_payments')
+    .select('id, amount, payment_method, carrier_type, carrier_number, invoice_number, invoice_status, paid_at')
+    .eq('order_id', orderId)
+    .order('paid_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+}
+
+// Moves all items from sourceOrderId → targetOrderId, voids the source order
+export async function mergeOrders(sourceOrderId, targetOrderId) {
+  const { error } = await supabase
+    .from('pos_order_items')
+    .update({ order_id: targetOrderId })
+    .eq('order_id', sourceOrderId)
+
+  if (error) return { error }
+
+  await supabase.from('pos_orders').update({ status: 'voided' }).eq('id', sourceOrderId)
+
+  await supabase
+    .from('qr_order_sessions')
+    .update({ revoked_at: new Date().toISOString() })
+    .eq('order_id', sourceOrderId)
+    .is('revoked_at', null)
+
+  return { error: null }
+}
+
+export async function createQrSession(storeId, orgId, tableId, orderId) {
+  return supabase
+    .from('qr_order_sessions')
+    .insert({ organization_id: orgId, store_id: storeId, table_id: tableId, order_id: orderId })
+    .select('id, token, expires_at')
+    .single()
+}
+
+export async function getOpenOrders(storeId) {
+  return supabase
+    .from('pos_orders')
+    .select('id, order_number, table_id, res_tables(table_number)')
+    .eq('store_id', storeId)
+    .in('status', ['open', 'submitted'])
+    .order('opened_at')
 }

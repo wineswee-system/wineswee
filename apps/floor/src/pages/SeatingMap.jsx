@@ -5,6 +5,7 @@ import {
   getReservations, getResTables,
   checkInReservation, extendReservation, moveReservationTable, updateReservationStatus,
 } from '../lib/db'
+import { getOrCreateOrder, createQrSession } from '../lib/posDb'
 import { useStore } from '../contexts/StoreContext'
 import { useAuth } from '../contexts/AuthContext'
 
@@ -77,7 +78,19 @@ export default function SeatingMap() {
 
   async function doAction(action) {
     if (!selRsv) return
-    if (action === 'checkin')  await checkInReservation(selRsv.id, employee?.id)
+    if (action === 'checkin') {
+      await checkInReservation(selRsv.id, employee?.id)
+      // Auto-create a POS order and QR session for this reservation
+      const { data: ord } = await getOrCreateOrder(storeId, employee?.organization_id, selRsv.table_id, employee?.id)
+      if (ord?.id) {
+        // Link reservation to order
+        await supabase.from('pos_orders').update({ reservation_id: selRsv.id }).eq('id', ord.id)
+        // Create QR self-ordering session
+        await createQrSession(storeId, employee?.organization_id, selRsv.table_id, ord.id)
+      }
+      navigate(`/order/${selRsv.table_id}`)
+      return
+    }
     if (action === 'extend')   await extendReservation(selRsv.id, selRsv.extended_hours || 0, employee?.id)
     if (action === 'complete') await updateReservationStatus(selRsv.id, 'completed', employee?.id)
     if (action === 'noshow')   await updateReservationStatus(selRsv.id, 'no_show', employee?.id)

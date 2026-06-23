@@ -4,17 +4,13 @@ import { useStore } from '../contexts/StoreContext'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
 import {
-  getTable,
-  getOrCreateOrder,
-  getOrderItems,
-  getMenuCategories,
-  getMenuItems,
-  getPosProducts,
-  getPosProductByBarcode,
-  addOrderItem,
-  updateOrderItemQty,
-  submitToKitchen,
+  getTable, getOrCreateOrder, getOrderItems,
+  getMenuCategories, getMenuItems, getPosProducts, getPosProductByBarcode,
+  addOrderItem, updateOrderItemQty, cancelOrderItem,
+  submitToKitchen, mergeOrders, createQrSession, getOpenOrders, getLastPayment,
 } from '../lib/posDb'
+import PaymentModal from '../components/PaymentModal'
+import { printKitchenTicket, printCancelTicket, printProductPullTicket, printReceipt } from '../lib/sunmiPrint'
 
 export default function OrderPage() {
   const { tableId } = useParams()
@@ -36,11 +32,15 @@ export default function OrderPage() {
   const [submitting, setSubmitting]     = useState(false)
   const [scanFeedback, setScanFeedback] = useState('')
 
-  // Stable ref so barcode handler always sees latest state without re-registering listeners
-  const stateRef = useRef({})
-  stateRef.current = { order, orderItems, storeId }
+  const [showPayment,   setShowPayment]   = useState(false)
+  const [showMerge,     setShowMerge]     = useState(false)
+  const [mergeList,     setMergeList]     = useState([])
+  const [qrSession,     setQrSession]     = useState(null)
+  const [confirmCancel, setConfirmCancel] = useState(null)
 
-  // Initial load: table info + get/create order + menu categories
+  const stateRef = useRef({})
+  stateRef.current = { order, orderItems, storeId, table }
+
   useEffect(() => {
     if (!storeId || !orgId || !tableId) return
     async function init() {
@@ -51,7 +51,6 @@ export default function OrderPage() {
       ])
       setTable(tbl)
       setCategories(cats ?? [])
-
       const { data: ord } = await getOrCreateOrder(storeId, orgId, tableId, employee?.id)
       setOrder(ord)
       if (ord) {
@@ -63,37 +62,34 @@ export default function OrderPage() {
     init()
   }, [storeId, orgId, tableId]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Load menu items when category selection or storeId changes
   useEffect(() => {
     if (!storeId) return
     getMenuItems(storeId, selCategory).then(({ data }) => setMenuItems(data ?? []))
   }, [storeId, selCategory])
 
-  // Load physical products when tab switches to 'product'
   useEffect(() => {
     if (tab !== 'product' || !storeId) return
     getPosProducts(storeId).then(({ data }) => setProducts(data ?? []))
   }, [tab, storeId])
 
-  // Realtime: pick up guest self-order additions
+  // Realtime: guest self-order additions
   useEffect(() => {
     if (!order?.id) return
     const orderId = order.id
-    async function refresh() {
-      const { data } = await getOrderItems(orderId)
-      setOrderItems(data ?? [])
-    }
     const ch = supabase
       .channel(`pos-order-${orderId}`)
       .on('postgres_changes', {
         event: '*', schema: 'public', table: 'pos_order_items',
         filter: `order_id=eq.${orderId}`,
-      }, refresh)
+      }, async () => {
+        const { data } = await getOrderItems(orderId)
+        setOrderItems(data ?? [])
+      })
       .subscribe()
     return () => supabase.removeChannel(ch)
   }, [order?.id])
 
-  // Barcode scanner: Sunmi D2 fires rapid keydown events ending with Enter
+  // Barcode scanner (Sunmi D2 rapid keydown → Enter)
   useEffect(() => {
     if (tab !== 'product') return
     let buf = '', last = 0
@@ -113,7 +109,7 @@ export default function OrderPage() {
   }, [tab]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleBarcodeScanned(barcode) {
-    const { order: ord, orderItems: items, storeId: sid } = stateRef.current
+    const { order: ord, storeId: sid } = stateRef.current
     if (!ord?.id) return
     const { data: product } = await getPosProductByBarcode(sid, barcode)
     if (!product) {
@@ -121,19 +117,27 @@ export default function OrderPage() {
       setTimeout(() => setScanFeedback(''), 2500)
       return
     }
-    const existing = items.find(i => i.pos_product_id === product.id)
+    await addOrIncrement(ord.id, 'product', product)
+    setScanFeedback(`已加入：${product.name}`)
+    setTimeout(() => setScanFeedback(''), 1500)
+  }
+
+  async function addOrIncrement(orderId, type, item) {
+    const existing = type === 'menu'
+      ? orderItems.find(i => i.menu_item_id === item.id)
+      : orderItems.find(i => i.pos_product_id === item.id)
     if (existing) {
       await updateOrderItemQty(existing.id, existing.quantity + 1)
     } else {
-      await addOrderItem(ord.id, {
-        itemType: 'product', posProductId: product.id,
-        name: product.name, unitPrice: product.retail_price, taxRate: product.tax_rate,
+      const price = type === 'menu' ? item.unit_price : item.retail_price
+      await addOrderItem(orderId, {
+        itemType: type,
+        menuItemId:   type === 'menu'    ? item.id : undefined,
+        posProductId: type === 'product' ? item.id : undefined,
+        name: item.name, unitPrice: price, taxRate: item.tax_rate,
       })
     }
-    setScanFeedback(`已加入：${product.name}`)
-    setTimeout(() => setScanFeedback(''), 1500)
-    const { data } = await getOrderItems(ord.id)
-    setOrderItems(data ?? [])
+    refreshItems()
   }
 
   async function refreshItems() {
@@ -142,51 +146,85 @@ export default function OrderPage() {
     setOrderItems(data ?? [])
   }
 
-  async function handleAddMenu(item) {
-    if (!order?.id) return
-    const existing = orderItems.find(i => i.menu_item_id === item.id)
-    if (existing) {
-      await updateOrderItemQty(existing.id, existing.quantity + 1)
-    } else {
-      await addOrderItem(order.id, {
-        itemType: 'menu', menuItemId: item.id,
-        name: item.name, unitPrice: item.unit_price, taxRate: item.tax_rate,
-      })
-    }
-    refreshItems()
-  }
-
-  async function handleAddProduct(product) {
-    if (!order?.id) return
-    const existing = orderItems.find(i => i.pos_product_id === product.id)
-    if (existing) {
-      await updateOrderItemQty(existing.id, existing.quantity + 1)
-    } else {
-      await addOrderItem(order.id, {
-        itemType: 'product', posProductId: product.id,
-        name: product.name, unitPrice: product.retail_price, taxRate: product.tax_rate,
-      })
-    }
-    refreshItems()
-  }
-
   async function handleQtyChange(item, delta) {
     await updateOrderItemQty(item.id, item.quantity + delta)
     refreshItems()
   }
 
+  function handleCancel(item) {
+    if (item.sent_to_kitchen) {
+      setConfirmCancel(item)
+    } else {
+      cancelOrderItem(item.id).then(refreshItems)
+    }
+  }
+
+  async function confirmCancelItem(item) {
+    const { order: ord, table: tbl } = stateRef.current
+    await cancelOrderItem(item.id)
+    await printCancelTicket(item, ord, tbl)
+    setConfirmCancel(null)
+    refreshItems()
+  }
+
   async function handleKitchen() {
     if (!order?.id || submitting) return
-    if (orderItems.filter(i => !i.sent_to_kitchen).length === 0) return
+    const unsent = orderItems.filter(i => !i.sent_to_kitchen)
+    if (!unsent.length) return
     setSubmitting(true)
+
+    const foodItems = unsent.filter(i => i.item_type === 'menu')
+    const prodItems = unsent.filter(i => i.item_type !== 'menu')
+
     await submitToKitchen(order.id)
     await refreshItems()
+
+    if (foodItems.length) await printKitchenTicket(order, table, foodItems)
+    if (prodItems.length) await printProductPullTicket(order, table, prodItems)
+
     setSubmitting(false)
   }
 
-  const subtotal    = orderItems.reduce((s, i) => s + i.unit_price * i.quantity, 0)
-  const unsentCount = orderItems.filter(i => !i.sent_to_kitchen).length
-  const displayItems = tab === 'menu' ? menuItems : products
+  async function handleGuestConfirm(item) {
+    await submitToKitchen(order.id)
+    await printKitchenTicket(order, table, [item], '客人點餐')
+    refreshItems()
+  }
+
+  async function handleGenerateQr() {
+    if (!order?.id) return
+    const { data: session } = await createQrSession(storeId, orgId, tableId, order.id)
+    if (session) {
+      const base = import.meta.env.VITE_BOOKING_URL ?? window.location.origin
+      const url  = `${base}/menu/${storeId}/${tableId}?token=${session.token}`
+      setQrSession({ token: session.token, url })
+    }
+  }
+
+  async function handleReprint() {
+    if (!order?.id) return
+    const { data: pay } = await getLastPayment(order.id)
+    if (!pay) return
+    await printReceipt({ storeName: '', order, table, items: orderItems, payment: pay })
+  }
+
+  async function handleOpenMerge() {
+    const { data } = await getOpenOrders(storeId)
+    setMergeList((data ?? []).filter(o => o.id !== order?.id))
+    setShowMerge(true)
+  }
+
+  async function handleMerge(sourceOrderId) {
+    if (!order?.id) return
+    await mergeOrders(sourceOrderId, order.id)
+    setShowMerge(false)
+    refreshItems()
+  }
+
+  const subtotal     = orderItems.reduce((s, i) => s + i.unit_price * i.quantity, 0)
+  const unsentCount  = orderItems.filter(i => !i.sent_to_kitchen).length
+  const guestPending = orderItems.filter(i => i.source === 'guest' && !i.sent_to_kitchen)
+  const isWalkIn     = !order?.reservation_id
 
   if (loading) {
     return (
@@ -201,18 +239,14 @@ export default function OrderPage() {
 
       {/* ── Header ── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '0 20px', height: 56, background: '#fff', borderBottom: '1px solid #e2e8f0', flexShrink: 0 }}>
-        <button onClick={() => navigate('/seating')} style={{ background: 'none', border: 'none', color: '#6b7280', cursor: 'pointer', fontSize: 22, lineHeight: 1, padding: '0 4px' }}>
-          ←
-        </button>
+        <button onClick={() => navigate('/seating')} style={{ background: 'none', border: 'none', color: '#6b7280', cursor: 'pointer', fontSize: 22, lineHeight: 1, padding: '0 4px' }}>←</button>
+
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
           <span style={{ fontSize: 17, fontWeight: 700, color: '#111827' }}>T{table?.table_number}</span>
           <span style={{ fontSize: 13, color: '#6b7280' }}>{table?.capacity}人桌</span>
-          {order?.order_number && (
-            <span style={{ fontSize: 12, color: '#9ca3af' }}>#{order.order_number}</span>
-          )}
+          {order?.order_number && <span style={{ fontSize: 12, color: '#9ca3af' }}>#{order.order_number}</span>}
         </div>
 
-        {/* Tab switcher */}
         <div style={{ display: 'flex', gap: 4, marginLeft: 20, background: '#f1f5f9', borderRadius: 8, padding: 3 }}>
           {[['menu', '菜單'], ['product', '商品']].map(([key, label]) => (
             <button key={key} onClick={() => setTab(key)} style={{
@@ -222,19 +256,31 @@ export default function OrderPage() {
               fontSize: 14, fontWeight: tab === key ? 700 : 400, cursor: 'pointer',
               boxShadow: tab === key ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
               transition: 'all 0.15s',
-            }}>
-              {label}
-            </button>
+            }}>{label}</button>
           ))}
         </div>
 
-        <div style={{ marginLeft: 'auto', fontSize: 13, color: '#6b7280' }}>{employee?.name}</div>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+          {isWalkIn && !qrSession && (
+            <IconBtn onClick={handleGenerateQr} title="生成 QR 自助點餐">📱</IconBtn>
+          )}
+          {qrSession && <span style={{ fontSize: 11, color: '#22c55e', fontWeight: 600 }}>QR 已產生</span>}
+          <IconBtn onClick={handleOpenMerge} title="合併桌">🔁</IconBtn>
+          <IconBtn onClick={handleReprint} title="重印收據">🖨</IconBtn>
+          <span style={{ fontSize: 13, color: '#6b7280' }}>{employee?.name}</span>
+        </div>
       </div>
 
-      {/* ── Body: category | items | order ── */}
+      {guestPending.length > 0 && (
+        <div style={{ padding: '8px 20px', background: '#fdf4ff', borderBottom: '1px solid #e9d5ff', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          <span style={{ fontSize: 18 }}>🔔</span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: '#7c3aed' }}>客人新增 {guestPending.length} 項待確認</span>
+        </div>
+      )}
+
+      {/* ── Main body ── */}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
 
-        {/* Category sidebar (menu tab only) */}
         {tab === 'menu' && (
           <div style={{ width: 108, flexShrink: 0, background: '#fff', borderRight: '1px solid #e2e8f0', overflowY: 'auto' }}>
             {[{ id: null, name: '全部' }, ...categories].map(cat => (
@@ -245,14 +291,11 @@ export default function OrderPage() {
                 borderLeft: `3px solid ${selCategory === cat.id ? '#0891b2' : 'transparent'}`,
                 fontSize: 14, color: selCategory === cat.id ? '#0369a1' : '#374151',
                 fontWeight: selCategory === cat.id ? 700 : 400,
-              }}>
-                {cat.name}
-              </button>
+              }}>{cat.name}</button>
             ))}
           </div>
         )}
 
-        {/* Item grid */}
         <div style={{ flex: 1, padding: 14, overflowY: 'auto' }}>
           {tab === 'product' && (
             <div style={{
@@ -260,36 +303,29 @@ export default function OrderPage() {
               background: scanFeedback ? (scanFeedback.startsWith('找不到') ? '#fef2f2' : '#f0fdf4') : '#eff6ff',
               border: `1px solid ${scanFeedback ? (scanFeedback.startsWith('找不到') ? '#fecaca' : '#bbf7d0') : '#bfdbfe'}`,
               color: scanFeedback ? (scanFeedback.startsWith('找不到') ? '#dc2626' : '#16a34a') : '#1e40af',
-              transition: 'background 0.2s, color 0.2s',
             }}>
               {scanFeedback || '掃描條碼自動加入，或點選下方商品'}
             </div>
           )}
-
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(138px, 1fr))', gap: 10 }}>
-            {displayItems.map(item => {
-              const price = tab === 'menu' ? item.unit_price : item.retail_price
+            {(tab === 'menu' ? menuItems : products).map(item => {
+              const price   = tab === 'menu' ? item.unit_price : item.retail_price
               const inOrder = tab === 'menu'
                 ? orderItems.find(o => o.menu_item_id === item.id)
                 : orderItems.find(o => o.pos_product_id === item.id)
               return (
                 <button key={item.id}
-                  onClick={() => tab === 'menu' ? handleAddMenu(item) : handleAddProduct(item)}
+                  onClick={() => addOrIncrement(order?.id, tab === 'menu' ? 'menu' : 'product', item)}
                   style={{
-                    background: '#fff',
-                    border: `2px solid ${inOrder ? '#0891b2' : '#e2e8f0'}`,
+                    background: '#fff', border: `2px solid ${inOrder ? '#0891b2' : '#e2e8f0'}`,
                     borderRadius: 10, padding: 12, cursor: 'pointer', textAlign: 'left',
                     display: 'flex', flexDirection: 'column', gap: 4, position: 'relative',
                   }}>
                   {inOrder && (
                     <span style={{
-                      position: 'absolute', top: 7, right: 8,
-                      background: '#0891b2', color: '#fff',
-                      borderRadius: 10, fontSize: 11, fontWeight: 700,
-                      padding: '1px 7px', lineHeight: '16px',
-                    }}>
-                      ×{inOrder.quantity}
-                    </span>
+                      position: 'absolute', top: 7, right: 8, background: '#0891b2', color: '#fff',
+                      borderRadius: 10, fontSize: 11, fontWeight: 700, padding: '1px 7px',
+                    }}>×{inOrder.quantity}</span>
                   )}
                   {item.image_url && (
                     <div style={{ width: '100%', height: 68, borderRadius: 6, overflow: 'hidden', marginBottom: 4 }}>
@@ -304,10 +340,9 @@ export default function OrderPage() {
                 </button>
               )
             })}
-
-            {displayItems.length === 0 && (
+            {(tab === 'menu' ? menuItems : products).length === 0 && (
               <div style={{ gridColumn: '1/-1', textAlign: 'center', paddingTop: 48, color: '#9ca3af', fontSize: 14 }}>
-                {tab === 'menu' ? '此分類暫無菜單' : '尚未設定商品，可先在管理後台新增'}
+                {tab === 'menu' ? '此分類暫無菜單' : '尚未設定商品，請在管理後台新增'}
               </div>
             )}
           </div>
@@ -318,9 +353,7 @@ export default function OrderPage() {
           <div style={{ padding: '14px 16px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span style={{ fontSize: 14, fontWeight: 700, color: '#111827' }}>訂單明細</span>
             {orderItems.length > 0 && (
-              <span style={{ fontSize: 12, color: '#6b7280', background: '#f1f5f9', borderRadius: 10, padding: '2px 8px' }}>
-                {orderItems.length} 品
-              </span>
+              <span style={{ fontSize: 12, color: '#6b7280', background: '#f1f5f9', borderRadius: 10, padding: '2px 8px' }}>{orderItems.length} 品</span>
             )}
           </div>
 
@@ -328,43 +361,58 @@ export default function OrderPage() {
             {orderItems.length === 0 && (
               <div style={{ color: '#9ca3af', fontSize: 13, textAlign: 'center', paddingTop: 36 }}>尚未點餐</div>
             )}
-            {orderItems.map(item => (
-              <div key={item.id} style={{
-                display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 8,
-                background: item.sent_to_kitchen ? '#f9fafb' : '#eff6ff',
-                border: `1px solid ${item.sent_to_kitchen ? '#e2e8f0' : '#bfdbfe'}`,
-              }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {item.name}
+            {orderItems.map(item => {
+              const isGuest  = item.source === 'guest'
+              const guestNew = isGuest && !item.sent_to_kitchen
+              return (
+                <div key={item.id} style={{
+                  display: 'flex', alignItems: 'flex-start', gap: 8, padding: '8px 10px', borderRadius: 8,
+                  background: guestNew ? '#fdf4ff' : item.sent_to_kitchen ? '#f9fafb' : '#eff6ff',
+                  border: `1px solid ${guestNew ? '#e9d5ff' : item.sent_to_kitchen ? '#e2e8f0' : '#bfdbfe'}`,
+                }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {guestNew && '🔔 '}{item.name}
+                    </div>
+                    <div style={{ fontSize: 12, color: '#6b7280' }}>${item.unit_price} × {item.quantity} = ${item.unit_price * item.quantity}</div>
+                    {item.item_type === 'product' && (
+                      <span style={{ fontSize: 10, background: '#e0f2fe', color: '#0369a1', borderRadius: 4, padding: '1px 5px', fontWeight: 600 }}>商品</span>
+                    )}
+                    {item.item_type === 'custom' && (
+                      <span style={{ fontSize: 10, background: '#fef3c7', color: '#92400e', borderRadius: 4, padding: '1px 5px', fontWeight: 600 }}>自訂</span>
+                    )}
                   </div>
-                  <div style={{ fontSize: 12, color: '#6b7280' }}>
-                    ${item.unit_price} × {item.quantity} = ${item.unit_price * item.quantity}
-                  </div>
-                  {item.source === 'guest' && (
-                    <div style={{ fontSize: 11, color: '#8b5cf6', fontWeight: 600 }}>顧客點餐</div>
+
+                  {guestNew && (
+                    <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                      <SmBtn color="#16a34a" onClick={() => handleGuestConfirm(item)}>✓</SmBtn>
+                      <SmBtn color="#dc2626" onClick={() => handleCancel(item)}>✕</SmBtn>
+                    </div>
+                  )}
+
+                  {!guestNew && !item.sent_to_kitchen && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                      <SmBtn onClick={() => handleQtyChange(item, -1)}>−</SmBtn>
+                      <span style={{ fontSize: 14, fontWeight: 700, width: 22, textAlign: 'center', color: '#111827' }}>{item.quantity}</span>
+                      <SmBtn onClick={() => handleQtyChange(item, +1)}>+</SmBtn>
+                      <SmBtn color="#ef4444" onClick={() => handleCancel(item)}>✕</SmBtn>
+                    </div>
+                  )}
+
+                  {!guestNew && item.sent_to_kitchen && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                      <span style={{ fontSize: 11, color: '#22c55e', fontWeight: 600 }}>已送出</span>
+                      <SmBtn color="#ef4444" onClick={() => handleCancel(item)}>✕</SmBtn>
+                    </div>
                   )}
                 </div>
-
-                {item.sent_to_kitchen ? (
-                  <span style={{ fontSize: 11, color: '#22c55e', fontWeight: 600, flexShrink: 0 }}>已送出</span>
-                ) : (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-                    <SmBtn onClick={() => handleQtyChange(item, -1)}>−</SmBtn>
-                    <span style={{ fontSize: 14, fontWeight: 700, width: 22, textAlign: 'center', color: '#111827' }}>
-                      {item.quantity}
-                    </span>
-                    <SmBtn onClick={() => handleQtyChange(item, +1)}>+</SmBtn>
-                  </div>
-                )}
-              </div>
-            ))}
+              )
+            })}
           </div>
 
-          {/* Totals + actions */}
           <div style={{ padding: '12px 14px', borderTop: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
-              <span style={{ fontSize: 13, color: '#6b7280' }}>小計（未含稅）</span>
+              <span style={{ fontSize: 13, color: '#6b7280' }}>小計（含稅）</span>
               <span style={{ fontSize: 18, fontWeight: 800, color: '#111827' }}>${subtotal.toLocaleString()}</span>
             </div>
 
@@ -382,6 +430,7 @@ export default function OrderPage() {
 
             <button
               disabled={orderItems.length === 0}
+              onClick={() => setShowPayment(true)}
               style={{
                 background: orderItems.length > 0 ? '#0891b2' : '#e2e8f0',
                 color: orderItems.length > 0 ? '#fff' : '#9ca3af',
@@ -394,16 +443,106 @@ export default function OrderPage() {
           </div>
         </div>
       </div>
+
+      {/* ── Modals ── */}
+      {showPayment && (
+        <PaymentModal
+          order={order} table={table} items={orderItems}
+          onClose={() => setShowPayment(false)}
+          onPaid={() => { setShowPayment(false); navigate('/seating') }}
+        />
+      )}
+
+      {showMerge && (
+        <Overlay onClose={() => setShowMerge(false)}>
+          <div style={{ background: '#fff', borderRadius: 14, padding: 24, width: 340, display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: '#111827' }}>🔁 合併桌</div>
+            <div style={{ fontSize: 13, color: '#6b7280' }}>選擇要合併到本桌的來源桌：</div>
+            {mergeList.length === 0
+              ? <div style={{ color: '#9ca3af', fontSize: 13, textAlign: 'center' }}>沒有其他可合併的訂單</div>
+              : mergeList.map(o => (
+                <button key={o.id} onClick={() => handleMerge(o.id)}
+                  style={{ background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 10, padding: '12px 16px', cursor: 'pointer', textAlign: 'left', fontSize: 14, color: '#111827' }}>
+                  <strong>T{o.res_tables?.table_number ?? '?'}</strong>
+                  {o.order_number ? ` — #${o.order_number}` : ''}
+                </button>
+              ))
+            }
+            <button onClick={() => setShowMerge(false)}
+              style={{ background: '#e2e8f0', color: '#374151', border: 'none', borderRadius: 8, padding: '10px 0', fontSize: 14, cursor: 'pointer', width: '100%' }}>
+              取消
+            </button>
+          </div>
+        </Overlay>
+      )}
+
+      {confirmCancel && (
+        <Overlay onClose={() => setConfirmCancel(null)}>
+          <div style={{ background: '#fff', borderRadius: 14, padding: 24, width: 320, display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: '#111827' }}>取消已送出品項</div>
+            <div style={{ fontSize: 14, color: '#374151' }}>
+              <strong>{confirmCancel.name}</strong> 已送廚房。取消後會列印取消單通知廚房。
+            </div>
+            <button onClick={() => confirmCancelItem(confirmCancel)}
+              style={{ background: '#ef4444', color: '#fff', border: 'none', borderRadius: 9, padding: '11px 0', fontSize: 14, fontWeight: 700, cursor: 'pointer', width: '100%' }}>
+              確認取消並列印取消單
+            </button>
+            <button onClick={() => setConfirmCancel(null)}
+              style={{ background: '#e2e8f0', color: '#374151', border: 'none', borderRadius: 9, padding: '10px 0', fontSize: 14, cursor: 'pointer', width: '100%' }}>
+              不取消
+            </button>
+          </div>
+        </Overlay>
+      )}
+
+      {qrSession && (
+        <Overlay onClose={() => setQrSession(null)}>
+          <div style={{ background: '#fff', borderRadius: 14, padding: 24, width: 320, display: 'flex', flexDirection: 'column', gap: 14, alignItems: 'center' }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: '#111827' }}>📱 QR 自助點餐</div>
+            <div style={{ fontSize: 12, color: '#0891b2', wordBreak: 'break-all', textAlign: 'center', fontFamily: 'monospace' }}>{qrSession.url}</div>
+            <div style={{ fontSize: 13, color: '#6b7280', textAlign: 'center' }}>讓顧客掃描此 URL，或複製到 QR 產生器列印</div>
+            <button onClick={() => setQrSession(null)}
+              style={{ background: '#e2e8f0', color: '#374151', border: 'none', borderRadius: 9, padding: '10px 0', fontSize: 14, cursor: 'pointer', width: '100%' }}>
+              關閉
+            </button>
+          </div>
+        </Overlay>
+      )}
     </div>
   )
 }
 
-function SmBtn({ onClick, children }) {
+function Overlay({ children, onClose }) {
+  return (
+    <div onClick={e => e.target === e.currentTarget && onClose?.()}
+      style={{ position: 'fixed', inset: 0, zIndex: 900, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      {children}
+    </div>
+  )
+}
+
+function IconBtn({ onClick, title, children }) {
+  return (
+    <button onClick={onClick} title={title} style={{
+      width: 36, height: 36, borderRadius: 8, border: '1px solid #e2e8f0',
+      background: '#fff', cursor: 'pointer', fontSize: 18,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+    }}>
+      {children}
+    </button>
+  )
+}
+
+function SmBtn({ onClick, color, children }) {
   return (
     <button onClick={onClick} style={{
-      width: 26, height: 26, borderRadius: 6, border: '1px solid #e2e8f0',
-      background: '#fff', cursor: 'pointer', fontSize: 16, lineHeight: 1,
-      display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#374151',
+      width: 26, height: 26, borderRadius: 6,
+      border: color ? 'none' : '1px solid #e2e8f0',
+      background: color ?? '#fff',
+      color: color ? '#fff' : '#374151',
+      cursor: 'pointer', fontSize: 14, lineHeight: 1,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      flexShrink: 0,
     }}>
       {children}
     </button>

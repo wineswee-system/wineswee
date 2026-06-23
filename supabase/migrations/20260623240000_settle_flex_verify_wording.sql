@@ -1,7 +1,10 @@
 -- ════════════════════════════════════════════════════════════════════════════
--- 費用核銷 LINE 卡片文字調整：標題「費用核銷」→「費用核銷(驗收)」、右側「待你審核」→「待你驗收」
+-- 費用核銷 LINE 卡片文字全面改「驗收」：
+--   標題「費用核銷」→「費用核銷(驗收)」
+--   狀態：待你審核→待你驗收、已核銷→已驗收、核銷已退回→驗收已退回
+--   通知預覽(altText)：核銷已通過→驗收已通過、核銷被退回→驗收被退回
 -- 2026-06-23
--- 以 live _push_expense_settle_flex 全文為底，只改 v_label 與待審核 v_status_chip 兩個字串。
+-- 以 live _push_expense_settle_flex 全文為底，只改上述文字字串，其餘 flex 邏輯不動。
 -- ════════════════════════════════════════════════════════════════════════════
 
 CREATE OR REPLACE FUNCTION public._push_expense_settle_flex(p_line_user_id text, p_liff_id text, p_request_id integer, p_event text)
@@ -86,11 +89,11 @@ BEGIN
   END IF;
 
   IF p_event = 'settle_approved' THEN
-    v_status_chip := '已核銷';
-    v_alt_text := v_emoji || ' 核銷已通過 — ' || COALESCE(v_req.title, '');
+    v_status_chip := '已驗收';
+    v_alt_text := v_emoji || ' 驗收已通過 — ' || COALESCE(v_req.title, '');
   ELSIF p_event = 'settle_rejected' THEN
-    v_status_chip := '核銷已退回';
-    v_alt_text := v_emoji || ' 核銷被退回 — ' || COALESCE(v_req.title, '');
+    v_status_chip := '驗收已退回';
+    v_alt_text := v_emoji || ' 驗收被退回 — ' || COALESCE(v_req.title, '');
   ELSE
     v_status_chip := '待你驗收';
     v_alt_text := v_emoji || ' ' || v_label || ' — ' || COALESCE(v_req.employee, '');

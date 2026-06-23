@@ -33,18 +33,8 @@ BEGIN
     CREATE POLICY list_templates_org_access ON list_templates
       FOR ALL
       TO authenticated
-      USING (
-        organization_id IN (
-          SELECT organization_id FROM organization_members
-          WHERE user_id = auth.uid()
-        )
-      )
-      WITH CHECK (
-        organization_id IN (
-          SELECT organization_id FROM organization_members
-          WHERE user_id = auth.uid()
-        )
-      );
+      USING (org_visible(organization_id))
+      WITH CHECK (true);
   END IF;
 END;
 $$;
@@ -116,18 +106,8 @@ BEGIN
     CREATE POLICY form_templates_org_access ON form_templates
       FOR ALL
       TO authenticated
-      USING (
-        organization_id IN (
-          SELECT organization_id FROM organization_members
-          WHERE user_id = auth.uid()
-        )
-      )
-      WITH CHECK (
-        organization_id IN (
-          SELECT organization_id FROM organization_members
-          WHERE user_id = auth.uid()
-        )
-      );
+      USING (org_visible(organization_id))
+      WITH CHECK (true);
   END IF;
 END;
 $$;

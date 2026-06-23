@@ -8,6 +8,7 @@ import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
 import SignaturePad from './SignaturePad'
 import SearchableSelect, { empOptions } from '../SearchableSelect'
+import { postBindingFillDone } from '../../lib/embeddedBinding'
 
 const STATUS_BADGE = {
   '草稿':   { bg: 'var(--bg-secondary)',      color: 'var(--text-muted)' },
@@ -135,6 +136,7 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
       if (!data?.ok) throw new Error(data?.error || 'unknown')
       toast.success(data.event === 'auto_approved_no_chain' ? '已核准（無簽核鏈設定）' : '已送出，進入簽核流程')
       onChanged?.(); load()
+      postBindingFillDone(null)  // 任務 iframe inline（稽核送審）：通知父視窗完成
     } catch (err) {
       toast.error('送出失敗：' + (err.message || err))
     } finally {

@@ -74,10 +74,15 @@ function AdminApp() {
   const canAccessWithPerm = (_modulePrefix, permCode) => hasPermission(permCode)
   const blocked = <Navigate to="/" replace />
 
+  // embedded=1：被任務面板 iframe 內嵌（綁定表單「自己填」inline），隱藏側欄/頂欄/精靈，只留頁面內容
+  const isEmbedded = (() => {
+    try { return new URLSearchParams(window.location.search).get('embedded') === '1' } catch { return false }
+  })()
+
   return (
     <div className="app-layout">
-      {showOnboarding && <OnboardingWizard onComplete={() => setShowOnboarding(false)} />}
-      <Sidebar />
+      {!isEmbedded && showOnboarding && <OnboardingWizard onComplete={() => setShowOnboarding(false)} />}
+      {!isEmbedded && <Sidebar />}
       <main className="main-content">
         <div className="page-container">
           <Suspense fallback={<LoadingSpinner />}>
@@ -91,7 +96,7 @@ function AdminApp() {
         </div>
         {/* 浮動橫向滾軸：自動同步當前 viewport 內可見的 .data-table-wrapper / div.data-table。
             sticky bottom: 0 黏在 .main-content 底，永遠在 viewport 可見 */}
-        <StickyHorizontalScrollbar />
+        {!isEmbedded && <StickyHorizontalScrollbar />}
       </main>
     </div>
   )

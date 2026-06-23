@@ -10,6 +10,7 @@ import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
 import { uploadFormAttachments, listFormAttachments, getAttachmentSignedUrl } from '../../lib/formAttachments'
 import { printGoodsTransferSignOff } from '../../lib/signOffAdapters'
+import { postBindingFillDone } from '../../lib/embeddedBinding'
 
 // 商品調撥申請單 — 兩階段流程（申請審核 + 驗收審核）
 
@@ -211,6 +212,7 @@ export default function TransferRequests() {
       setShowFormModal(false)
       setEditingId(null)
       setForm(emptyForm())
+      postBindingFillDone(linkedBindingId || null)  // 任務 iframe inline：通知父視窗完成
       // 任務綁定跳過來的，送出成功後把 binding_id 清掉
       if (linkedBindingId) {
         const next = new URLSearchParams(searchParams)
@@ -616,6 +618,7 @@ function TransferDetailModal({ row, stores, empMap, profile, userRole, onClose, 
     if (error || !data?.ok) { toast.error('送驗收失敗：' + (error?.message || data?.error)); return }
     toast.success('已送驗收審核')
     onChanged()
+    postBindingFillDone(null)  // 任務 iframe inline（驗收段）：通知父視窗完成
   }
 
   const openAttachment = async (att) => {

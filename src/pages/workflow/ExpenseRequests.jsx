@@ -20,6 +20,7 @@ import SettleModal from './components/SettleModal'
 import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
 import { displaySettleStatus as displayStatus } from '../../lib/displayLabel'
+import { postBindingFillDone } from '../../lib/embeddedBinding'
 const STATUS_COLORS = {
   '申請中': { bg: 'var(--accent-blue-dim)', color: 'var(--accent-blue)' },
   '已核准': { bg: 'var(--accent-green-dim)', color: 'var(--accent-green)' },
@@ -356,6 +357,7 @@ export default function ExpenseRequests() {
     setLineItems([emptyItem()])
     setFiles([])
     load()
+    postBindingFillDone(bindingId ? Number(bindingId) : null)  // 任務 iframe inline：通知父視窗完成
   }
 
   // ★ 走 chain step-by-step 推進（呼 expense_request_step_advance RPC）
@@ -663,6 +665,7 @@ export default function ExpenseRequests() {
     setSaving(false)
     setShowSettleModal(false)
     load()
+    postBindingFillDone(null)  // 任務 iframe inline（核銷段）：通知父視窗完成
   }
 
   // 核銷簽核：呼叫 RPC 推 settle chain 一步；最後一關通過 → 開分錄 + 已核銷

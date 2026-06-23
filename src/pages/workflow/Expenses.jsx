@@ -16,6 +16,7 @@ import ApprovalDetailModal from '../../components/ApprovalDetailModal'
 import { buildFormChainSteps } from '../../lib/buildChainSteps'
 import { validateRequired, clearError } from '../../lib/formValidation'
 import { usePendingApprovals } from '../../lib/usePendingApprovals'
+import { postBindingFillDone } from '../../lib/embeddedBinding'
 
 import { toast } from '../../lib/toast'
 const CATEGORIES = ['交通', '住宿', '餐飲', '設備', '其他']
@@ -185,6 +186,7 @@ export default function Expenses() {
       setAttachFiles([])
       setForm({ employee: profile?.name || employees[0]?.name || '', category: CATEGORIES[0], amount: '', date: '', description: '', receipt: true })
       await createApprovalWorkflow('expense', data, form.employee)
+      postBindingFillDone(bindingId ? Number(bindingId) : null)  // 任務 iframe inline：通知父視窗完成
     }
   }
 

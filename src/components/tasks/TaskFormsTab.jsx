@@ -4,6 +4,7 @@ import { toast } from '../../lib/toast'
 import FormBindingsPicker from '../FormBindingsPicker'
 import SearchableSelect, { empOptions } from '../SearchableSelect'
 import FillFormModal from './FillFormModal'
+import { applyTypeFor, bindingFillPath } from './bindingFillUrl'
 
 const STATUS_STYLE = {
   '未填':   { bg: 'var(--glass-light)',       color: 'var(--text-muted)',    icon: '⚪' },
@@ -12,28 +13,8 @@ const STATUS_STYLE = {
   '已完成': { bg: 'var(--accent-green-dim)',  color: 'var(--accent-green)',  icon: '✅' },
 }
 
-const applyTypeFor = (ft) =>
-  ft === 'expense_settle' ? 'expense_apply'
-  : ft === 'goods_transfer_receipt' ? 'goods_transfer_apply'
-  : null
-
 function navTo(b, bindings) {
-  const at = applyTypeFor(b.form_type)
-  const sibDone = at ? bindings.find(x => x.form_type === at)?.status === '已完成' : true
-  if (at && !sibDone) return
-
-  let u = null
-  if (b.form_type === 'expense_settle') {
-    u = b.form_id ? `/process/expense-requests?focus=${b.form_id}&settle=1` : null
-  } else if (b.form_type === 'goods_transfer_receipt') {
-    u = b.form_id ? `/process/transfer-requests?focus=${b.form_id}&receipt=1` : null
-  } else {
-    u = (b.form_type === 'expense_request' || b.form_type === 'expense_apply') ? `/process/expense-requests?new=1&binding_id=${b.id}`
-      : b.form_type === 'expense'         ? `/process/expenses?new=1&binding_id=${b.id}`
-      : b.form_type === 'store_audit'     ? `/process/store-audits?new=1&binding_id=${b.id}`
-      : (b.form_type === 'goods_transfer' || b.form_type === 'goods_transfer_apply') ? `/process/transfer-requests?new=1&binding_id=${b.id}`
-      : `/process/forms/custom/${b.form_template_id}?binding_id=${b.id}`
-  }
+  const u = bindingFillPath(b, bindings)
   if (u) window.open(u, '_blank')
 }
 
@@ -75,9 +56,9 @@ export default function TaskFormsTab({ task, formBindings, setFormBindings }) {
     return { label: '', clickable: false }
   }
 
-  // 點動作：自己填 + 自訂表單 → inline 彈窗；其餘（重型 / 他人填）→ 開頁
+  // 點動作：自己填 → 任務內彈窗（自訂表單 inline / 重型用 iframe）；他人填 → 開頁(代填 fallback)
   const onAction = (b) => {
-    if (b.fill_mode === 'self' && b.form_type === 'form_submission' && !b.form_id) {
+    if (b.fill_mode === 'self') {
       setFillBinding(b)
     } else {
       navTo(b, formBindings)
@@ -268,6 +249,7 @@ export default function TaskFormsTab({ task, formBindings, setFormBindings }) {
       {fillBinding && (
         <FillFormModal
           binding={fillBinding}
+          bindings={formBindings}
           onClose={() => setFillBinding(null)}
           onDone={reloadBindings}
         />

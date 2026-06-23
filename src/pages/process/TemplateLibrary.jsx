@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Plus, Edit3, Rocket, Trash2, Search,
-  Copy, Download, Upload, Filter, SortAsc, Lock, BarChart2,
+  Copy, Download, Upload, Filter, SortAsc, Lock, BarChart2, Play,
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { toast } from '../../lib/toast'
@@ -11,6 +11,7 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 import DeployWizard from './components/DeployWizard'
 import TemplatePreviewModal from './components/TemplatePreviewModal'
 import TemplateAnalyticsModal from './components/TemplateAnalyticsModal'
+import ShadowDeployModal from './components/ShadowDeployModal'
 
 const ALL_LABEL = '全部'
 
@@ -145,6 +146,7 @@ export default function TemplateLibrary() {
   // New state
   const [previewTarget, setPreviewTarget] = useState(null)    // template for preview modal
   const [analyticsTarget, setAnalyticsTarget] = useState(null) // template for analytics modal
+  const [shadowTarget, setShadowTarget] = useState(null)       // template for shadow/dry-run modal
   const [sortBy, setSortBy] = useState('usage')             // 'usage'|'updated'|'name'|'steps'
   const [showDraftArchived, setShowDraftArchived] = useState(false)
 
@@ -906,6 +908,22 @@ export default function TemplateLibrary() {
                         >
                           <Copy size={13} />
                         </button>
+                        {/* Dry-run / shadow deploy (workflow only) */}
+                        {!isSpecialType && (
+                          <button
+                            onClick={() => setShadowTarget(tpl)}
+                            title="模擬部署"
+                            style={{
+                              background: 'none', border: 'none', color: 'var(--text-muted)',
+                              cursor: 'pointer', padding: '4px 5px', borderRadius: 5,
+                              display: 'flex', alignItems: 'center', transition: 'color 0.15s',
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.color = 'var(--accent-cyan)' }}
+                            onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)' }}
+                          >
+                            <Play size={13} />
+                          </button>
+                        )}
                         {/* Analytics (icon-only, workflow/project only) */}
                         {!isSpecialType && (
                           <button
@@ -982,6 +1000,14 @@ export default function TemplateLibrary() {
           template={analyticsTarget}
           usageCount={usageCounts[analyticsTarget.name] || 0}
           onClose={() => setAnalyticsTarget(null)}
+        />
+      )}
+      {shadowTarget && (
+        <ShadowDeployModal
+          template={shadowTarget}
+          checklists={checklists}
+          approvalChains={approvalChains}
+          onClose={() => setShadowTarget(null)}
         />
       )}
     </div>

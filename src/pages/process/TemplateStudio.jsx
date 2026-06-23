@@ -52,6 +52,7 @@ const normalizeStep = (s) => ({
 const emptyTpl = () => ({
   name: '', category: 'HR', description: '', approval_chain_id: '',
   tags: [], status: 'published',
+  permissions: { deploy_access: 'all', allowed_departments: [], require_approval: false },
   steps: [emptyStep()],
 })
 
@@ -145,6 +146,9 @@ export default function TemplateStudio() {
           approval_chain_id: data.approval_chain_id || '',
           tags: Array.isArray(data.tags) ? data.tags : [],
           status: data.status || 'published',
+          permissions: data.permissions && typeof data.permissions === 'object'
+            ? { deploy_access: 'all', allowed_departments: [], require_approval: false, ...data.permissions }
+            : { deploy_access: 'all', allowed_departments: [], require_approval: false },
           steps: (data.steps?.length > 0) ? data.steps.map(normalizeStep) : [emptyStep()],
         })
       }
@@ -319,6 +323,7 @@ export default function TemplateStudio() {
         approval_chain_id: tpl.approval_chain_id || null,
         tags: tpl.tags?.length > 0 ? tpl.tags : null,
         status: tpl.status || 'published',
+        permissions: tpl.permissions || {},
         steps: cleanSteps,
         organization_id: profile?.organization_id || null,
       }
@@ -612,6 +617,95 @@ export default function TemplateStudio() {
                   </button>
                 ))}
               </div>
+            </div>
+
+            {/* ── Permissions panel ── */}
+            <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border-subtle)' }}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 5 }}>
+                <Lock size={11} /> 部署權限
+              </div>
+
+              {/* Who can deploy */}
+              <div style={{ marginBottom: 8 }}>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 4 }}>誰可以部署</div>
+                <div style={{ display: 'flex', gap: 5 }}>
+                  {[{ value: 'all', label: '所有人' }, { value: 'departments', label: '指定部門' }].map(opt => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => updateTpl(t => ({
+                        ...t,
+                        permissions: { ...t.permissions, deploy_access: opt.value, allowed_departments: [] },
+                      }))}
+                      style={{
+                        flex: 1, padding: '4px 0', borderRadius: 6, fontSize: 11, fontWeight: 600,
+                        cursor: 'pointer', border: '1.5px solid',
+                        borderColor: (tpl.permissions?.deploy_access ?? 'all') === opt.value ? 'var(--accent-cyan)' : 'var(--border-subtle)',
+                        background: (tpl.permissions?.deploy_access ?? 'all') === opt.value ? 'var(--accent-cyan-dim)' : 'var(--bg-card)',
+                        color: (tpl.permissions?.deploy_access ?? 'all') === opt.value ? 'var(--accent-cyan)' : 'var(--text-muted)',
+                        transition: 'all 0.15s',
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Department picker — only when restricted */}
+              {(tpl.permissions?.deploy_access) === 'departments' && (
+                <div style={{ marginBottom: 8 }}>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 4 }}>允許部門</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 3, maxHeight: 120, overflowY: 'auto' }}>
+                    {departments.map(dept => {
+                      const checked = (tpl.permissions?.allowed_departments || []).includes(dept.id)
+                      return (
+                        <label key={dept.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, cursor: 'pointer', color: 'var(--text-secondary)' }}>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => {
+                              updateTpl(t => {
+                                const current = t.permissions?.allowed_departments || []
+                                const next = checked ? current.filter(id => id !== dept.id) : [...current, dept.id]
+                                return { ...t, permissions: { ...t.permissions, allowed_departments: next } }
+                              })
+                            }}
+                            style={{ accentColor: 'var(--accent-cyan)', width: 12, height: 12 }}
+                          />
+                          {dept.name}
+                        </label>
+                      )
+                    })}
+                    {departments.length === 0 && (
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>無部門資料</div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Require approval toggle */}
+              <label style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer', fontSize: 11, color: 'var(--text-secondary)' }}>
+                <div
+                  onClick={() => updateTpl(t => ({
+                    ...t,
+                    permissions: { ...t.permissions, require_approval: !t.permissions?.require_approval },
+                  }))}
+                  style={{
+                    width: 28, height: 16, borderRadius: 8, position: 'relative', flexShrink: 0,
+                    background: tpl.permissions?.require_approval ? 'var(--accent-cyan)' : 'var(--border-medium)',
+                    cursor: 'pointer', transition: 'background 0.2s',
+                  }}
+                >
+                  <div style={{
+                    position: 'absolute', top: 2,
+                    left: tpl.permissions?.require_approval ? 14 : 2,
+                    width: 12, height: 12, borderRadius: '50%',
+                    background: '#fff', transition: 'left 0.2s',
+                  }} />
+                </div>
+                部署前需主管核准
+              </label>
             </div>
           </div>
 

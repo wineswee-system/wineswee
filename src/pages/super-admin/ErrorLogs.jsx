@@ -8,7 +8,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { getErrorLogs, resolveErrorLog, unresolveErrorLog, getTenants } from '../../lib/db'
 import { timeAgo as _timeAgo } from '../../lib/auditLogUtils'
 
-const MODULES = ['Auth', 'HR', 'Finance', 'CRM', 'Sales', 'POS', 'WMS', 'Purchase', 'Manufacturing', 'Analytics', 'Process', 'Integration', 'AI', 'System', 'Runtime']
+const MODULES = ['Auth', 'HR', 'Finance', 'CRM', 'Sales', 'POS', 'WMS', 'Purchase', 'Manufacturing', 'Analytics', 'Process', 'Integration', 'AI', 'System', 'Runtime', 'MemberApp']
 
 const levelStyle = {
   error: { bg: '#fee2e2', color: '#dc2626', icon: AlertTriangle },

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useReturnNav } from '../../lib/useReturnNav'
 import { Plus, Printer, Settings, Paperclip } from 'lucide-react'
-import { getExpenses, createExpense, updateExpenseStatus } from '../../lib/db'
+import { getExpenses, createExpense, updateExpenseStatus, getAccounts } from '../../lib/db'
 import { createApprovalWorkflow } from '../../lib/workflowIntegration'
 import { supabase } from '../../lib/supabase'
 import { getEventBus } from '../../lib/events/index.js'
@@ -27,6 +27,7 @@ export default function Expenses() {
   const navigate = useNavigate()
   const returnNav = useReturnNav()
   const [expenses, setExpenses] = useState([])
+  const [accounts, setAccounts] = useState([])   // 會計科目（跟費用申請同源 accounts 表）
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
   const [deptFilter, setDeptFilter] = useState('')
@@ -95,13 +96,16 @@ export default function Expenses() {
       supabase.from('employees').select('id, name, name_en, dept, department_id, store, store_id, position, signature_url, departments!department_id(name), stores!store_id(name)').eq('status', '在職').order('name'),
       supabase.from('departments').select('*').order('name'),
       orgId ? supabase.from('organizations').select('name, logo_url').eq('id', orgId).maybeSingle() : Promise.resolve({ data: null }),
-    ]).then(([ex, e, d, orgRes]) => {
+      getAccounts(orgId),
+    ]).then(([ex, e, d, orgRes, accRes]) => {
       const emps = e.data || []
+      const accs = accRes?.data || []
       setExpenses(ex.data || [])
       setEmployees(emps)
       setDepartments(d.data || [])
       setOrganization(orgRes?.data || null)
-      setForm(f => ({ ...f, employee: f.employee || profile?.name || emps[0]?.name || '' }))
+      setAccounts(accs)
+      setForm(f => ({ ...f, employee: f.employee || profile?.name || emps[0]?.name || '', category: f.category || accs[0]?.name || '' }))
     }).catch(err => {
       console.error('Failed to load data:', err)
       setError('資料載入失敗，請重新整理頁面')
@@ -405,7 +409,10 @@ export default function Expenses() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Field label="會計科目" required error={errors.category} errorMsg="請選會計科目">
               <select className="form-input" style={{ width: '100%' }} value={form.category} onChange={e => { set('category', e.target.value); clearError('category', setErrors) }}>
-                {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+                <option value="">— 請選擇會計科目 —</option>
+                {(accounts.length > 0
+                  ? accounts.map(a => <option key={a.id ?? a.code} value={a.name}>{a.code} {a.name}</option>)
+                  : CATEGORIES.map(c => <option key={c} value={c}>{c}</option>))}
               </select>
             </Field>
             <Field label="金額 (NT$)" required error={errors.amount} errorMsg="請填寫金額">

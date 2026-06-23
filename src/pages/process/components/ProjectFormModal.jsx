@@ -2,6 +2,7 @@ import { useState } from 'react'
 import Modal, { Field } from '../../../components/Modal'
 import { Plus, X, Workflow, CheckSquare } from 'lucide-react'
 import SearchableSelect, { empOptions } from '../../../components/SearchableSelect'
+import TaskQuickCreateModal from '../../../components/tasks/TaskQuickCreateModal'
 
 const STATUS_KEYS = ['規劃中', '進行中', '已完成', '暫停', '已取消']
 const PRIORITY_COLORS = { '高': 'var(--accent-red)', '中': 'var(--accent-yellow)', '低': 'var(--accent-green)' }
@@ -23,6 +24,7 @@ export default function ProjectFormModal({
   setPendingWfCreate,
   pendingTasks,
   setPendingTasks,
+  approvalChains = [],
 }) {
   const [errors, setErrors] = useState({})
   const set = (k, v) => {
@@ -44,7 +46,6 @@ export default function ProjectFormModal({
   const [inlineWfAttachId, setInlineWfAttachId] = useState('')
   const [inlineWfCreate, setInlineWfCreate] = useState({ template_name: '' })
   const [inlineTaskMode, setInlineTaskMode] = useState(false)
-  const [inlineTask, setInlineTask] = useState({ title: '', assignee: '', due_date: '', planned_start: '', store: '', priority: '中', description: '' })
 
   return (
     <Modal
@@ -211,62 +212,18 @@ export default function ProjectFormModal({
             </div>
           )}
           {inlineTaskMode && (
-            <div style={{ padding: 12, borderRadius: 8, background: 'var(--bg-card)', border: '1px solid var(--border-medium)', marginBottom: 8 }}>
-              <input className="form-input" style={{ width: '100%', marginBottom: 10, fontSize: 13 }} placeholder="任務名稱 *"
-                value={inlineTask.title} onChange={e => setInlineTask(f => ({ ...f, title: e.target.value }))} />
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
-                <SearchableSelect
-                  value={inlineTask.assignee}
-                  onChange={(v) => setInlineTask(f => ({ ...f, assignee: v || '' }))}
-                  options={empOptions(employees, { keyBy: 'name' })}
-                  placeholder="負責人"
-                />
-                <select className="form-input" style={{ fontSize: 13 }} value={inlineTask.store} onChange={e => setInlineTask(f => ({ ...f, store: e.target.value }))}>
-                  <option value="">— 門市 —</option>
-                  {stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
-                </select>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
-                <div>
-                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 3 }}>計畫開始</div>
-                  <input className="form-input" type="date" style={{ fontSize: 13, width: '100%' }}
-                    value={inlineTask.planned_start} onChange={e => setInlineTask(f => ({ ...f, planned_start: e.target.value }))} />
-                </div>
-                <div>
-                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 3 }}>
-                    截止日期 <span style={{ color: 'var(--accent-red)', fontWeight: 700 }}>*</span>
-                  </div>
-                  <input className="form-input" type="date" style={{ fontSize: 13, width: '100%', borderColor: !inlineTask.due_date ? 'var(--accent-red)' : undefined }}
-                    value={inlineTask.due_date} onChange={e => setInlineTask(f => ({ ...f, due_date: e.target.value }))} />
-                </div>
-                <div>
-                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 3 }}>優先度</div>
-                  <select className="form-input" style={{ fontSize: 13, width: '100%' }} value={inlineTask.priority} onChange={e => setInlineTask(f => ({ ...f, priority: e.target.value }))}>
-                    <option>高</option><option>中</option><option>低</option>
-                  </select>
-                </div>
-              </div>
-              <textarea className="form-input" style={{ width: '100%', fontSize: 13, minHeight: 52, resize: 'vertical', marginBottom: 8 }}
-                placeholder="說明（選填）"
-                value={inlineTask.description} onChange={e => setInlineTask(f => ({ ...f, description: e.target.value }))} />
-              <div style={{ display: 'flex', gap: 6 }}>
-                <button className="btn btn-primary" style={{ fontSize: 12, padding: '4px 12px' }} disabled={!inlineTask.title || !inlineTask.due_date}
-                  onClick={() => {
-                    if (inlineTask.title && inlineTask.due_date) {
-                      setPendingTasks(p => [...p, { ...inlineTask }])
-                      setInlineTask({ title: '', assignee: '', due_date: '', planned_start: '', store: '', priority: '中', description: '' })
-                      setInlineTaskMode(false)
-                    }
-                  }}>確認</button>
-                <button className="btn btn-secondary" style={{ fontSize: 12, padding: '4px 12px' }}
-                  onClick={() => { setInlineTaskMode(false); setInlineTask({ title: '', assignee: '', due_date: '', planned_start: '', store: '', priority: '中', description: '' }) }}>取消</button>
-              </div>
-            </div>
+            <TaskQuickCreateModal
+              open={inlineTaskMode}
+              title="新增任務"
+              employees={employees}
+              stores={stores}
+              approvalChains={approvalChains}
+              onClose={() => setInlineTaskMode(false)}
+              onSubmit={(fd) => { setPendingTasks(p => [...p, fd]); return true }}
+            />
           )}
-          {!inlineTaskMode && (
-            <button className="btn btn-secondary" style={{ fontSize: 12, padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 4 }}
-              onClick={() => setInlineTaskMode(true)}><Plus size={11} /> 新增任務</button>
-          )}
+          <button className="btn btn-secondary" style={{ fontSize: 12, padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 4 }}
+            onClick={() => setInlineTaskMode(true)}><Plus size={11} /> 新增任務</button>
         </div>
       </>}
     </Modal>

@@ -1028,6 +1028,7 @@ export default function ProjectDetailPanel({
           employees={employees}
           stores={stores}
           templates={templates}
+          approvalChains={approvalChains}
           freeInstances={freeInstances}
           pendingWfAttach={pendingWfAttach}
           setPendingWfAttach={setPendingWfAttach}

@@ -311,16 +311,40 @@ export default function Projects() {
         if (pendingTasks.length > 0) {
           const taskRows = pendingTasks.map((t, i) => ({
             title: t.title, project_id: data.id,
-            assignee: t.assignee || null, due_date: t.due_date || null,
+            assignee: t.assignee || null,
+            assignee_id: t.assignee ? (employees.find(e => e.name === t.assignee)?.id || null) : null,
+            due_date: t.due_date || null,
+            planned_start: t.planned_start || null,
+            description: t.description || null,
+            role: t.role || null,
             priority: t.priority || '中',
             // step 1 直接開工 進行中、step 2+ 待處理（等前一步 trigger 自動 advance）
             status: i === 0 ? '進行中' : '待處理',
             started_at: i === 0 ? new Date().toISOString() : null,
-            step_order: i + 1, bucket: 'Project',
-            store: payload.store || null,
+            step_order: i + 1, bucket: 'Project', category: 'Project',
+            store: t.store || payload.store || null,
+            approval_chain_id: t.approval_mode === 'chain' && t.approval_chain_id ? Number(t.approval_chain_id) : null,
+            confirmation_mode: t.approval_mode === 'people' ? (t.confirmation_mode || 'parallel') : null,
             organization_id: profile?.organization_id || null,
           }))
-          await supabase.from('tasks').insert(taskRows)
+          const { data: insertedTasks } = await supabase.from('tasks').insert(taskRows).select()
+          // 指定人員簽核 → task_confirmations；綁定表單 → create_task_form_binding（對齊其他建任務路徑）
+          for (let i = 0; i < (insertedTasks?.length || 0); i++) {
+            const t = pendingTasks[i], row = insertedTasks[i]
+            if (t.approval_mode === 'people' && (t.confirmation_approvers || []).length > 0) {
+              await supabase.from('task_confirmations').insert(
+                t.confirmation_approvers.map((approver, idx) => ({
+                  task_id: row.id, approver, step_order: idx, status: 'pending',
+                  organization_id: profile?.organization_id || null,
+                }))
+              )
+            }
+            for (const f of (t.required_forms || [])) {
+              await supabase.rpc('create_task_form_binding', {
+                p_task_id: row.id, p_form_type: f.form_type, p_form_template_id: f.form_template_id || null,
+              })
+            }
+          }
         }
         if (pendingWfAttach.length > 0 || pendingWfCreate.length > 0 || pendingTasks.length > 0) load()
       }
@@ -830,6 +854,7 @@ export default function Projects() {
       templates={templates}
       employees={employees}
       stores={stores}
+      approvalChains={approvalChains}
       filtered={filtered}
       tab={tab}
       setTab={setTab}

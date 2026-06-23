@@ -126,6 +126,19 @@ export default function Expenses() {
     }
   }, [expenses, searchParams]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // 從任務填寫狀態跳過來 ?new=1&binding_id=N → 自動開新增費用 modal
+  // 開完就把 new=1 拿掉，避免關 modal 後重彈；binding_id 留著給 submit 使用
+  useEffect(() => {
+    if (searchParams.get('new') === '1' && !showModal) {
+      setEditingId(null)
+      setForm({ employee: '', category: CATEGORIES[0], amount: '', date: '', description: '', receipt: true })
+      setShowModal(true)
+      const next = new URLSearchParams(searchParams)
+      next.delete('new')
+      setSearchParams(next, { replace: true })
+    }
+  }, [searchParams, showModal, setSearchParams]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
   const handleSubmit = async () => {

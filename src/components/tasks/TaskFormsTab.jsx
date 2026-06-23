@@ -24,8 +24,8 @@ function navTo(b, bindings) {
   } else if (b.form_type === 'goods_transfer_receipt') {
     u = b.form_id ? `/process/transfer-requests?focus=${b.form_id}&receipt=1` : null
   } else {
-    u = (b.form_type === 'expense_request' || b.form_type === 'expense_apply') ? `/process/expense-requests?binding_id=${b.id}`
-      : b.form_type === 'expense'         ? `/process/expenses?binding_id=${b.id}`
+    u = (b.form_type === 'expense_request' || b.form_type === 'expense_apply') ? `/process/expense-requests?new=1&binding_id=${b.id}`
+      : b.form_type === 'expense'         ? `/process/expenses?new=1&binding_id=${b.id}`
       : b.form_type === 'store_audit'     ? `/process/store-audits?new=1&binding_id=${b.id}`
       : (b.form_type === 'goods_transfer' || b.form_type === 'goods_transfer_apply') ? `/process/transfer-requests?new=1&binding_id=${b.id}`
       : `/process/forms/custom/${b.form_template_id}?binding_id=${b.id}`

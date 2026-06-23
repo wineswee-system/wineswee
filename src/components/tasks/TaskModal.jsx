@@ -185,6 +185,28 @@ export default function TaskModal({
     }).catch(() => {})
   }, [task?.id, employees]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Realtime: sync 填寫狀態 when DB binding status changes (e.g. after employee submits form or approval finishes)
+  useEffect(() => {
+    if (!task?.id) return
+    const channel = supabase
+      .channel(`task-form-bindings-${task.id}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'task_form_bindings',
+        filter: `task_id=eq.${task.id}`,
+      }, async () => {
+        const { data } = await supabase
+          .from('task_form_bindings')
+          .select('*')
+          .eq('task_id', task.id)
+          .order('id')
+        setFormBindings(data || [])
+      })
+      .subscribe()
+    return () => supabase.removeChannel(channel)
+  }, [task?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     const orig = document.body.style.overflow
     document.body.style.overflow = 'hidden'

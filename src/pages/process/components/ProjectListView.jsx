@@ -24,6 +24,7 @@ export default function ProjectListView({
   employees,
   stores,
   approvalChains,
+  departments = [],
   filtered,
   tab,
   setTab,
@@ -340,6 +341,7 @@ export default function ProjectListView({
           stores={stores}
           templates={templates}
           approvalChains={approvalChains}
+          departments={departments}
           freeInstances={freeInstances}
           pendingWfAttach={pendingWfAttach}
           setPendingWfAttach={setPendingWfAttach}

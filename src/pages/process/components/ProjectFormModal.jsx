@@ -28,6 +28,7 @@ export default function ProjectFormModal({
   pendingTasks,
   setPendingTasks,
   approvalChains = [],
+  departments = [],
 }) {
   const [errors, setErrors] = useState({})
   const set = (k, v) => {
@@ -114,7 +115,10 @@ export default function ProjectFormModal({
           />
         </Field>
         <Field label="部門">
-          <input className="form-input" style={{ width: '100%' }} value={form.department} onChange={e => set('department', e.target.value)} placeholder="選填" />
+          <select className="form-input" style={{ width: '100%' }} value={form.department} onChange={e => set('department', e.target.value)}>
+            <option value="">不指定</option>
+            {departments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+          </select>
         </Field>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>

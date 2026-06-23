@@ -136,6 +136,21 @@ export default function ExpenseRequests() {
     }
   }, [requests, searchParams]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // 從任務填寫狀態跳過來 ?new=1&binding_id=N → 自動開新增申請 modal
+  // 開完就把 new=1 拿掉，避免關 modal 後重彈；binding_id 留著給 submit 使用
+  useEffect(() => {
+    if (searchParams.get('new') === '1' && !showModal) {
+      setEditingId(null)
+      setForm(emptyForm)
+      setLineItems([emptyItem()])
+      setFiles([])
+      setShowModal(true)
+      const next = new URLSearchParams(searchParams)
+      next.delete('new')
+      setSearchParams(next, { replace: true })
+    }
+  }, [searchParams, showModal, setSearchParams]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Load attachments for detail view
   const loadAttachments = async (requestId) => {
     const { data } = await supabase.from('expense_request_attachments')

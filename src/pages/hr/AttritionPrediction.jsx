@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { AlertTriangle, TrendingDown, Users, RefreshCw, ChevronDown, ChevronUp, Brain } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { getDepartments } from '../../lib/db'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 
@@ -52,6 +53,7 @@ export default function AttritionPrediction() {
   const [sortAsc, setSortAsc] = useState(false)
   const [expandedId, setExpandedId] = useState(null)
   const [computing, setComputing] = useState(false)
+  const [departments, setDepartments] = useState([])
 
   useEffect(() => {
     const orgId = profile?.organization_id
@@ -68,13 +70,15 @@ export default function AttritionPrediction() {
       supabase.from('performance_reviews').select('employee, overall_score, period').eq('organization_id', orgId).order('period', { ascending: false }),
       supabase.from('salary_records').select('employee_id, base_salary, month, employees(name)').eq('organization_id', orgId).order('month', { ascending: false }),
       supabase.from('engagement_responses').select('employee, overall_score').eq('organization_id', orgId),
-    ]).then(([e, a, l, p, s, sv]) => {
+      getDepartments(orgId),
+    ]).then(([e, a, l, p, s, sv, d]) => {
       setEmployees(e.data || [])
       setAttendance(a.data || [])
       setLeaves(l.data || [])
       setReviews(p.data || [])
       setSalaries(s.data || [])
       setSurveys(sv.data || [])
+      setDepartments(d.data || [])
     }).catch(err => {
       console.error('Failed to load attrition data:', err)
       setError('資料載入失敗，請重新整理頁面')
@@ -154,8 +158,6 @@ export default function AttritionPrediction() {
       return { ...record, risk_score: score, risk_factors: factors, risk: riskLevel(score) }
     })
   }, [employees, attendance, leaves, reviews, salaries, surveys])
-
-  const departments = useMemo(() => [...new Set(employees.map(e => e.dept).filter(Boolean))].sort(), [employees])
 
   const filtered = useMemo(() => {
     let list = riskData
@@ -268,7 +270,7 @@ export default function AttritionPrediction() {
         <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>🏢 部門</span>
         <select className="form-input" style={{ fontSize: 13, minWidth: 140 }} value={deptFilter} onChange={e => setDeptFilter(e.target.value)}>
           <option value="">全部部門</option>
-          {departments.map(d => <option key={d} value={d}>{d}</option>)}
+          {departments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
         </select>
         <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>⚠️ 風險</span>
         <select className="form-input" style={{ fontSize: 13, minWidth: 120 }} value={riskFilter} onChange={e => setRiskFilter(e.target.value)}>

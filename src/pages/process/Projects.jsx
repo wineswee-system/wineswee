@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { toast } from '../../lib/toast'
 import { supabase } from '../../lib/supabase'
-import { getEmployees, getProjectSections, createProjectSection, updateProjectSection, deleteProjectSection, createWorkflowInstance, updateTask, createTask, drainEntity } from '../../lib/db'
+import { getEmployees, getDepartments, getProjectSections, createProjectSection, updateProjectSection, deleteProjectSection, createWorkflowInstance, updateTask, createTask, drainEntity } from '../../lib/db'
 import { useRealtimeTasks, useRealtimeWorkflowInstances } from '../../lib/hooks/useRealtimeSync'
 import { useAuth } from '../../contexts/AuthContext'
 import { useAuditLog } from '../../lib/useAuditLog'
@@ -28,6 +28,7 @@ export default function Projects() {
   const [stores, setStores] = useState([])
   const [templates, setTemplates] = useState([])
   const [approvalChains, setApprovalChains] = useState([])
+  const [departments, setDepartments] = useState([])
   const [comments, setComments] = useState([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -153,7 +154,7 @@ export default function Projects() {
     const orgId = profile?.organization_id
     if (!orgId) return // Auth not ready; re-triggered when profile resolves (see useEffect below)
     setLoading(true)
-    const [pRes, wRes, eRes, sRes, cRes, tplRes, acRes, expRes] = await Promise.all([
+    const [pRes, wRes, eRes, sRes, cRes, tplRes, acRes, expRes, dRes] = await Promise.all([
       supabase.from('projects').select('*').eq('organization_id', orgId).order('created_at', { ascending: false }),
       supabase.from('workflow_instances').select('*').eq('organization_id', orgId).not('project_id', 'is', null).order('sort_order'),
       getEmployees(),
@@ -164,6 +165,7 @@ export default function Projects() {
       supabase.from('expense_requests')
         .select('id, title, employee, estimated_amount, actual_amount, status, project_id, account_name, store, created_at')
         .order('created_at', { ascending: false }),
+      getDepartments(orgId),
     ])
     // Load tasks that either carry project_id directly OR belong to a project's workflow instance.
     // Two separate queries avoids URL-length overflow: the old .or() with wIds.join(',') breaks
@@ -189,6 +191,7 @@ export default function Projects() {
     setTemplates(tplRes.data || [])
     setApprovalChains(acRes.data || [])
     setExpenses(expRes.data || [])
+    setDepartments(dRes.data || [])
     setLoading(false)
   }
 
@@ -872,6 +875,7 @@ export default function Projects() {
         onWfEdit={handleWfEdit}
         onProjectOrderChange={handleProjectOrderChange}
         approvalChains={approvalChains}
+        departments={departments}
         inputModal={inputModal}
         closeInput={closeInput}
         onBack={() => setSelected(null)}
@@ -897,6 +901,7 @@ export default function Projects() {
       employees={employees}
       stores={stores}
       approvalChains={approvalChains}
+      departments={departments}
       filtered={filtered}
       tab={tab}
       setTab={setTab}

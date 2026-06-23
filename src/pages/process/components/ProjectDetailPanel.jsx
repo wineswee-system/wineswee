@@ -236,6 +236,7 @@ export default function ProjectDetailPanel({
   onWfEdit,
   onProjectOrderChange,
   approvalChains = [],
+  departments = [],
   allExpenses = [],
   onLinkExpense,
   onUnlinkExpense,
@@ -1051,6 +1052,7 @@ export default function ProjectDetailPanel({
           stores={stores}
           templates={templates}
           approvalChains={approvalChains}
+          departments={departments}
           freeInstances={freeInstances}
           pendingWfAttach={pendingWfAttach}
           setPendingWfAttach={setPendingWfAttach}

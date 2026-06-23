@@ -353,6 +353,13 @@ export default function Projects() {
                   p_task_id: row.id, p_form_type: f.form_type, p_form_template_id: f.form_template_id || null,
                 })
               }
+              // 第一步（進行中）才推；未開始的後續步驟等 cascade 由 DB trigger 推
+              if (row.status === '進行中' && row.assignee) {
+                notifyTaskAssignee(row.assignee, row.title, wf.name || wf.template_name || '', row.id, {
+                  dueDate: row.due_date, description: row.description, notes: row.notes, store: row.store,
+                  approvalRequired: row.status === '待簽核', priority: row.priority,
+                }).catch(() => {})
+              }
             }
           }
         }
@@ -551,7 +558,13 @@ export default function Projects() {
       setAddTaskForm({ title: '', assignee: '', due_date: '', required_forms: [] })
       setAddingTaskWfId(null)
     }
-    // 通知由 DB trigger 處理（只在 status=進行中 時推）→ 未開始的後續步驟不會誤推、也不雙推
+    // 第一步（進行中）才推 LINE；未開始的後續步驟等 cascade 由 DB trigger 推（不在前端誤推）
+    if (data.status === '進行中' && data.assignee) {
+      notifyTaskAssignee(data.assignee, data.title, workflows.find(w => w.id === wfId)?.template_name || '', data.id, {
+        dueDate: data.due_date, description: data.description, notes: data.notes, store: data.store,
+        approvalRequired: data.status === '待簽核', priority: data.priority,
+      }).catch(() => {})
+    }
     return true
   }
 

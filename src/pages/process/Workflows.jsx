@@ -19,7 +19,7 @@ import { useRealtimeTasks, useRealtimeWorkflowInstances } from '../../lib/hooks/
 import LoadingSpinner from '../../components/LoadingSpinner'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import TaskDetailPanel from '../../components/TaskDetailPanel'
-import { notifyTaskConfirmationResult, notifyApproval } from '../../lib/lineNotify'
+import { notifyTaskAssignee, notifyTaskConfirmationResult, notifyApproval } from '../../lib/lineNotify'
 import { useAuth } from '../../contexts/AuthContext'
 import { useAuditLog } from '../../lib/useAuditLog'
 
@@ -315,8 +315,15 @@ export default function Workflows() {
           organization_id: profile?.organization_id || null,
         }
       })
-      await supabase.from('tasks').insert(newRows).select()
-      // 通知由 DB trigger 統一推（status=進行中 時，含 insert 第一步）→ 前端不再推
+      const { data: createdTasks } = await supabase.from('tasks').insert(newRows).select()
+      // 第一步（進行中）才推；未開始的後續步驟等 cascade 由 DB trigger 推
+      const t0 = createdTasks?.[0]
+      if (t0?.status === '進行中' && t0.assignee) {
+        notifyTaskAssignee(t0.assignee, `🚀 [自動觸發] ${t0.title}`, `由「${sourceInst?.template_name}」觸發`, t0.id, {
+          dueDate: t0.due_date, description: t0.description, notes: t0.notes, store: t0.store,
+          approvalRequired: t0.status === '待簽核', priority: t0.priority,
+        }).catch(() => {})
+      }
     }
     setInstances(prev => [newInst, ...prev])
   }
@@ -631,7 +638,13 @@ export default function Workflows() {
         toast.error(`任務已建立，但有設定失敗：\n${subFailures.join('\n')}`)
       }
 
-      // 通知由 DB trigger 統一推（status=進行中 時，含 insert 第一步、cascade 後續步）→ 前端不再推
+      // 第一步（進行中）才推；未開始的後續步驟等 cascade 由 DB trigger 推
+      if (data.status === '進行中' && data.assignee) {
+        notifyTaskAssignee(data.assignee, data.title, selectedInstance.store || selectedInstance.template_name, data.id, {
+          dueDate: data.due_date, description: data.description, notes: data.notes, store: data.store,
+          approvalRequired: data.status === '待簽核',
+        }).catch(() => {})
+      }
     }
   }
 

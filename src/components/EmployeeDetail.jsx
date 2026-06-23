@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Save } from 'lucide-react'
+import { Save, KeyRound } from 'lucide-react'
 import InputModal from './ui/InputModal'
 import { supabase } from '../lib/supabase'
 import { updateEmployee } from '../lib/db'
@@ -34,6 +34,17 @@ const MAIN_TABS = [
 
 export default function EmployeeDetail({ employee, employees: allEmployees, stores, departments, onUpdate, onClose, clickY }) {
   const { isAdmin, profile } = useAuth()
+
+  // 重設此員工的 LIFF 薪資密碼（清 line_pin_hash，員工下次查薪資重新設定）
+  const handleResetSalaryPin = async () => {
+    if (!(await confirm({ message: `確定重設「${employee.name}」的薪資密碼？\n重設後該員工下次在 LINE 查薪資需重新設定一組新密碼。` }))) return
+    const { data, error } = await supabase.rpc('reset_employee_salary_pin', { p_employee_id: employee.id })
+    if (error || !data?.ok) {
+      toast.error(data?.error === 'NOT_AUTHORIZED' ? '需要管理員權限' : '重設失敗，請稍後再試')
+      return
+    }
+    toast.success(`已重設「${employee.name}」的薪資密碼`)
+  }
 
   const SUB_TABS = {
     profile: [
@@ -511,6 +522,11 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
           <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', padding: '12px 24px 0' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               {isDirty && <span style={{ fontSize: 11, color: 'var(--accent-orange)', fontWeight: 600 }}>未儲存變更</span>}
+              {isAdmin && (
+                <button className="btn btn-secondary" onClick={handleResetSalaryPin} style={{ fontSize: 12, padding: '6px 14px', borderRadius: 8 }}>
+                  <KeyRound size={12} /> 重設薪資密碼
+                </button>
+              )}
               <button className="btn btn-primary" onClick={handleSave} disabled={saving} style={{ fontSize: 12, padding: '6px 16px', borderRadius: 8 }}>
                 <Save size={12} /> {saving ? '...' : '更新'}
               </button>

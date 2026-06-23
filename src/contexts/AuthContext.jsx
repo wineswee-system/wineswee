@@ -65,6 +65,17 @@ export function AuthProvider({ children }) {
   }, [])
 
   useEffect(() => {
+    // Exchange magic-link token_hash redirected from the line-login edge function.
+    // The edge function now redirects here directly (bypassing Supabase's redirect-URL
+    // allowlist); verifyOtp exchanges the token for a session, then onAuthStateChange fires.
+    const params = new URLSearchParams(window.location.search)
+    const tokenHash = params.get('token_hash')
+    if (tokenHash) {
+      const type = params.get('type') || 'magiclink'
+      supabase.auth.verifyOtp({ token_hash: tokenHash, type })
+        .then(() => window.history.replaceState({}, '', '/'))
+    }
+
     // Track whether the subscription has already handled auth state.
     // If it has, the getSession() fallback below becomes a no-op.
     const fired = { current: false }

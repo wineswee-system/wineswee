@@ -43,6 +43,16 @@ export function AuthProvider({ children }) {
   }
 
   useEffect(() => {
+    // Exchange magic-link token_hash redirected from the line-login edge function.
+    // This bypasses Supabase's redirect-URL allowlist; onAuthStateChange handles the rest.
+    const params = new URLSearchParams(window.location.search)
+    const tokenHash = params.get('token_hash')
+    if (tokenHash) {
+      const type = params.get('type') || 'magiclink'
+      supabase.auth.verifyOtp({ token_hash: tokenHash, type })
+        .then(() => window.history.replaceState({}, '', '/'))
+    }
+
     supabase.auth.getSession().then(({ data }) => {
       const u = data.session?.user ?? null
       setUser(u)

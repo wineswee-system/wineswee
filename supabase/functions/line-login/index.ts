@@ -232,9 +232,16 @@ serve(async (req) => {
         await supabase.from('employees').update({ auth_user_id: authUserId }).eq('id', employee.id)
       }
 
+      // Redirect directly to the calling app with the token hash so the client
+      // can exchange it via verifyOtp — bypasses Supabase's redirect-URL allowlist,
+      // which would otherwise force the browser back to the project's Site URL.
+      const hashedToken = linkData.properties.hashed_token
       return new Response(null, {
         status: 302,
-        headers: { Location: linkData.properties.action_link, ...corsHeaders },
+        headers: {
+          Location: `${SITE_URL}/?token_hash=${encodeURIComponent(hashedToken)}&type=magiclink`,
+          ...corsHeaders,
+        },
       })
 
     } catch (err) {

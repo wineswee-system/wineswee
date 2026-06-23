@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import {
   getReservations, getResTables,
@@ -24,6 +25,7 @@ function tileStatus(tbl, rsvs, now) {
 export default function SeatingMap() {
   const { storeId } = useStore()
   const { employee } = useAuth()
+  const navigate = useNavigate()
   const [date, setDate]       = useState(() => new Date().toISOString().slice(0, 10))
   const [rsvs, setRsvs]       = useState([])
   const [tables, setTables]   = useState([])
@@ -168,9 +170,12 @@ export default function SeatingMap() {
             </div>
 
             {!selRsv && (
-              <div style={{ fontSize: 13, color: '#22c55e', background: 'rgba(34,197,94,0.08)', borderRadius: 8, padding: '10px 12px' }}>
-                空桌，可接受入座
-              </div>
+              <>
+                <div style={{ fontSize: 13, color: '#22c55e', background: 'rgba(34,197,94,0.08)', borderRadius: 8, padding: '10px 12px' }}>
+                  空桌，可接受入座
+                </div>
+                <ABtn color="#0891b2" onClick={() => navigate(`/order/${selected.id}`)}>新增點餐</ABtn>
+              </>
             )}
 
             {selRsv && (
@@ -192,6 +197,7 @@ export default function SeatingMap() {
                   <ABtn color="#0891b2" onClick={() => doAction('checkin')}>入座</ABtn>
                 )}
                 {selRsv.status === 'seated' && (<>
+                  <ABtn color="#0891b2" onClick={() => navigate(`/order/${selected.id}`)}>點餐</ABtn>
                   <ABtn color="#f97316" onClick={() => doAction('extend')}>延長 +1 小時</ABtn>
                   <ABtn color="#22c55e" onClick={() => doAction('complete')}>完成用餐</ABtn>
                   <ABtn color="#8b5cf6" onClick={() => doAction('move')}>

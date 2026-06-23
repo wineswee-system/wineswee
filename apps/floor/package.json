@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite --port 5175",
     "build": "vite build",
-    "preview": "vite preview --port 5175"
+    "preview": "vite preview --port 5175",
+    "docker:build": "docker build -t floor-panel .",
+    "docker:run": "docker run -d -p 8080:8080 --name floor-panel-run floor-panel"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.0.0",

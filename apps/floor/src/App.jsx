@@ -7,6 +7,7 @@ import Layout from './components/Layout'
 import Overview from './pages/Overview'
 import ReservationList from './pages/ReservationList'
 import SeatingMap from './pages/SeatingMap'
+import OrderPage from './pages/OrderPage'
 
 function Guard({ children }) {
   const { user, loading, isAllowed } = useAuth()
@@ -27,14 +28,21 @@ function ProtectedApp() {
   return (
     <Guard>
       <StoreProvider>
-        <Layout>
-          <Routes>
-            <Route index element={<Navigate to="overview" replace />} />
-            <Route path="overview" element={<Overview />} />
-            <Route path="list"     element={<ReservationList />} />
-            <Route path="seating"  element={<SeatingMap />} />
-          </Routes>
-        </Layout>
+        <Routes>
+          {/* Full-screen POS ordering — no sidebar */}
+          <Route path="order/:tableId" element={<OrderPage />} />
+          {/* All other pages with sidebar */}
+          <Route path="*" element={
+            <Layout>
+              <Routes>
+                <Route index element={<Navigate to="overview" replace />} />
+                <Route path="overview" element={<Overview />} />
+                <Route path="list"     element={<ReservationList />} />
+                <Route path="seating"  element={<SeatingMap />} />
+              </Routes>
+            </Layout>
+          } />
+        </Routes>
       </StoreProvider>
     </Guard>
   )

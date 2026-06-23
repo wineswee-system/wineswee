@@ -203,6 +203,7 @@ function WalkinModal({ storeId, date: initDate, tables, employeeId, onClose, onC
   const [duration, setDuration]   = useState(1)
   const [slots, setSlots]         = useState([])
   const [slot, setSlot]           = useState('')
+  const [loadingSlots, setLoadingSlots] = useState(false)
   const [tableId, setTableId]     = useState('')
   const [guestName, setGuestName] = useState('')
   const [phone, setPhone]         = useState('')
@@ -210,9 +211,14 @@ function WalkinModal({ storeId, date: initDate, tables, employeeId, onClose, onC
   const [loading, setLoading]     = useState(false)
 
   useEffect(() => {
-    if (!storeId || !date) return
+    if (!storeId || !date) { setSlots([]); return }
+    setLoadingSlots(true)
     setSlot('')
-    getAvailableSlots(storeId, date, partySize, duration).then(({ data }) => setSlots(data ?? []))
+    setSlots([])
+    getAvailableSlots(storeId, date, partySize, duration).then(({ data }) => {
+      setSlots(data ?? [])
+      setLoadingSlots(false)
+    })
   }, [storeId, date, partySize, duration])
 
   async function submit() {
@@ -259,16 +265,27 @@ function WalkinModal({ storeId, date: initDate, tables, employeeId, onClose, onC
               ))}
             </div>
           </Field>
-          <Field label="時段">
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {slots.length === 0 && <div style={{ fontSize: 13, color: '#6b7280' }}>無可用時段</div>}
-              {slots.map(s => (
-                <button key={s.slot_time} onClick={() => setSlot(s.slot_time)}
-                  style={{ ...PILL, background: slot === s.slot_time ? '#0891b2' : '#f0f4f8', color: slot === s.slot_time ? '#fff' : '#6b7280' }}>
-                  {s.slot_time.slice(0, 5)}
-                </button>
-              ))}
-            </div>
+          <Field label="可用時段">
+            {!date && (
+              <div style={{ fontSize: 13, color: '#9ca3af' }}>請先選擇日期</div>
+            )}
+            {date && loadingSlots && (
+              <div style={{ fontSize: 13, color: '#6b7280' }}>查詢中…</div>
+            )}
+            {date && !loadingSlots && slots.length === 0 && (
+              <div style={{ fontSize: 13, color: '#ef4444' }}>該日無可用時段</div>
+            )}
+            {date && !loadingSlots && slots.length > 0 && (
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {slots.map(s => (
+                  <button key={s.slot_time} onClick={() => setSlot(s.slot_time)}
+                    style={{ ...PILL, background: slot === s.slot_time ? '#0891b2' : '#f0f4f8', color: slot === s.slot_time ? '#fff' : '#6b7280' }}>
+                    {s.slot_time.slice(0, 5)}
+                    <span style={{ marginLeft: 3, fontSize: 11, opacity: 0.75 }}>({s.available_table_count}桌)</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </Field>
           <Field label="桌位（選填）">
             <select value={tableId} onChange={e => setTableId(e.target.value)} style={INPUT}>

@@ -60,7 +60,7 @@ export default function Tasks() {
   const [uploadingFiles, setUploadingFiles] = useState(false)
   const newTaskFileRef = useRef(null)
 
-  const [portfolioMode, setPortfolioMode] = useState(false)
+  const [portfolioMode, setPortfolioMode] = useState(() => localStorage.getItem('tasks_portfolio_mode') === '1')
 
   const switchView = (v) => { setView(v); localStorage.setItem('tasks_view', v) }
 
@@ -468,7 +468,7 @@ export default function Tasks() {
         <>
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
             <button
-              onClick={() => setPortfolioMode(v => !v)}
+              onClick={() => setPortfolioMode(v => { const next = !v; localStorage.setItem('tasks_portfolio_mode', next ? '1' : '0'); return next })}
               style={{
                 fontSize: 12, padding: '4px 12px', borderRadius: 6, cursor: 'pointer',
                 border: '1px solid var(--border-medium)',

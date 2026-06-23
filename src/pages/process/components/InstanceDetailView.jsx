@@ -39,9 +39,15 @@ function QuickAddRow({ inst, employees, onDirectSave }) {
   const save = async () => {
     if (!title.trim()) return
     setSaving(true)
-    await onDirectSave({ title: title.trim(), assignee, due_date: dueDate })
-    setSaving(false)
-    reset()
+    try {
+      await onDirectSave({ title: title.trim(), assignee, due_date: dueDate })
+      reset()
+    } catch (err) {
+      const { toast } = await import('../../../lib/toast')
+      toast.error('新增失敗：' + (err?.message || '未知錯誤'))
+    } finally {
+      setSaving(false)
+    }
   }
 
   if (!active) {
@@ -637,17 +643,9 @@ export default function InstanceDetailView({
               <QuickAddRow
                 inst={inst}
                 employees={employees}
-                onAdd={step => {
-                  onAddTask?.()
-                  // Parent will refresh; optimistically pre-fill the form instead
-                  setTaskForm({ title: step.title, assignee: step.assignee || '', store: inst.store || '', planned_start: '', due_date: step.due_date || '', due_time: '17:00' })
-                  if (step.title) {
-                    // Direct save without modal if title given
-                    step._directSave = true
-                  }
-                }}
                 onDirectSave={async (draft) => {
                   const { createTask } = await import('../../../lib/db')
+                  const maxOrder = instSteps.reduce((m, s) => Math.max(m, s.step_order || 0), 0)
                   const payload = {
                     title: draft.title,
                     assignee: draft.assignee || null,
@@ -656,9 +654,10 @@ export default function InstanceDetailView({
                     status: '未開始',
                     workflow_instance_id: inst.id,
                     store: inst.store,
-                    step_order: (instSteps.length > 0 ? Math.max(...instSteps.map(s => s.step_order || 0)) : 0) + 1,
+                    step_order: maxOrder + 1,
                   }
-                  const { data } = await createTask(payload)
+                  const { data, error } = await createTask(payload)
+                  if (error) throw new Error(error.message)
                   if (data) onStepUpdate?.({ ...data, _isNew: true })
                 }}
               />

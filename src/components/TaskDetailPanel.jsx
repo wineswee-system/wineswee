@@ -687,11 +687,15 @@ function TaskTimeBlock({ task }) {
   const saveLog = async () => {
     if (!hours || Number(hours) <= 0) return
     setSaving(true)
-    const { data } = await supabase.from('task_time_logs').insert({
-      task_id: task.id, hours: Number(hours), note: note.trim() || null,
-    }).select().single()
-    if (data) { setLogs(prev => [data, ...prev]); setHours(''); setNote(''); setAdding(false) }
-    setSaving(false)
+    try {
+      const { data, error } = await supabase.from('task_time_logs').insert({
+        task_id: task.id, hours: Number(hours), note: note.trim() || null,
+      }).select().single()
+      if (error) { toast.error('記錄失敗：' + error.message); return }
+      setLogs(prev => [data, ...prev]); setHours(''); setNote(''); setAdding(false)
+    } finally {
+      setSaving(false)
+    }
   }
 
   const saveEst = async () => {
@@ -771,15 +775,21 @@ function SubtasksTab({ task, linkedChecklists, checklistItemsMap, setChecklistIt
   const addChildTask = async () => {
     if (!newChildTitle.trim()) return
     setSavingChild(true)
-    const { data } = await supabase.from('tasks').insert({
-      title: newChildTitle.trim(),
-      assignee: newChildAssignee || null,
-      status: '未開始',
-      parent_task_id: task.id,
-      store: task.store,
-    }).select().single()
-    if (data) setChildTasks(prev => [...prev, data])
-    setNewChildTitle(''); setNewChildAssignee(''); setAddingChild(false); setSavingChild(false)
+    try {
+      const { data, error } = await supabase.from('tasks').insert({
+        title: newChildTitle.trim(),
+        assignee: newChildAssignee || null,
+        status: '未開始',
+        parent_task_id: task.id,
+        store: task.store,
+        organization_id: task.organization_id,
+      }).select().single()
+      if (error) { toast.error('新增子任務失敗：' + error.message); return }
+      setChildTasks(prev => [...prev, data])
+      setNewChildTitle(''); setNewChildAssignee(''); setAddingChild(false)
+    } finally {
+      setSavingChild(false)
+    }
   }
 
   const toggleChildStatus = async (child) => {

@@ -39,7 +39,7 @@ export default function DelegationRules() {
     }
     setSaving(true)
     const { data, error } = await supabase.from('approval_delegation_rules')
-      .insert({ ...form, delegator_employee_id: Number(form.delegator_employee_id), delegate_employee_id: Number(form.delegate_employee_id) })
+      .insert({ ...form, org_id: orgId, delegator_employee_id: Number(form.delegator_employee_id), delegate_employee_id: Number(form.delegate_employee_id) })
       .select('*, delegator:delegator_employee_id(name), delegate:delegate_employee_id(name)')
       .single()
     if (error) { toast.error('儲存失敗：' + error.message); setSaving(false); return }
@@ -63,7 +63,8 @@ export default function DelegationRules() {
   }
 
   const empOpts = employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)
-  const today = new Date().toISOString().slice(0, 10)
+  // Use local date string (en-CA gives YYYY-MM-DD) to avoid UTC off-by-one for UTC+8 users
+  const today = new Date().toLocaleDateString('en-CA')
 
   const isCurrentlyActive = (rule) =>
     rule.is_active &&

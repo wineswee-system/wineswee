@@ -458,27 +458,32 @@ export default function Schedule() {
   const pasteSelection = async () => {
     if (!schedClipboard || !canEditSchedule) return
     const emps = gridEmps()
-    let baseEmpIdx = -1, baseDateIdx = -1
+    // 決定貼上目標矩形:有框選 → 整個框選範圍(平鋪填滿);只有焦點格 → 從焦點起貼一份剪貼簿大小
+    let eMin, eMax, dMin, dMax
     if (selection) {
       const aIdx = emps.findIndex(em => em.name === selection.anchor.empName)
       const eIdx = emps.findIndex(em => em.name === selection.end.empName)
       const aDIdx = activeDates.findIndex(d => d === selection.anchor.date)
       const eDIdx = activeDates.findIndex(d => d === selection.end.date)
-      baseEmpIdx = Math.min(aIdx, eIdx); baseDateIdx = Math.min(aDIdx, eDIdx)
+      if (aIdx < 0 || eIdx < 0 || aDIdx < 0 || eDIdx < 0) return
+      eMin = Math.min(aIdx, eIdx); eMax = Math.max(aIdx, eIdx)
+      dMin = Math.min(aDIdx, eDIdx); dMax = Math.max(aDIdx, eDIdx)
     } else if (focusedCell) {
-      baseEmpIdx = emps.findIndex(em => em.name === focusedCell.empName)
-      baseDateIdx = activeDates.findIndex(d => d === focusedCell.date)
-    }
-    if (baseEmpIdx < 0 || baseDateIdx < 0) return
+      const bi = emps.findIndex(em => em.name === focusedCell.empName)
+      const bd = activeDates.findIndex(d => d === focusedCell.date)
+      if (bi < 0 || bd < 0) return
+      eMin = bi; eMax = Math.min(emps.length - 1, bi + schedClipboard.rows - 1)
+      dMin = bd; dMax = Math.min(activeDates.length - 1, bd + schedClipboard.cols - 1)
+    } else return
 
     const ops = []
-    for (let r = 0; r < schedClipboard.rows; r++) {
-      for (let c = 0; c < schedClipboard.cols; c++) {
-        const ei = baseEmpIdx + r, di = baseDateIdx + c
-        if (ei >= emps.length || di >= activeDates.length) continue
-        const date = activeDates[di]
+    for (let i = eMin; i <= eMax; i++) {
+      for (let j = dMin; j <= dMax; j++) {
+        const date = activeDates[j]
         if (lockedDates?.has?.(date)) continue   // 鎖定月份跳過
-        ops.push({ empName: emps[ei].name, date, cell: schedClipboard.cells[r][c], store: emps[ei].store || null })
+        // 平鋪:用 (offset % 剪貼簿尺寸) 取對應格 → 複製 1 格會填滿整個框選
+        const cell = schedClipboard.cells[(i - eMin) % schedClipboard.rows][(j - dMin) % schedClipboard.cols]
+        ops.push({ empName: emps[i].name, date, cell, store: emps[i].store || null })
       }
     }
     if (ops.length === 0) return

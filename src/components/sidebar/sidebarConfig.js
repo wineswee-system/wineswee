@@ -15,6 +15,7 @@ import {
   FolderTree, UserMinus, PauseCircle, RefreshCcw, GraduationCap, PlayCircle,
   Globe, Trash2, Upload,
   ConciergeBell, TableProperties, Timer, Map, ClipboardEdit,
+  QrCode,
 } from 'lucide-react'
 
 // ── Major Groups for top bar ──
@@ -81,9 +82,13 @@ export const groupNav = {
       label: '門市 / POS',
       icon: Monitor,
       children: [
-        { icon: PieChart, label: '營運總覽', path: '/pos' },
-        { icon: Monitor, label: '收銀台', path: '/pos/terminal' },
-        { icon: DollarSign, label: '交班日結', path: '/pos/shifts' },
+        { icon: PieChart,    label: '營運總覽', path: '/pos' },
+        { icon: Monitor,     label: '收銀台',   path: '/pos/terminal' },
+        { icon: DollarSign,  label: '交班日結', path: '/pos/shifts' },
+        { icon: BookText,    label: '菜單管理', path: '/pos/menu' },
+        { icon: ShoppingBag, label: '商品目錄', path: '/pos/products' },
+        { icon: QrCode,      label: 'QR 點餐設定', path: '/pos/qr-settings' },
+        { icon: Award,       label: '員工業績', path: '/pos/staff-performance' },
       ]
     },
     {

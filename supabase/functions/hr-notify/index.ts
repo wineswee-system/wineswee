@@ -691,6 +691,74 @@ function buildTaskWithBindingsAssigned(details: {
   };
 }
 
+// ── form_binding_fill_assigned：被指派去填某張任務綁定表單 ──────────────
+function buildFormBindingFillNotification(details: {
+  binding_id?: number;
+  form_label?: string;
+  form_type?: string;
+  task_id?: number;
+  task_title?: string;
+  due_date?: string;
+  due_time?: string;
+  store?: string;
+  liff_id?: string | null;
+}) {
+  const LC = {
+    brand: '#06b6d4', danger: '#ef4444', muted: '#666666', dark: '#444444',
+  };
+
+  let dueLabel = '未設定';
+  let isOverdue = false;
+  if (details.due_date) {
+    const rawDate = String(details.due_date).slice(0, 10);
+    const dm = rawDate.match(/^\d{4}-(\d{2})-(\d{2})/);
+    const rawTime = String(details.due_time || '17:00');
+    const tm = rawTime.match(/^(\d{1,2}):(\d{1,2})/);
+    const hh = tm ? tm[1].padStart(2, '0') : '17';
+    const mi = tm ? tm[2].padStart(2, '0') : '00';
+    if (dm) {
+      dueLabel = `${dm[1]}/${dm[2]} ${hh}:${mi}`;
+      const dt = new Date(`${rawDate}T${hh}:${mi}:00+08:00`);
+      if (!isNaN(dt.getTime())) isOverdue = dt < new Date();
+    }
+  }
+
+  const body: any[] = [
+    { type: 'text', text: details.form_label || '指派表單', weight: 'bold', size: 'md', wrap: true, color: LC.brand },
+    { type: 'text', text: `任務：${details.task_title || '未命名任務'}`, size: 'sm', wrap: true, color: LC.dark },
+    {
+      type: 'text', text: `到期：${dueLabel}`, size: 'sm', wrap: true,
+      color: isOverdue ? LC.danger : LC.muted,
+      weight: isOverdue ? 'bold' : 'regular',
+    },
+  ];
+  if (details.store) body.push({ type: 'text', text: `門市：${details.store}`, size: 'sm', color: LC.muted });
+
+  const taskId = details.task_id;
+  const liffUrl = taskId ? buildLiffTaskUrl(taskId, details.liff_id || null) : null;
+  const footer = liffUrl ? {
+    type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '14px',
+    contents: [
+      { type: 'button', style: 'primary', height: 'sm', color: LC.brand,
+        action: { type: 'uri', label: '前往填寫', uri: liffUrl } },
+    ],
+  } : undefined;
+
+  return {
+    type: 'flex',
+    altText: `📝 請你填寫表單：${details.form_label || ''}`,
+    contents: {
+      type: 'bubble', size: 'kilo',
+      header: {
+        type: 'box', layout: 'vertical', backgroundColor: LC.brand, paddingAll: '14px',
+        contents: [{ type: 'text', text: '📝 請你填寫表單', color: '#FFFFFF', weight: 'bold', size: 'md' }],
+      },
+      body: { type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '14px', contents: body },
+      ...(footer ? { footer } : {}),
+    },
+  };
+}
+
 // ── contract_expiry_batch：合約 + 證件到期預警彙整（推給所有 admin/manager）─
 function buildExpiryBatchNotification(alerts: any[]) {
   const DOC_LABELS: Record<string, string> = {
@@ -1138,6 +1206,7 @@ serve(async (req) => {
     // 需要 liff_id 建 LIFF URL 的 type 走 resolveLineAccount
     const needsLiff = type === "task_auto_started"
       || type === "task_with_bindings_assigned"
+      || type === "form_binding_fill_assigned"
       || type === "interview_completed"
       || type === "goods_transfer_step_assigned"
       || type === "goods_transfer_receipt_pending"
@@ -1234,6 +1303,8 @@ serve(async (req) => {
       message = buildTaskAutoStarted(enriched);
     } else if (type === "task_with_bindings_assigned") {
       message = buildTaskWithBindingsAssigned({ ...details, liff_id: acct?.liffId || null });
+    } else if (type === "form_binding_fill_assigned") {
+      message = buildFormBindingFillNotification({ ...details, liff_id: acct?.liffId || null });
     } else if (type === "interview_completed") {
       message = buildInterviewCompleted({ ...details, liff_id: acct?.liffId || null });
     } else {

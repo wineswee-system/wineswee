@@ -43,7 +43,7 @@ function fieldVisible(field, data) {
 
 // 員工填寫單一自訂表單。Reads template from form_templates, renders fields,
 // submits to form_submissions.
-export default function CustomFormFill({ templateId: propTemplateId, embedded: propEmbedded, onClose }) {
+export default function CustomFormFill({ templateId: propTemplateId, embedded: propEmbedded, bindingId: propBindingId, onClose }) {
   const params = useParams()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -159,8 +159,8 @@ export default function CustomFormFill({ templateId: propTemplateId, embedded: p
         if (f.type === 'section') continue
         if (fieldVisible(f, data)) visibleData[f.key] = data[f.key]
       }
-      // 從 URL 取 binding_id（任務頁帶過來的）
-      const bindingId = searchParams.get('binding_id')
+      // binding_id：優先用 prop（Modal 內嵌），否則從 URL（任務頁帶過來的）
+      const bindingId = propBindingId ?? searchParams.get('binding_id')
       const { error } = await supabase.from('form_submissions').insert({
         organization_id: profile?.organization_id || 1,
         template_id: Number(templateId),

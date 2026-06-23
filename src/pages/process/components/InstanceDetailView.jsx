@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react'
 import { toast } from '../../../lib/toast'
 import {
   Plus, Pencil, ChevronLeft, MoreVertical, Archive, Trash2,
-  Users, User, ClipboardList, FolderOpen, ShieldCheck, ShieldX, X, GripVertical, GitBranch
+  Users, User, ClipboardList, FolderOpen, ShieldCheck, ShieldX, X, GripVertical, GitBranch, LayoutDashboard
 } from 'lucide-react'
+import { updateTask } from '../../../lib/db'
+import TaskContextMenu from '../../../components/ui/TaskContextMenu'
 import Modal, { Field } from '../../../components/Modal'
 import SearchableSelect, { empOptions } from '../../../components/SearchableSelect'
 import TaskDetailPanel from '../../../components/TaskDetailPanel'
@@ -23,6 +25,77 @@ const STATUS_CONFIG = {
 }
 // 任何 STATUS_CONFIG 沒對到的 status 都 fallback 到「未開始」（避免 sc.color 讀 undefined 崩）
 const FALLBACK_STATUS = STATUS_CONFIG['未開始']
+
+// ── Quick-add inline row at bottom of step table ──
+function QuickAddRow({ inst, employees, onDirectSave }) {
+  const [active, setActive] = useState(false)
+  const [title, setTitle] = useState('')
+  const [assignee, setAssignee] = useState('')
+  const [dueDate, setDueDate] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const reset = () => { setTitle(''); setAssignee(''); setDueDate(''); setActive(false) }
+
+  const save = async () => {
+    if (!title.trim()) return
+    setSaving(true)
+    await onDirectSave({ title: title.trim(), assignee, due_date: dueDate })
+    setSaving(false)
+    reset()
+  }
+
+  if (!active) {
+    return (
+      <tr>
+        <td colSpan={8} style={{ padding: '6px 12px' }}>
+          <button
+            onClick={() => setActive(true)}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, padding: '4px 0' }}
+            onMouseEnter={e => e.currentTarget.style.color = 'var(--accent-cyan)'}
+            onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
+          >
+            <Plus size={13} /> 快速新增任務
+          </button>
+        </td>
+      </tr>
+    )
+  }
+
+  return (
+    <tr style={{ background: 'var(--accent-cyan-dim)', borderLeft: '3px solid var(--accent-cyan)' }}>
+      <td style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>—</td>
+      <td colSpan={2}>
+        <input
+          autoFocus
+          value={title}
+          onChange={e => setTitle(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') reset() }}
+          placeholder="任務名稱（Enter 儲存 · Esc 取消）"
+          style={{ width: '100%', fontSize: 13, padding: '4px 6px', borderRadius: 5, border: '1.5px solid var(--accent-cyan)', background: 'var(--bg-input)', color: 'var(--text-primary)', outline: 'none' }}
+        />
+      </td>
+      <td>
+        <select className="form-input" style={{ fontSize: 11, padding: '3px 4px' }}
+          value={assignee} onChange={e => setAssignee(e.target.value)}>
+          <option value="">— 負責人 —</option>
+          {employees.map(e => <option key={e.id} value={e.name}>{e.name}</option>)}
+        </select>
+      </td>
+      <td>{inst.store || '—'}</td>
+      <td></td>
+      <td>
+        <input type="date" className="form-input" style={{ fontSize: 11, padding: '3px 4px' }}
+          value={dueDate} onChange={e => setDueDate(e.target.value)} />
+      </td>
+      <td colSpan={2} style={{ whiteSpace: 'nowrap' }}>
+        <button className="btn btn-primary" style={{ fontSize: 11, padding: '3px 10px' }} disabled={saving || !title.trim()} onClick={save}>
+          {saving ? '…' : '儲存'}
+        </button>
+        <button className="btn btn-secondary" style={{ fontSize: 11, padding: '3px 8px', marginLeft: 4 }} onClick={reset}>取消</button>
+      </td>
+    </tr>
+  )
+}
 
 export default function InstanceDetailView({
   inst, instSteps, stats, employees, stores, checklists, projects = [], lineGroups = [],
@@ -48,7 +121,16 @@ export default function InstanceDetailView({
   const [addTaskErrors, setAddTaskErrors] = useState({})
   const [dragStepId, setDragStepId] = useState(null)
   const [dragOverStepId, setDragOverStepId] = useState(null)
-  const [activeTab, setActiveTab] = useState('steps')  // 'steps' | 'dag'
+  const [activeTab, setActiveTab] = useState('steps')  // 'steps' | 'dag' | 'board'
+  const [boardDragId, setBoardDragId] = useState(null)
+  const [boardDragSrcStatus, setBoardDragSrcStatus] = useState(null)
+  const [boardOverCol, setBoardOverCol] = useState(null)
+  const [editingTitleId, setEditingTitleId] = useState(null)
+  const [editingTitleVal, setEditingTitleVal] = useState('')
+  const [titleSaving, setTitleSaving] = useState(false)
+  const [ctxMenu, setCtxMenu] = useState(null) // { task, x, y }
+  const [editingAssigneeId, setEditingAssigneeId] = useState(null)
+  const [editingDueDateId, setEditingDueDateId] = useState(null)
 
   const handleAddTask = () => {
     const errs = {}
@@ -76,19 +158,25 @@ export default function InstanceDetailView({
     <div className="fade-in">
       {/* Header */}
       <div style={{ marginBottom: 20 }}>
-        <button
-          onClick={onClose}
-          style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6,
-            background: 'none', border: 'none', cursor: 'pointer',
-            color: 'var(--text-muted)', fontSize: 13, fontWeight: 600,
-            padding: '6px 0', marginBottom: 12,
-          }}
-          onMouseEnter={e => e.currentTarget.style.color = 'var(--text-primary)'}
-          onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
-        >
-          <ChevronLeft size={16} /> 返回流程管理
-        </button>
+        {/* Breadcrumb */}
+        <nav aria-label="breadcrumb" style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12, fontSize: 13, flexWrap: 'wrap' }}>
+          <button
+            onClick={onClose}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontWeight: 600, padding: 0, display: 'flex', alignItems: 'center', gap: 4 }}
+            onMouseEnter={e => e.currentTarget.style.color = 'var(--text-primary)'}
+            onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
+          >
+            <ChevronLeft size={15} /> 流程管理
+          </button>
+          {currentProject && (
+            <>
+              <span aria-hidden="true" style={{ color: 'var(--border-medium)' }}>›</span>
+              <span style={{ color: 'var(--text-muted)', fontWeight: 500 }}>{currentProject.name}</span>
+            </>
+          )}
+          <span aria-hidden="true" style={{ color: 'var(--border-medium)' }}>›</span>
+          <span aria-current="page" style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{inst.template_name}</span>
+        </nav>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '20px 24px', background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 14 }}>
         <div style={{ flex: 1 }}>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -266,8 +354,9 @@ export default function InstanceDetailView({
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <div style={{ display: 'flex', gap: 4 }}>
           {[
-            { k: 'steps', icon: <ClipboardList size={14} />, label: `步驟任務 (${stats.total})` },
-            { k: 'dag',   icon: <GitBranch size={14} />,     label: '依賴圖' },
+            { k: 'steps', icon: <ClipboardList size={14} />,     label: `步驟任務 (${stats.total})` },
+            { k: 'board', icon: <LayoutDashboard size={14} />,   label: '看板' },
+            { k: 'dag',   icon: <GitBranch size={14} />,         label: '依賴圖' },
           ].map(({ k, icon, label }) => {
             const active = activeTab === k
             return (
@@ -286,6 +375,79 @@ export default function InstanceDetailView({
           setShowAddTaskModal(true)
         }}><Plus size={13} /> 新增任務</button>
       </div>
+
+      {/* Board view */}
+      {activeTab === 'board' && (
+        <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 12, alignItems: 'flex-start' }}>
+          {STATUS_LIST.map(status => {
+            const sc = STATUS_CONFIG[status] || FALLBACK_STATUS
+            const colTasks = instSteps.filter(s => s.status === status)
+            const isOver = boardOverCol === status
+            return (
+              <div key={status}
+                role="group"
+                aria-label={status}
+                onDragOver={e => { e.preventDefault(); setBoardOverCol(status) }}
+                onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setBoardOverCol(null) }}
+                onDrop={e => {
+                  e.preventDefault()
+                  setBoardOverCol(null)
+                  if (boardDragId && boardDragSrcStatus !== status) {
+                    onStatusChange(boardDragId, status)
+                  }
+                  setBoardDragId(null)
+                  setBoardDragSrcStatus(null)
+                }}
+                style={{
+                  minWidth: 200, flex: '0 0 200px',
+                  background: isOver ? sc.bg : 'var(--bg-card)',
+                  border: `1px solid ${isOver ? sc.color : 'var(--border-medium)'}`,
+                  borderRadius: 12, padding: 10, transition: 'all 0.15s',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10, padding: '0 4px' }}>
+                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: sc.color, flexShrink: 0 }} />
+                  <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>{status}</span>
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 'auto' }}>{colTasks.length}</span>
+                </div>
+                <div role="list" style={{ display: 'flex', flexDirection: 'column', gap: 8, minHeight: 40 }}>
+                  {colTasks.map(step => (
+                    <div key={step.id}
+                      draggable
+                      role="listitem"
+                      aria-label={step.title}
+                      aria-grabbed={boardDragId === step.id}
+                      onDragStart={() => { setBoardDragId(step.id); setBoardDragSrcStatus(step.status) }}
+                      onDragEnd={() => { setBoardDragId(null); setBoardDragSrcStatus(null) }}
+                      onClick={() => setSelectedStep(step)}
+                      style={{
+                        background: 'var(--bg-secondary)', borderRadius: 8, padding: 10,
+                        border: `1px solid var(--border-subtle)`,
+                        borderLeft: `3px solid ${sc.color}`,
+                        cursor: 'pointer', opacity: boardDragId === step.id ? 0.4 : 1,
+                      }}
+                    >
+                      <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.3, marginBottom: 6 }}>{step.title}</div>
+                      <div style={{ display: 'flex', gap: 6, fontSize: 11, color: 'var(--text-muted)', flexWrap: 'wrap', alignItems: 'center' }}>
+                        {step.task_code && (
+                          <span style={{ padding: '1px 5px', borderRadius: 3, background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)', fontWeight: 700, fontSize: 10 }}>
+                            {step.task_code}
+                          </span>
+                        )}
+                        {step.assignee && <span>👤 {step.assignee}</span>}
+                        {step.due_date && <span>📅 {step.due_date.slice(5)}</span>}
+                      </div>
+                    </div>
+                  ))}
+                  {colTasks.length === 0 && (
+                    <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 12, padding: 16, opacity: 0.5 }}>拖曳至此</div>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       {/* DAG view */}
       {activeTab === 'dag' && (
@@ -319,6 +481,7 @@ export default function InstanceDetailView({
                     onDragEnd={() => { setDragStepId(null); setDragOverStepId(null) }}
                     onDragOver={e => { e.preventDefault(); setDragOverStepId(step.id) }}
                     onDrop={e => { e.preventDefault(); onStepReorder?.(dragStepId, step.id); setDragStepId(null); setDragOverStepId(null) }}
+                    onContextMenu={e => { e.preventDefault(); setCtxMenu({ task: step, x: e.clientX, y: e.clientY }) }}
                     style={{ borderLeft: `3px solid ${sc.color}`, cursor: 'pointer', borderTop: isDragTarget ? '2px solid var(--accent-cyan)' : undefined }}
                     onClick={() => setSelectedStep(step)}>
                     <td style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
@@ -327,22 +490,115 @@ export default function InstanceDetailView({
                         <span style={{ fontWeight: 700, fontSize: 12 }}>{step.step_order}</span>
                       </div>
                     </td>
-                    <td>
+                    <td onClick={e => e.stopPropagation()}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         {step.task_code && (
                           <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)', border: '1px solid rgba(6,182,212,0.2)', flexShrink: 0, letterSpacing: '0.03em' }}>
                             {step.task_code}
                           </span>
                         )}
-                        <div style={{ fontWeight: 600 }}>{step.title}</div>
+                        {editingTitleId === step.id ? (
+                          <input
+                            autoFocus
+                            disabled={titleSaving}
+                            value={editingTitleVal}
+                            onChange={e => setEditingTitleVal(e.target.value)}
+                            onBlur={async () => {
+                              if (titleSaving) return
+                              const trimmed = editingTitleVal.trim()
+                              if (trimmed && trimmed !== step.title) {
+                                setTitleSaving(true)
+                                const { data, error } = await updateTask(step.id, { title: trimmed })
+                                setTitleSaving(false)
+                                if (error) {
+                                  toast.error('標題更新失敗')
+                                  setEditingTitleVal(step.title)
+                                  setEditingTitleId(null)
+                                  return
+                                }
+                                if (data) onStepUpdate?.(data)
+                              }
+                              setEditingTitleId(null)
+                            }}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') e.currentTarget.blur()
+                              if (e.key === 'Escape') {
+                                setEditingTitleVal(step.title)  // reset so onBlur sees no diff
+                                setEditingTitleId(null)
+                              }
+                            }}
+                            style={{
+                              fontWeight: 600, fontSize: 13, padding: '2px 6px',
+                              borderRadius: 4, border: '1.5px solid var(--accent-cyan)',
+                              background: 'var(--bg-input)', color: 'var(--text-primary)',
+                              outline: 'none', width: '100%', minWidth: 120,
+                              opacity: titleSaving ? 0.6 : 1,
+                            }}
+                          />
+                        ) : (
+                          <div
+                            style={{ fontWeight: 600, cursor: 'pointer' }}
+                            onClick={() => setSelectedStep(step)}
+                            onDoubleClick={e => { e.stopPropagation(); setEditingTitleId(step.id); setEditingTitleVal(step.title) }}
+                            title="雙擊可直接編輯標題"
+                          >
+                            {step.title}
+                          </div>
+                        )}
                       </div>
                     </td>
-                    <td><span style={{ fontSize: 12 }}>{step.assignee || '—'}</span></td>
+                    {/* Assignee — click to pick inline */}
+                    <td onClick={e => e.stopPropagation()} style={{ position: 'relative', minWidth: 90 }}>
+                      {editingAssigneeId === step.id ? (
+                        <select autoFocus className="form-input" style={{ fontSize: 11, padding: '2px 4px', minWidth: 90 }}
+                          value={step.assignee || ''}
+                          onChange={async e => {
+                            const { data } = await updateTask(step.id, { assignee: e.target.value || null })
+                            if (data) onStepUpdate?.(data)
+                            setEditingAssigneeId(null)
+                          }}
+                          onBlur={() => setEditingAssigneeId(null)}>
+                          <option value="">— 未指派 —</option>
+                          {employees.map(e => <option key={e.id} value={e.name}>{e.name}</option>)}
+                        </select>
+                      ) : (
+                        <span style={{ fontSize: 12, cursor: 'pointer', display: 'block', padding: '2px 4px', borderRadius: 4 }}
+                          onClick={() => setEditingAssigneeId(step.id)}
+                          title="點擊指派"
+                          onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-secondary)'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                          {step.assignee || <span style={{ color: 'var(--border-medium)' }}>— 指派</span>}
+                        </span>
+                      )}
+                    </td>
                     <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{step.store || inst.store || '—'}</td>
                     <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{step.planned_start || <span style={{ color: 'var(--border-medium)' }}>年/月/日</span>}</td>
-                    <td style={{ fontSize: 12 }}>
-                      {step.due_date ? <div><div>{step.due_date}</div><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>🕐 {step.due_time || '17:00'}</div></div>
-                        : <span style={{ color: 'var(--border-medium)' }}>年/月/日</span>}
+                    {/* Due date — click to pick inline */}
+                    <td onClick={e => e.stopPropagation()} style={{ fontSize: 12, minWidth: 110 }}>
+                      {editingDueDateId === step.id ? (
+                        <input autoFocus type="date" className="form-input" style={{ fontSize: 11, padding: '2px 4px', width: 120 }}
+                          defaultValue={step.due_date || ''}
+                          onBlur={async e => {
+                            const val = e.target.value
+                            if (val !== step.due_date) {
+                              const { data } = await updateTask(step.id, { due_date: val || null })
+                              if (data) onStepUpdate?.(data)
+                            }
+                            setEditingDueDateId(null)
+                          }}
+                          onKeyDown={e => { if (e.key === 'Escape') setEditingDueDateId(null) }}
+                        />
+                      ) : (
+                        <div style={{ cursor: 'pointer', padding: '2px 4px', borderRadius: 4 }}
+                          onClick={() => setEditingDueDateId(step.id)}
+                          title="點擊編輯日期"
+                          onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-secondary)'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                          {step.due_date
+                            ? <><div>{step.due_date}</div><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>🕐 {step.due_time || '17:00'}</div></>
+                            : <span style={{ color: 'var(--border-medium)' }}>— 設定日期</span>}
+                        </div>
+                      )}
                     </td>
                     <td>
                       <select value={step.status} onClick={e => e.stopPropagation()}
@@ -377,10 +633,58 @@ export default function InstanceDetailView({
                   </tr>
                 )
               })}
+              {/* Quick-add inline row */}
+              <QuickAddRow
+                inst={inst}
+                employees={employees}
+                onAdd={step => {
+                  onAddTask?.()
+                  // Parent will refresh; optimistically pre-fill the form instead
+                  setTaskForm({ title: step.title, assignee: step.assignee || '', store: inst.store || '', planned_start: '', due_date: step.due_date || '', due_time: '17:00' })
+                  if (step.title) {
+                    // Direct save without modal if title given
+                    step._directSave = true
+                  }
+                }}
+                onDirectSave={async (draft) => {
+                  const { createTask } = await import('../../../lib/db')
+                  const payload = {
+                    title: draft.title,
+                    assignee: draft.assignee || null,
+                    due_date: draft.due_date || null,
+                    due_time: '17:00',
+                    status: '未開始',
+                    workflow_instance_id: inst.id,
+                    store: inst.store,
+                    step_order: (instSteps.length > 0 ? Math.max(...instSteps.map(s => s.step_order || 0)) : 0) + 1,
+                  }
+                  const { data } = await createTask(payload)
+                  if (data) onStepUpdate?.({ ...data, _isNew: true })
+                }}
+              />
             </tbody>
           </table>
         </div>
       </div>
+      )}
+
+      {/* Context menu */}
+      {ctxMenu && (
+        <TaskContextMenu
+          task={ctxMenu.task}
+          x={ctxMenu.x} y={ctxMenu.y}
+          onClose={() => setCtxMenu(null)}
+          onEdit={step => { setSelectedStep(step); setCtxMenu(null) }}
+          onDuplicate={step => { onStepDuplicate?.(step); setCtxMenu(null) }}
+          onStatusChange={(id, status) => { onStatusChange(id, status); setCtxMenu(null) }}
+          onDelete={id => { onStepDelete?.(id); setCtxMenu(null) }}
+          assigneeOptions={employees.map(e => e.name)}
+          onAssign={async (id, name) => {
+            const { data } = await updateTask(id, { assignee: name })
+            if (data) onStepUpdate?.(data)
+            setCtxMenu(null)
+          }}
+        />
       )}
 
       {/* Modals */}

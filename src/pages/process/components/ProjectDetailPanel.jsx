@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Modal, { Field } from '../../../components/Modal'
+import { supabase } from '../../../lib/supabase'
 import { displaySettleStatus } from '../../../lib/displayLabel'
 import {
   Plus, ChevronRight, ChevronDown, Check, Clock, Pause, Ban, Play,
@@ -37,6 +38,113 @@ const TASK_STATUS_CONFIG = {
 }
 const TASK_STATUS_FALLBACK = TASK_STATUS_CONFIG['未開始']
 const fmt = (n) => n != null ? `NT$ ${Number(n).toLocaleString()}` : '-'
+
+// ─── 列表 tab component ───
+function ProjectListsTab({ projectId, tasks }) {
+  const [lists, setLists] = useState([])
+  const [newName, setNewName] = useState('')
+  const [adding, setAdding] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [editId, setEditId] = useState(null)
+  const [editName, setEditName] = useState('')
+
+  useEffect(() => {
+    supabase.from('project_lists').select('*').eq('project_id', projectId).order('sort_order')
+      .then(({ data }) => setLists(data || []))
+  }, [projectId])
+
+  const addList = async () => {
+    if (!newName.trim()) return
+    setSaving(true)
+    const { data } = await supabase.from('project_lists').insert({ project_id: projectId, name: newName.trim(), sort_order: lists.length }).select().single()
+    if (data) setLists(prev => [...prev, data])
+    setNewName(''); setAdding(false); setSaving(false)
+  }
+
+  const renameList = async (id) => {
+    if (!editName.trim()) return
+    const { data } = await supabase.from('project_lists').update({ name: editName.trim() }).eq('id', id).select().single()
+    if (data) setLists(prev => prev.map(l => l.id === id ? data : l))
+    setEditId(null)
+  }
+
+  const deleteList = async (id) => {
+    await supabase.from('project_lists').delete().eq('id', id)
+    setLists(prev => prev.filter(l => l.id !== id))
+  }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)' }}>專案列表 ({lists.length})</span>
+        <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={() => setAdding(true)}>+ 新增列表</button>
+      </div>
+
+      {adding && (
+        <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+          <input autoFocus className="form-input" style={{ flex: 1, fontSize: 13 }} placeholder="列表名稱" value={newName}
+            onChange={e => setNewName(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') addList(); if (e.key === 'Escape') { setAdding(false); setNewName('') } }} />
+          <button className="btn btn-primary" style={{ fontSize: 12 }} disabled={saving || !newName.trim()} onClick={addList}>儲存</button>
+          <button className="btn btn-secondary" style={{ fontSize: 12 }} onClick={() => { setAdding(false); setNewName('') }}>取消</button>
+        </div>
+      )}
+
+      {lists.length === 0 && !adding && (
+        <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 40, fontSize: 13 }}>
+          <div style={{ fontSize: 28, marginBottom: 8 }}>📋</div>
+          尚無列表。建立列表以將任務分組管理。
+        </div>
+      )}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {lists.map(list => {
+          const listTasks = tasks.filter(t => t.list_id === list.id)
+          const doneTasks = listTasks.filter(t => t.status === '已完成').length
+          return (
+            <div key={list.id} style={{ background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 10, padding: '12px 16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <CheckSquare size={15} style={{ color: 'var(--accent-cyan)', flexShrink: 0 }} />
+                {editId === list.id ? (
+                  <input autoFocus className="form-input" style={{ flex: 1, fontSize: 13 }} value={editName}
+                    onChange={e => setEditName(e.target.value)}
+                    onBlur={() => renameList(list.id)}
+                    onKeyDown={e => { if (e.key === 'Enter') renameList(list.id); if (e.key === 'Escape') setEditId(null) }} />
+                ) : (
+                  <span style={{ flex: 1, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
+                    onDoubleClick={() => { setEditId(list.id); setEditName(list.name) }}>
+                    {list.name}
+                  </span>
+                )}
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{doneTasks}/{listTasks.length} 已完成</span>
+                <button onClick={() => { setEditId(list.id); setEditName(list.name) }}
+                  style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }} title="重新命名">
+                  <Edit3 size={13} />
+                </button>
+                <button onClick={() => deleteList(list.id)}
+                  style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--accent-red)', padding: 4 }} title="刪除列表">
+                  <Trash2 size={13} />
+                </button>
+              </div>
+              {listTasks.length > 0 && (
+                <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4, paddingLeft: 25 }}>
+                  {listTasks.slice(0, 5).map(t => (
+                    <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: t.status === '已完成' ? 'var(--text-muted)' : 'var(--text-secondary)' }}>
+                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: t.status === '已完成' ? 'var(--accent-green)' : 'var(--accent-cyan)', flexShrink: 0 }} />
+                      <span style={{ textDecoration: t.status === '已完成' ? 'line-through' : 'none' }}>{t.title}</span>
+                      {t.assignee && <span style={{ color: 'var(--text-muted)', marginLeft: 'auto' }}>👤 {t.assignee}</span>}
+                    </div>
+                  ))}
+                  {listTasks.length > 5 && <div style={{ fontSize: 11, color: 'var(--text-muted)', paddingLeft: 16 }}>… 還有 {listTasks.length - 5} 個任務</div>}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
 
 // Expense-request status → accent color (matches Finance module canonical palette)
 const EXPENSE_STATUS_COLOR = {
@@ -218,6 +326,7 @@ export default function ProjectDetailPanel({
       <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--border-subtle)', marginBottom: 16, overflowX: 'auto' }}>
         {[
           { k: 'overview',  label: '總覽',     icon: FolderOpen },
+          { k: 'lists',     label: '列表',     icon: CheckSquare },
           { k: 'burndown',  label: '燃盡圖',   icon: TrendingDown },
           { k: 'budget',    label: '預算',     icon: DollarSign },
           { k: 'members',   label: '成員',     icon: Users },
@@ -240,6 +349,10 @@ export default function ProjectDetailPanel({
           )
         })}
       </div>
+
+      {detailTab === 'lists' && (
+        <ProjectListsTab projectId={p.id} tasks={tasks} />
+      )}
 
       {detailTab === 'members' && (
         <ProjectMembers

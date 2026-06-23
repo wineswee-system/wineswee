@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CheckSquare, Shield, FileText, Zap, ChevronDown, ChevronRight, GitBranch } from 'lucide-react'
+import { CheckSquare, Shield, FileText, Zap, ChevronDown, ChevronRight, GitBranch, GitMerge, Bell, Clock } from 'lucide-react'
 import { Field } from '../../../components/Modal'
 import FormBindingsPicker from '../../../components/FormBindingsPicker'
 
@@ -63,6 +63,12 @@ export default function StepEditor({ step, onChange, checklists = [], approvalCh
   }
 
   const set = (k, v) => onChange({ ...step, [k]: v })
+
+  // Helper for array fields: splits comma-separated string into trimmed, non-empty array
+  const setArray = (k, rawValue) => {
+    const arr = rawValue.split(',').map(s => s.trim()).filter(Boolean)
+    onChange({ ...step, [k]: arr })
+  }
 
   return (
     <div style={{ padding: '20px 28px', overflowY: 'auto', flex: 1 }}>
@@ -268,7 +274,91 @@ export default function StepEditor({ step, onChange, checklists = [], approvalCh
             </div>
           </Section>
         )}
+
+        {/* 通知設定 */}
+        <Section
+          icon={<Bell size={13} />}
+          label="通知設定"
+          color="var(--accent-blue)"
+          defaultOpen={(step.notify_on_start?.length > 0) || (step.notify_on_complete?.length > 0)}
+        >
+          <Field label="步驟開始時通知">
+            <input
+              className="form-input"
+              type="text"
+              style={{ width: '100%' }}
+              placeholder="例：王小明, 人資主管, 業務部"
+              value={(step.notify_on_start || []).join(', ')}
+              onChange={e => setArray('notify_on_start', e.target.value)}
+            />
+          </Field>
+          <div style={{ marginTop: 10 }}>
+            <Field label="步驟完成時通知">
+              <input
+                className="form-input"
+                type="text"
+                style={{ width: '100%' }}
+                placeholder="例：王小明, 人資主管, 業務部"
+                value={(step.notify_on_complete || []).join(', ')}
+                onChange={e => setArray('notify_on_complete', e.target.value)}
+              />
+            </Field>
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6, lineHeight: 1.5 }}>
+            輸入姓名或角色，多筆以逗號分隔
+          </div>
+        </Section>
+
+        {/* 時間設定 */}
+        <Section
+          icon={<Clock size={13} />}
+          label="時間設定"
+          color="var(--accent-orange)"
+          defaultOpen={step.relative_due_days != null}
+        >
+          <Field label="相對截止天數（前步驟完成後 N 天）">
+            <input
+              className="form-input"
+              type="number"
+              min={0}
+              max={365}
+              style={{ width: '100%' }}
+              placeholder="例：3"
+              value={step.relative_due_days ?? ''}
+              onChange={e => {
+                const raw = e.target.value
+                set('relative_due_days', raw === '' ? null : Math.min(365, Math.max(0, Number(raw))))
+              }}
+            />
+          </Field>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6, lineHeight: 1.5 }}>
+            留空表示不設定自動截止日
+          </div>
+        </Section>
+
+        {/* 前置條件 */}
+        <Section
+          icon={<GitMerge size={13} />}
+          label="前置條件"
+          color="var(--accent-red)"
+          defaultOpen={(step.preconditions?.length > 0)}
+        >
+          <Field label="條件清單">
+            <textarea
+              className="form-input"
+              style={{ width: '100%', minHeight: 80, resize: 'vertical', fontFamily: 'inherit', fontSize: 13 }}
+              placeholder={'例：前一步驟已核准\n倉庫已備料完成'}
+              value={(step.preconditions || []).join('\n')}
+              onChange={e => set('preconditions', e.target.value.split('\n').filter(Boolean))}
+            />
+          </Field>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6, lineHeight: 1.5 }}>
+            每行一條條件（目前為純文字，未來版本將支援自動判斷）
+          </div>
+        </Section>
+
       </div>
     </div>
   )
 }
+

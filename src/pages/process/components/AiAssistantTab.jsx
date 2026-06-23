@@ -11,6 +11,7 @@ const AI_EXAMPLES = [
 
 const PRIORITIES = ['高', '中', '低']
 const PRIORITY_COLOR = { 高: 'var(--accent-red)', 中: 'var(--accent-orange)', 低: 'var(--accent-green)' }
+const TPL_CATEGORIES = ['HR', '營運', '採購', '展店', '倉管', '財務', '行銷', '客服']
 
 function useSpeechInput(onResult) {
   const [listening, setListening] = useState(false)
@@ -148,10 +149,32 @@ export default function AiAssistantTab({
   onGenerate, onSaveResult, onSkipResult,
   aiPhase, aiStepIndex, aiDraftSteps, onStepConfirm,
   employees,
+  onDeployResult = null,
 }) {
   const { listening, toggle: toggleMic } = useSpeechInput(text => {
     setAiPrompt(prev => prev ? prev + ' ' + text : text)
   })
+
+  const [showSaveTplModal, setShowSaveTplModal] = useState(false)
+  const [saveTplForm, setSaveTplForm] = useState({
+    name: '',
+    category: '營運',
+    description: '',
+  })
+
+  const openSaveModal = () => {
+    setSaveTplForm({
+      name: aiResult?.name || '',
+      category: aiResult?.category || '營運',
+      description: aiResult?.description || '',
+    })
+    setShowSaveTplModal(true)
+  }
+
+  const handleConfirmSave = () => {
+    onSaveResult({ name: saveTplForm.name, category: saveTplForm.category, description: saveTplForm.description })
+    setShowSaveTplModal(false)
+  }
 
   const canSubmit = !aiLoading && aiPrompt.trim() && aiPhase !== 'collecting'
 
@@ -250,15 +273,99 @@ export default function AiAssistantTab({
           />
         )}
 
-        {/* Save / skip after all steps confirmed */}
+        {/* Save / deploy / skip after all steps confirmed */}
         {aiPhase === 'done' && aiResult && !aiLoading && (
-          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-            <button className="btn btn-primary" onClick={onSaveResult}>
-              💾 儲存到流程範本
-            </button>
-            <button className="btn btn-secondary" onClick={onSkipResult}>
-              略過
-            </button>
+          <div style={{ position: 'relative', marginTop: 8 }}>
+            {/* Inline save-as-template mini-modal */}
+            {showSaveTplModal && (
+              <div style={{
+                position: 'absolute', bottom: 'calc(100% + 8px)', left: 0, right: 0,
+                background: 'var(--bg-card)',
+                border: '1px solid var(--border-medium)',
+                borderRadius: 14,
+                padding: '18px 20px',
+                boxShadow: '0 8px 32px rgba(0,0,0,0.25)',
+                zIndex: 10,
+              }}>
+                <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 14, color: 'var(--text-primary)' }}>
+                  📝 儲存為範本
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div>
+                    <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>
+                      名稱 <span style={{ color: 'var(--accent-red)' }}>*</span>
+                    </label>
+                    <input
+                      className="form-input"
+                      value={saveTplForm.name}
+                      onChange={e => setSaveTplForm(p => ({ ...p, name: e.target.value }))}
+                      placeholder="範本名稱"
+                      style={{ fontSize: 13 }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>分類</label>
+                    <select
+                      className="form-input"
+                      value={saveTplForm.category}
+                      onChange={e => setSaveTplForm(p => ({ ...p, category: e.target.value }))}
+                      style={{ fontSize: 13 }}
+                    >
+                      {TPL_CATEGORIES.map(c => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>說明</label>
+                    <textarea
+                      className="form-input"
+                      rows={2}
+                      value={saveTplForm.description}
+                      onChange={e => setSaveTplForm(p => ({ ...p, description: e.target.value }))}
+                      placeholder="簡短描述此範本用途..."
+                      style={{ fontSize: 13, resize: 'none' }}
+                    />
+                  </div>
+
+                  <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
+                    <button
+                      className="btn btn-secondary"
+                      style={{ borderRadius: 10 }}
+                      onClick={() => setShowSaveTplModal(false)}
+                    >
+                      取消
+                    </button>
+                    <button
+                      className="btn btn-primary"
+                      style={{ borderRadius: 10 }}
+                      onClick={handleConfirmSave}
+                      disabled={!saveTplForm.name.trim()}
+                    >
+                      確認儲存
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Action button row */}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-primary" onClick={openSaveModal}>
+                📝 儲存為範本
+              </button>
+              {onDeployResult && (
+                <button className="btn btn-secondary" onClick={onDeployResult}>
+                  🚀 直接部署
+                </button>
+              )}
+              <button className="btn btn-secondary" onClick={onSkipResult}>
+                略過
+              </button>
+            </div>
           </div>
         )}
       </div>

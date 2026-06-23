@@ -30,7 +30,7 @@ const PRIORITY_LIST = ['低', '中', '高']
 
 
 export default function TaskDetailPanel({
-  step: task, allSteps, employees, stores, checklists,
+  step: task, instance, allSteps, employees, stores, checklists,
   onUpdate, onDelete, onDuplicate, onClose,
 }) {
   const { profile } = useAuth()
@@ -287,10 +287,18 @@ export default function TaskDetailPanel({
       }}>
         {/* ── Header ── */}
         <div style={{
-          padding: '18px 24px', borderBottom: '1px solid var(--border-subtle)',
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          padding: '14px 24px 0', borderBottom: '1px solid var(--border-subtle)',
           flexShrink: 0,
         }}>
+          {/* Breadcrumb */}
+          {instance && (
+            <nav aria-label="breadcrumb" style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--text-muted)', marginBottom: 8, flexWrap: 'wrap' }}>
+              <span style={{ fontWeight: 500 }}>{instance.template_name}</span>
+              <span aria-hidden="true" style={{ color: 'var(--border-medium)' }}>›</span>
+              <span aria-current="page" style={{ color: 'var(--text-secondary)' }}>tk-{task.id}</span>
+            </nav>
+          )}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 14 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
             {editingTitle ? (
               <input
@@ -331,6 +339,7 @@ export default function TaskDetailPanel({
               <X size={20} />
             </button>
           </div>
+          </div>
         </div>
 
         {/* ── Tab Bar ── */}
@@ -339,14 +348,20 @@ export default function TaskDetailPanel({
           borderBottom: '1px solid var(--border-subtle)',
           background: 'var(--bg-secondary)', flexShrink: 0,
         }}>
-          {[
-            { id: 'basic',      label: '基本' },
-            { id: 'relations',  label: '關聯' },
-            { id: 'approval',     label: '簽核' },
-            { id: 'attachments',  label: `附件 (${attachments.length})` },
-            { id: 'discussion',   label: '討論' },
-            { id: 'changelog',  label: '變更日誌' },
-          ].map(t => {
+          {(() => {
+            const allItems = linkedChecklists.flatMap(lc => checklistItemsMap[lc.checklist_id] || [])
+            const doneCount = allItems.filter(i => i.checked).length
+            const subtaskLabel = allItems.length > 0 ? `子任務 ${doneCount}/${allItems.length}` : '子任務'
+            return [
+              { id: 'basic',       label: '基本' },
+              { id: 'subtasks',    label: subtaskLabel },
+              { id: 'relations',   label: '關聯' },
+              { id: 'approval',    label: '簽核' },
+              { id: 'attachments', label: `附件 (${attachments.length})` },
+              { id: 'discussion',  label: '討論' },
+              { id: 'changelog',   label: '變更日誌' },
+            ]
+          })().map(t => {
             const active = activeTab === t.id
             return (
               <button key={t.id} onClick={() => setActiveTab(t.id)} style={{
@@ -482,6 +497,9 @@ export default function TaskDetailPanel({
                 </div>
               </div>
 
+              {/* ── 時間追蹤 ── */}
+              <TaskTimeBlock task={task} />
+
               <div style={sectionStyle}>
                 <div style={{ ...labelStyle, marginTop: 0 }}>備註</div>
                 <textarea className="form-input" style={{ width: '100%', minHeight: 80, resize: 'vertical' }}
@@ -528,6 +546,17 @@ export default function TaskDetailPanel({
                 <TaskFormBindingsBlock bindings={formBindings} taskId={task.id} />
               )}
             </>
+          )}
+
+          {/* ═══ Subtasks Tab ═══ */}
+          {activeTab === 'subtasks' && (
+            <SubtasksTab
+              task={task}
+              linkedChecklists={linkedChecklists}
+              checklistItemsMap={checklistItemsMap}
+              setChecklistItemsMap={setChecklistItemsMap}
+              employees={employees}
+            />
           )}
 
           {/* ═══ Relations Tab ═══ */}
@@ -634,13 +663,298 @@ export default function TaskDetailPanel({
   )
 }
 
+// ─── 時間追蹤 Block（in 基本 tab）───
+function TaskTimeBlock({ task }) {
+  const [logs, setLogs] = useState([])
+  const [adding, setAdding] = useState(false)
+  const [hours, setHours] = useState('')
+  const [note, setNote] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [estHours, setEstHours] = useState(task?.estimated_hours ?? '')
+  const [estSaving, setEstSaving] = useState(false)
+
+  useEffect(() => {
+    if (!task?.id) return
+    supabase.from('task_time_logs').select('*').eq('task_id', task.id).order('logged_date', { ascending: false })
+      .then(({ data }) => setLogs(data || []))
+  }, [task?.id])
+
+  const totalLogged = logs.reduce((s, l) => s + Number(l.hours), 0)
+  const est = Number(estHours) || 0
+  const pct = est > 0 ? Math.min(100, Math.round((totalLogged / est) * 100)) : 0
+  const overBudget = est > 0 && totalLogged > est
+
+  const saveLog = async () => {
+    if (!hours || Number(hours) <= 0) return
+    setSaving(true)
+    const { data } = await supabase.from('task_time_logs').insert({
+      task_id: task.id, hours: Number(hours), note: note.trim() || null,
+    }).select().single()
+    if (data) { setLogs(prev => [data, ...prev]); setHours(''); setNote(''); setAdding(false) }
+    setSaving(false)
+  }
+
+  const saveEst = async () => {
+    setEstSaving(true)
+    await supabase.from('tasks').update({ estimated_hours: estHours ? Number(estHours) : null }).eq('id', task.id)
+    setEstSaving(false)
+  }
+
+  return (
+    <div style={{ padding: '12px 24px', borderBottom: '1px solid var(--border-subtle)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)' }}>⏱ 時間追蹤</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>預估</span>
+          <input type="number" min="0" step="0.5" value={estHours} onChange={e => setEstHours(e.target.value)}
+            onBlur={saveEst}
+            style={{ width: 60, fontSize: 12, padding: '2px 6px', borderRadius: 5, border: '1px solid var(--border-medium)', background: 'var(--bg-input)', color: 'var(--text-primary)', textAlign: 'right' }} />
+          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>h{estSaving ? ' ✓' : ''}</span>
+        </div>
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8 }}>
+          {est > 0 && (
+            <div style={{ flex: 1, height: 6, background: 'var(--bg-secondary)', borderRadius: 3, overflow: 'hidden' }}>
+              <div style={{ height: '100%', width: `${pct}%`, borderRadius: 3, background: overBudget ? 'var(--accent-red)' : 'var(--accent-cyan)', transition: 'width 0.3s' }} />
+            </div>
+          )}
+          <span style={{ fontSize: 12, fontWeight: 700, color: overBudget ? 'var(--accent-red)' : 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+            {totalLogged.toFixed(1)}h{est > 0 ? ` / ${est}h` : ' 已記錄'}
+          </span>
+        </div>
+        <button onClick={() => setAdding(v => !v)} style={{ fontSize: 11, padding: '2px 8px', border: '1px solid var(--border-medium)', borderRadius: 5, background: 'none', color: 'var(--accent-cyan)', cursor: 'pointer' }}>
+          + 記錄
+        </button>
+      </div>
+
+      {adding && (
+        <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+          <input type="number" min="0.5" step="0.5" placeholder="小時" value={hours} onChange={e => setHours(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') saveLog(); if (e.key === 'Escape') setAdding(false) }}
+            style={{ width: 70, fontSize: 12, padding: '3px 6px', borderRadius: 5, border: '1px solid var(--accent-cyan)', background: 'var(--bg-input)', color: 'var(--text-primary)' }} />
+          <input type="text" placeholder="備註（選填）" value={note} onChange={e => setNote(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') saveLog(); if (e.key === 'Escape') setAdding(false) }}
+            style={{ flex: 1, fontSize: 12, padding: '3px 6px', borderRadius: 5, border: '1px solid var(--border-medium)', background: 'var(--bg-input)', color: 'var(--text-primary)' }} />
+          <button className="btn btn-primary" style={{ fontSize: 12, padding: '3px 10px' }} disabled={saving || !hours} onClick={saveLog}>儲存</button>
+          <button className="btn btn-secondary" style={{ fontSize: 12, padding: '3px 8px' }} onClick={() => setAdding(false)}>取消</button>
+        </div>
+      )}
+
+      {logs.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 3, maxHeight: 120, overflowY: 'auto' }}>
+          {logs.map(l => (
+            <div key={l.id} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 11, color: 'var(--text-secondary)' }}>
+              <span style={{ color: 'var(--text-muted)' }}>{l.logged_date}</span>
+              <span style={{ fontWeight: 700, color: 'var(--accent-cyan)' }}>{Number(l.hours).toFixed(1)}h</span>
+              {l.note && <span style={{ flex: 1, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.note}</span>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── 子任務 Tab ───
+function SubtasksTab({ task, linkedChecklists, checklistItemsMap, setChecklistItemsMap, employees = [] }) {
+  const [childTasks, setChildTasks] = useState([])
+  const [addingChild, setAddingChild] = useState(false)
+  const [newChildTitle, setNewChildTitle] = useState('')
+  const [newChildAssignee, setNewChildAssignee] = useState('')
+  const [savingChild, setSavingChild] = useState(false)
+
+  useEffect(() => {
+    if (!task?.id) return
+    supabase.from('tasks').select('id,title,status,assignee,due_date').eq('parent_task_id', task.id).order('id')
+      .then(({ data }) => setChildTasks(data || []))
+  }, [task?.id])
+
+  const addChildTask = async () => {
+    if (!newChildTitle.trim()) return
+    setSavingChild(true)
+    const { data } = await supabase.from('tasks').insert({
+      title: newChildTitle.trim(),
+      assignee: newChildAssignee || null,
+      status: '未開始',
+      parent_task_id: task.id,
+      store: task.store,
+    }).select().single()
+    if (data) setChildTasks(prev => [...prev, data])
+    setNewChildTitle(''); setNewChildAssignee(''); setAddingChild(false); setSavingChild(false)
+  }
+
+  const toggleChildStatus = async (child) => {
+    const next = child.status === '已完成' ? '未開始' : '已完成'
+    const { data } = await supabase.from('tasks').update({ status: next }).eq('id', child.id).select().single()
+    if (data) setChildTasks(prev => prev.map(c => c.id === child.id ? data : c))
+  }
+
+  const allItems = linkedChecklists.flatMap(lc =>
+    (checklistItemsMap[lc.checklist_id] || []).map(item => ({ ...item, _clId: lc.checklist_id }))
+  )
+  const childDone = childTasks.filter(c => c.status === '已完成').length
+  const totalItems = allItems.length + childTasks.length
+  const doneCount = allItems.filter(i => i.checked).length + childDone
+  const pct = totalItems > 0 ? Math.round((doneCount / totalItems) * 100) : 0
+
+  const toggleItem = async (item) => {
+    const next = !item.checked
+    const { error } = await supabase.from('checklist_items').update({ checked: next }).eq('id', item.id)
+    if (error) return
+    setChecklistItemsMap(prev => ({
+      ...prev,
+      [item._clId]: (prev[item._clId] || []).map(x => x.id === item.id ? { ...x, checked: next } : x),
+    }))
+  }
+
+  const hasContent = linkedChecklists.length > 0 || childTasks.length > 0
+
+  if (!hasContent && !addingChild) {
+    return (
+      <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+        <div style={{ fontSize: 28, marginBottom: 10 }}>☑️</div>
+        <div style={{ marginBottom: 12 }}>尚無子任務或查核清單</div>
+        <button className="btn btn-secondary" style={{ fontSize: 12 }} onClick={() => setAddingChild(true)}>+ 新增子任務</button>
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      {/* Progress bar */}
+      {totalItems > 0 && (
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>
+            <span>完成進度</span>
+            <span style={{ fontWeight: 700, color: pct === 100 ? 'var(--accent-green)' : 'var(--text-secondary)' }}>{doneCount} / {totalItems}</span>
+          </div>
+          <div style={{ height: 6, background: 'var(--bg-secondary)', borderRadius: 3, overflow: 'hidden' }}>
+            <div style={{
+              height: '100%', borderRadius: 3, transition: 'width 0.3s ease',
+              width: `${pct}%`,
+              background: pct === 100 ? 'var(--accent-green)' : 'var(--accent-cyan)',
+            }} />
+          </div>
+        </div>
+      )}
+
+      {/* Child tasks (parent_task_id) */}
+      {(childTasks.length > 0 || addingChild) && (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ color: 'var(--accent-cyan)' }}>⊞</span>
+            子任務
+            <span style={{ fontWeight: 400 }}>({childDone}/{childTasks.length})</span>
+            <button onClick={() => setAddingChild(true)} style={{ marginLeft: 'auto', border: 'none', background: 'none', cursor: 'pointer', color: 'var(--accent-cyan)', fontSize: 11, padding: '2px 6px' }}>+ 新增</button>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            {childTasks.map(child => (
+              <div key={child.id}
+                onClick={() => toggleChildStatus(child)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px',
+                  borderRadius: 8, cursor: 'pointer',
+                  background: child.status === '已完成' ? 'var(--accent-green-dim)' : 'var(--bg-card)',
+                  border: `1px solid ${child.status === '已完成' ? 'var(--accent-green)' : 'var(--border-subtle)'}`,
+                  transition: 'all 0.15s',
+                }}
+              >
+                <div style={{
+                  width: 16, height: 16, borderRadius: 4, border: `2px solid ${child.status === '已完成' ? 'var(--accent-green)' : 'var(--border-medium)'}`,
+                  background: child.status === '已完成' ? 'var(--accent-green)' : 'transparent',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                }}>
+                  {child.status === '已完成' && <span style={{ color: '#fff', fontSize: 10, lineHeight: 1 }}>✓</span>}
+                </div>
+                <span style={{ flex: 1, fontSize: 13, color: child.status === '已完成' ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: child.status === '已完成' ? 'line-through' : 'none' }}>
+                  {child.title}
+                </span>
+                {child.assignee && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>👤 {child.assignee}</span>}
+                {child.due_date && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>📅 {child.due_date.slice(5)}</span>}
+                <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 3, background: 'var(--bg-secondary)', color: 'var(--text-muted)' }}>tk-{child.id}</span>
+              </div>
+            ))}
+            {addingChild && (
+              <div style={{ display: 'flex', gap: 6, padding: '6px 0' }}>
+                <input autoFocus value={newChildTitle} onChange={e => setNewChildTitle(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') addChildTask(); if (e.key === 'Escape') { setAddingChild(false); setNewChildTitle('') } }}
+                  placeholder="子任務標題" className="form-input" style={{ flex: 1, fontSize: 12 }} />
+                <select className="form-input" style={{ fontSize: 12, minWidth: 90 }} value={newChildAssignee} onChange={e => setNewChildAssignee(e.target.value)}>
+                  <option value="">負責人</option>
+                  {employees.map(e => <option key={e.id} value={e.name}>{e.name}</option>)}
+                </select>
+                <button className="btn btn-primary" style={{ fontSize: 12, padding: '3px 10px' }} disabled={savingChild || !newChildTitle.trim()} onClick={addChildTask}>儲存</button>
+                <button className="btn btn-secondary" style={{ fontSize: 12, padding: '3px 8px' }} onClick={() => { setAddingChild(false); setNewChildTitle('') }}>取消</button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {childTasks.length === 0 && !addingChild && linkedChecklists.length > 0 && (
+        <div style={{ marginBottom: 8 }}>
+          <button onClick={() => setAddingChild(true)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 12, padding: '0 0 8px' }}>
+            + 新增子任務
+          </button>
+        </div>
+      )}
+
+      {/* Items grouped by checklist */}
+      {linkedChecklists.map(lc => {
+        const items = checklistItemsMap[lc.checklist_id] || []
+        const clDone = items.filter(i => i.checked).length
+        return (
+          <div key={lc.checklist_id} style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ color: 'var(--accent-green)' }}>☑</span>
+              {lc.name || `清單 #${lc.checklist_id}`}
+              <span style={{ fontWeight: 400 }}>({clDone}/{items.length})</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {items.map(item => (
+                <div key={item.id}
+                  onClick={() => toggleItem({ ...item, _clId: lc.checklist_id })}
+                  style={{
+                    display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 10px',
+                    borderRadius: 8, cursor: 'pointer',
+                    background: item.checked ? 'var(--accent-green-dim)' : 'var(--bg-card)',
+                    border: `1px solid ${item.checked ? 'var(--accent-green)' : 'var(--border-subtle)'}`,
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  <div style={{
+                    width: 16, height: 16, borderRadius: 4, border: `2px solid ${item.checked ? 'var(--accent-green)' : 'var(--border-medium)'}`,
+                    background: item.checked ? 'var(--accent-green)' : 'transparent',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1,
+                  }}>
+                    {item.checked && <span style={{ color: '#fff', fontSize: 10, lineHeight: 1 }}>✓</span>}
+                  </div>
+                  <span style={{
+                    fontSize: 13, lineHeight: 1.4,
+                    color: item.checked ? 'var(--text-muted)' : 'var(--text-primary)',
+                    textDecoration: item.checked ? 'line-through' : 'none',
+                  }}>
+                    {item.content || item.text || item.title || '(無標題)'}
+                  </span>
+                </div>
+              ))}
+              {items.length === 0 && (
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '8px 10px' }}>此清單無項目</div>
+              )}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 // ─── 綁定表單顯示元件（流程任務內的「需完成事項」清單）───
 function TaskFormBindingsBlock({ bindings }) {
   const STATUS_STYLE = {
-    '未填':   { bg: 'rgba(148,163,184,0.15)', color: 'var(--text-muted)',     icon: '⚪' },
-    '簽核中': { bg: 'rgba(245,158,11,0.15)',   color: 'var(--accent-orange)', icon: '🔵' },
-    '已退回': { bg: 'rgba(239,68,68,0.15)',    color: 'var(--accent-red)',    icon: '❌' },
-    '已完成': { bg: 'rgba(34,197,94,0.15)',    color: 'var(--accent-green)',  icon: '✅' },
+    '未填':   { bg: 'var(--glass-light)',       color: 'var(--text-muted)',    icon: '⚪' },
+    '簽核中': { bg: 'var(--accent-orange-dim)', color: 'var(--accent-orange)', icon: '🔵' },
+    '已退回': { bg: 'var(--accent-red-dim)',    color: 'var(--accent-red)',    icon: '❌' },
+    '已完成': { bg: 'var(--accent-green-dim)',  color: 'var(--accent-green)',  icon: '✅' },
   }
   // 驗收段（核銷/入庫驗收）對應的「申請段」型別
   const applyTypeFor = (ft) =>

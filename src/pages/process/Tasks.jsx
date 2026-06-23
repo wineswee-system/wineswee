@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Plus, Search, List, Columns, Calendar as CalIcon, GitBranch, Users, Pencil, Trash2, ShieldCheck, X as XIcon, Download, Upload, Loader2 } from 'lucide-react'
+import { Plus, Search, List, Columns, Calendar as CalIcon, GitBranch, Users, Pencil, Trash2, ShieldCheck, X as XIcon, Download, Upload, Loader2, AlignJustify } from 'lucide-react'
 import { exportToCsv, fmtDate } from '../../lib/exportCsv'
 import { todayTW } from '../../lib/datetime'
 import { getTasks, createTask, updateTask, deleteTask, getTaskDependenciesByInstance, getCategories, getWorkflows, getApprovalChains, createTaskAttachment } from '../../lib/db'
@@ -15,6 +15,7 @@ import TaskTimeline from '../../components/tasks/TaskTimeline'
 import TaskModal from '../../components/tasks/TaskModal'
 import TaskWorkloadView from '../../components/tasks/TaskWorkloadView'
 import FormBindingsPicker from '../../components/FormBindingsPicker'
+import TaskContextMenu from '../../components/ui/TaskContextMenu'
 import { useAuth } from '../../contexts/AuthContext'
 import { useAuditLog } from '../../lib/useAuditLog'
 import { useRealtimeTasks } from '../../lib/hooks/useRealtimeSync'
@@ -31,6 +32,8 @@ export default function Tasks() {
   const { logAction, logFieldChange } = useAuditLog()
   const [tab, setTab] = useState('all')
   const [view, setView] = useState(() => localStorage.getItem('tasks_view') || 'list')
+  const [swimlaneGroup, setSwimlaneGroup] = useState(() => localStorage.getItem('tasks_swimlane_group') || 'assignee')
+  const [ctxMenu, setCtxMenu] = useState(null) // { task, x, y }
   const [tasks, setTasks] = useState([])
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
@@ -56,6 +59,8 @@ export default function Tasks() {
   const [pendingFiles, setPendingFiles] = useState([])
   const [uploadingFiles, setUploadingFiles] = useState(false)
   const newTaskFileRef = useRef(null)
+
+  const [portfolioMode, setPortfolioMode] = useState(false)
 
   const switchView = (v) => { setView(v); localStorage.setItem('tasks_view', v) }
 
@@ -335,11 +340,12 @@ export default function Tasks() {
       <div style={{ display: 'flex', marginBottom: 12 }}>
         <div style={{ display: 'flex', border: '1px solid var(--border-medium)', borderRadius: 8, overflow: 'hidden' }}>
           {[
-            { k: 'list',     icon: List,      label: '列表' },
-            { k: 'kanban',   icon: Columns,   label: '看板' },
-            { k: 'calendar', icon: CalIcon,   label: '月曆' },
-            { k: 'timeline', icon: GitBranch, label: '時程' },
-            { k: 'workload', icon: Users,     label: '工作量' },
+            { k: 'list',      icon: List,          label: '列表' },
+            { k: 'kanban',    icon: Columns,       label: '看板' },
+            { k: 'swimlane',  icon: AlignJustify,  label: '泳道' },
+            { k: 'calendar',  icon: CalIcon,       label: '月曆' },
+            { k: 'timeline',  icon: GitBranch,     label: '時程' },
+            { k: 'workload',  icon: Users,         label: '工作量' },
           ].map(v => {
             const Icon = v.icon
             const active = view === v.k
@@ -424,6 +430,33 @@ export default function Tasks() {
         />
       )}
 
+      {view === 'swimlane' && (
+        <>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>分組依照：</span>
+            {[
+              { v: 'assignee', l: '負責人' },
+              { v: 'priority', l: '優先度' },
+              { v: 'workflow', l: '工作流程' },
+            ].map(opt => (
+              <button key={opt.v} onClick={() => { setSwimlaneGroup(opt.v); localStorage.setItem('tasks_swimlane_group', opt.v) }} style={{
+                padding: '4px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                border: swimlaneGroup === opt.v ? '1.5px solid var(--accent-cyan)' : '1px solid var(--border-medium)',
+                background: swimlaneGroup === opt.v ? 'var(--accent-cyan-dim)' : 'var(--bg-card)',
+                color: swimlaneGroup === opt.v ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+              }}>{opt.l}</button>
+            ))}
+          </div>
+          <TaskKanban
+            tasks={filtered.map(t => tasks.find(x => x.id === t.id) || t)}
+            sections={[]}
+            groupBy={swimlaneGroup}
+            onTaskClick={t => setSelectedTask(tasks.find(x => x.id === t.id) || t)}
+            onTaskMoved={t => setTasks(prev => prev.map(x => x.id === t.id ? t : x))}
+          />
+        </>
+      )}
+
       {view === 'calendar' && (
         <TaskCalendar
           tasks={filtered.map(t => tasks.find(x => x.id === t.id) || t)}
@@ -432,11 +465,29 @@ export default function Tasks() {
       )}
 
       {view === 'timeline' && (
-        <TaskTimeline
-          tasks={filtered.map(t => tasks.find(x => x.id === t.id) || t)}
-          dependencies={dependencies}
-          onTaskClick={t => setSelectedTask(tasks.find(x => x.id === t.id) || t)}
-        />
+        <>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+            <button
+              onClick={() => setPortfolioMode(v => !v)}
+              style={{
+                fontSize: 12, padding: '4px 12px', borderRadius: 6, cursor: 'pointer',
+                border: '1px solid var(--border-medium)',
+                background: portfolioMode ? 'var(--accent-cyan-dim)' : 'var(--bg-card)',
+                color: portfolioMode ? 'var(--accent-cyan)' : 'var(--text-muted)',
+                fontWeight: portfolioMode ? 700 : 400,
+              }}
+            >
+              📁 Portfolio 模式（依專案分組）
+            </button>
+          </div>
+          <TaskTimeline
+            tasks={filtered.map(t => tasks.find(x => x.id === t.id) || t)}
+            dependencies={dependencies}
+            onTaskClick={t => setSelectedTask(tasks.find(x => x.id === t.id) || t)}
+            groupByProject={portfolioMode}
+            projects={projects}
+          />
+        </>
       )}
 
       {view === 'list' && (
@@ -451,7 +502,8 @@ export default function Tasks() {
           return (
             <div key={t.id} className="card" style={{ marginBottom: 10, padding: '12px 16px', cursor: 'pointer' }}
               onClick={() => setSelectedTask(tasks.find(x => x.id === t.id) || t)}
-              title="點擊編輯">
+              onContextMenu={e => { e.preventDefault(); setCtxMenu({ task: tasks.find(x => x.id === t.id) || t, x: e.clientX, y: e.clientY }) }}
+              title="點擊編輯 · 右鍵更多操作">
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
 
                 {/* Col 1: task info */}
@@ -523,6 +575,37 @@ export default function Tasks() {
           )
         })}
       </div>
+      )}
+
+      {ctxMenu && (
+        <TaskContextMenu
+          task={ctxMenu.task}
+          x={ctxMenu.x} y={ctxMenu.y}
+          onClose={() => setCtxMenu(null)}
+          onEdit={t => setSelectedTask(t)}
+          onDuplicate={async t => {
+            const { data } = await import('../../lib/db').then(m => m.createTask({
+              ...t, id: undefined, title: `${t.title} (複製)`, created_at: undefined, updated_at: undefined,
+            }))
+            if (data) setTasks(prev => [...prev, data])
+          }}
+          onStatusChange={async (id, status) => {
+            const { updateTask } = await import('../../lib/db')
+            const { data } = await updateTask(id, { status })
+            if (data) setTasks(prev => prev.map(x => x.id === id ? data : x))
+          }}
+          onDelete={async id => {
+            const { deleteTask } = await import('../../lib/db')
+            await deleteTask(id)
+            setTasks(prev => prev.filter(x => x.id !== id))
+          }}
+          assigneeOptions={employees.map(e => e.name)}
+          onAssign={async (id, name) => {
+            const { updateTask } = await import('../../lib/db')
+            const { data } = await updateTask(id, { assignee: name })
+            if (data) setTasks(prev => prev.map(x => x.id === id ? data : x))
+          }}
+        />
       )}
 
       {selectedTask && (

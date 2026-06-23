@@ -88,7 +88,7 @@ function StepIndicator({ current, labels }) {
             </div>
             {i < labels.length - 1 && (
               <div style={{
-                width: 60, height: 2, margin: '0 4px', marginBottom: 20,
+                width: 44, height: 2, margin: '0 4px', marginBottom: 20,
                 background: done ? 'var(--accent-green)' : 'var(--border-subtle)',
               }} />
             )}
@@ -276,12 +276,243 @@ function Step3Schedule({ form, setForm }) {
   )
 }
 
+function ToggleSwitch({ checked, onChange }) {
+  return (
+    <div
+      onClick={() => onChange(!checked)}
+      style={{
+        width: 40, height: 22, borderRadius: 11, cursor: 'pointer',
+        background: checked ? 'var(--accent-cyan)' : 'var(--bg-secondary)',
+        border: '1px solid var(--border-subtle)',
+        position: 'relative', flexShrink: 0,
+        transition: 'background 0.15s',
+      }}
+    >
+      <div style={{
+        position: 'absolute', top: 2,
+        left: checked ? 20 : 2,
+        width: 16, height: 16, borderRadius: '50%',
+        background: '#fff', /* inverse text on accent background */
+        transition: 'left 0.15s',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+      }} />
+    </div>
+  )
+}
+
+function Step4Notify({ form, setForm }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>
+        提醒與通知
+      </div>
+
+      {/* LINE 通知 */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '12px 14px', borderRadius: 8,
+        border: '1px solid var(--border-subtle)', background: 'var(--bg-secondary)',
+      }}>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>LINE 通知</div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+            LINE 通知將發送給每個步驟的負責人
+          </div>
+        </div>
+        <ToggleSwitch
+          checked={form.notify_line ?? true}
+          onChange={v => setForm(f => ({ ...f, notify_line: v }))}
+        />
+      </div>
+
+      {/* Email 通知 */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '12px 14px', borderRadius: 8,
+        border: '1px solid var(--border-subtle)', background: 'var(--bg-secondary)',
+      }}>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Email 通知</div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+            發送任務指派通知到負責人信箱
+          </div>
+        </div>
+        <ToggleSwitch
+          checked={form.notify_email ?? false}
+          onChange={v => setForm(f => ({ ...f, notify_email: v }))}
+        />
+      </div>
+
+      {/* 提醒時機 */}
+      <div style={{
+        padding: '12px 14px', borderRadius: 8,
+        border: '1px solid var(--border-subtle)', background: 'var(--bg-secondary)',
+      }}>
+        <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', display: 'block', marginBottom: 8 }}>
+          提醒時機
+        </label>
+        <select className="form-input" style={{ width: '100%', fontSize: 12 }}
+          value={form.notify_timing || '1day'}
+          onChange={e => setForm(f => ({ ...f, notify_timing: e.target.value }))}>
+          {REMINDER_PRESETS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+        </select>
+      </div>
+
+      {/* 抄送直屬主管 */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '12px 14px', borderRadius: 8,
+        border: '1px solid var(--border-subtle)', background: 'var(--bg-secondary)',
+      }}>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>抄送直屬主管</div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+            任務指派及完成通知同步發給直屬主管
+          </div>
+        </div>
+        <ToggleSwitch
+          checked={form.cc_manager ?? true}
+          onChange={v => setForm(f => ({ ...f, cc_manager: v }))}
+        />
+      </div>
+    </div>
+  )
+}
+
+function Step5Confirm({ form, steps, templateName }) {
+  const assigneeCount = useMemo(() => {
+    const names = new Set(Object.values(form.assignees || {}).filter(Boolean))
+    return names.size
+  }, [form.assignees])
+
+  const firstDate = form.planned_start_date || '—'
+  const timingLabel = REMINDER_PRESETS.find(r => r.value === (form.notify_timing || '1day'))?.label || '—'
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* Summary banner */}
+      <div style={{
+        padding: '14px 16px', borderRadius: 10,
+        background: 'var(--accent-cyan-dim)', border: '1px solid var(--border-subtle)',
+      }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent-cyan)', marginBottom: 6 }}>
+          部署摘要
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
+          即將建立 <strong>{steps.length}</strong> 個任務，指派給 <strong>{assigneeCount}</strong> 位人員，
+          首個任務 <strong>{firstDate}</strong>
+        </div>
+      </div>
+
+      {/* Basic info */}
+      <div style={{
+        padding: '12px 14px', borderRadius: 8,
+        border: '1px solid var(--border-subtle)', background: 'var(--bg-secondary)',
+        display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 20px',
+        fontSize: 12,
+      }}>
+        <div>
+          <span style={{ color: 'var(--text-muted)' }}>範本名稱　</span>
+          <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{templateName}</span>
+        </div>
+        <div>
+          <span style={{ color: 'var(--text-muted)' }}>分店　</span>
+          <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{form.location || '—'}</span>
+        </div>
+        <div>
+          <span style={{ color: 'var(--text-muted)' }}>開始日期　</span>
+          <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{form.planned_start_date || '—'}</span>
+        </div>
+        <div>
+          <span style={{ color: 'var(--text-muted)' }}>完成日期　</span>
+          <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{form.planned_end_date || '—'}</span>
+        </div>
+        <div>
+          <span style={{ color: 'var(--text-muted)' }}>步驟數量　</span>
+          <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{steps.length} 步</span>
+        </div>
+      </div>
+
+      {/* Assignee table */}
+      <div style={{
+        borderRadius: 8, border: '1px solid var(--border-subtle)',
+        overflow: 'hidden',
+      }}>
+        <div style={{
+          padding: '8px 12px',
+          background: 'var(--bg-secondary)',
+          fontSize: 11, fontWeight: 700, color: 'var(--text-muted)',
+          display: 'grid', gridTemplateColumns: '36px 1fr 1fr',
+          borderBottom: '1px solid var(--border-subtle)',
+        }}>
+          <span>#</span><span>步驟</span><span>負責人</span>
+        </div>
+        {steps.map((step, i) => (
+          <div key={i} style={{
+            padding: '8px 12px',
+            background: i % 2 === 0 ? 'var(--bg-primary)' : 'var(--bg-secondary)',
+            fontSize: 12, display: 'grid', gridTemplateColumns: '36px 1fr 1fr',
+            alignItems: 'center',
+          }}>
+            <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>{i + 1}</span>
+            <span style={{ color: 'var(--text-primary)' }}>{step.title}</span>
+            <span style={{
+              color: form.assignees?.[i] ? 'var(--text-primary)' : 'var(--accent-orange)',
+              fontWeight: form.assignees?.[i] ? 400 : 600,
+            }}>
+              {form.assignees?.[i] || '未指派'}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {/* Notification summary */}
+      <div style={{
+        padding: '12px 14px', borderRadius: 8,
+        border: '1px solid var(--border-subtle)', background: 'var(--bg-secondary)',
+        fontSize: 12, display: 'flex', flexDirection: 'column', gap: 6,
+      }}>
+        <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 2 }}>通知設定</div>
+        <div style={{ display: 'flex', gap: 16 }}>
+          <span style={{ color: 'var(--text-muted)' }}>LINE 通知</span>
+          <span style={{ color: (form.notify_line ?? true) ? 'var(--accent-green)' : 'var(--text-muted)', fontWeight: 600 }}>
+            {(form.notify_line ?? true) ? '開啟' : '關閉'}
+          </span>
+        </div>
+        <div style={{ display: 'flex', gap: 16 }}>
+          <span style={{ color: 'var(--text-muted)' }}>Email 通知</span>
+          <span style={{ color: (form.notify_email ?? false) ? 'var(--accent-green)' : 'var(--text-muted)', fontWeight: 600 }}>
+            {(form.notify_email ?? false) ? '開啟' : '關閉'}
+          </span>
+        </div>
+        <div style={{ display: 'flex', gap: 16 }}>
+          <span style={{ color: 'var(--text-muted)' }}>提醒時機</span>
+          <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{timingLabel}</span>
+        </div>
+        <div style={{ display: 'flex', gap: 16 }}>
+          <span style={{ color: 'var(--text-muted)' }}>抄送主管</span>
+          <span style={{ color: (form.cc_manager ?? true) ? 'var(--accent-green)' : 'var(--text-muted)', fontWeight: 600 }}>
+            {(form.cc_manager ?? true) ? '是' : '否'}
+          </span>
+        </div>
+      </div>
+
+      <div style={{
+        fontSize: 12, color: 'var(--text-muted)',
+        textAlign: 'center', paddingTop: 4,
+      }}>
+        確認無誤後，點擊下方「立即部署 →」完成部署
+      </div>
+    </div>
+  )
+}
+
 // ── Main wizard component ─────────────────────────────────────────────────────
 
-const STEP_LABELS = ['目標', '人員分配', '排程設定']
+const STEP_LABELS = ['目標', '人員分配', '時間設定', '提醒通知', '確認部署']
 
 /**
- * DeployWizard — 3-step deploy modal (portal).
+ * DeployWizard — 5-step deploy modal (portal).
  *
  * Props:
  *   template    — { id, name, category, steps: [] }
@@ -313,12 +544,18 @@ export default function DeployWizard({ template, stores, employees, departments,
     notes: '',
     assignees: {},
     batch_defaults: { due_time: '17:00', reminder_preset: '1hr', priority: '中' },
+    notify_line: true,
+    notify_email: false,
+    notify_timing: '1day',
+    cc_manager: true,
   })
 
-  // Per-step validation
+  // Per-step validation (steps 3 and 4 are always valid — no required fields)
   const stepValid = useMemo(() => [
     !!form.location && (targetType !== 'employee' || !!form.target_employee_id),
     tplSteps.every((_, i) => !!form.assignees?.[i]),
+    true,
+    true,
     true,
   ], [form, tplSteps, targetType])
 
@@ -401,6 +638,8 @@ export default function DeployWizard({ template, stores, employees, departments,
           due_date: dueDate,
           due_time: batchDef.due_time || '17:00',
           reminder_preset: batchDef.reminder_preset || '1hr',
+          notify_line: form.notify_line ?? true,
+          notify_timing: form.notify_timing || '1day',
           store: loc,
           bucket: '工作流程',
           category: '工作流程',
@@ -530,6 +769,15 @@ export default function DeployWizard({ template, stores, employees, departments,
               {currentStep === 2 && (
                 <Step3Schedule form={form} setForm={setForm} />
               )}
+              {currentStep === 3 && (
+                <Step4Notify form={form} setForm={setForm} />
+              )}
+              {currentStep === 4 && (
+                <Step5Confirm
+                  form={form} steps={tplSteps}
+                  templateName={template?.name}
+                />
+              )}
 
               {!stepValid[currentStep] && currentStep < 2 && (
                 <div style={{
@@ -589,7 +837,7 @@ export default function DeployWizard({ template, stores, employees, departments,
                     style={{ display: 'flex', alignItems: 'center', gap: 6 }}
                   >
                     <Rocket size={14} />
-                    {deploying ? '部署中...' : '確認部署'}
+                    {deploying ? '部署中...' : '立即部署 →'}
                   </button>
                 )}
               </div>

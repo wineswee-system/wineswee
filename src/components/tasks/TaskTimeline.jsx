@@ -7,8 +7,61 @@ function daysBetween(a, b) {
   return Math.round((b - a) / 86400000)
 }
 
-export default function TaskTimeline({ tasks, dependencies = [], onTaskClick }) {
+function GanttRow({ task, offset, span, dayLabels, hovered, setHovered, onTaskClick }) {
+  return (
+    <div
+      style={{ display: 'flex', borderBottom: '1px solid var(--border-subtle)', position: 'relative' }}
+      onMouseEnter={() => setHovered(task.id)}
+      onMouseLeave={() => setHovered(null)}
+    >
+      <div
+        onClick={() => onTaskClick?.(task)}
+        style={{
+          width: 220, padding: '8px 12px', fontSize: 12, cursor: 'pointer',
+          borderRight: '1px solid var(--border-medium)', whiteSpace: 'nowrap',
+          overflow: 'hidden', textOverflow: 'ellipsis',
+          background: hovered === task.id ? 'var(--glass-light)' : 'transparent',
+        }}
+      >
+        <div style={{ fontWeight: 600 }}>{task.title}</div>
+        <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{task.assignee || '未指派'}</div>
+      </div>
+      <div style={{ position: 'relative', flex: 1, height: 44 }}>
+        {dayLabels.map((d, i) => {
+          const isWeekend = d.getDay() === 0 || d.getDay() === 6
+          return <div key={i} style={{ position: 'absolute', left: i * DAY_PX, top: 0, width: DAY_PX, height: '100%', background: isWeekend ? 'var(--bg-secondary)' : 'transparent', opacity: 0.5 }} />
+        })}
+        <div
+          onClick={() => onTaskClick?.(task)}
+          title={`${task.title} (${span} 天)`}
+          style={{
+            position: 'absolute', left: offset * DAY_PX + 2, top: 10,
+            width: span * DAY_PX - 4, height: 24,
+            background: PRIORITY_COLORS[task.priority] || '#64748b',
+            borderRadius: 4, cursor: 'pointer', display: 'flex',
+            alignItems: 'center', padding: '0 6px', fontSize: 10,
+            color: '#fff', fontWeight: 600, whiteSpace: 'nowrap',
+            overflow: 'hidden', textOverflow: 'ellipsis',
+            opacity: task.status === '已完成' ? 0.5 : 1,
+            boxShadow: hovered === task.id ? '0 0 0 2px var(--accent-cyan)' : 'none',
+          }}
+        >
+          {task.status === '已完成' && '✓ '}{task.title}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default function TaskTimeline({ tasks, dependencies = [], onTaskClick, groupByProject = false, projects = [] }) {
   const [hovered, setHovered] = useState(null)
+
+  // project id → name lookup
+  const projNameMap = useMemo(() => {
+    const m = new Map()
+    for (const p of projects) m.set(p.id, p.name)
+    return m
+  }, [projects])
 
   const MAX_DAYS = 180 // 防爆：日期區間超過半年就 clip，避免 89 tasks × 4000 days DOM 炸瀏覽器
   const { rows, start, days, clipped } = useMemo(() => {
@@ -108,53 +161,45 @@ export default function TaskTimeline({ tasks, dependencies = [], onTaskClick }) 
           })}
         </div>
 
-        {/* Rows */}
-        {rows.map(({ task, offset, span }) => (
-          <div
-            key={task.id}
-            style={{ display: 'flex', borderBottom: '1px solid var(--border-subtle)', position: 'relative' }}
-            onMouseEnter={() => setHovered(task.id)}
-            onMouseLeave={() => setHovered(null)}
-          >
-            <div
-              onClick={() => onTaskClick?.(task)}
-              style={{
-                width: 220, padding: '8px 12px', fontSize: 12, cursor: 'pointer',
-                borderRight: '1px solid var(--border-medium)', whiteSpace: 'nowrap',
-                overflow: 'hidden', textOverflow: 'ellipsis',
-                background: hovered === task.id ? 'var(--glass-light)' : 'transparent',
-              }}
-            >
-              <div style={{ fontWeight: 600 }}>{task.title}</div>
-              <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
-                {task.assignee || '未指派'}
+        {/* Rows — optionally grouped by project */}
+        {(() => {
+          if (!groupByProject) {
+            return rows.map(({ task, offset, span }) => (
+              <GanttRow key={task.id} task={task} offset={offset} span={span} dayLabels={dayLabels} hovered={hovered} setHovered={setHovered} onTaskClick={onTaskClick} />
+            ))
+          }
+          // Group rows by project_id — use a Map to handle non-contiguous orderings
+          const groups = []
+          const groupMap = new Map()
+          for (const row of rows) {
+            const pid = row.task.project_id ?? '__none__'
+            if (!groupMap.has(pid)) {
+              const g = { pid, rows: [] }
+              groupMap.set(pid, g)
+              groups.push(g)
+            }
+            groupMap.get(pid).rows.push(row)
+          }
+          return groups.map(({ pid, rows: gRows }) => {
+            const projName = pid === '__none__' ? '直接任務' : (projNameMap.get(Number(pid)) || `專案 #${pid}`)
+            return (
+              <div key={pid}>
+                <div style={{
+                  display: 'flex', borderBottom: '1px solid var(--border-medium)',
+                  background: 'var(--bg-secondary)', position: 'sticky', left: 0,
+                }}>
+                  <div style={{ width: 220, padding: '6px 12px', fontSize: 12, fontWeight: 700, color: 'var(--accent-cyan)', borderRight: '1px solid var(--border-medium)' }}>
+                    📁 {projName}
+                  </div>
+                  <div style={{ flex: 1, height: 28, background: 'var(--accent-cyan-dim)', opacity: 0.3 }} />
+                </div>
+                {gRows.map(({ task, offset, span }) => (
+                  <GanttRow key={task.id} task={task} offset={offset} span={span} dayLabels={dayLabels} hovered={hovered} setHovered={setHovered} onTaskClick={onTaskClick} />
+                ))}
               </div>
-            </div>
-            <div style={{ position: 'relative', flex: 1, height: 44 }}>
-              {dayLabels.map((d, i) => {
-                const isWeekend = d.getDay() === 0 || d.getDay() === 6
-                return <div key={i} style={{ position: 'absolute', left: i * DAY_PX, top: 0, width: DAY_PX, height: '100%', background: isWeekend ? 'var(--bg-secondary)' : 'transparent', opacity: 0.5 }} />
-              })}
-              <div
-                onClick={() => onTaskClick?.(task)}
-                title={`${task.title} (${span} 天)`}
-                style={{
-                  position: 'absolute', left: offset * DAY_PX + 2, top: 10,
-                  width: span * DAY_PX - 4, height: 24,
-                  background: PRIORITY_COLORS[task.priority] || '#64748b',
-                  borderRadius: 4, cursor: 'pointer', display: 'flex',
-                  alignItems: 'center', padding: '0 6px', fontSize: 10,
-                  color: '#fff', fontWeight: 600, whiteSpace: 'nowrap',
-                  overflow: 'hidden', textOverflow: 'ellipsis',
-                  opacity: task.status === '已完成' ? 0.5 : 1,
-                  boxShadow: hovered === task.id ? '0 0 0 2px var(--accent-cyan)' : 'none',
-                }}
-              >
-                {task.status === '已完成' && '✓ '}{task.title}
-              </div>
-            </div>
-          </div>
-        ))}
+            )
+          })
+        })()}
       </div>
       {depMap.size > 0 && (
         <div style={{ padding: '8px 16px', fontSize: 11, color: 'var(--text-muted)', borderTop: '1px solid var(--border-subtle)' }}>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import { toast } from '../../lib/toast'
 import {
   Plus, Pencil, ChevronRight, CheckCircle,
@@ -43,6 +43,7 @@ const TRIGGER_DEPTH_LIMIT = 5
 export default function Workflows() {
   const { profile, isAdmin, isSuperAdmin } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
+  const navigate = useNavigate()
   const currentUser = profile?.name || '管理員'
   const { logAction, logFieldChange } = useAuditLog()
   const [tab, setTab] = useState('active')
@@ -738,12 +739,12 @@ export default function Workflows() {
     }
   }
 
-  const handleSaveAiResult = async () => {
+  const handleSaveAiResult = async (overrides = {}) => {
     if (!aiResult) return
+    const { name = aiResult.name, category = aiResult.category || '營運', description = aiResult.description } = overrides
     const stepsToSave = aiDraftSteps.length > 0 ? aiDraftSteps : (aiResult.steps || [])
     const { data } = await supabase.from('sop_templates').insert({
-      name: aiResult.name, category: aiResult.category || '營運',
-      description: aiResult.description, steps: stepsToSave,
+      name, category, description, steps: stepsToSave,
     }).select().single()
     if (data) {
       setTemplates(prev => [...prev, data])
@@ -752,6 +753,7 @@ export default function Workflows() {
       setAiDraftSteps([])
       setAiStepIndex(0)
       setAiMessages(prev => [...prev, { role: 'ai', text: `✅「${data.name}」已儲存到流程範本！` }])
+      navigate('/process/sop/' + data.id + '/edit')
     }
   }
 

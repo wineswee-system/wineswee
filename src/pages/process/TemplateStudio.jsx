@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Plus, Shield, Save, History } from 'lucide-react'
+import { ArrowLeft, Plus, Shield, Save, History, Eye, Copy, X, Lock } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { toast } from '../../lib/toast'
@@ -9,14 +9,25 @@ import { Field } from '../../components/Modal'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import StepCard from './components/StepCard'
 import StepEditor from './components/StepEditor'
+import TemplatePreviewModal from './components/TemplatePreviewModal'
 
 const DEFAULT_CATEGORIES = ['HR', '營運', '採購', '展店', '倉管', '財務', '行銷', '客服']
+
+const STATUS_OPTIONS = [
+  { value: 'published', label: '已發布', color: 'var(--accent-green)',  dim: 'var(--accent-green-dim)' },
+  { value: 'draft',     label: '草稿',   color: 'var(--accent-orange)', dim: 'var(--accent-orange-dim)' },
+  { value: 'archived',  label: '已封存', color: 'var(--text-muted)',    dim: 'var(--bg-secondary)' },
+]
 
 const emptyStep = () => ({
   title: '', role: '', assignee: '', priority: '中', description: '',
   checklist_id: '', approval_chain_id: '', required_forms: [],
   trigger_template_id: '',
   branch_on_approved: '', branch_on_rejected: '',
+  notify_on_start: [],
+  notify_on_complete: [],
+  relative_due_days: null,
+  preconditions: [],
 })
 
 /** Normalise a raw step from DB / version JSONB into the local editor shape. */
@@ -32,10 +43,15 @@ const normalizeStep = (s) => ({
   trigger_template_id: s.trigger_template_id || '',
   branch_on_approved: s.branch_on_approved || '',
   branch_on_rejected: s.branch_on_rejected || '',
+  notify_on_start: s.notify_on_start || [],
+  notify_on_complete: s.notify_on_complete || [],
+  relative_due_days: s.relative_due_days ?? null,
+  preconditions: s.preconditions || [],
 })
 
 const emptyTpl = () => ({
   name: '', category: 'HR', description: '', approval_chain_id: '',
+  tags: [], status: 'published',
   steps: [emptyStep()],
 })
 
@@ -47,8 +63,8 @@ const emptyTpl = () => ({
  *   /process/sop/:id/edit   — edit mode (loads existing template by id)
  *
  * Layout:
- *   TopBar  [← 返回] [title] [儲存]
- *   LeftPanel (280px) — metadata fields + step list (StepCard × n)
+ *   TopBar  [← 返回] [title] [預覽] [儲存]
+ *   LeftPanel (280px) — metadata fields + step list (StepCard × n) + version history
  *   RightPanel (flex-1) — StepEditor for the selected step
  */
 export default function TemplateStudio() {
@@ -73,6 +89,14 @@ export default function TemplateStudio() {
   const [versions, setVersions] = useState([])
   const [showVersions, setShowVersions] = useState(false)
   const [loadingVersions, setLoadingVersions] = useState(false)
+  const [diffVersion, setDiffVersion] = useState(null)  // version being diff-compared
+
+  // Preview modal
+  const [previewOpen, setPreviewOpen] = useState(false)
+
+  // Tag input
+  const [tagInput, setTagInput] = useState('')
+  const tagInputRef = useRef(null)
 
   // ── Load reference data + template (if editing) ──
   useEffect(() => {
@@ -119,6 +143,8 @@ export default function TemplateStudio() {
           category: data.category || 'HR',
           description: data.description || '',
           approval_chain_id: data.approval_chain_id || '',
+          tags: Array.isArray(data.tags) ? data.tags : [],
+          status: data.status || 'published',
           steps: (data.steps?.length > 0) ? data.steps.map(normalizeStep) : [emptyStep()],
         })
       }
@@ -150,12 +176,9 @@ export default function TemplateStudio() {
 
   // ── Step operations ──
   const addStep = () => {
-    setTpl(prev => {
-      const newSteps = [...prev.steps, emptyStep()]
-      setSelectedStep(newSteps.length - 1)
-      setIsDirty(true)
-      return { ...prev, steps: newSteps }
-    })
+    const newSteps = [...tpl.steps, emptyStep()]
+    updateTpl(t => ({ ...t, steps: newSteps }))
+    setSelectedStep(newSteps.length - 1)
   }
 
   const updateStep = (i, updated) => {
@@ -174,6 +197,15 @@ export default function TemplateStudio() {
     setSelectedStep(prev => Math.max(0, Math.min(prev, tpl.steps.length - 2)))
   }
 
+  const duplicateStep = (i) => {
+    const src = tpl.steps[i]
+    const copy = { ...src, title: src.title ? `${src.title}（副本）` : '（副本）' }
+    const steps = [...tpl.steps]
+    steps.splice(i + 1, 0, copy)
+    updateTpl(t => ({ ...t, steps }))
+    setSelectedStep(i + 1)
+  }
+
   const moveStep = (i, dir) => {
     const j = i + dir
     if (j < 0 || j >= tpl.steps.length) return
@@ -185,25 +217,83 @@ export default function TemplateStudio() {
     setSelectedStep(j)
   }
 
+  // ── Tag operations ──
+  const commitTag = () => {
+    const raw = tagInput.trim().replace(/,+$/, '').trim()
+    if (!raw) { setTagInput(''); return }
+    const newTags = raw.split(/[,，]+/).map(t => t.trim()).filter(Boolean)
+    updateTpl(t => {
+      const existing = t.tags || []
+      const merged = [...existing, ...newTags.filter(tag => !existing.includes(tag))]
+      return { ...t, tags: merged }
+    })
+    setTagInput('')
+  }
+
+  const removeTag = (tag) => {
+    updateTpl(t => ({ ...t, tags: (t.tags || []).filter(tg => tg !== tag) }))
+  }
+
+  const handleTagKeyDown = (e) => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault()
+      commitTag()
+    } else if (e.key === 'Backspace' && tagInput === '' && tpl.tags?.length > 0) {
+      removeTag(tpl.tags[tpl.tags.length - 1])
+    }
+  }
+
   // ── Restore a version ──
   const handleRestore = async (v) => {
     const ok = await confirm({ message: `還原至版本 ${v.version_number}「${v.name}」？目前變更將被取代。` })
     if (!ok) return
-    setTpl({
+    setTpl(prev => ({
       name: v.name || '',
-      category: tpl.category,         // keep current category
+      category: prev.category,
       description: v.description || '',
-      approval_chain_id: tpl.approval_chain_id,  // keep current
+      approval_chain_id: prev.approval_chain_id,
+      tags: prev.tags,
+      status: prev.status,
       steps: (v.steps?.length > 0) ? v.steps.map(normalizeStep) : [emptyStep()],
-    })
+    }))
     setIsDirty(true)
+    setDiffVersion(null)
     toast.success(`已還原至版本 ${v.version_number}，請儲存以套用`)
+  }
+
+  // ── Diff helpers ──
+  const computeDiff = (versionSteps, currentSteps) => {
+    const vList = versionSteps || []
+    const cList = currentSteps || []
+    const vTitles = vList.map(s => s.title || '').filter(Boolean)
+    const cTitles = cList.map(s => s.title || '').filter(Boolean)
+    const added   = cTitles.filter(t => !vTitles.includes(t))
+    const removed = vTitles.filter(t => !cTitles.includes(t))
+    const changed = vTitles.filter(t => {
+      if (!cTitles.includes(t)) return false
+      const vs = vList.find(s => s.title === t)
+      const cs = cList.find(s => s.title === t)
+      if (!vs || !cs) return false
+      return (
+        vs.role !== cs.role ||
+        vs.assignee !== cs.assignee ||
+        vs.priority !== cs.priority ||
+        vs.description !== cs.description
+      )
+    })
+    return { added, removed, changed }
   }
 
   // ── Save ──
   const handleSave = async () => {
     if (!tpl.name.trim()) { toast.error('請填寫範本名稱'); return }
     if (!tpl.steps.some(s => s.title.trim())) { toast.error('至少需要一個有名稱的步驟'); return }
+    if (tpl.status === 'published') {
+      const ok = await confirm({
+        message: '此範本已發布。儲存將覆蓋已發布版本，建議先改為草稿再修改。確定繼續儲存？',
+      })
+      if (!ok) return
+    }
     setSaving(true)
     try {
       const cleanSteps = tpl.steps.filter(s => s.title.trim()).map(s => ({
@@ -218,12 +308,17 @@ export default function TemplateStudio() {
         trigger_template_id: s.trigger_template_id || null,
         branch_on_approved: s.branch_on_approved || null,
         branch_on_rejected: s.branch_on_rejected || null,
+        notify_on_start: s.notify_on_start?.length > 0 ? s.notify_on_start : null,
+        notify_on_complete: s.notify_on_complete?.length > 0 ? s.notify_on_complete : null,
+        relative_due_days: s.relative_due_days ?? null,
       }))
       const payload = {
         name: tpl.name.trim(),
         category: tpl.category,
         description: tpl.description?.trim() || null,
         approval_chain_id: tpl.approval_chain_id || null,
+        tags: tpl.tags?.length > 0 ? tpl.tags : null,
+        status: tpl.status || 'published',
         steps: cleanSteps,
         organization_id: profile?.organization_id || null,
       }
@@ -285,6 +380,18 @@ export default function TemplateStudio() {
     navigate('/process/sop')
   }
 
+  // Build preview template object from current tpl state
+  const previewTemplate = {
+    id: id || null,
+    name: tpl.name || '（未命名）',
+    category: tpl.category,
+    description: tpl.description,
+    tags: tpl.tags,
+    status: tpl.status,
+    approval_chain_id: tpl.approval_chain_id || null,
+    steps: tpl.steps,
+  }
+
   if (loading) return <LoadingSpinner />
 
   const steps = tpl.steps
@@ -310,8 +417,11 @@ export default function TemplateStudio() {
         </button>
 
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)', lineHeight: 1.3 }}>
+          <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)', lineHeight: 1.3, display: 'flex', alignItems: 'center', gap: 6 }}>
             {id ? `編輯：${tpl.name || '（未命名）'}` : '新增流程範本'}
+            {tpl.status === 'published' && (
+              <Lock size={13} style={{ color: 'var(--accent-orange)', flexShrink: 0 }} title="已發布版本" />
+            )}
           </div>
           {isDirty && (
             <div style={{ fontSize: 11, color: 'var(--accent-orange)' }}>● 有未儲存的變更</div>
@@ -322,6 +432,18 @@ export default function TemplateStudio() {
           <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
             {steps.length} 個步驟
           </span>
+          <button
+            type="button"
+            onClick={() => setPreviewOpen(true)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 5, fontSize: 13,
+              padding: '6px 12px', borderRadius: 6, cursor: 'pointer',
+              background: 'var(--bg-secondary)', border: '1px solid var(--border-medium)',
+              color: 'var(--text-secondary)',
+            }}
+          >
+            <Eye size={14} /> 預覽
+          </button>
           <button
             className="btn btn-primary"
             onClick={handleSave}
@@ -411,6 +533,86 @@ export default function TemplateStudio() {
                 />
               </Field>
             </div>
+
+            {/* Tags field */}
+            <div style={{ marginTop: 8 }}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 4 }}>
+                標籤
+              </div>
+              <div
+                onClick={() => tagInputRef.current?.focus()}
+                style={{
+                  display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center',
+                  minHeight: 32, padding: '4px 8px', borderRadius: 6,
+                  border: '1px solid var(--border-medium)', background: 'var(--bg-card)',
+                  cursor: 'text',
+                }}
+              >
+                {(tpl.tags || []).map(tag => (
+                  <span
+                    key={tag}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 3,
+                      background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)',
+                      borderRadius: 4, padding: '1px 6px', fontSize: 11, fontWeight: 600,
+                    }}
+                  >
+                    {tag}
+                    <button
+                      type="button"
+                      onClick={e => { e.stopPropagation(); removeTag(tag) }}
+                      style={{
+                        background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+                        color: 'var(--accent-cyan)', display: 'flex', alignItems: 'center',
+                        lineHeight: 1,
+                      }}
+                    >
+                      <X size={10} />
+                    </button>
+                  </span>
+                ))}
+                <input
+                  ref={tagInputRef}
+                  type="text"
+                  value={tagInput}
+                  onChange={e => setTagInput(e.target.value)}
+                  onKeyDown={handleTagKeyDown}
+                  onBlur={commitTag}
+                  placeholder={(tpl.tags || []).length === 0 ? '輸入標籤，Enter 確認' : ''}
+                  style={{
+                    border: 'none', outline: 'none', background: 'transparent',
+                    fontSize: 11, color: 'var(--text-primary)', flex: 1, minWidth: 60,
+                    padding: '1px 2px',
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Status field */}
+            <div style={{ marginTop: 8 }}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 4 }}>
+                狀態
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                {STATUS_OPTIONS.map(opt => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => updateTpl(t => ({ ...t, status: opt.value }))}
+                    style={{
+                      flex: 1, padding: '4px 0', borderRadius: 6, fontSize: 11, fontWeight: 600,
+                      cursor: 'pointer', border: '1.5px solid',
+                      borderColor: tpl.status === opt.value ? opt.color : 'var(--border-subtle)',
+                      background: tpl.status === opt.value ? opt.dim : 'var(--bg-card)',
+                      color: tpl.status === opt.value ? opt.color : 'var(--text-muted)',
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
 
           {/* Step list */}
@@ -429,17 +631,33 @@ export default function TemplateStudio() {
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
               {steps.map((step, i) => (
-                <StepCard
-                  key={i}
-                  step={step}
-                  index={i}
-                  total={steps.length}
-                  isActive={selectedStep === i}
-                  onClick={() => setSelectedStep(i)}
-                  onMoveUp={() => moveStep(i, -1)}
-                  onMoveDown={() => moveStep(i, 1)}
-                  onRemove={removeStep}
-                />
+                <div key={i} style={{ position: 'relative' }}>
+                  <StepCard
+                    step={step}
+                    index={i}
+                    total={steps.length}
+                    isActive={selectedStep === i}
+                    onClick={() => setSelectedStep(i)}
+                    onMoveUp={() => moveStep(i, -1)}
+                    onMoveDown={() => moveStep(i, 1)}
+                    onRemove={removeStep}
+                  />
+                  {/* Duplicate button: sits next to the remove button inside the card row */}
+                  <button
+                    type="button"
+                    title="複製步驟"
+                    onClick={e => { e.stopPropagation(); duplicateStep(i) }}
+                    style={{
+                      position: 'absolute', top: 5, right: 28,
+                      background: 'none', border: 'none', padding: '2px 3px',
+                      cursor: 'pointer', color: 'var(--text-muted)', borderRadius: 4,
+                      display: 'flex', alignItems: 'center', lineHeight: 1,
+                      zIndex: 1,
+                    }}
+                  >
+                    <Copy size={11} />
+                  </button>
+                </div>
               ))}
             </div>
 
@@ -476,42 +694,125 @@ export default function TemplateStudio() {
                 </button>
 
                 {showVersions && (
-                  <div style={{ marginTop: 8, maxHeight: 220, overflowY: 'auto' }}>
+                  <div style={{ marginTop: 8 }}>
                     {loadingVersions ? (
                       <div style={{ fontSize: 11, color: 'var(--text-muted)', padding: '8px 4px' }}>載入中...</div>
                     ) : versions.length === 0 ? (
                       <div style={{ fontSize: 11, color: 'var(--text-muted)', padding: '8px 4px' }}>尚無版本記錄</div>
-                    ) : versions.map(v => (
-                      <div key={v.id} style={{
-                        padding: '8px 10px', borderRadius: 8, marginBottom: 5,
-                        background: 'var(--bg-card)', border: '1px solid var(--border-subtle)',
-                      }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 6 }}>
-                          <div>
-                            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-primary)' }}>
-                              v{v.version_number}
-                            </div>
-                            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
-                              {v.changed_by} · {new Date(v.changed_at).toLocaleString('zh-TW', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                            </div>
-                            <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 2 }}>
-                              {(v.steps?.length || 0)} 步驟
+                    ) : (
+                      <div style={{ maxHeight: 260, overflowY: 'auto' }}>
+                        {versions.map(v => (
+                          <div key={v.id} style={{
+                            padding: '8px 10px', borderRadius: 8, marginBottom: 5,
+                            background: 'var(--bg-card)', border: '1px solid var(--border-subtle)',
+                          }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 6 }}>
+                              <div style={{ minWidth: 0 }}>
+                                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-primary)' }}>
+                                  v{v.version_number}
+                                </div>
+                                <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
+                                  {v.changed_by} · {new Date(v.changed_at).toLocaleString('zh-TW', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                </div>
+                                <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 2 }}>
+                                  {(v.steps?.length || 0)} 步驟
+                                </div>
+                              </div>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flexShrink: 0 }}>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRestore(v)}
+                                  style={{
+                                    fontSize: 10, padding: '3px 8px', borderRadius: 5, fontWeight: 600,
+                                    border: '1px solid var(--accent-orange)', background: 'var(--accent-orange-dim)',
+                                    color: 'var(--accent-orange)', cursor: 'pointer',
+                                  }}
+                                >
+                                  還原
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setDiffVersion(prev => prev?.id === v.id ? null : v)}
+                                  style={{
+                                    fontSize: 10, padding: '3px 8px', borderRadius: 5, fontWeight: 600,
+                                    border: '1px solid var(--accent-blue)',
+                                    background: diffVersion?.id === v.id ? 'var(--accent-blue)' : 'var(--accent-blue-dim)',
+                                    color: diffVersion?.id === v.id ? '#fff' : 'var(--accent-blue)',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  差異
+                                </button>
+                              </div>
                             </div>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => handleRestore(v)}
-                            style={{
-                              fontSize: 10, padding: '3px 8px', borderRadius: 5, fontWeight: 600,
-                              border: '1px solid var(--accent-orange)', background: 'var(--accent-orange-dim)',
-                              color: 'var(--accent-orange)', cursor: 'pointer', flexShrink: 0,
-                            }}
-                          >
-                            還原
-                          </button>
-                        </div>
+                        ))}
                       </div>
-                    ))}
+                    )}
+
+                    {/* Diff panel — shown below version list when a version is selected */}
+                    {diffVersion && (() => {
+                      const { added, removed, changed } = computeDiff(diffVersion.steps, tpl.steps)
+                      const hasChanges = added.length > 0 || removed.length > 0 || changed.length > 0
+                      return (
+                        <div style={{
+                          marginTop: 8, padding: '10px 12px', borderRadius: 8,
+                          background: 'var(--bg-card)', border: '1px solid var(--border-medium)',
+                        }}>
+                          <div style={{
+                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                            marginBottom: 8,
+                          }}>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)' }}>
+                              差異：v{diffVersion.version_number} → 目前
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setDiffVersion(null)}
+                              style={{
+                                background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+                                color: 'var(--text-muted)', display: 'flex', alignItems: 'center',
+                              }}
+                            >
+                              <X size={12} />
+                            </button>
+                          </div>
+                          {!hasChanges ? (
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>與目前版本相同</div>
+                          ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                              {added.map(title => (
+                                <div key={'a-' + title} style={{
+                                  fontSize: 11, color: 'var(--accent-green)',
+                                  display: 'flex', alignItems: 'baseline', gap: 5,
+                                }}>
+                                  <span style={{ fontWeight: 700, flexShrink: 0 }}>+</span>
+                                  <span>{title}</span>
+                                </div>
+                              ))}
+                              {removed.map(title => (
+                                <div key={'r-' + title} style={{
+                                  fontSize: 11, color: 'var(--accent-red)',
+                                  display: 'flex', alignItems: 'baseline', gap: 5,
+                                }}>
+                                  <span style={{ fontWeight: 700, flexShrink: 0 }}>−</span>
+                                  <span style={{ textDecoration: 'line-through', opacity: 0.8 }}>{title}</span>
+                                </div>
+                              ))}
+                              {changed.map(title => (
+                                <div key={'c-' + title} style={{
+                                  fontSize: 11, color: 'var(--accent-orange)',
+                                  display: 'flex', alignItems: 'baseline', gap: 5,
+                                }}>
+                                  <span style={{ fontWeight: 700, flexShrink: 0 }}>≠</span>
+                                  <span>{title}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })()}
                   </div>
                 )}
               </div>
@@ -526,6 +827,20 @@ export default function TemplateStudio() {
         }}>
           {steps[selectedStep] ? (
             <>
+              {/* Archived read-only banner */}
+              {tpl.status === 'archived' && (
+                <div style={{
+                  padding: '8px 24px', flexShrink: 0,
+                  background: 'var(--bg-secondary)',
+                  borderBottom: '1px solid var(--border-subtle)',
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  color: 'var(--text-muted)', fontSize: 13,
+                }}>
+                  <Lock size={14} style={{ flexShrink: 0 }} />
+                  此範本已封存，無法編輯。請先將狀態改為草稿。
+                </div>
+              )}
+
               {/* Step header bar */}
               <div style={{
                 padding: '12px 24px', borderBottom: '1px solid var(--border-subtle)',
@@ -553,6 +868,7 @@ export default function TemplateStudio() {
                 steps={steps}
                 stepIndex={selectedStep}
                 departments={departments}
+                disabled={tpl.status === 'archived'}
               />
             </>
           ) : (
@@ -566,6 +882,14 @@ export default function TemplateStudio() {
           )}
         </div>
       </div>
+
+      {/* ── Preview modal ── */}
+      {previewOpen && (
+        <TemplatePreviewModal
+          template={previewTemplate}
+          onClose={() => setPreviewOpen(false)}
+        />
+      )}
     </div>
   )
 }

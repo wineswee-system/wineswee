@@ -1,4 +1,5 @@
-import { Routes, Route } from 'react-router-dom'
+import { lazy, Suspense } from 'react'
+import { Routes, Route, useSearchParams } from 'react-router-dom'
 import Overview from '../pages/process/Overview'
 import Workflows from '../pages/process/Workflows'
 import Tasks from '../pages/process/Tasks'
@@ -6,6 +7,7 @@ import Checklists from '../pages/process/Checklists'
 import SOPTemplates from '../pages/process/SOPTemplates'
 import TemplateLibrary from '../pages/process/TemplateLibrary'
 import TemplateStudio from '../pages/process/TemplateStudio'
+import ProjectTemplateStudio from '../pages/process/ProjectTemplateStudio'
 import Approvals from '../pages/process/Approvals'
 import TaskConfirmations from '../pages/process/TaskConfirmations'
 import Projects from '../pages/process/Projects'
@@ -16,6 +18,7 @@ import ExpenseChains from '../pages/process/settings/ExpenseChains'
 import TransferApplyChains from '../pages/process/settings/TransferApplyChains'
 import TransferReceiptChains from '../pages/process/settings/TransferReceiptChains'
 import ChainEdit from '../pages/process/settings/ChainEdit'
+import DelegationRules from '../pages/process/settings/DelegationRules'
 import BusinessApplications from '../pages/process/BusinessApplications'
 import TransferRequests from '../pages/process/TransferRequests'
 import StoreAudits from '../pages/workflow/StoreAudits'
@@ -23,6 +26,21 @@ import ExpenseRequests from '../pages/workflow/ExpenseRequests'
 import Expenses from '../pages/workflow/Expenses'
 import CustomFormFill from '../pages/workflow/CustomFormFill'
 import FormSubmissions from '../pages/workflow/FormSubmissions'
+import LoadingSpinner from '../components/LoadingSpinner'
+
+const ListTemplateStudio = lazy(() => import('../pages/process/ListTemplateStudio'))
+const FormTemplateStudio = lazy(() => import('../pages/process/FormTemplateStudio'))
+
+/**
+ * SopStudioRouter — dispatches to the correct Studio based on ?type= query param.
+ *   ?type=project  → ProjectTemplateStudio
+ *   (default)      → TemplateStudio (workflow)
+ */
+function SopStudioRouter() {
+  const [searchParams] = useSearchParams()
+  if (searchParams.get('type') === 'project') return <ProjectTemplateStudio />
+  return <TemplateStudio />
+}
 
 // 老頁面已下架（2026-05-08），但 2026-05-11 重做為中央 library 管理：
 //   /process/settings/chains         → 全 chain library（取代舊 /process/approval-chains）
@@ -39,8 +57,15 @@ export default function ProcessModule() {
       <Route path="checklists" element={<Checklists />} />
       {/* ── SOP範本庫（重設計）── */}
       <Route path="sop" element={<TemplateLibrary />} />
-      <Route path="sop/new" element={<TemplateStudio />} />
-      <Route path="sop/:id/edit" element={<TemplateStudio />} />
+      {/* ?type=project → ProjectTemplateStudio; default → TemplateStudio */}
+      <Route path="sop/new" element={<SopStudioRouter />} />
+      <Route path="sop/:id/edit" element={<SopStudioRouter />} />
+      {/* ── 清單範本 Studio ── */}
+      <Route path="sop/list/new"      element={<Suspense fallback={<LoadingSpinner />}><ListTemplateStudio /></Suspense>} />
+      <Route path="sop/list/:id/edit" element={<Suspense fallback={<LoadingSpinner />}><ListTemplateStudio /></Suspense>} />
+      {/* ── 表單範本 Studio ── */}
+      <Route path="sop/form/new"      element={<Suspense fallback={<LoadingSpinner />}><FormTemplateStudio /></Suspense>} />
+      <Route path="sop/form/:id/edit" element={<Suspense fallback={<LoadingSpinner />}><FormTemplateStudio /></Suspense>} />
       {/* 保留舊頁備用 */}
       <Route path="sop/legacy" element={<SOPTemplates />} />
       <Route path="approvals" element={<Approvals />} />
@@ -60,6 +85,7 @@ export default function ProcessModule() {
       <Route path="settings/expense-chains" element={<ExpenseChains />} />
       <Route path="settings/transfer-apply-chains" element={<TransferApplyChains />} />
       <Route path="settings/transfer-receipt-chains" element={<TransferReceiptChains />} />
+      <Route path="settings/delegation" element={<DelegationRules />} />
     </Routes>
   )
 }

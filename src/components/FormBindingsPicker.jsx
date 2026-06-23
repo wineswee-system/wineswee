@@ -111,13 +111,13 @@ export default function FormBindingsPicker({ value = [], onChange, readonly = fa
   const toggle = (o) => {
     if (readonly) return
     const k = keyOf(o)
-    if (lockedKeys.includes(k)) return  // 鎖定的不能改
+    if (lockedKeys.includes(k)) { setOpen(false); return }
     if (isSelected(o)) {
       onChange?.(value.filter(v => keyOf(v) !== k))
     } else {
       onChange?.([...value, { form_type: o.form_type, form_template_id: o.form_template_id, label: o.label }])
-      setOpen(false)
     }
+    setOpen(false)
   }
 
   // 套用搜尋 filter

@@ -114,6 +114,8 @@ export default function Salary() {
   const canCompute = isAdmin || hasPermission('salary.compute')  // 批次計薪
   const canEditSalary = isAdmin || hasPermission('salary.edit')  // 新增薪資 / 逐筆調整（薪資結構=修改薪資）
   const canAudit = isAdmin || hasPermission('audit.view')        // 稽核（操作紀錄）
+  const canExport = isAdmin || hasPermission('salary.export')          // 匯出薪資報表 PDF
+  const canSendPayslip = isAdmin || hasPermission('salary.send_payslip') // 發送薪資條 LINE
 
   const [records, setRecords] = useState([])
   const [bonusRecords, setBonusRecords] = useState([])
@@ -527,9 +529,11 @@ export default function Salary() {
                   🔍 稽核
                 </button>
               )}
-              <button className="btn btn-secondary" onClick={() => exportSalaryPdf(filtered, month)}>
-                <Download size={14} /> 匯出 PDF
-              </button>
+              {canExport && (
+                <button className="btn btn-secondary" onClick={() => exportSalaryPdf(filtered, month)}>
+                  <Download size={14} /> 匯出 PDF
+                </button>
+              )}
               {canBank && (
                 <button className="btn btn-secondary" onClick={() => setShowBankImport(true)}>
                   <Landmark size={14} /> 匯入銀行帳號
@@ -540,7 +544,7 @@ export default function Salary() {
                   <Download size={14} /> 匯出代發薪檔
                 </button>
               )}
-              {canBank && (
+              {canSendPayslip && (
                 <button className="btn btn-secondary" onClick={handleSendPayslips} disabled={sendingPayslips}>
                   <Send size={14} /> {sendingPayslips ? '發送中…' : '發送薪資條 (LINE)'}
                 </button>

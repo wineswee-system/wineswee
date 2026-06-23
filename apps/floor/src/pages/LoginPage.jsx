@@ -48,16 +48,16 @@ export default function LoginPage() {
 
   return (
     <div style={{
-      minHeight: '100vh', background: '#0f1117',
+      minHeight: '100vh', background: '#f1f5f9',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>
       <div style={{
-        width: 360, background: '#141720',
-        borderRadius: 16, border: '1px solid #1f2336',
+        width: 360, background: '#ffffff',
+        borderRadius: 16, border: '1px solid #e9ecf1',
         padding: '40px 36px',
       }}>
         <div style={{ marginBottom: 28 }}>
-          <div style={{ fontSize: 22, fontWeight: 700, color: '#e5e7eb' }}>Floor Panel</div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: '#111827' }}>Floor Panel</div>
           <div style={{ fontSize: 13, color: '#6b7280', marginTop: 4 }}>限管理員、主管登入</div>
         </div>
 
@@ -77,21 +77,21 @@ export default function LoginPage() {
 
         {/* Divider */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-          <div style={{ flex: 1, height: 1, background: '#1f2336' }} />
-          <span style={{ fontSize: 12, color: '#4b5563' }}>或使用帳號密碼</span>
-          <div style={{ flex: 1, height: 1, background: '#1f2336' }} />
+          <div style={{ flex: 1, height: 1, background: '#e9ecf1' }} />
+          <span style={{ fontSize: 12, color: '#6b7280' }}>或使用帳號密碼</span>
+          <div style={{ flex: 1, height: 1, background: '#e9ecf1' }} />
         </div>
 
         {/* Email/password */}
         <form onSubmit={submitEmail} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div>
-            <label style={{ display: 'block', fontSize: 13, color: '#9ca3af', marginBottom: 6 }}>Email</label>
+            <label style={{ display: 'block', fontSize: 13, color: '#6b7280', marginBottom: 6 }}>Email</label>
             <input type="email" required autoFocus value={email}
               onChange={e => setEmail(e.target.value)}
               placeholder="admin@example.com" style={INPUT} />
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: 13, color: '#9ca3af', marginBottom: 6 }}>密碼</label>
+            <label style={{ display: 'block', fontSize: 13, color: '#6b7280', marginBottom: 6 }}>密碼</label>
             <input type="password" required value={password}
               onChange={e => setPassword(e.target.value)}
               placeholder="••••••••" style={INPUT} />
@@ -126,7 +126,7 @@ function LineIcon() {
 }
 
 const INPUT = {
-  width: '100%', background: '#0f1117', border: '1px solid #2d3148',
-  borderRadius: 8, color: '#e5e7eb', padding: '10px 12px',
+  width: '100%', background: '#f9fafb', border: '1px solid #d1d5db',
+  borderRadius: 8, color: '#111827', padding: '10px 12px',
   fontSize: 14, outline: 'none', boxSizing: 'border-box',
 }

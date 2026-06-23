@@ -9,7 +9,7 @@ import {
 import { useStore } from '../contexts/StoreContext'
 import { useAuth } from '../contexts/AuthContext'
 
-const STATUS_COLOR = { pending:'#f97316', confirmed:'#3b82f6', seated:'#0891b2', completed:'#22c55e', cancelled:'#374151', no_show:'#ef4444' }
+const STATUS_COLOR = { pending:'#f97316', confirmed:'#3b82f6', seated:'#0891b2', completed:'#22c55e', cancelled:'#64748b', no_show:'#ef4444' }
 const STATUS_LABEL = { pending:'待確認', confirmed:'已確認', seated:'已入座', completed:'已完成', cancelled:'已取消', no_show:'未到場' }
 
 function genCode() { return Math.random().toString(36).slice(2, 8).toUpperCase() }
@@ -55,7 +55,7 @@ export default function ReservationList() {
   return (
     <div style={{ padding: 24, minHeight: '100%' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 700, color: '#e5e7eb' }}>訂位清單</h1>
+        <h1 style={{ fontSize: 20, fontWeight: 700, color: '#111827' }}>訂位清單</h1>
         <button onClick={() => setShowWalkin(true)}
           style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#0891b2', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 16px', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
           <Plus size={16} />新增訂位
@@ -79,7 +79,7 @@ export default function ReservationList() {
       {/* List */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {filtered.length === 0 && (
-          <div style={{ color: '#4b5563', fontSize: 14, textAlign: 'center', padding: '48px 0' }}>無符合的訂位</div>
+          <div style={{ color: '#6b7280', fontSize: 14, textAlign: 'center', padding: '48px 0' }}>無符合的訂位</div>
         )}
         {filtered.map(r => (
           <RsvRow key={r.id} r={r} tables={tables}
@@ -122,36 +122,36 @@ function RsvRow({ r, tables, expanded, onToggle, onAct, onEdit }) {
   }, [expanded, r.id])
 
   return (
-    <div style={{ background: '#1e2232', border: '1px solid #2d3148', borderRadius: 10, overflow: 'hidden' }}>
+    <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 10, overflow: 'hidden' }}>
       <div onClick={onToggle} style={{ display: 'flex', alignItems: 'center', padding: '14px 16px', cursor: 'pointer', gap: 12 }}>
         <span style={{
           padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, flexShrink: 0,
-          background: (STATUS_COLOR[r.status] ?? '#374151') + '22',
-          color: STATUS_COLOR[r.status] ?? '#9ca3af',
+          background: (STATUS_COLOR[r.status] ?? '#64748b') + '22',
+          color: STATUS_COLOR[r.status] ?? '#6b7280',
         }}>
           {STATUS_LABEL[r.status] ?? r.status}
         </span>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: '#e5e7eb' }}>{r.guest_name}</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>{r.guest_name}</div>
           <div style={{ fontSize: 12, color: '#6b7280' }}>
             {r.reservation_time?.slice(0, 5)} · {r.party_size}人 · {r.duration_hours}h
             {r.res_tables ? ` · T${r.res_tables.table_number}` : ''}
           </div>
         </div>
-        <div style={{ color: '#4b5563' }}>{expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}</div>
+        <div style={{ color: '#6b7280' }}>{expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}</div>
       </div>
 
       {expanded && (
-        <div style={{ padding: '0 16px 16px', borderTop: '1px solid #1f2336' }}>
+        <div style={{ padding: '0 16px 16px', borderTop: '1px solid #e9ecf1' }}>
           <div style={{ paddingTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
             {r.status === 'pending'   && <Btn color="#3b82f6" onClick={() => onAct(r.id, 'status', 'confirmed')}>確認</Btn>}
             {r.status === 'confirmed' && <Btn color="#0891b2" onClick={() => onAct(r.id, 'checkin')}>入座</Btn>}
             {r.status === 'seated'    && <Btn color="#f97316" onClick={() => onAct(r.id, 'extend', r.extended_hours || 0)}>延長 +1h</Btn>}
             {r.status === 'seated'    && <Btn color="#22c55e" onClick={() => onAct(r.id, 'status', 'completed')}>完成</Btn>}
             {['pending','confirmed'].includes(r.status) && <Btn color="#ef4444" onClick={() => onAct(r.id, 'status', 'no_show')}>未到</Btn>}
-            {['pending','confirmed','seated'].includes(r.status) && <Btn color="#374151" onClick={() => onAct(r.id, 'status', 'cancelled')}>取消</Btn>}
-            <Btn color="#374151" onClick={onEdit}><Pencil size={12} style={{ display:'inline', verticalAlign:'middle', marginRight:4 }} />編輯</Btn>
-            <Btn color="#7f1d1d" onClick={() => { if (window.confirm('確定刪除此訂位？此動作無法復原。')) onAct(r.id, 'delete') }}>
+            {['pending','confirmed','seated'].includes(r.status) && <Btn color="#64748b" onClick={() => onAct(r.id, 'status', 'cancelled')}>取消</Btn>}
+            <Btn color="#64748b" onClick={onEdit}><Pencil size={12} style={{ display:'inline', verticalAlign:'middle', marginRight:4 }} />編輯</Btn>
+            <Btn color="#dc2626" onClick={() => { if (window.confirm('確定刪除此訂位？此動作無法復原。')) onAct(r.id, 'delete') }}>
               <Trash2 size={12} style={{ display:'inline', verticalAlign:'middle', marginRight:4 }} />刪除
             </Btn>
           </div>
@@ -178,14 +178,14 @@ function RsvRow({ r, tables, expanded, onToggle, onAct, onEdit }) {
           </div>
 
           {logs.length > 0 && (
-            <div style={{ marginTop: 14, borderTop: '1px solid #1f2336', paddingTop: 10 }}>
-              <div style={{ fontSize: 11, color: '#4b5563', fontWeight: 600, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>變更記錄</div>
+            <div style={{ marginTop: 14, borderTop: '1px solid #e9ecf1', paddingTop: 10 }}>
+              <div style={{ fontSize: 11, color: '#6b7280', fontWeight: 600, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>變更記錄</div>
               {logs.map(l => (
-                <div key={l.id} style={{ display: 'flex', gap: 10, fontSize: 12, color: '#6b7280', padding: '4px 0', borderBottom: '1px solid #1a1f30' }}>
-                  <span style={{ color: '#4b5563', flexShrink: 0 }}>
+                <div key={l.id} style={{ display: 'flex', gap: 10, fontSize: 12, color: '#6b7280', padding: '4px 0', borderBottom: '1px solid #e9ecf1' }}>
+                  <span style={{ color: '#6b7280', flexShrink: 0 }}>
                     {new Date(l.created_at).toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
                   </span>
-                  <span style={{ color: '#9ca3af', flexShrink: 0 }}>{ACTION_LABEL[l.action] ?? l.action}</span>
+                  <span style={{ color: '#6b7280', flexShrink: 0 }}>{ACTION_LABEL[l.action] ?? l.action}</span>
                   {l.employees?.name && <span style={{ color: '#6b7280' }}>by {l.employees.name}</span>}
                 </div>
               ))}
@@ -229,15 +229,15 @@ function WalkinModal({ storeId, date, tables, employeeId, onClose, onCreated }) 
   }
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
-      <div style={{ background: '#1e2232', border: '1px solid #2d3148', borderRadius: 16, padding: 28, width: 420, maxHeight: '90vh', overflowY: 'auto' }}>
-        <div style={{ fontSize: 16, fontWeight: 700, color: '#e5e7eb', marginBottom: 20 }}>新增訂位</div>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
+      <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 16, padding: 28, width: 420, maxHeight: '90vh', overflowY: 'auto' }}>
+        <div style={{ fontSize: 16, fontWeight: 700, color: '#111827', marginBottom: 20 }}>新增訂位</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <Field label="人數">
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               {[1,2,3,4,5,6,7,8].map(n => (
                 <button key={n} onClick={() => setPartySize(n)}
-                  style={{ ...PILL, background: n === partySize ? '#0891b2' : '#141720', color: n === partySize ? '#fff' : '#9ca3af' }}>
+                  style={{ ...PILL, background: n === partySize ? '#0891b2' : '#f0f4f8', color: n === partySize ? '#fff' : '#6b7280' }}>
                   {n}人
                 </button>
               ))}
@@ -247,7 +247,7 @@ function WalkinModal({ storeId, date, tables, employeeId, onClose, onCreated }) 
             <div style={{ display: 'flex', gap: 6 }}>
               {[1,2,3].map(h => (
                 <button key={h} onClick={() => setDuration(h)}
-                  style={{ ...PILL, background: h === duration ? '#0891b2' : '#141720', color: h === duration ? '#fff' : '#9ca3af' }}>
+                  style={{ ...PILL, background: h === duration ? '#0891b2' : '#f0f4f8', color: h === duration ? '#fff' : '#6b7280' }}>
                   {h}小時
                 </button>
               ))}
@@ -255,10 +255,10 @@ function WalkinModal({ storeId, date, tables, employeeId, onClose, onCreated }) 
           </Field>
           <Field label="時段">
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {slots.length === 0 && <div style={{ fontSize: 13, color: '#4b5563' }}>無可用時段</div>}
+              {slots.length === 0 && <div style={{ fontSize: 13, color: '#6b7280' }}>無可用時段</div>}
               {slots.map(s => (
                 <button key={s.slot_time} onClick={() => setSlot(s.slot_time)}
-                  style={{ ...PILL, background: slot === s.slot_time ? '#0891b2' : '#141720', color: slot === s.slot_time ? '#fff' : '#9ca3af' }}>
+                  style={{ ...PILL, background: slot === s.slot_time ? '#0891b2' : '#f0f4f8', color: slot === s.slot_time ? '#fff' : '#6b7280' }}>
                   {s.slot_time.slice(0, 5)}
                 </button>
               ))}
@@ -280,7 +280,7 @@ function WalkinModal({ storeId, date, tables, employeeId, onClose, onCreated }) 
           </Field>
         </div>
         <div style={{ display: 'flex', gap: 10, marginTop: 24 }}>
-          <button onClick={onClose} style={{ flex: 1, background: 'transparent', border: '1px solid #2d3148', borderRadius: 8, color: '#9ca3af', padding: '11px 0', fontSize: 14, cursor: 'pointer' }}>取消</button>
+          <button onClick={onClose} style={{ flex: 1, background: 'transparent', border: '1px solid #e2e8f0', borderRadius: 8, color: '#6b7280', padding: '11px 0', fontSize: 14, cursor: 'pointer' }}>取消</button>
           <button onClick={submit} disabled={loading || !guestName || !phone || !slot}
             style={{ flex: 2, background: '#0891b2', color: '#fff', border: 'none', borderRadius: 8, padding: '11px 0', fontSize: 14, fontWeight: 700, cursor: 'pointer', opacity: (!guestName || !phone || !slot || loading) ? 0.5 : 1 }}>
             {loading ? '建立中…' : '建立訂位'}
@@ -344,9 +344,9 @@ function EditModal({ r, tables, employeeId, onClose, onSaved }) {
   const suitable = tables.filter(t => t.capacity >= form.party_size)
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
-      <div style={{ background: '#1e2232', border: '1px solid #2d3148', borderRadius: 16, padding: 28, width: 440, maxHeight: '90vh', overflowY: 'auto' }}>
-        <div style={{ fontSize: 16, fontWeight: 700, color: '#e5e7eb', marginBottom: 20 }}>編輯訂位</div>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
+      <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 16, padding: 28, width: 440, maxHeight: '90vh', overflowY: 'auto' }}>
+        <div style={{ fontSize: 16, fontWeight: 700, color: '#111827', marginBottom: 20 }}>編輯訂位</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <Field label="姓名 *">
             <input value={form.guest_name} onChange={e => set('guest_name', e.target.value)} style={INPUT} />
@@ -385,7 +385,7 @@ function EditModal({ r, tables, employeeId, onClose, onSaved }) {
           </Field>
         </div>
         <div style={{ display: 'flex', gap: 10, marginTop: 24 }}>
-          <button onClick={onClose} style={{ flex: 1, background: 'transparent', border: '1px solid #2d3148', borderRadius: 8, color: '#9ca3af', padding: '11px 0', fontSize: 14, cursor: 'pointer' }}>取消</button>
+          <button onClick={onClose} style={{ flex: 1, background: 'transparent', border: '1px solid #e2e8f0', borderRadius: 8, color: '#6b7280', padding: '11px 0', fontSize: 14, cursor: 'pointer' }}>取消</button>
           <button onClick={save} disabled={loading || !form.guest_name || !form.guest_phone}
             style={{ flex: 2, background: '#0891b2', color: '#fff', border: 'none', borderRadius: 8, padding: '11px 0', fontSize: 14, fontWeight: 700, cursor: 'pointer', opacity: (!form.guest_name || !form.guest_phone || loading) ? 0.5 : 1 }}>
             {loading ? '儲存中…' : '儲存變更'}
@@ -396,5 +396,5 @@ function EditModal({ r, tables, employeeId, onClose, onSaved }) {
   )
 }
 
-const INPUT = { background: '#141720', border: '1px solid #2d3148', borderRadius: 8, color: '#e5e7eb', padding: '9px 12px', fontSize: 14, outline: 'none', width: '100%', boxSizing: 'border-box' }
+const INPUT = { background: '#f9fafb', border: '1px solid #d1d5db', borderRadius: 8, color: '#111827', padding: '9px 12px', fontSize: 14, outline: 'none', width: '100%', boxSizing: 'border-box' }
 const PILL  = { padding: '6px 12px', border: 'none', borderRadius: 16, fontSize: 13, cursor: 'pointer', fontWeight: 500 }

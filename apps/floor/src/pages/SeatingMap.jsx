@@ -7,7 +7,7 @@ import {
 import { useStore } from '../contexts/StoreContext'
 import { useAuth } from '../contexts/AuthContext'
 
-const TILE_BG     = { available:'#1a2e1a', pending:'#2e1e08', confirmed:'#0d1e2e', seated:'#0a1f2e', expiring:'#2e1a08' }
+const TILE_BG     = { available:'#f0fdf4', pending:'#fff7ed', confirmed:'#eff6ff', seated:'#ecfeff', expiring:'#fff7ed' }
 const TILE_BORDER = { available:'#22c55e', pending:'#f97316', confirmed:'#3b82f6', seated:'#0891b2', expiring:'#f97316' }
 const TILE_TEXT   = { available:'#22c55e', pending:'#f97316', confirmed:'#60a5fa', seated:'#38bdf8', expiring:'#fb923c' }
 
@@ -88,18 +88,18 @@ export default function SeatingMap() {
       {/* Floor plan */}
       <div style={{ flex: 1, padding: 24, overflow: 'auto' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-          <h1 style={{ fontSize: 20, fontWeight: 700, color: '#e5e7eb' }}>
+          <h1 style={{ fontSize: 20, fontWeight: 700, color: '#111827' }}>
             座位地圖
             {moveMode && <span style={{ fontSize: 13, color: '#f97316', fontWeight: 400, marginLeft: 10 }}>— 點選目標桌位完成移桌</span>}
           </h1>
           <input type="date" value={date} onChange={e => setDate(e.target.value)}
-            style={{ background: '#1e2232', border: '1px solid #2d3148', borderRadius: 8, color: '#e5e7eb', padding: '8px 12px', fontSize: 14, outline: 'none' }} />
+            style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, color: '#111827', padding: '8px 12px', fontSize: 14, outline: 'none' }} />
         </div>
 
         {/* Legend */}
         <div style={{ display: 'flex', gap: 16, marginBottom: 20, flexWrap: 'wrap' }}>
           {[['available','空桌'],['pending','待確認'],['confirmed','已訂位'],['seated','入座中'],['expiring','即將到時']].map(([s, l]) => (
-            <div key={s} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#9ca3af' }}>
+            <div key={s} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#6b7280' }}>
               <div style={{ width: 10, height: 10, borderRadius: 2, background: TILE_BORDER[s] }} />
               {l}
             </div>
@@ -107,7 +107,7 @@ export default function SeatingMap() {
         </div>
 
         {tables.length === 0 ? (
-          <div style={{ color: '#4b5563', fontSize: 14, textAlign: 'center', paddingTop: 60 }}>尚無桌位資料，請先在設定中新增桌位</div>
+          <div style={{ color: '#6b7280', fontSize: 14, textAlign: 'center', paddingTop: 60 }}>尚無桌位資料，請先在設定中新增桌位</div>
         ) : (
           <div style={{
             display: 'grid',
@@ -136,14 +136,14 @@ export default function SeatingMap() {
                   transition: 'box-shadow 0.15s',
                 }}>
                   <div style={{ fontSize: 15, fontWeight: 700, color: TILE_TEXT[status] }}>T{tbl.table_number}</div>
-                  <div style={{ fontSize: 11, color: '#4b5563' }}>{tbl.capacity}人</div>
+                  <div style={{ fontSize: 11, color: '#6b7280' }}>{tbl.capacity}人</div>
                   {rsv && (
                     <div style={{ fontSize: 11, color: TILE_TEXT[status], overflow: 'hidden', maxWidth: '90%', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'center' }}>
                       {rsv.guest_name}
                     </div>
                   )}
                   {remMin !== null && (
-                    <div style={{ fontSize: 10, color: remMin <= 15 ? '#f97316' : '#4b5563' }}>
+                    <div style={{ fontSize: 10, color: remMin <= 15 ? '#f97316' : '#6b7280' }}>
                       {remMin > 0 ? `${remMin}分` : '已超時'}
                     </div>
                   )}
@@ -155,15 +155,15 @@ export default function SeatingMap() {
       </div>
 
       {/* Action panel */}
-      <div style={{ width: 256, flexShrink: 0, background: '#141720', borderLeft: '1px solid #1f2336', padding: 20, display: 'flex', flexDirection: 'column', gap: 14, overflowY: 'auto' }}>
+      <div style={{ width: 256, flexShrink: 0, background: '#ffffff', borderLeft: '1px solid #e9ecf1', padding: 20, display: 'flex', flexDirection: 'column', gap: 14, overflowY: 'auto' }}>
         {!selected && (
-          <div style={{ color: '#4b5563', fontSize: 13, marginTop: 48, textAlign: 'center' }}>點選桌位查看詳情</div>
+          <div style={{ color: '#6b7280', fontSize: 13, marginTop: 48, textAlign: 'center' }}>點選桌位查看詳情</div>
         )}
 
         {selected && (
           <>
-            <div style={{ paddingBottom: 12, borderBottom: '1px solid #1f2336' }}>
-              <div style={{ fontSize: 17, fontWeight: 700, color: '#e5e7eb' }}>T{selected.table_number}</div>
+            <div style={{ paddingBottom: 12, borderBottom: '1px solid #e9ecf1' }}>
+              <div style={{ fontSize: 17, fontWeight: 700, color: '#111827' }}>T{selected.table_number}</div>
               <div style={{ fontSize: 13, color: '#6b7280', marginTop: 2 }}>容量 {selected.capacity} 人</div>
             </div>
 
@@ -174,8 +174,8 @@ export default function SeatingMap() {
             )}
 
             {selRsv && (
-              <div style={{ background: '#1e2232', border: '1px solid #2d3148', borderRadius: 10, padding: 14, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <div style={{ fontSize: 14, fontWeight: 600, color: '#e5e7eb' }}>{selRsv.guest_name}</div>
+              <div style={{ background: '#f0f4f8', border: '1px solid #e2e8f0', borderRadius: 10, padding: 14, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>{selRsv.guest_name}</div>
                 <div style={{ fontSize: 12, color: '#6b7280' }}>{selRsv.reservation_time?.slice(0,5)} · {selRsv.party_size}人</div>
                 <div style={{ fontSize: 12, color: '#6b7280' }}>
                   {selRsv.duration_hours + (selRsv.extended_hours || 0)}h 用餐
@@ -205,7 +205,7 @@ export default function SeatingMap() {
             )}
 
             <button onClick={() => { setSelected(null); setMoveMode(false) }}
-              style={{ marginTop: 'auto', background: 'transparent', border: '1px solid #2d3148', borderRadius: 8, color: '#6b7280', padding: '9px', fontSize: 13, cursor: 'pointer' }}>
+              style={{ marginTop: 'auto', background: 'transparent', border: '1px solid #e2e8f0', borderRadius: 8, color: '#6b7280', padding: '9px', fontSize: 13, cursor: 'pointer' }}>
               取消選取
             </button>
           </>

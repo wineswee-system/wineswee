@@ -25,26 +25,26 @@ export default function Layout({ children }) {
       {/* Sidebar */}
       <aside style={{
         width: 220, flexShrink: 0,
-        background: '#141720',
-        borderRight: '1px solid #1f2336',
+        background: '#ffffff',
+        borderRight: '1px solid #e9ecf1',
         display: 'flex', flexDirection: 'column',
       }}>
         {/* Brand */}
-        <div style={{ padding: '24px 20px 16px', borderBottom: '1px solid #1f2336' }}>
-          <div style={{ fontSize: 16, fontWeight: 700, color: '#e5e7eb' }}>Floor Panel</div>
+        <div style={{ padding: '24px 20px 16px', borderBottom: '1px solid #e9ecf1' }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: '#111827' }}>Floor Panel</div>
           <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>訂位管理系統</div>
         </div>
 
         {/* Store selector */}
-        <div style={{ padding: '14px 16px', borderBottom: '1px solid #1f2336' }}>
+        <div style={{ padding: '14px 16px', borderBottom: '1px solid #e9ecf1' }}>
           <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 6, fontWeight: 500 }}>目前店家</div>
           <div style={{ position: 'relative' }}>
             <select
               value={storeId}
               onChange={e => setStoreId(e.target.value)}
               style={{
-                width: '100%', background: '#1e2232', border: '1px solid #2d3148',
-                borderRadius: 8, color: '#e5e7eb', padding: '8px 28px 8px 10px',
+                width: '100%', background: '#ffffff', border: '1px solid #e2e8f0',
+                borderRadius: 8, color: '#111827', padding: '8px 28px 8px 10px',
                 fontSize: 13, cursor: 'pointer', outline: 'none', appearance: 'none',
               }}
             >
@@ -61,8 +61,8 @@ export default function Layout({ children }) {
               display: 'flex', alignItems: 'center', gap: 10,
               padding: '10px 12px', borderRadius: 8, textDecoration: 'none',
               fontSize: 14, fontWeight: isActive ? 600 : 400,
-              color: isActive ? '#0891b2' : '#9ca3af',
-              background: isActive ? 'rgba(8,145,178,0.12)' : 'transparent',
+              color: isActive ? '#0369a1' : '#6b7280',
+              background: isActive ? '#e0f2fe' : 'transparent',
             })}>
               <Icon size={17} />
               {label}
@@ -71,14 +71,14 @@ export default function Layout({ children }) {
         </nav>
 
         {/* User / logout */}
-        <div style={{ padding: '12px 16px', borderTop: '1px solid #1f2336' }}>
+        <div style={{ padding: '12px 16px', borderTop: '1px solid #e9ecf1' }}>
           <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 10, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {user?.email}
           </div>
           <button onClick={signOut} style={{
             display: 'flex', alignItems: 'center', gap: 8,
-            background: 'transparent', border: '1px solid #2d3148',
-            borderRadius: 8, color: '#9ca3af', padding: '8px 12px',
+            background: 'transparent', border: '1px solid #e2e8f0',
+            borderRadius: 8, color: '#6b7280', padding: '8px 12px',
             fontSize: 13, cursor: 'pointer', width: '100%',
           }}>
             <LogOut size={14} />
@@ -88,7 +88,7 @@ export default function Layout({ children }) {
       </aside>
 
       {/* Main content */}
-      <main style={{ flex: 1, overflow: 'auto', background: '#0f1117' }}>
+      <main style={{ flex: 1, overflow: 'auto', background: '#f1f5f9' }}>
         {children}
       </main>
     </div>

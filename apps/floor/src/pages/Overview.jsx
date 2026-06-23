@@ -14,7 +14,7 @@ const STATUS_COLOR = {
   confirmed: '#3b82f6',
   seated:    '#0891b2',
   completed: '#22c55e',
-  cancelled: '#374151',
+  cancelled: '#64748b',
   no_show:   '#ef4444',
 }
 
@@ -75,9 +75,9 @@ export default function Overview() {
     <div style={{ padding: 24, minHeight: '100%' }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 700, color: '#e5e7eb' }}>今日總覽</h1>
+        <h1 style={{ fontSize: 20, fontWeight: 700, color: '#111827' }}>今日總覽</h1>
         <input type="date" value={date} onChange={e => setDate(e.target.value)}
-          style={{ background: '#1e2232', border: '1px solid #2d3148', borderRadius: 8, color: '#e5e7eb', padding: '8px 12px', fontSize: 14, outline: 'none' }} />
+          style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, color: '#111827', padding: '8px 12px', fontSize: 14, outline: 'none' }} />
       </div>
 
       {/* Stat cards */}
@@ -88,19 +88,19 @@ export default function Overview() {
           { label: '已入座',  value: seated.length,    color: '#0891b2' },
           { label: '今日總計', value: rsvs.length,     color: '#22c55e' },
         ].map(({ label, value, color }) => (
-          <div key={label} style={{ background: '#1e2232', border: '1px solid #2d3148', borderRadius: 12, padding: '16px 20px' }}>
+          <div key={label} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '16px 20px' }}>
             <div style={{ fontSize: 28, fontWeight: 800, color }}>{value}</div>
-            <div style={{ fontSize: 13, color: '#6b7280', marginTop: 4 }}>{label}</div>
+            <div style={{ fontSize: 13, color: '#374151', marginTop: 4 }}>{label}</div>
           </div>
         ))}
       </div>
 
       {/* Gantt */}
-      <div style={{ background: '#1e2232', border: '1px solid #2d3148', borderRadius: 12, padding: 20, marginBottom: 24 }}>
-        <div style={{ fontSize: 14, fontWeight: 600, color: '#9ca3af', marginBottom: 12 }}>時段表</div>
+      <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 20, marginBottom: 24 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: '#374151', marginBottom: 12 }}>時段表</div>
         <div style={{ display: 'flex', marginLeft: 80, marginBottom: 4 }}>
           {Array.from({ length: HOUR_END - HOUR_START + 1 }, (_, i) => (
-            <div key={i} style={{ flex: 1, fontSize: 11, color: '#4b5563' }}>{HOUR_START + i}</div>
+            <div key={i} style={{ flex: 1, fontSize: 11, color: '#6b7280' }}>{HOUR_START + i}</div>
           ))}
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -108,8 +108,8 @@ export default function Overview() {
             const tblRsvs = active.filter(r => r.table_id === tbl.id)
             return (
               <div key={tbl.id} style={{ display: 'flex', alignItems: 'center', height: 30 }}>
-                <div style={{ width: 72, flexShrink: 0, fontSize: 12, color: '#6b7280', fontWeight: 600 }}>T{tbl.table_number}</div>
-                <div style={{ flex: 1, position: 'relative', height: '100%', background: '#141720', borderRadius: 4 }}>
+                <div style={{ width: 72, flexShrink: 0, fontSize: 12, color: '#374151', fontWeight: 600 }}>T{tbl.table_number}</div>
+                <div style={{ flex: 1, position: 'relative', height: '100%', background: '#f0f4f8', borderRadius: 4 }}>
                   {nowPct >= 0 && nowPct <= 100 && (
                     <div style={{ position: 'absolute', left: `${nowPct}%`, top: 0, bottom: 0, width: 1.5, background: '#ef4444', zIndex: 3 }} />
                   )}
@@ -124,7 +124,7 @@ export default function Overview() {
                         style={{
                           position: 'absolute', left: `${l}%`, width: `${w}%`,
                           top: 2, bottom: 2, borderRadius: 3,
-                          background: STATUS_COLOR[r.status] ?? '#374151',
+                          background: STATUS_COLOR[r.status] ?? '#64748b',
                           display: 'flex', alignItems: 'center', paddingLeft: 4,
                           fontSize: 10, color: '#fff', overflow: 'hidden', whiteSpace: 'nowrap',
                         }}>
@@ -137,7 +137,7 @@ export default function Overview() {
             )
           })}
           {tables.length === 0 && (
-            <div style={{ color: '#4b5563', fontSize: 13, textAlign: 'center', padding: '16px 0' }}>尚無桌位資料</div>
+            <div style={{ color: '#6b7280', fontSize: 13, textAlign: 'center', padding: '16px 0' }}>尚無桌位資料</div>
           )}
         </div>
       </div>
@@ -145,35 +145,35 @@ export default function Overview() {
       {/* Bottom panels */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
         {/* Pending */}
-        <div style={{ background: '#1e2232', border: '1px solid #2d3148', borderRadius: 12, padding: 20 }}>
+        <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 20 }}>
           <div style={{ fontSize: 14, fontWeight: 600, color: '#f97316', marginBottom: 14 }}>待確認 ({pending.length})</div>
-          {pending.length === 0 && <div style={{ color: '#4b5563', fontSize: 13 }}>無待確認訂位</div>}
+          {pending.length === 0 && <div style={{ color: '#6b7280', fontSize: 13 }}>無待確認訂位</div>}
           {pending.map(r => (
-            <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #1f2336' }}>
+            <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #e9ecf1' }}>
               <div>
-                <div style={{ fontSize: 14, fontWeight: 600, color: '#e5e7eb' }}>{r.guest_name}</div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>{r.guest_name}</div>
                 <div style={{ fontSize: 12, color: '#6b7280' }}>{r.reservation_time?.slice(0, 5)} · {r.party_size}人</div>
               </div>
               <div style={{ display: 'flex', gap: 6 }}>
                 <Btn color="#3b82f6" onClick={() => act(r.id, 'confirmed')}>確認</Btn>
-                <Btn color="#374151" onClick={() => act(r.id, 'cancelled')}>取消</Btn>
+                <Btn color="#64748b" onClick={() => act(r.id, 'cancelled')}>取消</Btn>
               </div>
             </div>
           ))}
         </div>
 
         {/* Seated */}
-        <div style={{ background: '#1e2232', border: '1px solid #2d3148', borderRadius: 12, padding: 20 }}>
+        <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 20 }}>
           <div style={{ fontSize: 14, fontWeight: 600, color: '#0891b2', marginBottom: 14 }}>已入座 ({seated.length})</div>
-          {seated.length === 0 && <div style={{ color: '#4b5563', fontSize: 13 }}>無入座中訂位</div>}
+          {seated.length === 0 && <div style={{ color: '#6b7280', fontSize: 13 }}>無入座中訂位</div>}
           {seated.map(r => {
             const endMs  = new Date(r.seated_at).getTime() + (r.duration_hours + (r.extended_hours || 0)) * 3600000
             const remMin = Math.round((endMs - now) / 60000)
             const urgent = remMin <= 15
             return (
-              <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #1f2336' }}>
+              <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #e9ecf1' }}>
                 <div>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: '#e5e7eb' }}>{r.guest_name}</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>{r.guest_name}</div>
                   <div style={{ fontSize: 12, color: '#6b7280' }}>T{r.res_tables?.table_number} · {r.party_size}人</div>
                 </div>
                 <div style={{ fontSize: 13, fontWeight: 700, color: urgent ? '#f97316' : '#0891b2' }}>

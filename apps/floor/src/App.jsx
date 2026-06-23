@@ -13,7 +13,7 @@ function Guard({ children }) {
 
   if (user === undefined || loading) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', color: '#9ca3af', background: '#0f1117' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', color: '#6b7280', background: '#f1f5f9' }}>
         載入中…
       </div>
     )

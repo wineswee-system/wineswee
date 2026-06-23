@@ -19,12 +19,12 @@ export default function AccessDenied() {
 
   return (
     <div style={{
-      minHeight: '100vh', background: '#0f1117',
+      minHeight: '100vh', background: '#f1f5f9',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>
       <div style={{
-        width: 380, background: '#141720', borderRadius: 16,
-        border: '1px solid #1f2336', padding: '48px 40px', textAlign: 'center',
+        width: 380, background: '#ffffff', borderRadius: 16,
+        border: '1px solid #e9ecf1', padding: '48px 40px', textAlign: 'center',
       }}>
         <div style={{
           width: 60, height: 60, borderRadius: '50%',
@@ -35,17 +35,17 @@ export default function AccessDenied() {
           <ShieldOff size={26} color="#ef4444" />
         </div>
 
-        <div style={{ fontSize: 18, fontWeight: 700, color: '#e5e7eb', marginBottom: 8 }}>
+        <div style={{ fontSize: 18, fontWeight: 700, color: '#111827', marginBottom: 8 }}>
           無存取權限
         </div>
         <div style={{ fontSize: 14, color: '#6b7280', lineHeight: 1.7, marginBottom: 28 }}>
           Floor Panel 僅限管理員與主管使用。
           {employee ? (
-            <div style={{ marginTop: 12, fontSize: 13, color: '#4b5563' }}>
+            <div style={{ marginTop: 12, fontSize: 13, color: '#6b7280' }}>
               目前登入：{employee.name}（{ROLE_LABEL[employee.role] ?? employee.role}）
             </div>
           ) : (
-            <div style={{ marginTop: 12, fontSize: 13, color: '#4b5563' }}>
+            <div style={{ marginTop: 12, fontSize: 13, color: '#6b7280' }}>
               找不到對應的員工帳號，請聯絡管理員。
             </div>
           )}
@@ -53,8 +53,8 @@ export default function AccessDenied() {
 
         <button onClick={signOut} style={{
           width: '100%', padding: '12px',
-          background: 'transparent', border: '1px solid #2d3148',
-          borderRadius: 10, color: '#9ca3af', fontSize: 14, cursor: 'pointer',
+          background: 'transparent', border: '1px solid #e2e8f0',
+          borderRadius: 10, color: '#6b7280', fontSize: 14, cursor: 'pointer',
         }}>
           登出
         </button>

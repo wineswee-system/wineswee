@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Download, Plus, Calculator, Pencil, Landmark, Package } from 'lucide-react'
+import { Download, Plus, Calculator, Pencil, Landmark, Package, Send } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { calculateLaborInsurance, calculateHealthInsurance, calculateLaborPension, calculateMonthlyWithholding, calculateNetSalary, calculateInServiceDays } from '../../lib/payroll'
@@ -133,6 +133,7 @@ export default function Salary() {
   const [showBatchModal, setShowBatchModal] = useState(false)
   const [batchPreview, setBatchPreview] = useState([])
   const [batchSaving, setBatchSaving] = useState(false)
+  const [sendingPayslips, setSendingPayslips] = useState(false)
   const [showBankImport, setShowBankImport] = useState(false)
   const [showPieceModal, setShowPieceModal] = useState(false)
 
@@ -429,6 +430,26 @@ export default function Salary() {
   const handleBatchSave        = () => handleBatchSaveCore('finalized')
   const handleBatchSaveAsDraft = () => handleBatchSaveCore('draft')
 
+  // ── 發送薪資條 LINE（依當月 salary_records 的人，逐人用引擎重算）──
+  const handleSendPayslips = async () => {
+    const targets = filtered.length
+    if (!(await confirm({ message: `確定發送 ${month} 薪資條給該月有薪資紀錄、且已綁定 LINE 的員工嗎？` }))) return
+    setSendingPayslips(true)
+    try {
+      const { data, error } = await supabase.functions.invoke('send-payslips', {
+        body: { pay_period: month, organization_id: orgId },
+      })
+      if (error) throw error
+      if (!data?.ok) { toast.error('發送失敗：' + (data?.error || '未知錯誤')); return }
+      toast.success(`已發送 ${data.sent || 0} 筆${data.failed ? `；${data.failed} 筆失敗（多為未綁 LINE）` : ''}`)
+    } catch (err) {
+      console.error('Send payslips failed:', err)
+      toast.error('發送失敗：' + (err.message || '未知錯誤'))
+    } finally {
+      setSendingPayslips(false)
+    }
+  }
+
   // ── 匯出代發薪匯款檔（admin）──
   // 本月 salary_records 實領 + employee_bank_accounts 帳號 → Excel(.xlsx)
   // 欄位：身分證字號 / 帳號 / 金額 / 姓名
@@ -517,6 +538,11 @@ export default function Salary() {
               {canBank && (
                 <button className="btn btn-secondary" onClick={handleExportTransfer}>
                   <Download size={14} /> 匯出代發薪檔
+                </button>
+              )}
+              {canBank && (
+                <button className="btn btn-secondary" onClick={handleSendPayslips} disabled={sendingPayslips}>
+                  <Send size={14} /> {sendingPayslips ? '發送中…' : '發送薪資條 (LINE)'}
                 </button>
               )}
             </>}

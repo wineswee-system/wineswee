@@ -51,10 +51,24 @@ function buildPayslipFlex(
   payPeriod: string,
   record: Record<string, unknown>,
 ) {
-  const fmt = (v: unknown) => {
-    const n = Number(v) || 0
-    return n.toLocaleString('zh-TW')
-  }
+  const num = (v: unknown) => Number(v) || 0
+  const fmt = (v: unknown) => num(v).toLocaleString('zh-TW')
+  const R = record as Record<string, unknown>
+  // 相容引擎(_compute_payroll_for_employee)與舊 payroll_records 兩種欄位名
+  const base      = num(R.base_salary)
+  const role      = num(R.role_allowance)
+  const meal      = num(R.meal_allowance)
+  const transport = num(R.transport_allowance)
+  const attBonus  = num(R.attendance_bonus ?? R.attendance_bonus_earned)
+  const ot        = num(R.overtimePay ?? R.overtime_pay)
+  const gross     = num(R.gross ?? R.gross_salary)
+  const laborIns  = num(R.laborInsurance ?? R.labor_ins_employee)
+  const healthIns = num(R.healthInsurance ?? R.health_ins_employee)
+  const pension   = num(R.pension ?? R.labor_pension_employee)
+  const leaveDed  = num(R.absenceDeduction) + num(R.unpaidDeduction) + num(R.halfPayDeduction) + num(R.leave_deduction)
+  const lateDed   = num(R.lateDeduction ?? R.late_deduction)
+  const totalDed  = num(R.totalDeductions ?? R.total_deductions)
+  const net       = num(R.netSalary ?? R.net_salary)
 
   return {
     type: 'flex',
@@ -83,31 +97,31 @@ function buildPayslipFlex(
             contents: [
               { type: 'box', layout: 'horizontal', contents: [
                 { type: 'text', text: '底薪', size: 'sm', color: '#555555', flex: 4 },
-                { type: 'text', text: `$${fmt(record.base_salary)}`, size: 'sm', align: 'end', flex: 3 },
+                { type: 'text', text: `$${fmt(base)}`, size: 'sm', align: 'end', flex: 3 },
               ]},
               { type: 'box', layout: 'horizontal', contents: [
                 { type: 'text', text: '職務加給', size: 'sm', color: '#555555', flex: 4 },
-                { type: 'text', text: `$${fmt(record.role_allowance)}`, size: 'sm', align: 'end', flex: 3 },
+                { type: 'text', text: `$${fmt(role)}`, size: 'sm', align: 'end', flex: 3 },
               ]},
               { type: 'box', layout: 'horizontal', contents: [
                 { type: 'text', text: '伙食津貼', size: 'sm', color: '#555555', flex: 4 },
-                { type: 'text', text: `$${fmt(record.meal_allowance)}`, size: 'sm', align: 'end', flex: 3 },
+                { type: 'text', text: `$${fmt(meal)}`, size: 'sm', align: 'end', flex: 3 },
               ]},
               { type: 'box', layout: 'horizontal', contents: [
                 { type: 'text', text: '交通津貼', size: 'sm', color: '#555555', flex: 4 },
-                { type: 'text', text: `$${fmt(record.transport_allowance)}`, size: 'sm', align: 'end', flex: 3 },
+                { type: 'text', text: `$${fmt(transport)}`, size: 'sm', align: 'end', flex: 3 },
               ]},
               { type: 'box', layout: 'horizontal', contents: [
                 { type: 'text', text: '全勤獎金', size: 'sm', color: '#555555', flex: 4 },
-                { type: 'text', text: `$${fmt(record.attendance_bonus_earned)}`, size: 'sm', align: 'end', flex: 3 },
+                { type: 'text', text: `$${fmt(attBonus)}`, size: 'sm', align: 'end', flex: 3 },
               ]},
               { type: 'box', layout: 'horizontal', contents: [
                 { type: 'text', text: '加班費', size: 'sm', color: '#555555', flex: 4 },
-                { type: 'text', text: `$${fmt(record.overtime_pay)}`, size: 'sm', align: 'end', flex: 3 },
+                { type: 'text', text: `$${fmt(ot)}`, size: 'sm', align: 'end', flex: 3 },
               ]},
               { type: 'box', layout: 'horizontal', contents: [
                 { type: 'text', text: '應發合計', size: 'sm', weight: 'bold', flex: 4 },
-                { type: 'text', text: `$${fmt(record.gross_salary)}`, size: 'sm', weight: 'bold', align: 'end', flex: 3 },
+                { type: 'text', text: `$${fmt(gross)}`, size: 'sm', weight: 'bold', align: 'end', flex: 3 },
               ]},
             ],
           },
@@ -119,31 +133,27 @@ function buildPayslipFlex(
             contents: [
               { type: 'box', layout: 'horizontal', contents: [
                 { type: 'text', text: '勞保（個人）', size: 'sm', color: '#555555', flex: 4 },
-                { type: 'text', text: `-$${fmt(record.labor_ins_employee)}`, size: 'sm', color: '#ef4444', align: 'end', flex: 3 },
+                { type: 'text', text: `-$${fmt(laborIns)}`, size: 'sm', color: '#ef4444', align: 'end', flex: 3 },
               ]},
               { type: 'box', layout: 'horizontal', contents: [
                 { type: 'text', text: '健保（個人）', size: 'sm', color: '#555555', flex: 4 },
-                { type: 'text', text: `-$${fmt(record.health_ins_employee)}`, size: 'sm', color: '#ef4444', align: 'end', flex: 3 },
+                { type: 'text', text: `-$${fmt(healthIns)}`, size: 'sm', color: '#ef4444', align: 'end', flex: 3 },
               ]},
               { type: 'box', layout: 'horizontal', contents: [
                 { type: 'text', text: '勞退自提', size: 'sm', color: '#555555', flex: 4 },
-                { type: 'text', text: `-$${fmt(record.labor_pension_employee)}`, size: 'sm', color: '#ef4444', align: 'end', flex: 3 },
-              ]},
-              { type: 'box', layout: 'horizontal', contents: [
-                { type: 'text', text: '所得稅預扣', size: 'sm', color: '#555555', flex: 4 },
-                { type: 'text', text: `-$${fmt(record.income_tax_withheld)}`, size: 'sm', color: '#ef4444', align: 'end', flex: 3 },
+                { type: 'text', text: `-$${fmt(pension)}`, size: 'sm', color: '#ef4444', align: 'end', flex: 3 },
               ]},
               { type: 'box', layout: 'horizontal', contents: [
                 { type: 'text', text: '請假扣款', size: 'sm', color: '#555555', flex: 4 },
-                { type: 'text', text: `-$${fmt(record.leave_deduction)}`, size: 'sm', color: '#ef4444', align: 'end', flex: 3 },
+                { type: 'text', text: `-$${fmt(leaveDed)}`, size: 'sm', color: '#ef4444', align: 'end', flex: 3 },
               ]},
               { type: 'box', layout: 'horizontal', contents: [
                 { type: 'text', text: '遲到扣款', size: 'sm', color: '#555555', flex: 4 },
-                { type: 'text', text: `-$${fmt(record.late_deduction)}`, size: 'sm', color: '#ef4444', align: 'end', flex: 3 },
+                { type: 'text', text: `-$${fmt(lateDed)}`, size: 'sm', color: '#ef4444', align: 'end', flex: 3 },
               ]},
               { type: 'box', layout: 'horizontal', contents: [
                 { type: 'text', text: '扣除合計', size: 'sm', weight: 'bold', flex: 4 },
-                { type: 'text', text: `-$${fmt(record.total_deductions)}`, size: 'sm', weight: 'bold', color: '#ef4444', align: 'end', flex: 3 },
+                { type: 'text', text: `-$${fmt(totalDed)}`, size: 'sm', weight: 'bold', color: '#ef4444', align: 'end', flex: 3 },
               ]},
             ],
           },
@@ -153,7 +163,7 @@ function buildPayslipFlex(
             type: 'box', layout: 'horizontal', margin: 'md',
             contents: [
               { type: 'text', text: '實發金額', weight: 'bold', size: 'md', flex: 4 },
-              { type: 'text', text: `$${fmt(record.net_salary)}`, weight: 'bold', size: 'md', color: '#22c55e', align: 'end', flex: 3 },
+              { type: 'text', text: `$${fmt(net)}`, weight: 'bold', size: 'md', color: '#22c55e', align: 'end', flex: 3 },
             ],
           },
         ],
@@ -218,22 +228,44 @@ serve(async (req: Request) => {
       orgId = orgRow?.id ?? null
     }
 
-    // Fetch payroll records (join employee name separately to avoid FK issues)
-    let query = supabase
-      .from('payroll_records')
-      .select('*')
+    // 建立發送名單 targets：{ employee_id, name, period, payload(給卡片用) }
+    // 優先 pay_period → 從 salary_records 取該月的人，逐人用批次同款引擎重算（方案 B）。
+    // 舊路徑 payroll_run_id → 沿用 payroll_records。
+    type Target = { employee_id: number; name: string; period: string; payload: Record<string, unknown> }
+    const targets: Target[] = []
 
-    if (payroll_run_id) {
-      query = query.eq('payroll_run_id', payroll_run_id)
+    if (pay_period) {
+      let sq = supabase.from('salary_records')
+        .select('employee_id, employee, month')
+        .eq('month', pay_period)
+      if (orgId) sq = sq.eq('organization_id', orgId)
+      const { data: srRows, error: srErr } = await sq
+      if (srErr) throw new Error(`查詢薪資記錄失敗: ${srErr.message}`)
+
+      const seen = new Set<number>()
+      for (const sr of (srRows || [])) {
+        const eid = sr.employee_id as number | null
+        if (!eid || seen.has(eid)) continue
+        seen.add(eid)
+        // 批次同款引擎重算完整明細（與薪資頁展開明細一致）
+        const { data: detail, error: cErr } = await supabase.rpc('_compute_payroll_for_employee', { p_emp_id: eid, p_period: pay_period })
+        if (cErr || !detail) continue
+        targets.push({ employee_id: eid, name: (detail as any).employee || sr.employee || `員工 #${eid}`, period: pay_period, payload: detail as Record<string, unknown> })
+      }
     } else {
-      query = query.eq('pay_period', pay_period)
+      let query = supabase.from('payroll_records').select('*').eq('payroll_run_id', payroll_run_id)
+      if (orgId) query = query.eq('organization_id', orgId)
+      const { data: records, error: fetchErr } = await query
+      if (fetchErr) throw new Error(`查詢薪資記錄失敗: ${fetchErr.message}`)
+      for (const record of (records || [])) {
+        const eid = record.employee_id as number | null
+        if (!eid) continue
+        const { data: empData } = await supabase.from('employees').select('name').eq('id', eid).maybeSingle()
+        targets.push({ employee_id: eid, name: empData?.name || `員工 #${eid}`, period: record.pay_period, payload: record })
+      }
     }
-    if (orgId) query = query.eq('organization_id', orgId)
 
-    const { data: records, error: fetchErr } = await query
-    if (fetchErr) throw new Error(`查詢薪資記錄失敗: ${fetchErr.message}`)
-
-    if (!records || records.length === 0) {
+    if (targets.length === 0) {
       return new Response(JSON.stringify({ ok: true, sent: 0, message: '無薪資記錄' }), {
         status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
@@ -241,49 +273,38 @@ serve(async (req: Request) => {
 
     const results: { employee_id: number; name: string; success: boolean; error?: string }[] = []
 
-    for (const record of records) {
-      const employeeId = record.employee_id
-      // Lookup employee name separately
-      const { data: empData } = await supabase.from('employees').select('name').eq('id', employeeId).maybeSingle()
-      const employeeName = empData?.name || `員工 #${employeeId}`
-      const period = record.pay_period
-
-      if (!employeeId) {
-        results.push({ employee_id: 0, name: 'unknown', success: false, error: 'No employee_id' })
-        continue
-      }
-
+    for (const t of targets) {
       // Resolve primary LINE account across all OAs
       const { data: lineAcc } = await supabase
         .from('v_employee_line_resolved')
         .select('line_user_id, channel_code')
-        .eq('employee_id', employeeId)
+        .eq('employee_id', t.employee_id)
         .order('is_primary', { ascending: false })
         .limit(1)
         .maybeSingle()
 
       if (!lineAcc?.line_user_id) {
-        results.push({ employee_id: employeeId, name: employeeName, success: false, error: 'No LINE account linked' })
+        results.push({ employee_id: t.employee_id, name: t.name, success: false, error: 'No LINE account linked' })
         continue
       }
 
       try {
         await pushLineMessage(lineAcc.line_user_id, [
-          buildPayslipFlex(employeeName, period, record),
+          buildPayslipFlex(t.name, t.period, t.payload),
         ], lineAcc.channel_code)
-        results.push({ employee_id: employeeId, name: employeeName, success: true })
+        results.push({ employee_id: t.employee_id, name: t.name, success: true })
       } catch (e) {
-        results.push({ employee_id: employeeId, name: employeeName, success: false, error: (e as Error).message })
+        results.push({ employee_id: t.employee_id, name: t.name, success: false, error: (e as Error).message })
       }
     }
 
     const sentCount = results.filter(r => r.success).length
 
-    console.log(`[send-payslips] total=${records.length}, sent=${sentCount}`)
+    console.log(`[send-payslips] total=${targets.length}, sent=${sentCount}`)
 
     return new Response(JSON.stringify({
       ok: true,
-      total: records.length,
+      total: targets.length,
       sent: sentCount,
       failed: results.length - sentCount,
       results,

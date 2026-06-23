@@ -328,7 +328,7 @@ export default function Expenses() {
       <div className="card">
         <div className="data-table-wrapper">
           <table className="data-table">
-            <thead><tr><th>員工</th><th>部門</th><th>類別</th><th>金額</th><th>日期</th><th>說明</th><th>收據</th><th>狀態</th><th>操作</th></tr></thead>
+            <thead><tr><th>員工</th><th>部門</th><th>會計科目</th><th>金額</th><th>日期</th><th>說明</th><th>收據</th><th>狀態</th><th>操作</th></tr></thead>
             <tbody>
               {filtered.length === 0 && <tr><td colSpan={9} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>尚無申請</td></tr>}
               {filtered.map(e => (
@@ -403,7 +403,7 @@ export default function Expenses() {
             />
           </Field>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="類別" required error={errors.category} errorMsg="請選類別">
+            <Field label="會計科目" required error={errors.category} errorMsg="請選會計科目">
               <select className="form-input" style={{ width: '100%' }} value={form.category} onChange={e => { set('category', e.target.value); clearError('category', setErrors) }}>
                 {CATEGORIES.map(c => <option key={c}>{c}</option>)}
               </select>
@@ -466,7 +466,7 @@ export default function Expenses() {
               employee_no: empRow?.employee_no,
             }}
             fields={[
-              { label: '費用類別', value: detailRow.category },
+              { label: '會計科目', value: detailRow.category },
               { label: '發生日期', value: detailRow.date },
               { label: '金額', value: `NT$ ${Number(detailRow.amount || 0).toLocaleString()}` },
               { label: '是否有收據', value: detailRow.receipt ? '有' : '無' },

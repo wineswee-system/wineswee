@@ -371,21 +371,15 @@ export default function TaskDetailPanel({
           borderBottom: '1px solid var(--border-subtle)',
           background: 'var(--bg-secondary)', flexShrink: 0,
         }}>
-          {(() => {
-            const allItems = linkedChecklists.flatMap(lc => checklistItemsMap[lc.checklist_id] || [])
-            const doneCount = allItems.filter(i => i.checked).length
-            const subtaskLabel = allItems.length > 0 ? `子任務 ${doneCount}/${allItems.length}` : '子任務'
-            return [
+          {[
               { id: 'basic',       label: '基本' },
               { id: 'forms',       label: formBindings.length > 0 ? `表單 (${formBindings.length})` : '表單' },
-              { id: 'subtasks',    label: subtaskLabel },
               { id: 'relations',   label: '關聯' },
               { id: 'approval',    label: '簽核' },
               { id: 'attachments', label: `附件 (${attachments.length})` },
               { id: 'discussion',  label: '討論' },
               { id: 'changelog',   label: '變更日誌' },
-            ]
-          })().map(t => {
+            ].map(t => {
             const active = activeTab === t.id
             return (
               <button key={t.id} onClick={() => setActiveTab(t.id)} style={{
@@ -575,17 +569,6 @@ export default function TaskDetailPanel({
               </div>
 
             </>
-          )}
-
-          {/* ═══ Subtasks Tab ═══ */}
-          {activeTab === 'subtasks' && (
-            <SubtasksTab
-              task={task}
-              linkedChecklists={linkedChecklists}
-              checklistItemsMap={checklistItemsMap}
-              setChecklistItemsMap={setChecklistItemsMap}
-              employees={employees}
-            />
           )}
 
           {/* ═══ Relations Tab ═══ */}

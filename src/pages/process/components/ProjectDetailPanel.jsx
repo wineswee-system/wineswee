@@ -247,10 +247,11 @@ export default function ProjectDetailPanel({
   const [editWfForm, setEditWfForm] = useState({})
 
   const sc = STATUS_MAP[p.status] || {}
+  const narrowTab = detailTab === 'sections' || detailTab === 'fields'
 
   return (
     <div className="fade-in" style={{ display: 'flex', alignItems: 'flex-start', gap: 0 }}>
-    <div style={{ flex: 1, minWidth: 0 }}>
+    <div style={{ flex: 1, minWidth: 0, ...(narrowTab ? { maxWidth: 460 } : {}) }}>
       <div className="page-header">
         <div className="page-header-row">
           <div>
@@ -832,8 +833,7 @@ export default function ProjectDetailPanel({
 
     {selectedTask && (
       <div style={{
-        width: 440,
-        flexShrink: 0,
+        ...(narrowTab ? { flex: 1, minWidth: 0 } : { width: 440, flexShrink: 0 }),
         borderLeft: '1px solid var(--border-medium)',
         background: 'var(--bg-primary)',
         position: 'sticky',

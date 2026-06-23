@@ -95,7 +95,7 @@ const superAdminItems = [
 // ── Route prefix → group key mapping ──
 const routeToGroup = (pathname) => {
   if (pathname === '/') return 'dashboard'
-  if (pathname.startsWith('/crm') || pathname.startsWith('/sales') || pathname.startsWith('/pos')) return 'commerce'
+  if (pathname.startsWith('/crm') || pathname.startsWith('/sales') || pathname.startsWith('/pos') || pathname.startsWith('/reservations')) return 'commerce'
   if (pathname.startsWith('/purchase') || pathname.startsWith('/wms') || pathname.startsWith('/manufacturing')) return 'supply'
   if (pathname.startsWith('/finance')) return 'finance'
   if (pathname.startsWith('/process')) return 'project'

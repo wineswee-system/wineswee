@@ -14,6 +14,7 @@ import {
   Brain, ClipboardCheck, Heart, Scale, MessageSquare, FileBarChart, Gift,
   FolderTree, UserMinus, PauseCircle, RefreshCcw, GraduationCap, PlayCircle,
   Globe, Trash2, Upload,
+  ConciergeBell, TableProperties, Timer, Map, ClipboardEdit,
 } from 'lucide-react'
 
 // ── Major Groups for top bar ──
@@ -83,6 +84,17 @@ export const groupNav = {
         { icon: PieChart, label: '營運總覽', path: '/pos' },
         { icon: Monitor, label: '收銀台', path: '/pos/terminal' },
         { icon: DollarSign, label: '交班日結', path: '/pos/shifts' },
+      ]
+    },
+    {
+      label: '訂位管理',
+      icon: ConciergeBell,
+      children: [
+        { icon: Eye, label: '今日總覽', path: '/reservations/overview' },
+        { icon: ClipboardList, label: '訂位清單', path: '/reservations/list' },
+        { icon: Map, label: '座位地圖', path: '/reservations/seating' },
+        { icon: TableProperties, label: '桌位設定', path: '/reservations/tables' },
+        { icon: ClipboardEdit, label: '訂位規則', path: '/reservations/rules' },
       ]
     },
   ],

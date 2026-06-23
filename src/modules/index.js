@@ -31,6 +31,7 @@ export const DEFS = [
   { basePath: '/ai',            perm: 'nav.project.admin',    load: () => import('./AIModule') },
   { basePath: '/integration',   perm: 'system.admin',         load: () => import('./IntegrationModule') },
   { basePath: '/lms',           perm: null,                   load: () => import('./LMSModule') },
+  { basePath: '/reservations',  perm: null,    alsoBase: true, load: () => import('./ReservationModule') },
   { basePath: '/super-admin',   perm: null,    superAdminOnly: true, load: () => import('./SuperAdminModule') },
 ]
 

@@ -116,6 +116,7 @@ export default function FormBindingsPicker({ value = [], onChange, readonly = fa
       onChange?.(value.filter(v => keyOf(v) !== k))
     } else {
       onChange?.([...value, { form_type: o.form_type, form_template_id: o.form_template_id, label: o.label }])
+      setOpen(false)
     }
   }
 

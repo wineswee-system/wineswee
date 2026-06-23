@@ -1008,9 +1008,31 @@ export default function ProjectDetailPanel({
                     {stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
                   </select>
                 </Field>
+                <Field label="計畫開始">
+                  <input className="form-input" type="date" style={{ width: '100%' }} value={newWfForm.planned_start_date || ''} onChange={e => setNewWfForm(f => ({ ...f, planned_start_date: e.target.value }))} />
+                </Field>
+                <Field label="預期完成日">
+                  <input className="form-input" type="date" style={{ width: '100%' }} value={newWfForm.planned_end_date || ''} onChange={e => setNewWfForm(f => ({ ...f, planned_end_date: e.target.value }))} />
+                </Field>
+                <Field label="優先度">
+                  <select className="form-input" style={{ width: '100%' }} value={newWfForm.priority || '中'} onChange={e => setNewWfForm(f => ({ ...f, priority: e.target.value }))}>
+                    <option>高</option><option>中</option><option>低</option>
+                  </select>
+                </Field>
+                <Field label="截止日期（選填）">
+                  <input className="form-input" type="date" style={{ width: '100%' }} value={newWfForm.due_date} onChange={e => setNewWfForm(f => ({ ...f, due_date: e.target.value }))} />
+                </Field>
               </div>
-              <Field label="到期日">
-                <input className="form-input" type="date" style={{ width: '100%' }} value={newWfForm.due_date} onChange={e => setNewWfForm(f => ({ ...f, due_date: e.target.value }))} />
+              <Field label="整體完成後簽核鏈（選填）">
+                <select className="form-input" style={{ width: '100%' }} value={newWfForm.completion_chain_id || ''} onChange={e => setNewWfForm(f => ({ ...f, completion_chain_id: e.target.value || '' }))}>
+                  <option value="">不需要 — 所有任務完成即結案</option>
+                  {approvalChains.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}（{c.steps?.length || 0} 關）</option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="備註（選填）">
+                <textarea className="form-input" style={{ width: '100%', minHeight: 56, resize: 'vertical' }} value={newWfForm.notes || ''} onChange={e => setNewWfForm(f => ({ ...f, notes: e.target.value }))} />
               </Field>
             </>
           )}

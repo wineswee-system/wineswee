@@ -51,7 +51,7 @@ export default function Projects() {
   const [workflowTab, setWorkflowTab] = useState('attach') // 'attach' | 'create'
   const [freeInstances, setFreeInstances] = useState([])
   const [selectedAttachId, setSelectedAttachId] = useState('')
-  const [newWfForm, setNewWfForm] = useState({ template_name: '', assignee: '', store: '', due_date: '' })
+  const [newWfForm, setNewWfForm] = useState({ template_name: '', assignee: '', store: '', due_date: '', planned_start_date: '', planned_end_date: '', priority: '中', completion_chain_id: '', notes: '' })
   const [workflowSaving, setWorkflowSaving] = useState(false)
   const [pendingWfAttach, setPendingWfAttach] = useState([])
   const [pendingWfCreate, setPendingWfCreate] = useState([])
@@ -437,7 +437,7 @@ export default function Projects() {
     const { data } = await supabase.from('workflow_instances').select('id, template_name, status, started_by, started_at').is('project_id', null).order('started_at', { ascending: false })
     setFreeInstances(data || [])
     setSelectedAttachId('')
-    setNewWfForm({ template_name: '', assignee: proj.owner || profile?.name || '', store: proj.store || '', due_date: proj.end_date || '' })
+    setNewWfForm({ template_name: '', assignee: proj.owner || profile?.name || '', store: proj.store || '', due_date: proj.end_date || '', planned_start_date: proj.start_date || '', planned_end_date: proj.end_date || '', priority: '中', completion_chain_id: '', notes: '' })
     setWorkflowTab('attach')
     setShowWorkflowModal(true)
   }
@@ -465,11 +465,18 @@ export default function Projects() {
       template_name: newWfForm.template_name,
       status: '進行中',
       started_by: newWfForm.assignee || profile?.name || '',
+      assignee: newWfForm.assignee || null,
       store: newWfForm.store || null,
+      planned_start_date: newWfForm.planned_start_date || null,
+      planned_end_date: newWfForm.planned_end_date || null,
+      priority: newWfForm.priority || '中',
       due_date: newWfForm.due_date || null,
+      completion_chain_id: newWfForm.completion_chain_id ? Number(newWfForm.completion_chain_id) : null,
+      notes: newWfForm.notes || null,
       project_id: selected.id,
       sort_order: maxOrder + 1,
       started_at: new Date().toISOString(),
+      organization_id: profile?.organization_id || null,
     })
     if (error) { toast.error('建立失敗，請稍後再試'); setWorkflowSaving(false); return }
     if (newWf) setWorkflows(prev => [...prev, newWf])

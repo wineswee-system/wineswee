@@ -19,6 +19,7 @@ import CostCenters from '../pages/finance/CostCenters'
 import CashFlow from '../pages/finance/CashFlow'
 import PeriodClose from '../pages/finance/PeriodClose'
 import ChartOfAccounts from '../pages/finance/ChartOfAccounts'
+import Currencies from '../pages/finance/Currencies'
 // ExpenseRequests 已搬到 HR module → /hr/expense-requests（2026-05-09，員工沒財務權限要看得到）
 // ExpenseApprovalSettings 已下架（2026-05-08）— 改用 /hr/expense-requests 頁右上「⚙ 簽核設定」
 
@@ -27,6 +28,7 @@ export default memo(function FinanceModule() {
     <Routes>
       <Route path="overview" element={<Overview />} />
       <Route path="chart-of-accounts" element={<ChartOfAccounts />} />
+      <Route path="currencies" element={<Currencies />} />
       <Route path="journal" element={<JournalEntries />} />
       <Route path="ar" element={<AccountsReceivable />} />
       <Route path="ap" element={<AccountsPayable />} />

@@ -186,6 +186,7 @@ export const groupNav = {
       icon: DollarSign,
       children: [
         { icon: BookText, label: '會計科目', path: '/finance/chart-of-accounts' },
+        { icon: DollarSign, label: '幣別管理', path: '/finance/currencies' },
         { icon: BarChart3, label: '預算管理', path: '/finance/budgets' },
         { icon: BarChart3, label: '成本中心', path: '/finance/cost-centers' },
         { icon: Package, label: '固定資產', path: '/finance/fixed-assets' },

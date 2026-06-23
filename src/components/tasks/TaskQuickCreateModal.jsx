@@ -181,6 +181,36 @@ export default function TaskQuickCreateModal({
           onChange={v => set('required_forms', v)}
         />
       </div>
+
+      {/* 填寫狀態 — 有選表單才顯示 */}
+      {(form.required_forms || []).length > 0 && (
+        <div style={{ marginTop: 8, padding: 12, borderRadius: 8, background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)' }}>📄 填寫狀態</span>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>建立後可填寫</span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {form.required_forms.map((f, i) => (
+              <div key={`${f.form_type}-${f.form_template_id ?? 'null'}-${i}`}
+                style={{
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  padding: '7px 10px', borderRadius: 6,
+                  background: 'var(--bg-card)', border: '1px solid var(--border-subtle)',
+                }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>
+                  ⚪ {f.label}
+                </span>
+                <span style={{
+                  padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700,
+                  background: 'var(--glass-light)', color: 'var(--text-muted)',
+                }}>
+                  未填
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </Modal>
   )
 }

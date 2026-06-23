@@ -922,6 +922,109 @@ input, select, textarea {
   margin-left: 0;
 }
 
+/* ── Sidebar collapse toggle button ── */
+.sidebar-toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  width: 100%;
+  padding: 6px 12px 2px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color var(--transition-fast);
+  flex-shrink: 0;
+}
+.sidebar-toggle-btn:hover {
+  color: var(--text-secondary);
+}
+
+/* ── Manual sidebar collapsed (icon-only, 72px) ── */
+@media (min-width: 1025px) {
+  .sidebar.sidebar-collapsed {
+    width: 72px;
+  }
+  .sidebar.sidebar-collapsed:not(.sidebar-hidden) ~ .main-content {
+    margin-left: 72px;
+  }
+  .sidebar.sidebar-collapsed .sidebar-toggle-btn {
+    justify-content: center;
+    padding: 8px 6px 2px;
+  }
+  .sidebar.sidebar-collapsed .sidebar-search {
+    display: none;
+  }
+  .sidebar.sidebar-collapsed .nav-section-label,
+  .sidebar.sidebar-collapsed .nav-divider-label {
+    font-size: 0;
+    padding: 8px 0;
+    border-top-color: var(--border-subtle);
+  }
+  .sidebar.sidebar-collapsed .nav-section-label::after,
+  .sidebar.sidebar-collapsed .nav-divider-label::after {
+    content: '·';
+    display: block;
+    text-align: center;
+    font-size: 14px;
+    color: var(--text-muted);
+    line-height: 1;
+  }
+  .sidebar.sidebar-collapsed .nav-section-header {
+    justify-content: center;
+    padding: 10px 6px;
+    margin: 2px 6px 0;
+    gap: 0;
+    font-size: 0;
+  }
+  .sidebar.sidebar-collapsed .nav-section-header .nav-section-icon {
+    opacity: 0.7;
+    width: 18px;
+    height: 18px;
+  }
+  .sidebar.sidebar-collapsed .nav-section-header .nav-section-chevron {
+    display: none;
+  }
+  .sidebar.sidebar-collapsed .nav-sub-item {
+    justify-content: center;
+    padding: 8px 6px;
+    margin: 1px 6px;
+    gap: 0;
+    font-size: 0;
+  }
+  .sidebar.sidebar-collapsed .nav-sub-item .nav-sub-item-icon {
+    width: 18px;
+    height: 18px;
+    opacity: 0.7;
+    margin: 0;
+  }
+  .sidebar.sidebar-collapsed .nav-sub-item.active .nav-sub-item-icon {
+    opacity: 1;
+  }
+  .sidebar.sidebar-collapsed .nav-sub-item.active::before {
+    height: 14px;
+    width: 3px;
+  }
+  .sidebar.sidebar-collapsed .sidebar-footer {
+    padding: 8px 6px;
+  }
+  .sidebar.sidebar-collapsed .sidebar-system-btn {
+    justify-content: center;
+    padding: 8px 6px;
+    gap: 0;
+    font-size: 0;
+  }
+  .sidebar.sidebar-collapsed .sidebar-user {
+    padding: 6px;
+    justify-content: center;
+    gap: 0;
+  }
+  .sidebar.sidebar-collapsed .sidebar-user-info,
+  .sidebar.sidebar-collapsed .sidebar-logout-btn {
+    display: none;
+  }
+}
+
 .page-container {
   padding: 28px 32px;
   max-width: 1600px;
@@ -4609,6 +4712,8 @@ div.data-table > table {
 @media (min-width: 1025px) and (max-width: 1280px) {
   :root { --sidebar-width: 72px; }
   .sidebar { width: 72px; }
+  /* hide collapse toggle — sidebar is already compact at this breakpoint */
+  .sidebar-toggle-btn { display: none; }
 
   /* 搜尋區隱藏（hover icon 用 SidebarTooltipLayer 提示） */
   .sidebar-search { display: none; }
@@ -4682,6 +4787,8 @@ div.data-table > table {
 @media (max-width: 1024px) {
   .mobile-menu-btn { display: flex; }
   .sidebar-overlay.active { display: block; }
+  /* hide collapse toggle in drawer mode — sidebar has its own open/close */
+  .sidebar-toggle-btn { display: none; }
   /* sticky bar 在 drawer mode 也滿版（sidebar 不佔位） */
   .sticky-x-scrollbar { left: 0 !important; }
 

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import {
   Building2,
-  ChevronRight, ChevronDown,
+  ChevronLeft, ChevronRight, ChevronDown,
   MessageCircle, Zap, Bell, UserCog,
   ScrollText, Settings, LogOut, Sun, Moon,
   Upload,
@@ -116,6 +116,7 @@ export default function Sidebar() {
   const [openMenus, setOpenMenus] = useState({})
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light')
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem('sidebar-collapsed') === 'true')
   const [searchQuery, setSearchQuery] = useState('')
   const [openDropdown, setOpenDropdown] = useState(null)
   const dropdownRef = useRef(null)
@@ -171,6 +172,12 @@ export default function Sidebar() {
       if (alreadyOpen) return { ...prev, [key]: false }
       return { [key]: true }  // accordion: close all others implicitly
     })
+  }
+
+  const toggleSidebarCollapse = () => {
+    const next = !sidebarCollapsed
+    setSidebarCollapsed(next)
+    localStorage.setItem('sidebar-collapsed', String(next))
   }
 
   const handleNavClick = () => {
@@ -509,7 +516,16 @@ export default function Sidebar() {
     <div className={`sidebar-overlay ${mobileOpen ? 'active' : ''}`} onClick={() => setMobileOpen(false)} />
 
     {/* ═══════ Left Sidebar (contextual) ═══════ */}
-    <aside className={`sidebar ${mobileOpen ? 'open' : ''} ${activeGroup === 'dashboard' && !isSystemGroup && !isSuperAdminGroup ? 'sidebar-hidden' : ''}`}>
+    <aside className={`sidebar ${mobileOpen ? 'open' : ''} ${activeGroup === 'dashboard' && !isSystemGroup && !isSuperAdminGroup ? 'sidebar-hidden' : ''} ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
+      {/* Collapse toggle button */}
+      <button
+        className="sidebar-toggle-btn"
+        onClick={toggleSidebarCollapse}
+        title={sidebarCollapsed ? '展開側欄' : '收合側欄'}
+      >
+        {sidebarCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+      </button>
+
       {/* Search */}
       <div className="sidebar-search">
         <div className="sidebar-search-wrapper">

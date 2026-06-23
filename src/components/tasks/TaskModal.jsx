@@ -382,7 +382,7 @@ export default function TaskModal({
             { id: 'approval',     label: '簽核' },
             { id: 'attachments',  label: `附件 (${attachments.length})` },
             { id: 'discussion',   label: `討論 (${comments.length})` },
-            { id: 'activity',   label: '活動' },
+            { id: 'activity',   label: '變更日誌' },
           ].map(t => {
             const active = activeTab === t.id
             return (
@@ -664,10 +664,13 @@ export default function TaskModal({
           {activeTab === 'activity' && (
             <>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-muted)', fontWeight: 700, marginBottom: 12 }}>
-                <ActivityIcon size={14} /> 活動紀錄
+                <ActivityIcon size={14} /> 活動時間軸
               </div>
               <TaskActivity taskId={task.id} refreshKey={activityRefresh} />
-              <div style={{ marginTop: 24 }}>
+              <div style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid var(--border-subtle)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-muted)', fontWeight: 700, marginBottom: 12 }}>
+                  <Info size={14} /> 變更紀錄
+                </div>
                 <ChangelogPanel
                   tables={['tasks']}
                   targetId={task?.id}

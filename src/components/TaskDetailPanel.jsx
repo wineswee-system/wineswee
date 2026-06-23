@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { X, Pencil, Save, Trash2, Bell, Copy, Info } from 'lucide-react'
+import { X, Pencil, Save, Trash2, Bell, Copy, Info, Activity as ActivityIcon } from 'lucide-react'
 import InputModal from './ui/InputModal'
 import SearchableSelect, { empOptions } from './SearchableSelect'
 import { toast } from '../lib/toast'
@@ -15,6 +15,7 @@ import {
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import ChangelogPanel from './ChangelogPanel'
+import TaskActivity from './tasks/TaskActivity'
 import { confirm } from '../lib/confirm'
 import { useAuditLog } from '../lib/useAuditLog'
 import { diffAndLogTask } from '../lib/taskAudit'
@@ -642,12 +643,21 @@ export default function TaskDetailPanel({
           {/* ═══ Changelog Tab ═══ */}
           {activeTab === 'changelog' && (
             <div style={{ padding: '4px 0' }}>
-              <ChangelogPanel
-                tables={['tasks']}
-                targetId={task?.id}
-                orgId={profile?.organization_id}
-                currentUser={profile?.name}
-              />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-muted)', fontWeight: 700, marginBottom: 12 }}>
+                <ActivityIcon size={14} /> 活動時間軸
+              </div>
+              <TaskActivity taskId={task?.id} />
+              <div style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid var(--border-subtle)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-muted)', fontWeight: 700, marginBottom: 12 }}>
+                  <Info size={14} /> 變更紀錄
+                </div>
+                <ChangelogPanel
+                  tables={['tasks']}
+                  targetId={task?.id}
+                  orgId={profile?.organization_id}
+                  currentUser={profile?.name}
+                />
+              </div>
             </div>
           )}
 

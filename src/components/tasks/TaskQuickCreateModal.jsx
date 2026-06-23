@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { ShieldCheck, X as XIcon } from 'lucide-react'
 import Modal, { Field } from '../Modal'
 import SearchableSelect, { empOptions } from '../SearchableSelect'
 import FormBindingsPicker from '../FormBindingsPicker'
@@ -17,7 +18,7 @@ import FormBindingsPicker from '../FormBindingsPicker'
  */
 export default function TaskQuickCreateModal({
   open, title = '新增任務', employees = [], stores = [],
-  defaultStore = '', onClose, onSubmit,
+  defaultStore = '', approvalChains = [], onClose, onSubmit,
 }) {
   const [form, setForm] = useState(initialForm(defaultStore))
   const [saving, setSaving] = useState(false)
@@ -103,6 +104,72 @@ export default function TaskQuickCreateModal({
           value={form.role} onChange={e => set('role', e.target.value)} />
       </Field>
 
+      {/* 簽核設定（對齊獨立任務頁：無 / 指定人員 / 簽核鏈） */}
+      <div style={{ marginTop: 12, padding: 12, borderRadius: 8, background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)' }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8 }}>🛡️ 完成簽核（選填）</div>
+        <Field label="完成方式">
+          <div style={{ display: 'flex', gap: 8 }}>
+            {[{ v: 'none', l: '免簽核' }, { v: 'people', l: '指定人員' }, { v: 'chain', l: '簽核鏈' }].map(opt => {
+              const active = form.approval_mode === opt.v
+              return (
+                <button type="button" key={opt.v} onClick={() => set('approval_mode', opt.v)}
+                  style={{
+                    flex: 1, padding: '8px 6px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                    border: active ? '1.5px solid var(--accent-cyan)' : '1px solid var(--border-medium)',
+                    background: active ? 'var(--accent-cyan-dim)' : 'var(--bg-card)',
+                    color: active ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+                  }}>
+                  {opt.l}
+                </button>
+              )
+            })}
+          </div>
+        </Field>
+        {form.approval_mode === 'people' && (
+          <>
+            <Field label="加入審批人員">
+              <SearchableSelect value=""
+                onChange={(name) => { if (!name) return; set('confirmation_approvers', [...(form.confirmation_approvers || []).filter(x => x !== name), name]) }}
+                options={empOptions(employees.filter(e => !(form.confirmation_approvers || []).includes(e.name)), { keyBy: 'name' })}
+                placeholder="🔍 搜尋姓名 / 職稱..." />
+            </Field>
+            {(form.confirmation_approvers || []).length > 0 && (
+              <>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+                  {form.confirmation_approvers.map(name => (
+                    <span key={name} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 14, fontSize: 12, background: 'var(--accent-purple-dim)', color: 'var(--accent-purple)', border: '1px solid var(--accent-purple)' }}>
+                      <ShieldCheck size={11} /> {name}
+                      <button type="button" onClick={() => set('confirmation_approvers', form.confirmation_approvers.filter(x => x !== name))}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-purple)', padding: 0, lineHeight: 1 }}>
+                        <XIcon size={11} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+                {form.confirmation_approvers.length > 1 && (
+                  <Field label="多人簽核模式">
+                    <select className="form-input" style={{ width: '100%' }} value={form.confirmation_mode} onChange={e => set('confirmation_mode', e.target.value)}>
+                      <option value="parallel">並簽（任一人通過即可）</option>
+                      <option value="sequential">會簽（每個人都要通過）</option>
+                    </select>
+                  </Field>
+                )}
+              </>
+            )}
+          </>
+        )}
+        {form.approval_mode === 'chain' && (
+          <Field label="選擇簽核鏈">
+            <select className="form-input" style={{ width: '100%' }} value={form.approval_chain_id} onChange={e => set('approval_chain_id', e.target.value)}>
+              <option value="">— 請選擇 —</option>
+              {approvalChains.map(c => (
+                <option key={c.id} value={c.id}>{c.name}（{c.steps?.length || 0} 關）</option>
+              ))}
+            </select>
+          </Field>
+        )}
+      </div>
+
       {/* 綁定表單 */}
       <div style={{ marginTop: 12, padding: 12, borderRadius: 8, background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)' }}>
         <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 4 }}>📋 綁定表單（選填）</div>
@@ -123,5 +190,7 @@ function initialForm(defaultStore) {
     title: '', description: '', assignee: '', store: defaultStore || '',
     priority: '中', planned_start: '', due_date: '', role: '',
     required_forms: [],
+    // 簽核設定（對齊獨立任務頁）
+    approval_mode: 'none', confirmation_approvers: [], confirmation_mode: 'parallel', approval_chain_id: '',
   }
 }

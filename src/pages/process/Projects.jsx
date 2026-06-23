@@ -436,6 +436,7 @@ export default function Projects() {
       ? (employees.find(e => e.name === fd.assignee)?.id || null)
       : null
     const isFirstStep = instTasks.length === 0
+    const chainId = fd.approval_mode === 'chain' && fd.approval_chain_id ? Number(fd.approval_chain_id) : null
     const { data } = await createTask({
       workflow_instance_id: wfId,
       project_id: selected?.id || null,
@@ -452,9 +453,20 @@ export default function Projects() {
       bucket: '工作流程',
       category: '工作流程',
       priority: fd.priority || '中',
+      approval_chain_id: chainId,
+      confirmation_mode: fd.approval_mode === 'people' ? (fd.confirmation_mode || 'parallel') : null,
       organization_id: profile?.organization_id || null,
     })
     if (!data) return false
+    // 指定人員簽核 → 建 task_confirmations（對齊獨立任務頁）
+    if (fd.approval_mode === 'people' && (fd.confirmation_approvers || []).length > 0) {
+      await supabase.from('task_confirmations').insert(
+        fd.confirmation_approvers.map((approver, idx) => ({
+          task_id: data.id, approver, step_order: idx, status: 'pending',
+          organization_id: profile?.organization_id || null,
+        }))
+      )
+    }
     // 綁定表單
     for (const f of (fd.required_forms || [])) {
       await supabase.rpc('create_task_form_binding', {
@@ -480,6 +492,7 @@ export default function Projects() {
     const directTasks = tasks.filter(t => t.project_id === selected.id && !t.workflow_instance_id)
     const maxOrder = directTasks.reduce((m, t) => Math.max(m, t.step_order || 0), 0)
     const empId = fd.assignee ? (employees.find(e => e.name === fd.assignee)?.id || null) : null
+    const chainId = fd.approval_mode === 'chain' && fd.approval_chain_id ? Number(fd.approval_chain_id) : null
     const { data } = await createTask({
       project_id: selected.id,
       title: fd.title.trim(),
@@ -495,9 +508,20 @@ export default function Projects() {
       step_order: maxOrder + 1,
       bucket: 'Project',
       category: 'Project',
+      approval_chain_id: chainId,
+      confirmation_mode: fd.approval_mode === 'people' ? (fd.confirmation_mode || 'parallel') : null,
       organization_id: profile?.organization_id || null,
     })
     if (!data) return false
+    // 指定人員簽核 → 建 task_confirmations（對齊獨立任務頁）
+    if (fd.approval_mode === 'people' && (fd.confirmation_approvers || []).length > 0) {
+      await supabase.from('task_confirmations').insert(
+        fd.confirmation_approvers.map((approver, idx) => ({
+          task_id: data.id, approver, step_order: idx, status: 'pending',
+          organization_id: profile?.organization_id || null,
+        }))
+      )
+    }
     // 綁定表單
     for (const f of (fd.required_forms || [])) {
       await supabase.rpc('create_task_form_binding', {

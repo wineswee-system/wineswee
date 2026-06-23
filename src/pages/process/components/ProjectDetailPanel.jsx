@@ -717,7 +717,7 @@ export default function ProjectDetailPanel({
                 <button
                   className="btn btn-secondary"
                   style={{ fontSize: 11, padding: '2px 8px', display: 'flex', alignItems: 'center', gap: 3 }}
-                  onClick={e => { e.stopPropagation(); setAddingTaskWfId(addingTaskWfId === w.id ? null : w.id); setAddTaskForm({ title: '', assignee: '', due_date: '' }) }}
+                  onClick={e => { e.stopPropagation(); setAddingTaskWfId(addingTaskWfId === w.id ? null : w.id) }}
                 >
                   <Plus size={10} /> 新增任務
                 </button>
@@ -779,7 +779,7 @@ export default function ProjectDetailPanel({
                 <CheckSquare size={15} /> 獨立任務（{directTasks.length}）
               </span>
               <button className="btn btn-secondary" style={{ fontSize: 12, padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 4 }}
-                onClick={() => { setAddingDirectTask(v => !v); setDirectTaskForm({ title: '', assignee: '', due_date: '', priority: '中' }) }}>
+                onClick={() => { setAddingDirectTask(v => !v) }}>
                 <Plus size={12} /> 新增任務
               </button>
             </div>
@@ -1054,6 +1054,7 @@ export default function ProjectDetailPanel({
         title="新增工作流程任務"
         employees={employees}
         stores={stores}
+        approvalChains={approvalChains}
         onClose={() => setAddingTaskWfId(null)}
         onSubmit={(formData) => handleAddTaskToWorkflow(addingTaskWfId, formData)}
       />
@@ -1064,6 +1065,7 @@ export default function ProjectDetailPanel({
         title="新增專案任務"
         employees={employees}
         stores={stores}
+        approvalChains={approvalChains}
         onClose={() => setAddingDirectTask(false)}
         onSubmit={(formData) => handleAddDirectTask(formData)}
       />

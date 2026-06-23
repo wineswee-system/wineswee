@@ -278,12 +278,12 @@ export default function Expenses() {
       <div className="page-header">
         <div className="page-header-row">
           <div>
-            <h2><span className="header-icon">🧾</span> 費用報銷</h2>
-            <p>報銷申請與審核</p>
+            <h2><span className="header-icon">🧾</span> 經常性費用申請</h2>
+            <p>經常性費用申請與審核</p>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             {(isAdmin || hasPermission('finance.edit')) && (
-              <button className="btn btn-secondary" onClick={() => navigate('/process/settings/chains/edit?formType=expense&label=費用報銷')} title="設定費用報銷簽核流程">
+              <button className="btn btn-secondary" onClick={() => navigate('/process/settings/chains/edit?formType=expense&label=經常性費用申請')} title="設定經常性費用申請簽核流程">
                 <Settings size={14} /> 簽核設定
               </button>
             )}
@@ -292,7 +292,7 @@ export default function Expenses() {
               setForm({ employee: profile?.name || employees[0]?.name || '', category: CATEGORIES[0], amount: '', date: '', description: '', receipt: true })
               setErrors({})
               setShowModal(true)
-            }}><Plus size={14} /> 新增報銷</button>
+            }}><Plus size={14} /> 新增申請</button>
           </div>
         </div>
       </div>
@@ -330,7 +330,7 @@ export default function Expenses() {
           <table className="data-table">
             <thead><tr><th>員工</th><th>部門</th><th>類別</th><th>金額</th><th>日期</th><th>說明</th><th>收據</th><th>狀態</th><th>操作</th></tr></thead>
             <tbody>
-              {filtered.length === 0 && <tr><td colSpan={9} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>尚無報銷申請</td></tr>}
+              {filtered.length === 0 && <tr><td colSpan={9} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>尚無申請</td></tr>}
               {filtered.map(e => (
                 <tr key={e.id} onClick={() => openDetail(e)} style={{ cursor: 'pointer' }} title="點擊查看簽核明細"
                   onMouseEnter={(ev) => ev.currentTarget.style.background = 'var(--bg-secondary)'}
@@ -389,10 +389,10 @@ export default function Expenses() {
 
       {showModal && (
         <Modal
-          title={editingId ? '✏️ 編輯重送（駁回後修改）' : '新增報銷申請'}
+          title={editingId ? '✏️ 編輯重送（駁回後修改）' : '新增經常性費用申請'}
           onClose={() => { setShowModal(false); setErrors({}); setEditingId(null) }}
           onSubmit={handleSubmit}
-          successMessage={editingId ? '已重新送審，主管會收到通知' : '報銷申請已送出，等待主管簽核'}
+          successMessage={editingId ? '已重新送審，主管會收到通知' : '經常性費用申請已送出，等待主管簽核'}
         >
           <Field label="員工" required error={errors.employee} errorMsg="請選擇員工">
             <SearchableSelect
@@ -454,7 +454,7 @@ export default function Expenses() {
           <ApprovalDetailModal
             open={!!detailRow}
             onClose={() => { setDetailRow(null); setDetailChainSteps([]) }}
-            docTitle="費用報銷"
+            docTitle="經常性費用申請"
             docNo={detailRow.id}
             status={detailRow.status}
             applicant={{

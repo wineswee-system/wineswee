@@ -42,7 +42,7 @@ export default function FormBindingsPicker({ value = [], onChange, readonly = fa
           { form_type: 'expense_request', form_template_id: null, icon: '🧾', label: '申請費用（整單）', group: '費用' },
           { form_type: 'expense_apply',   form_template_id: null, icon: '📝', label: '費用-申請步驟', group: '費用' },
           { form_type: 'expense_settle',  form_template_id: null, icon: '✅', label: '費用-核銷(驗收)步驟', group: '費用' },
-          { form_type: 'expense',         form_template_id: null, icon: '💸', label: '費用報銷', group: '費用' },
+          { form_type: 'expense',         form_template_id: null, icon: '💸', label: '經常性費用申請', group: '費用' },
           { form_type: 'store_audit',     form_template_id: null, icon: '🏪', label: '門市稽核', group: '非費用' },
           { form_type: 'goods_transfer',  form_template_id: null, icon: '📦', label: '商品調撥（整單）', group: '非費用' },
           { form_type: 'goods_transfer_apply',   form_template_id: null, icon: '📝', label: '調撥-申請步驟', group: '非費用' },

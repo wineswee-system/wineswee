@@ -6,7 +6,7 @@ import {
   Plus, ChevronRight, ChevronDown, Check, Clock, Pause, Ban, Play,
   MessageSquare, Workflow, CheckSquare, Edit3, Trash2, FolderOpen,
   Users, Settings, Columns, GitBranch, MoreVertical, GripVertical,
-  TrendingDown, DollarSign, Link2, Unlink,
+  TrendingDown, DollarSign,
 } from 'lucide-react'
 import TaskDetailPanel from '../../../components/TaskDetailPanel'
 import TaskQuickCreateModal from '../../../components/tasks/TaskQuickCreateModal'
@@ -249,7 +249,8 @@ export default function ProjectDetailPanel({
   const sc = STATUS_MAP[p.status] || {}
 
   return (
-    <div className="fade-in">
+    <div className="fade-in" style={{ display: 'flex', alignItems: 'flex-start', gap: 0 }}>
+    <div style={{ flex: 1, minWidth: 0 }}>
       <div className="page-header">
         <div className="page-header-row">
           <div>
@@ -329,7 +330,6 @@ export default function ProjectDetailPanel({
       <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--border-subtle)', marginBottom: 16, overflowX: 'auto' }}>
         {[
           { k: 'overview',  label: '總覽',     icon: FolderOpen },
-          { k: 'lists',     label: '列表',     icon: CheckSquare },
           { k: 'burndown',  label: '燃盡圖',   icon: TrendingDown },
           { k: 'budget',    label: '預算',     icon: DollarSign },
           { k: 'members',   label: '成員',     icon: Users },
@@ -352,10 +352,6 @@ export default function ProjectDetailPanel({
           )
         })}
       </div>
-
-      {detailTab === 'lists' && (
-        <ProjectListsTab projectId={p.id} tasks={tasks} />
-      )}
 
       {detailTab === 'members' && (
         <ProjectMembers
@@ -460,11 +456,31 @@ export default function ProjectDetailPanel({
       {/* ── Budget tab ── */}
       {detailTab === 'budget' && (() => {
         const linked = allExpenses.filter(e => e.project_id === p.id)
-        const unlinked = allExpenses.filter(e => !e.project_id)
+        const requested = linked.filter(e => e.status !== '已核銷')
+        const settled = linked.filter(e => e.status === '已核銷')
         const actualSpent = linked.reduce((s, e) => s + Number(e.actual_amount ?? e.estimated_amount ?? 0), 0)
         const budget = Number(p.budget || 0)
         const pct = budget > 0 ? Math.min(100, Math.round((actualSpent / budget) * 100)) : null
         const overBudget = budget > 0 && actualSpent > budget
+
+        const ExpenseRow = ({ e }) => (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0',
+            borderBottom: '1px solid var(--border-subtle)', fontSize: 13,
+          }}>
+            <span style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0 }}>er-{e.id}</span>
+            <span style={{ flex: 1, fontWeight: 500 }}>{e.title}</span>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{e.employee}</span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent-cyan)', minWidth: 80, textAlign: 'right' }}>
+              {fmt(e.actual_amount ?? e.estimated_amount)}
+            </span>
+            <span style={{
+              fontSize: 10, fontWeight: 600, padding: '2px 6px', borderRadius: 4,
+              color: EXPENSE_STATUS_COLOR[e.status] || 'var(--text-muted)',
+              background: 'var(--glass-light)', whiteSpace: 'nowrap',
+            }}>{displaySettleStatus(e.status)}</span>
+          </div>
+        )
 
         return (
           <div>
@@ -507,77 +523,25 @@ export default function ProjectDetailPanel({
               )}
             </div>
 
-            {/* Linked expenses */}
+            {/* 已申請費用 */}
             <div className="card" style={{ padding: '14px 16px', marginBottom: 12 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-secondary)' }}>
-                已連結費用申請（{linked.length}）
+              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: 'var(--text-secondary)' }}>
+                已申請費用（{requested.length}）
               </div>
-              {linked.length === 0 ? (
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '6px 0' }}>尚未連結任何費用申請。</div>
-              ) : linked.map(e => (
-                <div key={e.id} style={{
-                  display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0',
-                  borderBottom: '1px solid var(--border-subtle)', fontSize: 13,
-                }}>
-                  <span style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0 }}>er-{e.id}</span>
-                  <span style={{ flex: 1, fontWeight: 500 }}>{e.title}</span>
-                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{e.employee}</span>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent-cyan)', minWidth: 80, textAlign: 'right' }}>
-                    {fmt(e.actual_amount ?? e.estimated_amount)}
-                  </span>
-                  <span style={{
-                    fontSize: 10, fontWeight: 600, padding: '2px 6px', borderRadius: 4,
-                    color: EXPENSE_STATUS_COLOR[e.status] || 'var(--text-muted)',
-                    background: 'var(--glass-light)',
-                    whiteSpace: 'nowrap',
-                  }}>{displaySettleStatus(e.status)}</span>
-                  <button
-                    title="取消連結"
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '3px 5px', borderRadius: 4, color: 'var(--accent-red)', flexShrink: 0 }}
-                    onMouseEnter={e2 => e2.currentTarget.style.background = 'var(--accent-red-dim)'}
-                    onMouseLeave={e2 => e2.currentTarget.style.background = 'none'}
-                    onClick={() => onUnlinkExpense?.(e.id)}
-                  ><Unlink size={12} /></button>
-                </div>
-              ))}
+              {requested.length === 0 ? (
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '6px 0' }}>此專案尚無已申請費用。</div>
+              ) : requested.map(e => <ExpenseRow key={e.id} e={e} />)}
             </div>
 
-            {/* Link new expense */}
-            {unlinked.length > 0 && (
-              <div className="card" style={{ padding: '14px 16px' }}>
-                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-secondary)' }}>
-                  <Link2 size={14} /> 連結費用申請
-                </div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
-                  選擇尚未連結專案的費用申請，點「連結」將其計入此專案預算。
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 5, maxHeight: 220, overflowY: 'auto' }}>
-                  {unlinked.map(e => (
-                    <div key={e.id} style={{
-                      display: 'flex', alignItems: 'center', gap: 10, padding: '6px 8px',
-                      borderRadius: 7, border: '1px solid var(--border-subtle)', fontSize: 13,
-                    }}>
-                      <span style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0 }}>er-{e.id}</span>
-                      <span style={{ flex: 1, fontWeight: 500 }}>{e.title}</span>
-                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{e.employee}</span>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent-cyan)', minWidth: 70, textAlign: 'right' }}>
-                        {fmt(e.estimated_amount)}
-                      </span>
-                      <span style={{
-                        fontSize: 10, fontWeight: 600, padding: '2px 6px', borderRadius: 4,
-                        color: EXPENSE_STATUS_COLOR[e.status] || 'var(--text-muted)',
-                        background: 'var(--glass-light)', whiteSpace: 'nowrap',
-                      }}>{displaySettleStatus(e.status)}</span>
-                      <button
-                        className="btn btn-secondary"
-                        style={{ fontSize: 11, padding: '3px 10px', display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0 }}
-                        onClick={() => onLinkExpense?.(e.id, p.id)}
-                      ><Link2 size={11} /> 連結</button>
-                    </div>
-                  ))}
-                </div>
+            {/* 已核銷費用 */}
+            <div className="card" style={{ padding: '14px 16px' }}>
+              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: 'var(--text-secondary)' }}>
+                已核銷費用（{settled.length}）
               </div>
-            )}
+              {settled.length === 0 ? (
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '6px 0' }}>此專案尚無已核銷費用。</div>
+              ) : settled.map(e => <ExpenseRow key={e.id} e={e} />)}
+            </div>
           </div>
         )
       })()}
@@ -836,6 +800,11 @@ export default function ProjectDetailPanel({
         )
       })()}
 
+      {/* Lists */}
+      <div style={{ marginTop: 20 }}>
+        <ProjectListsTab projectId={p.id} tasks={tasks} />
+      </div>
+
       {/* Comments */}
       <div style={{ fontSize: 13, fontWeight: 700, marginTop: 16, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-secondary)' }}>
         <MessageSquare size={15} /> 備註（{pComments.length}）
@@ -859,10 +828,22 @@ export default function ProjectDetailPanel({
       </div>
 
       </>}
+    </div>
 
-      {/* Task detail panel */}
-      {selectedTask && (
+    {selectedTask && (
+      <div style={{
+        width: 440,
+        flexShrink: 0,
+        borderLeft: '1px solid var(--border-medium)',
+        background: 'var(--bg-primary)',
+        position: 'sticky',
+        top: 0,
+        alignSelf: 'flex-start',
+        maxHeight: 'calc((100vh - var(--topnav-height)) / var(--app-font-scale, 1))',
+        overflowY: 'auto',
+      }}>
         <TaskDetailPanel
+          mode="panel"
           step={selectedTask}
           instance={pWorkflows.find(w => w.id === selectedTask.workflow_instance_id) || null}
           allSteps={selectedTask.workflow_instance_id
@@ -875,7 +856,8 @@ export default function ProjectDetailPanel({
           onDelete={() => setSelectedTask(null)}
           onClose={() => setSelectedTask(null)}
         />
-      )}
+      </div>
+    )}
 
       {/* Edit workflow modal */}
       {editWfOpen && (

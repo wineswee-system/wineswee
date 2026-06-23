@@ -34,6 +34,7 @@ const PRIORITY_LIST = ['低', '中', '高']
 export default function TaskDetailPanel({
   step: task, instance, allSteps, employees, stores, checklists,
   onUpdate, onDelete, onDuplicate, onClose,
+  mode = 'modal',
 }) {
   const { profile } = useAuth()
   const { logAction, logFieldChange } = useAuditLog()
@@ -168,10 +169,11 @@ export default function TaskDetailPanel({
 
   // Lock body scroll when modal is open
   useEffect(() => {
+    if (mode === 'panel') return
     const orig = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     return () => { document.body.style.overflow = orig }
-  }, [])
+  }, [mode])
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
@@ -289,26 +291,23 @@ export default function TaskDetailPanel({
   }
   const fieldGrid = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }
 
-  return createPortal(
-    <div style={{
-      position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-      zIndex: 10000,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: 'rgba(0,0,0,0.4)',
-      width: '100vw', height: '100vh',
-    }} onMouseDown={e => { if (e.target === e.currentTarget) handleClose() }}>
-      <div style={{
-        width: '100%', maxWidth: 780,
-        maxHeight: '85vh',
-        background: 'var(--bg-primary)',
-        border: '1px solid var(--border-medium)',
-        borderRadius: 16,
-        display: 'flex', flexDirection: 'column',
-        boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
-        animation: 'fadeIn 0.2s ease',
-        overflow: 'hidden',
-        margin: 'auto',
-      }}>
+  const _inner = (
+    <>
+    <div style={mode === 'panel' ? {
+      display: 'flex', flexDirection: 'column',
+      background: 'var(--bg-primary)',
+    } : {
+      width: '100%', maxWidth: 780,
+      maxHeight: '85vh',
+      background: 'var(--bg-primary)',
+      border: '1px solid var(--border-medium)',
+      borderRadius: 16,
+      display: 'flex', flexDirection: 'column',
+      boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+      animation: 'fadeIn 0.2s ease',
+      overflow: 'hidden',
+      margin: 'auto',
+    }}>
         {/* ── Header ── */}
         <div style={{
           padding: '14px 24px 0', borderBottom: '1px solid var(--border-subtle)',
@@ -695,6 +694,20 @@ export default function TaskDetailPanel({
         onConfirm={inputModal.onConfirm || (() => {})}
         onCancel={closeInput}
       />
+    </>
+  )
+
+  if (mode === 'panel') return _inner
+
+  return createPortal(
+    <div style={{
+      position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+      zIndex: 10000,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: 'rgba(0,0,0,0.4)',
+      width: '100vw', height: '100vh',
+    }} onMouseDown={e => { if (e.target === e.currentTarget) handleClose() }}>
+      {_inner}
     </div>,
     document.body
   )

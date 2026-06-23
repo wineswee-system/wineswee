@@ -36,7 +36,7 @@ export default function BookingPage() {
   useEffect(() => {
     supabase
       .from('stores')
-      .select('id, name')
+      .select('id, name, phone')
       .eq('is_active', true)
       .order('name')
       .then(({ data }) => {
@@ -150,15 +150,25 @@ export default function BookingPage() {
                 onChange={e => setDate(e.target.value)} style={INPUT} />
             </Field>
 
-            <Field label="人數">
+            <Field label="訂位人數">
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                {Array.from({ length: maxParty }, (_, i) => i + 1).map(n => (
+                {[2, 3, 4, 5, 6, 7, 8].map(n => (
                   <button key={n} onClick={() => setPartySize(n)}
                     style={{ ...PILL, background: n === partySize ? '#0891b2' : '#f5f4f0', color: n === partySize ? '#fff' : '#333' }}>
                     {n}人
                   </button>
                 ))}
               </div>
+              {(() => {
+                const s = stores.find(x => x.id === storeId)
+                return (
+                  <div style={{ marginTop: 10, fontSize: 13, color: '#666', background: '#f5f4f0', borderRadius: 8, padding: '10px 12px', lineHeight: 1.6 }}>
+                    8 人以上請來電預約：
+                    <span style={{ fontWeight: 700, color: '#333' }}>{s?.name ?? '—'}</span>
+                    {s?.phone && <span style={{ marginLeft: 6, color: '#0891b2', fontWeight: 600 }}>📞 {s.phone}</span>}
+                  </div>
+                )
+              })()}
             </Field>
 
             <Field label="用餐時間">
@@ -215,7 +225,7 @@ export default function BookingPage() {
               <input type="email" placeholder="（選填）" value={email}
                 onChange={e => setEmail(e.target.value)} style={INPUT} />
             </Field>
-            <Field label="特殊需求">
+            <Field label="備註">
               <textarea placeholder="過敏原、兒童椅、慶生蛋糕…（選填）"
                 value={requests} onChange={e => setRequests(e.target.value)}
                 rows={3} style={{ ...INPUT, resize: 'vertical' }} />
@@ -247,6 +257,7 @@ export default function BookingPage() {
             <SummaryRow label="手機" value={phone} />
             {email && <SummaryRow label="Email" value={email} />}
             {requests && <SummaryRow label="備註" value={requests} />}
+
 
             {error && (
               <div style={{ color: '#e53e3e', fontSize: 13, background: '#fff5f5', padding: '10px 14px', borderRadius: 8 }}>

@@ -197,7 +197,8 @@ function RsvRow({ r, tables, expanded, onToggle, onAct, onEdit }) {
   )
 }
 
-function WalkinModal({ storeId, date, tables, employeeId, onClose, onCreated }) {
+function WalkinModal({ storeId, date: initDate, tables, employeeId, onClose, onCreated }) {
+  const [date, setDate]           = useState(initDate)
   const [partySize, setPartySize] = useState(2)
   const [duration, setDuration]   = useState(1)
   const [slots, setSlots]         = useState([])
@@ -205,6 +206,7 @@ function WalkinModal({ storeId, date, tables, employeeId, onClose, onCreated }) 
   const [tableId, setTableId]     = useState('')
   const [guestName, setGuestName] = useState('')
   const [phone, setPhone]         = useState('')
+  const [remarks, setRemarks]     = useState('')
   const [loading, setLoading]     = useState(false)
 
   useEffect(() => {
@@ -221,6 +223,7 @@ function WalkinModal({ storeId, date, tables, employeeId, onClose, onCreated }) 
       party_size: partySize, duration_hours: duration,
       table_id: tableId || null,
       guest_name: guestName, guest_phone: phone,
+      special_requests: remarks || null,
       confirmation_code: genCode(), status: 'confirmed',
       source: 'walk_in',
     }, employeeId)
@@ -233,9 +236,12 @@ function WalkinModal({ storeId, date, tables, employeeId, onClose, onCreated }) 
       <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 16, padding: 28, width: 420, maxHeight: '90vh', overflowY: 'auto' }}>
         <div style={{ fontSize: 16, fontWeight: 700, color: '#111827', marginBottom: 20 }}>新增訂位</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <Field label="人數">
+          <Field label="日期">
+            <input type="date" value={date} onChange={e => setDate(e.target.value)} style={INPUT} />
+          </Field>
+          <Field label="訂位人數">
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {[1,2,3,4,5,6,7,8].map(n => (
+              {[2,3,4,5,6,7,8].map(n => (
                 <button key={n} onClick={() => setPartySize(n)}
                   style={{ ...PILL, background: n === partySize ? '#0891b2' : '#f0f4f8', color: n === partySize ? '#fff' : '#6b7280' }}>
                   {n}人
@@ -277,6 +283,11 @@ function WalkinModal({ storeId, date, tables, employeeId, onClose, onCreated }) 
           </Field>
           <Field label="手機 *">
             <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="0912-000-000" style={INPUT} />
+          </Field>
+          <Field label="備註">
+            <textarea value={remarks} onChange={e => setRemarks(e.target.value)}
+              placeholder="過敏原、兒童椅、慶生蛋糕…（選填）"
+              rows={2} style={{ ...INPUT, resize: 'vertical' }} />
           </Field>
         </div>
         <div style={{ display: 'flex', gap: 10, marginTop: 24 }}>
@@ -379,7 +390,7 @@ function EditModal({ r, tables, employeeId, onClose, onSaved }) {
               {suitable.map(t => <option key={t.id} value={t.id}>T{t.table_number} ({t.capacity}人)</option>)}
             </select>
           </Field>
-          <Field label="特殊需求">
+          <Field label="備註">
             <textarea value={form.special_requests} onChange={e => set('special_requests', e.target.value)}
               rows={2} style={{ ...INPUT, resize: 'vertical' }} />
           </Field>

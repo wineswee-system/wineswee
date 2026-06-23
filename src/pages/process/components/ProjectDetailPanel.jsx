@@ -5,14 +5,13 @@ import { displaySettleStatus } from '../../../lib/displayLabel'
 import {
   Plus, ChevronRight, ChevronDown, Check, Clock, Pause, Ban, Play,
   MessageSquare, Workflow, CheckSquare, Edit3, Trash2, FolderOpen,
-  Users, Settings, Columns, GitBranch, MoreVertical, GripVertical,
+  Users, GitBranch, MoreVertical, GripVertical,
   TrendingDown, DollarSign,
 } from 'lucide-react'
 import TaskDetailPanel from '../../../components/TaskDetailPanel'
 import TaskQuickCreateModal from '../../../components/tasks/TaskQuickCreateModal'
 import ProjectMembers from '../../../components/tasks/ProjectMembers'
 import ChangelogPanel from '../../../components/ChangelogPanel'
-import { ProjectCustomFieldsAdmin } from '../../../components/tasks/CustomFieldsEditor'
 import SearchableSelect, { empOptions } from '../../../components/SearchableSelect'
 import ProjectFormModal from './ProjectFormModal'
 import InputModal from '../../../components/ui/InputModal'
@@ -247,11 +246,10 @@ export default function ProjectDetailPanel({
   const [editWfForm, setEditWfForm] = useState({})
 
   const sc = STATUS_MAP[p.status] || {}
-  const narrowTab = detailTab === 'sections' || detailTab === 'fields'
 
   return (
     <div className="fade-in" style={{ display: 'flex', alignItems: 'flex-start', gap: 0 }}>
-    <div style={{ flex: 1, minWidth: 0, ...(narrowTab ? { maxWidth: 460 } : {}) }}>
+    <div style={{ flex: 1, minWidth: 0, maxWidth: 520 }}>
       <div className="page-header">
         <div className="page-header-row">
           <div>
@@ -334,8 +332,6 @@ export default function ProjectDetailPanel({
           { k: 'burndown',  label: '燃盡圖',   icon: TrendingDown },
           { k: 'budget',    label: '預算',     icon: DollarSign },
           { k: 'members',   label: '成員',     icon: Users },
-          { k: 'sections',  label: '欄位',     icon: Columns },
-          { k: 'fields',    label: '自訂欄位', icon: Settings },
           { k: 'changelog', label: '變更日誌', icon: GitBranch },
         ].map(t => {
           const Icon = t.icon
@@ -378,10 +374,6 @@ export default function ProjectDetailPanel({
         />
       )}
 
-      {detailTab === 'fields' && (
-        <ProjectCustomFieldsAdmin projectId={p.id} />
-      )}
-
       {detailTab === 'changelog' && (
         <ChangelogPanel
           tables={['projects', 'project_comments', 'project_sections']}
@@ -389,44 +381,6 @@ export default function ProjectDetailPanel({
           orgId={profile?.organization_id}
           currentUser={profile?.name}
         />
-      )}
-
-      {detailTab === 'sections' && (
-        <div>
-          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-secondary)' }}>
-            <Columns size={14} /> 看板欄位 ({sections.length})
-          </div>
-          <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
-            <input
-              className="form-input" style={{ flex: 1, fontSize: 13 }}
-              placeholder="新欄位名稱，例：審核中"
-              value={newSection} onChange={e => setNewSection(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && addSection()}
-            />
-            <button className="btn btn-primary" onClick={addSection} disabled={!newSection.trim()}>
-              <Plus size={13} /> 新增
-            </button>
-          </div>
-          {sections.length === 0 ? (
-            <div className="card" style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)', fontSize: 12 }}>
-              尚無自訂欄位。看板會使用預設狀態欄位。
-            </div>
-          ) : sections.map(s => (
-            <div key={s.id} className="card" style={{ padding: '8px 12px', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div style={{ width: 12, height: 12, borderRadius: 3, background: s.color }} />
-              <input
-                defaultValue={s.name}
-                onBlur={e => e.target.value !== s.name && renameSection(s.id, e.target.value)}
-                style={{ flex: 1, border: 'none', background: 'transparent', fontSize: 13, fontWeight: 600, outline: 'none' }}
-              />
-              <button
-                className="btn btn-secondary"
-                style={{ padding: '3px 7px', color: 'var(--accent-red)' }}
-                onClick={() => removeSection(s.id)}
-              ><Trash2 size={12} /></button>
-            </div>
-          ))}
-        </div>
       )}
 
       {/* ── Burndown tab ── */}
@@ -833,7 +787,7 @@ export default function ProjectDetailPanel({
 
     {selectedTask && (
       <div style={{
-        ...(narrowTab ? { flex: 1, minWidth: 0 } : { width: 440, flexShrink: 0 }),
+        flex: 1, minWidth: 0,
         borderLeft: '1px solid var(--border-medium)',
         background: 'var(--bg-primary)',
         position: 'sticky',

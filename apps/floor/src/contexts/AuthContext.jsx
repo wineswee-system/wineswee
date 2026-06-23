@@ -19,25 +19,12 @@ export function AuthProvider({ children }) {
     }
     setLoading(true)
 
-    // Match by auth_user_id (email/password and edge-function LINE login both write this)
-    let { data: emp } = await supabase
+    // Match by auth_user_id (set by the line-login edge function and email/password login)
+    const { data: emp } = await supabase
       .from('employees')
-      .select('id, name, role, organization_id, store_id, line_user_id')
+      .select('id, name, role, organization_id, store_id')
       .eq('auth_user_id', authUser.id)
       .maybeSingle()
-
-    // Fallback: LINE OAuth identity (future-proof if Supabase OAuth is ever enabled)
-    if (!emp) {
-      const lineIdentity = authUser.identities?.find(i => i.provider === 'line')
-      if (lineIdentity?.id) {
-        const { data } = await supabase
-          .from('employees')
-          .select('id, name, role, organization_id, store_id, line_user_id')
-          .eq('line_user_id', lineIdentity.id)
-          .maybeSingle()
-        emp = data
-      }
-    }
 
     setEmployee(emp ?? null)
     setLoading(false)

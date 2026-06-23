@@ -17,15 +17,16 @@ export function AuthProvider({ children }) {
       setLoading(false)
       return
     }
+    setLoading(true)
 
-    // Email/password login: match by auth_user_id
+    // Match by auth_user_id (email/password and edge-function LINE login both write this)
     let { data: emp } = await supabase
       .from('employees')
       .select('id, name, role, organization_id, store_id, line_user_id')
       .eq('auth_user_id', authUser.id)
       .maybeSingle()
 
-    // LINE OAuth login: Supabase stores the LINE user ID in identities[].id
+    // Fallback: LINE OAuth identity (future-proof if Supabase OAuth is ever enabled)
     if (!emp) {
       const lineIdentity = authUser.identities?.find(i => i.provider === 'line')
       if (lineIdentity?.id) {
@@ -43,21 +44,25 @@ export function AuthProvider({ children }) {
   }
 
   useEffect(() => {
-    // Exchange magic-link token_hash redirected from the line-login edge function.
-    // This bypasses Supabase's redirect-URL allowlist; onAuthStateChange handles the rest.
     const params = new URLSearchParams(window.location.search)
     const tokenHash = params.get('token_hash')
+
     if (tokenHash) {
+      // token_hash path: verifyOtp exchanges the magic-link token for a session.
+      // Skip getSession() — there is no session yet. onAuthStateChange fires on completion.
       const type = params.get('type') || 'magiclink'
       supabase.auth.verifyOtp({ token_hash: tokenHash, type })
         .then(() => window.history.replaceState({}, '', '/'))
+        .catch(() => { setUser(null); setEmployee(null); setLoading(false) })
+    } else {
+      // Normal path: check for an existing session (page refresh, email/password login)
+      supabase.auth.getSession().then(({ data }) => {
+        const u = data.session?.user ?? null
+        setUser(u)
+        loadEmployee(u)
+      })
     }
 
-    supabase.auth.getSession().then(({ data }) => {
-      const u = data.session?.user ?? null
-      setUser(u)
-      loadEmployee(u)
-    })
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
       const u = session?.user ?? null
       setUser(u)

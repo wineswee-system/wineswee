@@ -8,7 +8,6 @@ import {
   createWorkflowInstance,
 } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
-import { notifyTaskAssignee } from '../../lib/lineNotify'
 import { toast } from '../../lib/toast'
 const labelStyle = { fontSize: 13, fontWeight: 700, color: 'var(--accent-blue)', marginBottom: 6, marginTop: 18 }
 const sectionStyle = {
@@ -117,22 +116,8 @@ export default function TaskRelationsTab({
           priority: s.priority || '中',
           organization_id: task.organization_id || null,
         }))
-        const { data: createdTasks } = await supabase.from('tasks').insert(taskRows).select()
-        if (createdTasks?.[0]?.assignee) {
-          notifyTaskAssignee(
-            createdTasks[0].assignee,
-            createdTasks[0].title,
-            tpl.name,
-            createdTasks[0].id,
-            {
-              dueDate: createdTasks[0].due_date,
-              description: createdTasks[0].description,
-              notes: createdTasks[0].notes,
-              store: createdTasks[0].store,
-              approvalRequired: createdTasks[0].status === '待簽核',
-            }
-          ).catch(() => {})
-        }
+        await supabase.from('tasks').insert(taskRows)
+        // 通知由 DB trigger 統一推（status=進行中 時，含 insert 第一步）→ 前端不再推
       }
 
       setTriggeredInstances(prev => [inst, ...prev])

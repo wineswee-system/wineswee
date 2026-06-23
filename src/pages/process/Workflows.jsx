@@ -19,7 +19,7 @@ import { useRealtimeTasks, useRealtimeWorkflowInstances } from '../../lib/hooks/
 import LoadingSpinner from '../../components/LoadingSpinner'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import TaskDetailPanel from '../../components/TaskDetailPanel'
-import { notifyTaskAssignee, notifyTaskConfirmationResult, notifyApproval } from '../../lib/lineNotify'
+import { notifyTaskConfirmationResult, notifyApproval } from '../../lib/lineNotify'
 import { useAuth } from '../../contexts/AuthContext'
 import { useAuditLog } from '../../lib/useAuditLog'
 
@@ -315,17 +315,8 @@ export default function Workflows() {
           organization_id: profile?.organization_id || null,
         }
       })
-      const { data: createdTasks } = await supabase.from('tasks').insert(newRows).select()
-      if (createdTasks?.[0]?.assignee) {
-        const t0 = createdTasks[0]
-        notifyTaskAssignee(
-          t0.assignee,
-          `🚀 [自動觸發] ${t0.title}`,
-          `由「${sourceInst?.template_name}」觸發`,
-          t0.id,
-          { dueDate: t0.due_date, description: t0.description, notes: t0.notes, store: t0.store, approvalRequired: t0.status === '待簽核', priority: t0.priority }
-        ).catch(() => {})
-      }
+      await supabase.from('tasks').insert(newRows).select()
+      // 通知由 DB trigger 統一推（status=進行中 時，含 insert 第一步）→ 前端不再推
     }
     setInstances(prev => [newInst, ...prev])
   }
@@ -640,18 +631,7 @@ export default function Workflows() {
         toast.error(`任務已建立，但有設定失敗：\n${subFailures.join('\n')}`)
       }
 
-      // 只在「沒有未完成前置步驟」時才推 LINE
-      // → 第一個任務（step 1）正常推；後續步驟要等前面完成才會由 cascade 推
-      const hasIncompletePrev = instTasks.some(t =>
-        (t.step_order || 0) < (maxOrder + 1) &&
-        t.status !== '已完成' && t.status !== 'completed'
-      )
-      if (taskForm.assignee && !hasIncompletePrev) {
-        notifyTaskAssignee(taskForm.assignee, taskForm.title, selectedInstance.store || selectedInstance.template_name, data.id, {
-          dueDate: data.due_date, description: data.description, notes: data.notes, store: data.store,
-          approvalRequired: data.status === '待簽核',
-        }).catch(() => {})
-      }
+      // 通知由 DB trigger 統一推（status=進行中 時，含 insert 第一步、cascade 後續步）→ 前端不再推
     }
   }
 

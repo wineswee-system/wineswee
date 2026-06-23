@@ -5,7 +5,6 @@ import { todayTW } from '../../lib/datetime'
 import { getTasks, createTask, updateTask, deleteTask, getTaskDependenciesByInstance, getCategories, getWorkflows, getApprovalChains, createTaskAttachment } from '../../lib/db'
 import { safeStorageName } from '../../lib/storageSanitize'
 import { supabase } from '../../lib/supabase'
-import { notifyTaskAssignee } from '../../lib/lineNotify'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
@@ -251,13 +250,7 @@ export default function Tasks() {
         setUploadingFiles(false)
         setPendingFiles([])
       }
-      // Send LINE notification after attachments are saved (DB trigger skips INSERT)
-      if (data.assignee) {
-        notifyTaskAssignee(data.assignee, data.title, '', data.id, {
-          dueDate: data.due_date, description: data.description,
-          notes: data.notes, store: data.store, priority: data.priority,
-        }).catch(() => {})
-      }
+      // 通知由 DB trigger trg_task_enqueue_started_notify 統一推（status=進行中 時，含 insert 第一步）→ 前端不再推，避免雙推
       setTasks(prev => [data, ...prev])
       setShowModal(false)
       setForm({ title: '', workflow: '', assignee: '', due_date: '', planned_start: '', store: '', role: '', priority: '中', bucket: '一般工作', task_type: 'task', project_id: '', section_id: '', description: '', approval_mode: 'none', approval_chain_id: '', confirmation_approvers: [], confirmation_mode: 'parallel', required_forms: [] })

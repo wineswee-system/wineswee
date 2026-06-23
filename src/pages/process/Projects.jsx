@@ -5,7 +5,7 @@ import { getEmployees, getProjectSections, createProjectSection, updateProjectSe
 import { useRealtimeTasks, useRealtimeWorkflowInstances } from '../../lib/hooks/useRealtimeSync'
 import { useAuth } from '../../contexts/AuthContext'
 import { useAuditLog } from '../../lib/useAuditLog'
-import { notifyTaskAssignee, notifyTaskStarted } from '../../lib/lineNotify'
+import { notifyTaskAssignee } from '../../lib/lineNotify'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { confirm } from '../../lib/confirm'
 import ProjectDetailPanel from './components/ProjectDetailPanel'
@@ -485,19 +485,13 @@ export default function Projects() {
   }
 
   const handleTaskStatusChange = async (taskId, newStatus) => {
-    const prevTask = tasks.find(t => t.id === taskId)
     const { data } = await updateTask(taskId, {
       status: newStatus,
       completed_at: newStatus === '已完成' ? new Date().toISOString() : null,
     })
     if (data) {
       setTasks(prev => prev.map(t => t.id === taskId ? data : t))
-      if (newStatus === '進行中' && prevTask?.status !== '進行中' && data.assignee) {
-        notifyTaskStarted(data.assignee, data.title, '', data.id, {
-          dueDate: data.due_date, description: data.description, notes: data.notes, store: data.store,
-          approvalRequired: data.status === '待簽核',
-        }).catch(() => {})
-      }
+      // 「進行中」通知由 DB trigger trg_task_enqueue_started_notify 統一推（前端不再推，避免雙推）
     }
   }
 
@@ -507,7 +501,6 @@ export default function Projects() {
     if (!fd.title?.trim()) return false
     const instTasks = tasks.filter(t => t.workflow_instance_id === wfId)
     const maxOrder = instTasks.reduce((m, t) => Math.max(m, t.step_order || 0), 0)
-    const wf = workflows.find(w => w.id === wfId)
     const empId = fd.assignee
       ? (employees.find(e => e.name === fd.assignee)?.id || null)
       : null
@@ -555,10 +548,7 @@ export default function Projects() {
       setAddTaskForm({ title: '', assignee: '', due_date: '', required_forms: [] })
       setAddingTaskWfId(null)
     }
-    if (data.assignee) notifyTaskAssignee(data.assignee, data.title, wf?.template_name || '', data.id, {
-      dueDate: data.due_date, description: data.description, notes: data.notes, store: data.store,
-      approvalRequired: data.status === '待簽核', priority: data.priority,
-    }).catch(() => {})
+    // 通知由 DB trigger 處理（只在 status=進行中 時推）→ 未開始的後續步驟不會誤推、也不雙推
     return true
   }
 

@@ -57,6 +57,7 @@ export default function DelegationRules() {
   }
 
   const remove = async (id) => {
+    if (!window.confirm('確定刪除此代理規則？此操作無法復原。')) return
     await supabase.from('approval_delegation_rules').delete().eq('id', id)
     setRules(prev => prev.filter(r => r.id !== id))
     toast.success('已刪除代理規則')

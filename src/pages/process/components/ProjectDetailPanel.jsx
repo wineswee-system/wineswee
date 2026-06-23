@@ -62,13 +62,15 @@ function ProjectListsTab({ projectId, tasks }) {
   }
 
   const renameList = async (id) => {
-    if (!editName.trim()) return
+    const current = lists.find(l => l.id === id)
+    if (!editName.trim() || editName.trim() === current?.name) { setEditId(null); return }
     const { data } = await supabase.from('project_lists').update({ name: editName.trim() }).eq('id', id).select().single()
     if (data) setLists(prev => prev.map(l => l.id === id ? data : l))
     setEditId(null)
   }
 
   const deleteList = async (id) => {
+    if (!window.confirm('確定刪除此列表？（任務不會被刪除，但會取消分組）')) return
     await supabase.from('project_lists').delete().eq('id', id)
     setLists(prev => prev.filter(l => l.id !== id))
   }

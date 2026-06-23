@@ -50,8 +50,8 @@ function TriggerBuilder({ trigger, onClose, onSaved }) {
       .select().single()
     if (error) { toast.error('儲存失敗'); setSaving(false); return }
     toast.success('觸發器已更新')
-    onSaved(data)
     setSaving(false)
+    onSaved(data)
   }
 
   const blockStyle = { background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 10, padding: '12px 16px', position: 'relative' }

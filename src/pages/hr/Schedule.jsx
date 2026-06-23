@@ -69,6 +69,7 @@ export default function Schedule() {
   const [focusedCell, setFocusedCell] = useState(null)  // { empName, date } 鍵盤導航的焦點
   const [selection, setSelection] = useState(null)       // { anchor: {empName, date}, end: {empName, date} } 拖曳框選
   const [selecting, setSelecting] = useState(false)      // mousedown 拖曳中
+  const [schedClipboard, setSchedClipboard] = useState(null) // 複製/貼上：{ rows, cols, cells: [[{shift,actual_start,actual_end,source_store}]] }
   const [offRequests, setOffRequests] = useState([])
   const [pendingLeaves, setPendingLeaves] = useState([]) // 待審核/審核中請假（橘點提示用）
   const [holidays, setHolidays] = useState([]) // ['2026-04-04', ...]
@@ -409,6 +410,89 @@ export default function Schedule() {
     }
   }
 
+  // ── 複製 / 貼上（總覽矩形）──────────────────────────────────────────────
+  // 取一格完整內容（含 actual_start/end/source_store），供複製
+  const getFullCell = (empName, date) => {
+    if (aiDraft?.assignments) {
+      const a = aiDraft.assignments.find(a => a.employee === empName && a.date === date)
+      return a ? { shift: a.shift || '', actual_start: a.actual_start || null, actual_end: a.actual_end || null, source_store: a.source_store || null } : { shift: '' }
+    }
+    const s = schedules.find(s => s.employee === empName && s.date === date)
+    return s ? { shift: s.shift || '', actual_start: s.actual_start || null, actual_end: s.actual_end || null, source_store: s.source_store || null } : { shift: '' }
+  }
+
+  // 跟 applyToSelection 同一份篩選邏輯（決定哪些員工列在畫面上）
+  const gridEmps = () => {
+    const vStart = activeDates?.[0]
+    const vEnd = activeDates?.[activeDates.length - 1]
+    return employees.filter(em =>
+      em.employment_category !== 'admin' && em.employment_category !== 'piece' &&
+      (isAdmin || scopedStoreIds.has(em.store_id)) &&
+      (deptFilter === '' || em.dept === deptFilter) &&
+      (storeFilter === '' || em.store === storeFilter) &&
+      (!em.join_date   || !vEnd   || em.join_date   <= vEnd) &&
+      (!em.resign_date || !vStart || em.resign_date >= vStart)
+    )
+  }
+
+  const copySelection = () => {
+    if (!selection) return
+    const emps = gridEmps()
+    const aIdx = emps.findIndex(em => em.name === selection.anchor.empName)
+    const eIdx = emps.findIndex(em => em.name === selection.end.empName)
+    const aDIdx = activeDates.findIndex(d => d === selection.anchor.date)
+    const eDIdx = activeDates.findIndex(d => d === selection.end.date)
+    if (aIdx < 0 || eIdx < 0 || aDIdx < 0 || eDIdx < 0) return
+    const eMin = Math.min(aIdx, eIdx), eMax = Math.max(aIdx, eIdx)
+    const dMin = Math.min(aDIdx, eDIdx), dMax = Math.max(aDIdx, eDIdx)
+    const cells = []
+    for (let i = eMin; i <= eMax; i++) {
+      const row = []
+      for (let j = dMin; j <= dMax; j++) row.push(getFullCell(emps[i].name, activeDates[j]))
+      cells.push(row)
+    }
+    setSchedClipboard({ rows: eMax - eMin + 1, cols: dMax - dMin + 1, cells })
+    toast.success(`已複製 ${(eMax - eMin + 1) * (dMax - dMin + 1)} 格`)
+  }
+
+  const pasteSelection = async () => {
+    if (!schedClipboard || !canEditSchedule) return
+    const emps = gridEmps()
+    let baseEmpIdx = -1, baseDateIdx = -1
+    if (selection) {
+      const aIdx = emps.findIndex(em => em.name === selection.anchor.empName)
+      const eIdx = emps.findIndex(em => em.name === selection.end.empName)
+      const aDIdx = activeDates.findIndex(d => d === selection.anchor.date)
+      const eDIdx = activeDates.findIndex(d => d === selection.end.date)
+      baseEmpIdx = Math.min(aIdx, eIdx); baseDateIdx = Math.min(aDIdx, eDIdx)
+    } else if (focusedCell) {
+      baseEmpIdx = emps.findIndex(em => em.name === focusedCell.empName)
+      baseDateIdx = activeDates.findIndex(d => d === focusedCell.date)
+    }
+    if (baseEmpIdx < 0 || baseDateIdx < 0) return
+
+    const ops = []
+    for (let r = 0; r < schedClipboard.rows; r++) {
+      for (let c = 0; c < schedClipboard.cols; c++) {
+        const ei = baseEmpIdx + r, di = baseDateIdx + c
+        if (ei >= emps.length || di >= activeDates.length) continue
+        const date = activeDates[di]
+        if (lockedDates?.has?.(date)) continue   // 鎖定月份跳過
+        ops.push({ empName: emps[ei].name, date, cell: schedClipboard.cells[r][c], store: emps[ei].store || null })
+      }
+    }
+    if (ops.length === 0) return
+    if (ops.length > 5 && !(await confirm({ message: `貼上到 ${ops.length} 格？` }))) return
+    for (const op of ops) {
+      if (op.cell && op.cell.shift) {
+        await handleSetShift(op.empName, op.date, op.cell.shift, op.cell.actual_start, op.cell.actual_end, op.cell.source_store || op.store)
+      } else {
+        await handleDeleteShift(op.empName, op.date)
+      }
+    }
+    toast.success(`已貼上 ${ops.length} 格`)
+  }
+
   // 鍵盤導航：方向鍵移動 focused cell + Space/Enter 開 modal
   useEffect(() => {
     if (!canEditSchedule) return
@@ -431,6 +515,16 @@ export default function Schedule() {
       )
       const dates = activeDates
       if (filteredEmps.length === 0 || dates.length === 0) return
+
+      // 複製 / 貼上（Ctrl/⌘ + C / V）
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'C')) {
+        if (selection) { e.preventDefault(); copySelection() }
+        return
+      }
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'v' || e.key === 'V')) {
+        if (schedClipboard && (selection || focusedCell)) { e.preventDefault(); pasteSelection() }
+        return
+      }
 
       // 有 selection 時：R/S/B/M 套到整個範圍，Del 刪除整個範圍
       if (selection) {
@@ -508,7 +602,7 @@ export default function Schedule() {
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focusedCell, editCell, canEditSchedule, employees, deptFilter, storeFilter, activeDates, selection])
+  }, [focusedCell, editCell, canEditSchedule, employees, deptFilter, storeFilter, activeDates, selection, schedClipboard])
 
   const getShift = (empName, date) => {
     // 模擬中：aiDraft 存在時純看 draft（找不到也不 fallback DB）
@@ -1914,7 +2008,8 @@ export default function Schedule() {
             boxShadow: '0 6px 18px rgba(0,0,0,0.25)',
             display: 'flex', alignItems: 'center', gap: 10,
           }}>
-            🔵 已選 {cnt} 格 — E=例 R=休 S=特休 B=病 M=會議 Del=清除 Esc=取消
+            🔵 已選 {cnt} 格 — E=例 R=休 S=特休 B=病 M=會議 · Ctrl+C 複製 Ctrl+V 貼上 · Del=清除 Esc=取消
+            {schedClipboard && <span style={{ color: 'var(--accent-purple)' }}>· 📋 已複製 {schedClipboard.rows}×{schedClipboard.cols}</span>}
             <button onClick={() => setSelection(null)} style={{
               background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-cyan)', padding: 0, fontSize: 16,
             }}>×</button>

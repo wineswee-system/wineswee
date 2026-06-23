@@ -90,11 +90,13 @@ export default function ExpenseFormModal({
   editingId,
   isExpense, setIsExpense,
   onSubmit, saving, errors, setErrors,
-  currency, onCurrencyChange,
+  currency, currencies = [], onCurrencyChange,
 }) {
   if (!open) return null
 
   const csvRef = useRef(null)
+  // 幣別符號:優先用 currencies 表(資料驅動),fallback 靜態/代碼
+  const curSym = Object.fromEntries((currencies || []).map(c => [c.code, c.symbol]))
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
@@ -106,7 +108,7 @@ export default function ExpenseFormModal({
   })
 
   const lineTotal = lineItems.reduce((s, li) => s + (li.subtotal || 0), 0)
-  const fmtAmt = (n) => n != null ? `${CURRENCY_PREFIX[currency] ?? currency} ${Number(n).toLocaleString()}` : '-'
+  const fmtAmt = (n) => n != null ? `${curSym[currency] ?? CURRENCY_PREFIX[currency] ?? currency} ${Number(n).toLocaleString()}` : '-'
 
   // 下載 CSV 範本（含標題列 + 2 筆範例，UTF-8 BOM 讓 Excel 認得）
   const handleDownloadTemplate = () => {
@@ -271,13 +273,10 @@ export default function ExpenseFormModal({
                 onChange={e => onCurrencyChange(e.target.value)}
                 style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }}
               >
-                <option value="TWD">TWD — 台幣</option>
-                <option value="USD">USD — 美元</option>
-                <option value="JPY">JPY — 日幣</option>
-                <option value="CNY">CNY — 人民幣</option>
-                <option value="EUR">EUR — 歐元</option>
-                <option value="NZD">NZD — 紐西蘭幣</option>
-                <option value="AUD">AUD — 澳幣</option>
+                {(currencies && currencies.length > 0
+                  ? currencies.map(c => <option key={c.code} value={c.code}>{c.code} — {c.name}</option>)
+                  : [['TWD','台幣'],['USD','美元'],['JPY','日幣'],['CNY','人民幣'],['EUR','歐元'],['NZD','紐西蘭幣'],['AUD','澳幣']]
+                      .map(([code, name]) => <option key={code} value={code}>{code} — {name}</option>))}
               </select>
             </div>
           )}

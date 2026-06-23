@@ -6,6 +6,10 @@ export const getAccounts = (orgId) => {
   return q
 }
 
+// 幣別單一來源（currencies 表）— 之後加幣別只要在表 INSERT 一列
+export const getCurrencies = () =>
+  supabase.from('currencies').select('code, name, symbol, decimals').eq('is_active', true).order('sort_order')
+
 export const createAccount = (data) =>
   supabase.from('accounts').insert(data).select().single()
 

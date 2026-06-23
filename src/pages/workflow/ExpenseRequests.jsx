@@ -4,7 +4,7 @@ import { useReturnNav } from '../../lib/useReturnNav'
 import { useAuth } from '../../contexts/AuthContext'
 import { Plus, X, Send, Settings, Search } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import { getAccounts } from '../../lib/db'
+import { getAccounts, getCurrencies } from '../../lib/db'
 import { exportExpenseRequestPdf } from '../../lib/exportPdf'
 import { createApprovalWorkflow } from '../../lib/workflowIntegration'
 import { buildChainBasedSteps } from '../../lib/buildChainSteps'
@@ -52,6 +52,7 @@ export default function ExpenseRequests() {
   const returnNav = useReturnNav()  // 從「我的待簽」帶 ?returnTo 跳來時，簽完用它回待簽；否則 no-op
   const [requests, setRequests] = useState([])
   const [accounts, setAccounts] = useState([])
+  const [currencies, setCurrencies] = useState([])
   const [employees, setEmployees] = useState([])
   const [stores, setStores] = useState([])
   const [organization, setOrganization] = useState(null)  // { name, logo_url } — 印簽呈用
@@ -87,7 +88,7 @@ export default function ExpenseRequests() {
       .select('id, name, name_en, employee_number, dept, department_id, store, store_id, position, status, signature_url')
       .eq('status', '在職').order('name')
     if (orgId) empQuery = empQuery.eq('organization_id', orgId)
-    const [reqRes, accRes, empRes, orgRes, extraRes, storeRes] = await Promise.all([
+    const [reqRes, accRes, empRes, orgRes, extraRes, storeRes, curRes] = await Promise.all([
       reqQuery,
       getAccounts(orgId),
       empQuery,
@@ -99,9 +100,11 @@ export default function ExpenseRequests() {
         .eq('status', 'pending'),
       // 門市清單給費用表單下拉用
       supabase.from('stores').select('id, name').order('name'),
+      getCurrencies(),
     ])
     setRequests(reqRes.data || [])
     setAccounts(accRes.data || [])
+    setCurrencies(curRes?.data || [])
     setEmployees((empRes.data || []).filter(e => e.status === '在職'))
     setStores(storeRes?.data || [])
     setOrganization(orgRes?.data || null)
@@ -904,6 +907,7 @@ export default function ExpenseRequests() {
         errors={errors}
         setErrors={setErrors}
         currency={form.currency}
+        currencies={currencies}
         onCurrencyChange={v => setForm(f => ({ ...f, currency: v }))}
       />
 

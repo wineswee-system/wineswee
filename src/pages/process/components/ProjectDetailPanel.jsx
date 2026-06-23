@@ -78,7 +78,7 @@ function ProjectListsTab({ projectId, tasks }) {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
         <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)' }}>專案列表 ({lists.length})</span>
-        <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={() => setAdding(true)}>+ 新增列表</button>
+        <button className="btn btn-secondary" style={{ fontSize: 12, padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 4 }} onClick={() => setAdding(true)}><Plus size={12} /> 新增列表</button>
       </div>
 
       {adding && (

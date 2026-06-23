@@ -301,12 +301,57 @@ export default function Projects() {
           await supabase.from('workflow_instances').update({ project_id: data.id, sort_order: sortOrder++ }).eq('id', id)
         }
         for (const wf of pendingWfCreate) {
-          await createWorkflowInstance({
-            template_name: wf.template_name, status: '進行中',
-            started_by: payload.owner, store: payload.store || null,
-            due_date: payload.end_date || null, project_id: data.id,
-            sort_order: sortOrder++, started_at: new Date().toISOString(),
+          const { data: newWf } = await createWorkflowInstance({
+            template_name: wf.name || wf.template_name || '',
+            status: '進行中',
+            started_by: wf.assignee || payload.owner,
+            assignee: wf.assignee || null,
+            store: wf.store || payload.store || null,
+            planned_start_date: wf.planned_start_date || null,
+            planned_end_date: wf.planned_end_date || null,
+            priority: wf.priority || '中',
+            due_date: wf.due_date || payload.end_date || null,
+            completion_chain_id: wf.completion_chain_id ? Number(wf.completion_chain_id) : null,
+            notes: wf.notes || null,
+            project_id: data.id, sort_order: sortOrder++,
+            started_at: new Date().toISOString(),
+            organization_id: profile?.organization_id || null,
           })
+          // 該流程底下的任務（含簽核 + 綁定表單，對齊其他建任務路徑）
+          if (newWf && (wf.tasks || []).length > 0) {
+            const wfTaskRows = wf.tasks.map((t, ti) => ({
+              workflow_instance_id: newWf.id, project_id: data.id,
+              title: t.title, description: t.description || null,
+              assignee: t.assignee || null,
+              assignee_id: t.assignee ? (employees.find(e => e.name === t.assignee)?.id || null) : null,
+              store: t.store || null, planned_start: t.planned_start || null,
+              due_date: t.due_date || null, role: t.role || null,
+              priority: t.priority || '中',
+              status: ti === 0 ? '進行中' : '待處理',
+              started_at: ti === 0 ? new Date().toISOString() : null,
+              step_order: ti + 1, bucket: '工作流程', category: '工作流程',
+              approval_chain_id: t.approval_mode === 'chain' && t.approval_chain_id ? Number(t.approval_chain_id) : null,
+              confirmation_mode: t.approval_mode === 'people' ? (t.confirmation_mode || 'parallel') : null,
+              organization_id: profile?.organization_id || null,
+            }))
+            const { data: insertedWfTasks } = await supabase.from('tasks').insert(wfTaskRows).select()
+            for (let ti = 0; ti < (insertedWfTasks?.length || 0); ti++) {
+              const t = wf.tasks[ti], row = insertedWfTasks[ti]
+              if (t.approval_mode === 'people' && (t.confirmation_approvers || []).length > 0) {
+                await supabase.from('task_confirmations').insert(
+                  t.confirmation_approvers.map((approver, idx) => ({
+                    task_id: row.id, approver, step_order: idx, status: 'pending',
+                    organization_id: profile?.organization_id || null,
+                  }))
+                )
+              }
+              for (const f of (t.required_forms || [])) {
+                await supabase.rpc('create_task_form_binding', {
+                  p_task_id: row.id, p_form_type: f.form_type, p_form_template_id: f.form_template_id || null,
+                })
+              }
+            }
+          }
         }
         if (pendingTasks.length > 0) {
           const taskRows = pendingTasks.map((t, i) => ({

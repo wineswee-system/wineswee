@@ -3,6 +3,9 @@ import Modal, { Field } from '../../../components/Modal'
 import { Plus, X, Workflow, CheckSquare } from 'lucide-react'
 import SearchableSelect, { empOptions } from '../../../components/SearchableSelect'
 import TaskQuickCreateModal from '../../../components/tasks/TaskQuickCreateModal'
+import BlankWorkflowModal from './BlankWorkflowModal'
+
+const emptyWf = () => ({ name: '', store: '', assignee: '', planned_start_date: '', planned_end_date: '', priority: '中', due_date: '', completion_chain_id: '', notes: '' })
 
 const STATUS_KEYS = ['規劃中', '進行中', '已完成', '暫停', '已取消']
 const PRIORITY_COLORS = { '高': 'var(--accent-red)', '中': 'var(--accent-yellow)', '低': 'var(--accent-green)' }
@@ -44,7 +47,9 @@ export default function ProjectFormModal({
 
   const [inlineWfMode, setInlineWfMode] = useState(null) // null | 'attach' | 'create'
   const [inlineWfAttachId, setInlineWfAttachId] = useState('')
-  const [inlineWfCreate, setInlineWfCreate] = useState({ template_name: '' })
+  const [wfCreateOpen, setWfCreateOpen] = useState(false)
+  const [newWfForm, setNewWfForm] = useState(emptyWf())
+  const [addTaskWfIdx, setAddTaskWfIdx] = useState(null)
   const [inlineTaskMode, setInlineTaskMode] = useState(false)
 
   return (
@@ -146,10 +151,24 @@ export default function ProjectFormModal({
                 ) : null
               })}
               {pendingWfCreate.map((wf, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', borderRadius: 6, background: 'var(--glass-light)', marginBottom: 4, fontSize: 12 }}>
-                  <Plus size={11} style={{ color: 'var(--accent-purple)', flexShrink: 0 }} />
-                  <span style={{ flex: 1 }}>{wf.template_name} <span style={{ color: 'var(--text-muted)' }}>（新建）</span></span>
-                  <button onClick={() => setPendingWfCreate(p => p.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-red)', padding: 2 }}><X size={12} /></button>
+                <div key={i} style={{ padding: '5px 10px', borderRadius: 6, background: 'var(--glass-light)', marginBottom: 4, fontSize: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Plus size={11} style={{ color: 'var(--accent-purple)', flexShrink: 0 }} />
+                    <span style={{ flex: 1 }}>{wf.name || wf.template_name} <span style={{ color: 'var(--text-muted)' }}>（新建）</span></span>
+                    <button onClick={() => setAddTaskWfIdx(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-cyan)', padding: 2, fontSize: 11, display: 'flex', alignItems: 'center', gap: 2 }}><Plus size={11} /> 加任務</button>
+                    <button onClick={() => setPendingWfCreate(p => p.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-red)', padding: 2 }}><X size={12} /></button>
+                  </div>
+                  {(wf.tasks || []).length > 0 && (
+                    <div style={{ marginTop: 4, paddingLeft: 19, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      {wf.tasks.map((t, ti) => (
+                        <div key={ti} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--text-secondary)' }}>
+                          <CheckSquare size={9} style={{ color: 'var(--accent-blue)', flexShrink: 0 }} />
+                          <span style={{ flex: 1 }}>{t.title}{t.assignee && <span style={{ color: 'var(--text-muted)' }}> · {t.assignee}</span>}</span>
+                          <button onClick={() => setPendingWfCreate(p => p.map((w, j) => j === i ? { ...w, tasks: w.tasks.filter((_, k) => k !== ti) } : w))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-red)', padding: 0 }}><X size={10} /></button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -173,24 +192,39 @@ export default function ProjectFormModal({
               </div>
             </div>
           )}
-          {inlineWfMode === 'create' && (
-            <div style={{ padding: 10, borderRadius: 8, background: 'var(--bg-card)', border: '1px solid var(--border-medium)', marginBottom: 8 }}>
-              <input className="form-input" style={{ width: '100%', marginBottom: 8, fontSize: 13 }} placeholder="流程名稱 *"
-                value={inlineWfCreate.template_name} onChange={e => setInlineWfCreate(f => ({ ...f, template_name: e.target.value }))} />
-              <div style={{ display: 'flex', gap: 6 }}>
-                <button className="btn btn-primary" style={{ fontSize: 12, padding: '4px 12px' }} disabled={!inlineWfCreate.template_name}
-                  onClick={() => { if (inlineWfCreate.template_name) { setPendingWfCreate(p => [...p, { ...inlineWfCreate }]); setInlineWfCreate({ template_name: '' }); setInlineWfMode(null) } }}>確認</button>
-                <button className="btn btn-secondary" style={{ fontSize: 12, padding: '4px 12px' }} onClick={() => { setInlineWfMode(null); setInlineWfCreate({ template_name: '' }) }}>取消</button>
-              </div>
-            </div>
-          )}
           {!inlineWfMode && (
             <div style={{ display: 'flex', gap: 6 }}>
               <button className="btn btn-secondary" style={{ fontSize: 12, padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 4 }}
                 onClick={() => setInlineWfMode('attach')}><Workflow size={11} /> 連結現有流程</button>
               <button className="btn btn-secondary" style={{ fontSize: 12, padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 4 }}
-                onClick={() => setInlineWfMode('create')}><Plus size={11} /> 建立新流程</button>
+                onClick={() => setWfCreateOpen(true)}><Plus size={11} /> 建立新流程</button>
             </div>
+          )}
+
+          {/* 建立新流程（完整設定） */}
+          {wfCreateOpen && (
+            <BlankWorkflowModal
+              blankWorkflowForm={newWfForm}
+              setBlankWorkflowForm={setNewWfForm}
+              employees={employees}
+              stores={stores}
+              approvalChains={approvalChains}
+              onClose={() => { setWfCreateOpen(false); setNewWfForm(emptyWf()) }}
+              onSubmit={() => { setPendingWfCreate(p => [...p, { ...newWfForm, tasks: [] }]); setNewWfForm(emptyWf()); setWfCreateOpen(false); return true }}
+            />
+          )}
+
+          {/* 加任務到待建流程 */}
+          {addTaskWfIdx !== null && (
+            <TaskQuickCreateModal
+              open={addTaskWfIdx !== null}
+              title="新增流程任務"
+              employees={employees}
+              stores={stores}
+              approvalChains={approvalChains}
+              onClose={() => setAddTaskWfIdx(null)}
+              onSubmit={(fd) => { setPendingWfCreate(p => p.map((w, j) => j === addTaskWfIdx ? { ...w, tasks: [...(w.tasks || []), fd] } : w)); return true }}
+            />
           )}
         </div>
 

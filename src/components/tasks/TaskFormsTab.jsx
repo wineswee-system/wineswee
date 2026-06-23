@@ -56,13 +56,9 @@ export default function TaskFormsTab({ task, formBindings, setFormBindings }) {
     return { label: '', clickable: false }
   }
 
-  // 點動作：自己填 → 任務內彈窗（自訂表單 inline / 重型用 iframe）；他人填 → 開頁(代填 fallback)
+  // 點動作：一律以任務內 overlay 開啟（自訂表單 inline / 重型用 iframe）
   const onAction = (b) => {
-    if (b.fill_mode === 'self') {
-      setFillBinding(b)
-    } else {
-      navTo(b, formBindings)
-    }
+    setFillBinding(b)
   }
 
   // 切「自己填」：清掉指派

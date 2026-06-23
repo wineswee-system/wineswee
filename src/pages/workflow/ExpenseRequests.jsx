@@ -30,7 +30,7 @@ const STATUS_COLORS = {
   '核銷已退回': { bg: 'var(--accent-red-dim)', color: 'var(--accent-red)' },
 }
 
-const CURRENCY_SYMBOL = { TWD: 'NT$', USD: 'US$', JPY: '¥', CNY: '¥', EUR: '€' }
+const CURRENCY_SYMBOL = { TWD: 'NT$', USD: 'US$', JPY: '¥', CNY: '¥', EUR: '€', NZD: 'NZ$', AUD: 'A$' }
 const fmtCur = (n, cur) => {
   if (n == null) return '-'
   const sym = CURRENCY_SYMBOL[cur] || (cur ?? 'NT$')

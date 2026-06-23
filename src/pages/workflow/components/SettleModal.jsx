@@ -4,7 +4,7 @@ import { ModalOverlay } from '../../../components/Modal'
 import { clearError } from '../../../lib/formValidation'
 
 // 對齊 ExpenseRequests.jsx 的 CURRENCY_SYMBOL；request.currency 可能是 USD/JPY/EUR/CNY
-const CURRENCY_SYMBOL = { TWD: 'NT$', USD: 'US$', JPY: '¥', CNY: '¥', EUR: '€' }
+const CURRENCY_SYMBOL = { TWD: 'NT$', USD: 'US$', JPY: '¥', CNY: '¥', EUR: '€', NZD: 'NZ$', AUD: 'A$' }
 const fmt = (n, cur) => {
   if (n == null) return '-'
   const sym = CURRENCY_SYMBOL[cur] || (cur ?? 'NT$')

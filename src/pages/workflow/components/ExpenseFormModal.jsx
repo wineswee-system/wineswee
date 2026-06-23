@@ -276,6 +276,8 @@ export default function ExpenseFormModal({
                 <option value="JPY">JPY — 日幣</option>
                 <option value="CNY">CNY — 人民幣</option>
                 <option value="EUR">EUR — 歐元</option>
+                <option value="NZD">NZD — 紐西蘭幣</option>
+                <option value="AUD">AUD — 澳幣</option>
               </select>
             </div>
           )}

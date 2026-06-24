@@ -65,6 +65,7 @@ const systemItems = [
   { icon: FileText, label: '表單建立器', path: '/system/form-builder' },
   { icon: UserCog, label: '使用者管理', path: '/system/users' },
   { icon: Shield, label: '員工個別權限', path: '/system/employee-permissions' },
+  { icon: UserCog, label: '簽核代理', path: '/system/approval-delegations', perm: 'approval.delegate_manage' },
   { icon: Building2, label: '租戶管理', path: '/system/tenants', perm: 'system.tenant_manage' },
   { icon: Zap, label: '觸發器', path: '/system/triggers' },
   { icon: Bell, label: '通知管理', path: '/system/notifications' },

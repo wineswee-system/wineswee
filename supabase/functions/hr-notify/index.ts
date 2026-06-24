@@ -414,6 +414,7 @@ function buildTaskAutoStarted(details: {
   description?: string;
   notes?: string;
   completed_tasks?: string[];
+  bindings?: Array<{ label?: string; required_status?: string }>;
   liff_id?: string | null;
 }) {
   const LC = {
@@ -471,16 +472,33 @@ function buildTaskAutoStarted(details: {
     body.push({ type: 'text', text: note, size: 'sm', color: LC.dark, wrap: true });
   }
 
+  // 需完成表單清單（步驟綁定，執行人填的）
+  const bindings = Array.isArray(details.bindings) ? details.bindings : [];
+  if (bindings.length > 0) {
+    body.push({ type: 'separator', margin: 'sm' });
+    body.push({ type: 'text', text: `📋 需完成表單（${bindings.length}）`, size: 'sm', color: LC.dark, weight: 'bold', margin: 'sm' });
+    for (const b of bindings) {
+      body.push({
+        type: 'box', layout: 'horizontal', spacing: 'sm',
+        contents: [
+          { type: 'text', text: '•', size: 'sm', color: LC.brand, flex: 0 },
+          { type: 'text', text: b.label || '未命名表單', size: 'sm', color: LC.dark, wrap: true, flex: 1 },
+        ],
+      });
+    }
+  }
+
   // footer 雙按鈕（只在有 task_id 時建 LIFF URL）
   const taskId = details.task_id;
   const liffUrl = taskId ? buildLiffTaskUrl(taskId, details.liff_id || null) : null;
+  const hasForms = bindings.length > 0;
   const footer = liffUrl ? {
     type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '14px',
     contents: [
       { type: 'button', style: 'primary', height: 'sm', color: LC.success,
         action: { type: 'postback', label: '回報完成', data: `action=complete&type=task&id=${taskId}`, displayText: '回報完成' } },
-      { type: 'button', style: 'secondary', height: 'sm',
-        action: { type: 'uri', label: '查看任務', uri: liffUrl } },
+      { type: 'button', style: hasForms ? 'primary' : 'secondary', height: 'sm', color: hasForms ? LC.brand : undefined,
+        action: { type: 'uri', label: hasForms ? '查看任務 / 填表單' : '查看任務', uri: liffUrl } },
     ],
   } : undefined;
 

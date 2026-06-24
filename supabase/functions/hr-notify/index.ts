@@ -777,6 +777,79 @@ function buildFormBindingFillNotification(details: {
   };
 }
 
+// ── approval_delegated：代簽通知 — 你正在代理某人的簽核 ───────────────────
+const CUR_SYM: Record<string, string> = { TWD: 'NT$', USD: 'US$', JPY: '¥', CNY: '¥', EUR: '€', NZD: 'NZ$', AUD: 'A$' };
+function buildApprovalDelegatedNotification(details: {
+  delegator_name?: string;
+  reason?: string;
+  effective_from?: string;
+  effective_to?: string;
+  rt?: string;               // expense_request | expense_settle | ...
+  request_id?: number;
+  doc_label?: string;        // 費用申請 / 費用核銷(驗收)
+  title?: string;
+  applicant_name?: string;
+  applicant_dept?: string;
+  amount?: number;
+  currency?: string;
+  store?: string;
+  step_name?: string;
+  due_date?: string;
+  due_time?: string;
+  liff_id?: string | null;
+}) {
+  const LC = { brand: '#8b5cf6', danger: '#ef4444', muted: '#666666', dark: '#444444' };
+
+  let dueLabel = '未設定'; let isOverdue = false;
+  if (details.due_date) {
+    const rawDate = String(details.due_date).slice(0, 10);
+    const dm = rawDate.match(/^\d{4}-(\d{2})-(\d{2})/);
+    const tm = String(details.due_time || '17:00').match(/^(\d{1,2}):(\d{1,2})/);
+    const hh = tm ? tm[1].padStart(2, '0') : '17'; const mi = tm ? tm[2].padStart(2, '0') : '00';
+    if (dm) { dueLabel = `${dm[1]}/${dm[2]} ${hh}:${mi}`; const dt = new Date(`${rawDate}T${hh}:${mi}:00+08:00`); if (!isNaN(dt.getTime())) isOverdue = dt < new Date(); }
+  }
+  const period = `${(details.effective_from || '').slice(5)}–${details.effective_to ? details.effective_to.slice(5) : '長期'}`;
+  const sym = CUR_SYM[details.currency || 'TWD'] || (details.currency ?? 'NT$');
+
+  const body: any[] = [
+    { type: 'text', text: `你正在代理 ${details.delegator_name || ''} 的簽核`, weight: 'bold', size: 'sm', wrap: true, color: LC.brand },
+    { type: 'text', text: `代理期間 ${period}${details.reason ? ` · ${details.reason}` : ''}`, size: 'xs', color: LC.muted, wrap: true },
+    { type: 'separator', margin: 'sm' },
+    { type: 'text', text: `${details.doc_label || '簽核'} #${details.request_id ?? ''}`, weight: 'bold', size: 'sm', wrap: true, margin: 'sm' },
+  ];
+  if (details.title) body.push({ type: 'text', text: details.title, size: 'sm', color: LC.dark, wrap: true });
+  if (details.applicant_name) body.push({ type: 'text', text: `申請人：${details.applicant_name}${details.applicant_dept ? ` · ${details.applicant_dept}` : ''}`, size: 'sm', color: LC.muted, wrap: true });
+  if (details.amount != null) body.push({ type: 'text', text: `金額：${sym} ${Number(details.amount).toLocaleString()}`, size: 'sm', color: LC.dark });
+  if (details.step_name) body.push({ type: 'text', text: `目前關卡：${details.step_name}（原簽核人 ${details.delegator_name || ''}）`, size: 'sm', color: LC.muted, wrap: true });
+  if (details.store) body.push({ type: 'text', text: `門市：${details.store}`, size: 'sm', color: LC.muted });
+  body.push({ type: 'text', text: `到期：${dueLabel}`, size: 'sm', color: isOverdue ? LC.danger : LC.muted, weight: isOverdue ? 'bold' : 'regular' });
+
+  const id = details.request_id; const rt = details.rt || 'expense_request';
+  const toPath = rt === 'expense_settle' ? `/expense-request?settle_id=${id}` : `/expense-request`;
+  const liffUrl = details.liff_id ? `https://liff.line.me/${details.liff_id}?to=${encodeURIComponent(toPath)}` : null;
+  const footer = {
+    type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '14px',
+    contents: [
+      { type: 'button', style: 'primary', height: 'sm', color: LC.brand,
+        action: { type: 'postback', label: '✅ 核准（代簽）', data: `action=approve&type=request&rt=${rt}&id=${id}`, displayText: '核准（代簽）' } },
+      ...(liffUrl ? [{ type: 'button', style: 'secondary', height: 'sm',
+        action: { type: 'uri', label: '前往簽核 / 看明細', uri: liffUrl } }] : []),
+    ],
+  };
+
+  return {
+    type: 'flex',
+    altText: `🔄 代簽通知：代 ${details.delegator_name || ''} 簽 ${details.doc_label || ''} #${details.request_id ?? ''}`,
+    contents: {
+      type: 'bubble', size: 'kilo',
+      header: { type: 'box', layout: 'vertical', backgroundColor: LC.brand, paddingAll: '14px',
+        contents: [{ type: 'text', text: '🔄 代簽通知', color: '#FFFFFF', weight: 'bold', size: 'md' }] },
+      body: { type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '14px', contents: body },
+      footer,
+    },
+  };
+}
+
 // ── contract_expiry_batch：合約 + 證件到期預警彙整（推給所有 admin/manager）─
 function buildExpiryBatchNotification(alerts: any[]) {
   const DOC_LABELS: Record<string, string> = {
@@ -1225,6 +1298,7 @@ serve(async (req) => {
     const needsLiff = type === "task_auto_started"
       || type === "task_with_bindings_assigned"
       || type === "form_binding_fill_assigned"
+      || type === "approval_delegated"
       || type === "interview_completed"
       || type === "goods_transfer_step_assigned"
       || type === "goods_transfer_receipt_pending"
@@ -1323,6 +1397,8 @@ serve(async (req) => {
       message = buildTaskWithBindingsAssigned({ ...details, liff_id: acct?.liffId || null });
     } else if (type === "form_binding_fill_assigned") {
       message = buildFormBindingFillNotification({ ...details, liff_id: acct?.liffId || null });
+    } else if (type === "approval_delegated") {
+      message = buildApprovalDelegatedNotification({ ...details, liff_id: acct?.liffId || null });
     } else if (type === "interview_completed") {
       message = buildInterviewCompleted({ ...details, liff_id: acct?.liffId || null });
     } else {

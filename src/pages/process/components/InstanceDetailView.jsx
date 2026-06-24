@@ -161,7 +161,8 @@ export default function InstanceDetailView({
     return false
   }
   return (
-    <div className="fade-in">
+    <div className="fade-in" style={{ display: 'flex', alignItems: 'flex-start', gap: 0 }}>
+    <div style={{ flex: 1, minWidth: 0 }}>
       {/* Header */}
       <div style={{ marginBottom: 20 }}>
         {/* Breadcrumb */}
@@ -948,12 +949,26 @@ export default function InstanceDetailView({
           </Field>
         </Modal>
       )}
+    </div>{/* ── 左欄結束 ── */}
+
+      {/* 右側：點步驟後滑出該任務詳情（對齊專案頁主從版面，取代原本全螢幕 modal） */}
       {selectedStep && (
-        <TaskDetailPanel step={selectedStep} instance={inst} allSteps={instSteps} employees={employees} stores={stores} checklists={checklists}
-          onUpdate={onStepUpdate}
-          onDelete={onStepDelete}
-          onDuplicate={onStepDuplicate}
-          onClose={() => setSelectedStep(null)} />
+        <div style={{
+          flex: '0 0 480px', minWidth: 0,
+          borderLeft: '1px solid var(--border-medium)',
+          background: 'var(--bg-primary)',
+          position: 'sticky', top: 0, alignSelf: 'flex-start',
+          maxHeight: 'calc((100vh - var(--topnav-height)) / var(--app-font-scale, 1))',
+          overflowY: 'auto',
+        }}>
+          <TaskDetailPanel
+            mode="panel"
+            step={selectedStep} instance={inst} allSteps={instSteps} employees={employees} stores={stores} checklists={checklists}
+            onUpdate={onStepUpdate}
+            onDelete={onStepDelete}
+            onDuplicate={onStepDuplicate}
+            onClose={() => setSelectedStep(null)} />
+        </div>
       )}
 
       {/* ── Confirm / Reject Task Modal ── */}

@@ -792,13 +792,17 @@ function buildApprovalDelegatedNotification(details: {
   applicant_dept?: string;
   amount?: number;
   currency?: string;
+  summary?: string;          // 類型摘要(請假:假別+起迄+天數;加班:時數…)
   store?: string;
   step_name?: string;
   due_date?: string;
   due_time?: string;
+  liff_to?: string;          // LIFF 深連結目標路徑(各類型自訂)
   liff_id?: string | null;
 }) {
   const LC = { brand: '#8b5cf6', danger: '#ef4444', muted: '#666666', dark: '#444444' };
+  // LINE postback approve 支援的 rt(postback-approval.ts);不支援的不放核准鈕
+  const APPROVE_RT = ['leave', 'overtime', 'trip', 'expense', 'expense_request', 'expense_settle', 'correction', 'off_request', 'goods_transfer'];
 
   let dueLabel = '未設定'; let isOverdue = false;
   if (details.due_date) {
@@ -819,20 +823,23 @@ function buildApprovalDelegatedNotification(details: {
   ];
   if (details.title) body.push({ type: 'text', text: details.title, size: 'sm', color: LC.dark, wrap: true });
   if (details.applicant_name) body.push({ type: 'text', text: `申請人：${details.applicant_name}${details.applicant_dept ? ` · ${details.applicant_dept}` : ''}`, size: 'sm', color: LC.muted, wrap: true });
+  if (details.summary) body.push({ type: 'text', text: details.summary, size: 'sm', color: LC.dark, wrap: true });
   if (details.amount != null) body.push({ type: 'text', text: `金額：${sym} ${Number(details.amount).toLocaleString()}`, size: 'sm', color: LC.dark });
   if (details.step_name) body.push({ type: 'text', text: `目前關卡：${details.step_name}（原簽核人 ${details.delegator_name || ''}）`, size: 'sm', color: LC.muted, wrap: true });
   if (details.store) body.push({ type: 'text', text: `門市：${details.store}`, size: 'sm', color: LC.muted });
   body.push({ type: 'text', text: `到期：${dueLabel}`, size: 'sm', color: isOverdue ? LC.danger : LC.muted, weight: isOverdue ? 'bold' : 'regular' });
 
   const id = details.request_id; const rt = details.rt || 'expense_request';
-  const toPath = rt === 'expense_settle' ? `/expense-request?settle_id=${id}` : `/expense-request`;
+  const toPath = details.liff_to
+    || (rt === 'expense_settle' ? `/expense-request?settle_id=${id}` : rt === 'expense_request' ? `/expense-request` : `/`);
   const liffUrl = details.liff_id ? `https://liff.line.me/${details.liff_id}?to=${encodeURIComponent(toPath)}` : null;
+  const canApprove = APPROVE_RT.includes(rt);
   const footer = {
     type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '14px',
     contents: [
-      { type: 'button', style: 'primary', height: 'sm', color: LC.brand,
-        action: { type: 'postback', label: '✅ 核准（代簽）', data: `action=approve&type=request&rt=${rt}&id=${id}`, displayText: '核准（代簽）' } },
-      ...(liffUrl ? [{ type: 'button', style: 'secondary', height: 'sm',
+      ...(canApprove ? [{ type: 'button', style: 'primary', height: 'sm', color: LC.brand,
+        action: { type: 'postback', label: '✅ 核准（代簽）', data: `action=approve&type=request&rt=${rt}&id=${id}`, displayText: '核准（代簽）' } }] : []),
+      ...(liffUrl ? [{ type: 'button', style: canApprove ? 'secondary' : 'primary', height: 'sm', ...(canApprove ? {} : { color: LC.brand }),
         action: { type: 'uri', label: '前往簽核 / 看明細', uri: liffUrl } }] : []),
     ],
   };

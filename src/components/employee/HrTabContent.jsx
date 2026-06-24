@@ -1,8 +1,55 @@
-import { Upload, Eye, Plus, X } from 'lucide-react'
+import { useState, useRef, useEffect } from 'react'
+import { Upload, Eye, Plus, X, ChevronDown } from 'lucide-react'
 import { getPTAnnualLeaveHours, getAnnualLeaveEntitlement } from '../../lib/leavePolicy'
 import SearchableSelect, { empOptions } from '../SearchableSelect'
 
 const maskBank = (v) => v ? '****' + v.slice(-4) : ''
+
+// 職位常用選項 — 可手打也可下拉選；點 ▼ 一律展開全部（不被已填字過濾）
+const POSITION_OPTS = [
+  '儲備幹部', '店長', '副店長', '資深店長', '督導', '經理', '副理', '主管', '組長', '主任',
+  '專員', '行政助理', '會計', '門市人員', '門市正職人員', '門市兼職人員', '正職人員', '兼職人員', '收銀員', '倉管人員',
+]
+
+// 手打 + 下拉二合一：input 可自由輸入，點 ▼ 或聚焦展開「全部」選項（不依輸入過濾）
+function PositionCombo({ value, onChange, placeholder }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  useEffect(() => {
+    if (!open) return
+    const h = (e) => { if (!ref.current?.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [open])
+  return (
+    <div ref={ref} style={{ position: 'relative', width: '100%' }}>
+      <input
+        className="form-input"
+        style={{ width: '100%', paddingRight: 30 }}
+        value={value || ''}
+        onChange={e => onChange(e.target.value)}
+        onFocus={() => setOpen(true)}
+        placeholder={placeholder}
+      />
+      <button type="button" tabIndex={-1} onClick={() => setOpen(o => !o)}
+        style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2, display: 'flex' }}>
+        <ChevronDown size={14} style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
+      </button>
+      {open && (
+        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4, zIndex: 50, background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 8, boxShadow: 'var(--shadow-lg)', maxHeight: 260, overflowY: 'auto' }}>
+          {POSITION_OPTS.map(opt => (
+            <div key={opt} onClick={() => { onChange(opt); setOpen(false) }}
+              style={{ padding: '7px 12px', cursor: 'pointer', fontSize: 13, color: 'var(--text-primary)', background: opt === value ? 'var(--glass-light)' : 'transparent' }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'var(--glass-light)' }}
+              onMouseLeave={e => { e.currentTarget.style.background = opt === value ? 'var(--glass-light)' : 'transparent' }}>
+              {opt}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 // 跟 SalaryFormModal / SalaryStructures 一致的 12 個常見津貼快選
 const PRESET_ALLOWANCES = [
@@ -113,21 +160,13 @@ export default function HrTabContent({
 
           <SectionTitle icon="👔" text="職位" />
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            <div><div style={L}>主職位</div><input className="form-input" list="hr-position-opts" style={{ width: '100%' }} value={form.position || ''} onChange={e => set('position', e.target.value)} placeholder="輸入或選擇職位" /></div>
+            <div><div style={L}>主職位</div><PositionCombo value={form.position} onChange={v => set('position', v)} placeholder="輸入或選擇職位" /></div>
             <div><div style={L}>職等</div><input className="form-input" style={{ width: '100%' }} value={form.grade || ''} onChange={e => set('grade', e.target.value)} placeholder="M1 / S3" /></div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            <div><div style={L}>副職位</div><input className="form-input" list="hr-position-opts" style={{ width: '100%' }} value={form.position_secondary || ''} onChange={e => set('position_secondary', e.target.value)} placeholder="選填" /></div>
-            <div><div style={L}>第三職位</div><input className="form-input" list="hr-position-opts" style={{ width: '100%' }} value={form.position_third || ''} onChange={e => set('position_third', e.target.value)} placeholder="選填" /></div>
+            <div><div style={L}>副職位</div><PositionCombo value={form.position_secondary} onChange={v => set('position_secondary', v)} placeholder="選填" /></div>
+            <div><div style={L}>第三職位</div><PositionCombo value={form.position_third} onChange={v => set('position_third', v)} placeholder="選填" /></div>
           </div>
-          <datalist id="hr-position-opts">
-            <option value="儲備幹部" />
-            <option value="店長" /><option value="副店長" /><option value="資深店長" /><option value="督導" />
-            <option value="經理" /><option value="副理" /><option value="主管" /><option value="組長" /><option value="主任" />
-            <option value="專員" /><option value="行政助理" /><option value="會計" />
-            <option value="門市人員" /><option value="門市正職人員" /><option value="門市兼職人員" /><option value="正職人員" /><option value="兼職人員" />
-            <option value="收銀員" /><option value="倉管人員" />
-          </datalist>
           <div style={{ marginTop: 14 }}>
             <div style={L}>角色（系統權限）</div>
             <select className="form-input" style={{ width: '100%' }} value={form.role_id || ''}

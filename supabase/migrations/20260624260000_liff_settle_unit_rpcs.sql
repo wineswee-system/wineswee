@@ -225,7 +225,7 @@ BEGIN
     notes = p_payload->>'notes',
     status = '待核銷'
   WHERE id = p_id
-    AND (employee_id = emp.id OR settle_assignee_id = emp.id);
+    AND (settle_assignee_id = emp.id OR (settle_assignee_id IS NULL AND employee_id = emp.id));
   GET DIAGNOSTICS n = ROW_COUNT;
   RETURN json_build_object('updated', n);
 END $function$;

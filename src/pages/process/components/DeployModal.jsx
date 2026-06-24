@@ -156,6 +156,17 @@ export default function DeployModal({
     return { ...f, step_extras: extras }
   })
 
+  // 每步綁定表單「誰來填」設定（部署時才決定）：step_extras[i].form_fills[formKey] = {fill_mode, assignee_id}
+  const ffKey = (form) => `${form.form_type}-${form.form_template_id ?? 'null'}`
+  const setStepFormFill = (i, key, patch) => setDeployForm(f => {
+    const extras = { ...(f.step_extras || {}) }
+    const cur = extras[i] || {}
+    const ff = { ...(cur.form_fills || {}) }
+    ff[key] = { fill_mode: 'self', assignee_id: null, ...(ff[key] || {}), ...patch }
+    extras[i] = { ...cur, form_fills: ff }
+    return { ...f, step_extras: extras }
+  })
+
   // 批次預設操作
   const setBatch = (k, v) => setDeployForm(f => ({
     ...f,
@@ -578,6 +589,52 @@ export default function DeployModal({
                         </div>
                       </div>
                     </div>
+
+                    {/* ─── 📋 綁定表單 誰來填（部署時決定自己填/他人填）─── */}
+                    {(step.required_forms?.length || 0) > 0 && (
+                      <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px dashed var(--border-subtle)' }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent-cyan)', marginBottom: 8 }}>
+                          📋 綁定表單 誰來填
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          {step.required_forms.map((rf, fi) => {
+                            const key = ffKey(rf)
+                            const ff = deployForm.step_extras?.[i]?.form_fills?.[key] || { fill_mode: 'self', assignee_id: null }
+                            const isOther = ff.fill_mode === 'other'
+                            return (
+                              <div key={fi} style={{ padding: '8px 10px', borderRadius: 6, background: 'var(--bg-card)', border: '1px solid var(--border-subtle)' }}>
+                                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 6 }}>📄 {rf.label}</div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>誰來填：</span>
+                                  <button type="button" onClick={() => setStepFormFill(i, key, { fill_mode: 'self', assignee_id: null })}
+                                    style={{ padding: '2px 10px', borderRadius: 10, fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                                      border: '1px solid ' + (!isOther ? 'var(--accent-cyan)' : 'var(--border-subtle)'),
+                                      background: !isOther ? 'var(--accent-cyan-dim)' : 'transparent', color: !isOther ? 'var(--accent-cyan)' : 'var(--text-muted)' }}>
+                                    執行人填
+                                  </button>
+                                  <button type="button" onClick={() => setStepFormFill(i, key, { fill_mode: 'other' })}
+                                    style={{ padding: '2px 10px', borderRadius: 10, fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                                      border: '1px solid ' + (isOther ? 'var(--accent-cyan)' : 'var(--border-subtle)'),
+                                      background: isOther ? 'var(--accent-cyan-dim)' : 'transparent', color: isOther ? 'var(--accent-cyan)' : 'var(--text-muted)' }}>
+                                    指定他人填
+                                  </button>
+                                  {isOther && (
+                                    <div style={{ minWidth: 180, flex: 1 }}>
+                                      <SearchableSelect
+                                        value={ff.assignee_id || ''}
+                                        onChange={(v) => setStepFormFill(i, key, { fill_mode: 'other', assignee_id: v ? Number(v) : null })}
+                                        options={empOptions(employees)}
+                                        placeholder="搜尋要指派的員工…"
+                                      />
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

@@ -6,7 +6,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
-import BoundFormsField from '../../components/tasks/BoundFormsField'
+import FormBindingsPicker from '../../components/FormBindingsPicker'
 
 import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
@@ -526,14 +526,12 @@ export default function SOPTemplates() {
                 {/* 綁定表單 — 完成 step 前必須填完這些表單 */}
                 <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px dashed var(--border-subtle)' }}>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>綁定表單（完成此 step 前需填完）</div>
-                  <BoundFormsField
+                  <FormBindingsPicker
                     value={stepForms}
                     onChange={(next) => setNewTemplate(t => ({
                       ...t,
                       steps: t.steps.map((s, j) => j === i ? { ...s, required_forms: next } : s),
                     }))}
-                    employees={employees}
-                    templateMode
                   />
                 </div>
               </div>

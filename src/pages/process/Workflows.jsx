@@ -1074,13 +1074,16 @@ export default function Workflows() {
             // 綁定表單：對該 step 設定的 required_forms 建 task_form_bindings
             //   ※ 漏這段會導致範本裡掛的表單部署後完全消失（任務沒有 binding）
             const reqForms = tplSteps[i].required_forms || []
+            const stepFormFills = deployForm.step_extras?.[i]?.form_fills || {}
             for (const f of reqForms) {
+              const ff = stepFormFills[`${f.form_type}-${f.form_template_id ?? 'null'}`] || {}
+              const fillMode = ff.fill_mode === 'other' ? 'other' : 'self'
               const { error } = await supabase.rpc('create_task_form_binding', {
                 p_task_id: taskId,
                 p_form_type: f.form_type,
                 p_form_template_id: f.form_template_id || null,
-                p_fill_mode: f.fill_mode || 'self',
-                p_assignee_id: f.fill_mode === 'other' ? (f.assignee_id || null) : null,
+                p_fill_mode: fillMode,
+                p_assignee_id: fillMode === 'other' ? (ff.assignee_id || null) : null,
               })
               if (error) {
                 console.error(`[deploy] step ${i + 1} form_binding 失敗:`, error)

@@ -8,6 +8,7 @@
 import { supabase } from './supabase'
 import { safeStorageName } from './storageSanitize'
 import { createApprovalWorkflow } from './workflowIntegration'
+import { createExpense } from './db'
 
 const EXPENSE_ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf', 'text/csv', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']
 const MAX_SIZE = 10 * 1024 * 1024
@@ -66,6 +67,40 @@ export async function commitExpenseDraft(bindingId, draft, _profile) {
   return data
 }
 
+// ── 經常性費用 draft：{ payload:{employee,category,amount,date,description,receipt}, attachFiles:[{file}], empId } ──
+async function uploadSimpleExpenseFiles(expenseId, attachFiles, empId) {
+  const urls = []
+  for (const { file } of (attachFiles || [])) {
+    if (!file) continue
+    const ext = (file.name.split('.').pop() || 'bin').toLowerCase()
+    const path = `emp-${empId || 'unknown'}/${expenseId}-${Date.now()}.${ext}`
+    const { error } = await supabase.storage.from('expense-receipts').upload(path, file, { cacheControl: '3600', upsert: true })
+    if (error) continue
+    const { data } = supabase.storage.from('expense-receipts').getPublicUrl(path)
+    if (data?.publicUrl) urls.push(data.publicUrl)
+  }
+  if (urls.length > 0) {
+    await supabase.from('expenses').update({ attachments: urls }).eq('id', expenseId)
+  }
+  return urls
+}
+
+export async function commitSimpleExpenseDraft(bindingId, draft, _profile) {
+  const fullPayload = {
+    ...draft.payload,
+    amount: Number(draft.payload.amount),
+    status: '待審核',
+    linked_binding_id: bindingId ? Number(bindingId) : null,
+  }
+  const { data, error } = await createExpense(fullPayload)
+  if (error) throw error
+  if (data) {
+    if (draft.attachFiles?.length) await uploadSimpleExpenseFiles(data.id, draft.attachFiles, draft.empId)
+    try { await createApprovalWorkflow('expense', data, draft.payload.employee) } catch { /* 簽核失敗不擋單據 */ }
+  }
+  return data
+}
+
 // 依 form_type 落地一張暫存表單
 export async function commitBindingDraft(bindingId, item, profile) {
   if (!item?._draft) return
@@ -73,10 +108,15 @@ export async function commitBindingDraft(bindingId, item, profile) {
     await commitFormSubmissionDraft(bindingId, item._draft, profile)
   } else if (item.form_type === 'expense_request' || item.form_type === 'expense_apply') {
     await commitExpenseDraft(bindingId, item._draft, profile)
+  } else if (item.form_type === 'expense') {
+    await commitSimpleExpenseDraft(bindingId, item._draft, profile)
   }
 }
 
 // 此 form_type 是否支援「自己填當場暫存」(A 模式)；不支援的走建立後跳出
+// 註：商品調撥(店長↔店長須調入店長發起) / 稽核(多步驟) / 驗收段(對既有單) 本質不適合當場填
 export function isDraftableType(formType) {
-  return formType === 'form_submission' || formType === 'expense_request' || formType === 'expense_apply'
+  return formType === 'form_submission'
+    || formType === 'expense_request' || formType === 'expense_apply'
+    || formType === 'expense'
 }

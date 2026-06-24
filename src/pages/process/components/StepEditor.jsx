@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { CheckSquare, Shield, FileText, Zap, ChevronDown, ChevronRight, GitBranch, GitMerge, Bell, Clock } from 'lucide-react'
 import { Field } from '../../../components/Modal'
-import BoundFormsField from '../../../components/tasks/BoundFormsField'
+import FormBindingsPicker from '../../../components/FormBindingsPicker'
 
 /**
  * Collapsible section used inside StepEditor for optional configuration blocks.
@@ -198,11 +198,9 @@ export default function StepEditor({ step, onChange, checklists = [], approvalCh
           color="var(--accent-cyan)"
           defaultOpen={(step.required_forms?.length || 0) > 0}
         >
-          <BoundFormsField
+          <FormBindingsPicker
             value={step.required_forms || []}
             onChange={v => set('required_forms', v)}
-            employees={employees}
-            templateMode
           />
         </Section>
 

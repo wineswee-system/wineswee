@@ -5,6 +5,7 @@ import SearchableSelect, { empOptions } from '../SearchableSelect'
 import { ModalOverlay } from '../Modal'
 import CustomFormFill from '../../pages/workflow/CustomFormFill'
 import ExpenseFormDraft from '../../pages/workflow/components/ExpenseFormDraft'
+import ExpenseSimpleDraft from '../../pages/workflow/components/ExpenseSimpleDraft'
 import { isDraftableType } from '../../lib/commitBindingDraft'
 
 /**
@@ -136,6 +137,13 @@ export default function BoundFormsField({ value = [], onChange, employees = [], 
       )}
       {cap && (cap.form_type === 'expense_request' || cap.form_type === 'expense_apply') && (
         <ExpenseFormDraft
+          initialDraft={cap._draft}
+          onCapture={(draft) => { setItem(capturingIdx, { _draft: draft }); setCapturingIdx(null) }}
+          onClose={() => setCapturingIdx(null)}
+        />
+      )}
+      {cap && cap.form_type === 'expense' && (
+        <ExpenseSimpleDraft
           initialDraft={cap._draft}
           onCapture={(draft) => { setItem(capturingIdx, { _draft: draft }); setCapturingIdx(null) }}
           onClose={() => setCapturingIdx(null)}

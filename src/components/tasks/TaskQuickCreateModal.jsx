@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { ShieldCheck, X as XIcon } from 'lucide-react'
 import Modal, { Field } from '../Modal'
 import SearchableSelect, { empOptions } from '../SearchableSelect'
-import FormBindingsPicker from '../FormBindingsPicker'
+import BoundFormsField from './BoundFormsField'
 
 /**
  * 通用快速建任務 Modal — 給 Projects / 其他需要快速建任務的地方共用
@@ -170,47 +170,12 @@ export default function TaskQuickCreateModal({
         )}
       </div>
 
-      {/* 綁定表單 */}
-      <div style={{ marginTop: 12, padding: 12, borderRadius: 8, background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)' }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 4 }}>📋 綁定表單（選填）</div>
-        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
-          執行人需填完選定的表單，全部完成才能完成此任務
-        </div>
-        <FormBindingsPicker
-          value={form.required_forms || []}
-          onChange={v => set('required_forms', v)}
-        />
-      </div>
-
-      {/* 填寫狀態 — 有選表單才顯示 */}
-      {(form.required_forms || []).length > 0 && (
-        <div style={{ marginTop: 8, padding: '16px 20px', borderRadius: 10, background: 'var(--bg-card)', border: '1px solid var(--border-subtle)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent-blue)' }}>📄 填寫狀態</span>
-            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>0/{form.required_forms.length} 完成</span>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {form.required_forms.map((f, i) => (
-              <div key={`${f.form_type}-${f.form_template_id ?? 'null'}-${i}`}
-                style={{
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                  padding: '10px 12px', borderRadius: 6,
-                  background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)',
-                }}>
-                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
-                  ⚪ {f.label}
-                </span>
-                <span style={{
-                  padding: '3px 10px', borderRadius: 12, fontSize: 11, fontWeight: 700,
-                  background: 'var(--glass-light)', color: 'var(--text-muted)',
-                }}>
-                  未填
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* 綁定表單 + 每張誰來填（自己填 / 他人填） */}
+      <BoundFormsField
+        value={form.required_forms || []}
+        onChange={v => set('required_forms', v)}
+        employees={employees}
+      />
     </Modal>
   )
 }

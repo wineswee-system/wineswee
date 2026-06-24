@@ -14,7 +14,9 @@ import TaskCalendar from '../../components/tasks/TaskCalendar'
 import TaskTimeline from '../../components/tasks/TaskTimeline'
 import TaskModal from '../../components/tasks/TaskModal'
 import TaskWorkloadView from '../../components/tasks/TaskWorkloadView'
-import FormBindingsPicker from '../../components/FormBindingsPicker'
+import BoundFormsField from '../../components/tasks/BoundFormsField'
+import SelfFillQueue from '../../components/tasks/SelfFillQueue'
+import { bindingFillPath } from '../../components/tasks/bindingFillUrl'
 import TaskContextMenu from '../../components/ui/TaskContextMenu'
 import { useAuth } from '../../contexts/AuthContext'
 import { useAuditLog } from '../../lib/useAuditLog'
@@ -57,6 +59,7 @@ export default function Tasks() {
   const [formSections, setFormSections] = useState([])
   const [form, setForm] = useState({ title: '', workflow: '', assignee: '', due_date: '', planned_start: '', store: '', role: '', priority: '中', bucket: '一般工作', task_type: 'task', project_id: '', section_id: '', description: '', approval_mode: 'none', approval_chain_id: '', confirmation_approvers: [], confirmation_mode: 'parallel', required_forms: [] })
   const [pendingFiles, setPendingFiles] = useState([])
+  const [selfFillQueue, setSelfFillQueue] = useState(null)  // 建立後「自己填」表單自動跳出佇列
   const [uploadingFiles, setUploadingFiles] = useState(false)
   const newTaskFileRef = useRef(null)
 
@@ -217,13 +220,21 @@ export default function Tasks() {
           }))
         )
       }
-      // 綁定表單 → 建 task_form_bindings
+      // 綁定表單 → 建 task_form_bindings（帶上自己填/他人填 + 指派人）
       for (const f of (form.required_forms || [])) {
         await supabase.rpc('create_task_form_binding', {
           p_task_id: data.id,
           p_form_type: f.form_type,
           p_form_template_id: f.form_template_id || null,
+          p_fill_mode: f.fill_mode || 'self',
+          p_assignee_id: f.fill_mode === 'other' ? (f.assignee_id || null) : null,
         })
+      }
+      // 「自己填」的綁定 → 建立後立即跳出讓使用者當下填
+      if ((form.required_forms || []).some(f => (f.fill_mode || 'self') !== 'other')) {
+        const { data: bRows } = await supabase.from('task_form_bindings').select('*').eq('task_id', data.id).order('id')
+        const queue = (bRows || []).filter(r => r.fill_mode !== 'other' && bindingFillPath(r, bRows))
+        if (queue.length) setSelfFillQueue({ bindings: queue, all: bRows })
       }
       // 上傳附件
       if (pendingFiles.length > 0) {
@@ -824,17 +835,12 @@ export default function Tasks() {
             )}
           </div>
 
-          {/* 綁定表單 — 任務完成前需填完這些表單 */}
-          <div style={{ padding: 12, borderRadius: 8, background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)' }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 4 }}>📋 綁定表單（選填）</div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
-              員工開任務後要填完選定的表單，全部核准才能完成任務
-            </div>
-            <FormBindingsPicker
-              value={form.required_forms || []}
-              onChange={v => set('required_forms', v)}
-            />
-          </div>
+          {/* 綁定表單 — 任務完成前需填完這些表單；可指定每張誰來填 */}
+          <BoundFormsField
+            value={form.required_forms || []}
+            onChange={v => set('required_forms', v)}
+            employees={employees}
+          />
 
           {/* 附件（選填） */}
           <div style={{ padding: 12, borderRadius: 8, background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)' }}>
@@ -894,6 +900,15 @@ export default function Tasks() {
             <textarea className="form-input" style={{ width: '100%', minHeight: 60, resize: 'vertical' }} placeholder="任務說明、注意事項..." value={form.description} onChange={e => set('description', e.target.value)} />
           </Field>
         </Modal>
+      )}
+
+      {/* 建立任務後：自己填的綁定表單依序自動跳出來填 */}
+      {selfFillQueue && (
+        <SelfFillQueue
+          bindings={selfFillQueue.bindings}
+          allBindings={selfFillQueue.all}
+          onDone={() => setSelfFillQueue(null)}
+        />
       )}
     </div>
   )

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Plus, Search, List, Columns, Calendar as CalIcon, GitBranch, Users, Pencil, Trash2, ShieldCheck, X as XIcon, Download, Upload, Loader2, AlignJustify } from 'lucide-react'
 import { exportToCsv, fmtDate } from '../../lib/exportCsv'
 import { todayTW } from '../../lib/datetime'
@@ -49,6 +50,7 @@ export default function Tasks() {
   const [showModal, setShowModal] = useState(false)
   const [formErrors, setFormErrors] = useState({})
   const [selectedTask, setSelectedTask] = useState(null)
+  const [searchParams, setSearchParams] = useSearchParams()
   const [search, setSearch] = useState('')
   const [filterAssignee, setFilterAssignee] = useState('')
   const [filterStore, setFilterStore] = useState('')
@@ -118,6 +120,17 @@ export default function Tasks() {
 
   // Live-sync: reflect DB changes made by other users or tabs without a full refresh
   useRealtimeTasks(setTasks)
+
+  // 從儀表板「我的任務」等處帶 ?focus=ID 進來 → 自動開該任務詳情
+  useEffect(() => {
+    const fid = searchParams.get('focus')
+    if (!fid || !tasks.length) return
+    const t = tasks.find(x => x.id === Number(fid))
+    if (t) {
+      setSelectedTask(t)
+      setSearchParams(sp => { const x = new URLSearchParams(sp); x.delete('focus'); return x }, { replace: true })
+    }
+  }, [tasks, searchParams]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load sections for the selected project in the create form
   useEffect(() => {

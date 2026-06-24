@@ -18,6 +18,7 @@ import { usePendingApprovals } from '../../lib/usePendingApprovals'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { chartPalette, chartTextTokens } from '../../lib/theme/tokens'
 import KpiCard from './components/KpiCard'
+import MyTasksWidget from './components/MyTasksWidget'
 import DashboardAiChat from './components/DashboardAiChat'
 import DashboardCharts from './components/DashboardCharts'
 
@@ -1040,6 +1041,11 @@ export default function TeamDashboard() {
         alerts={alerts}
         activeWorkflows={activeWorkflows}
       />
+
+      {/* ─── 我的任務 ─── */}
+      <div style={{ marginBottom: 16 }}>
+        <MyTasksWidget />
+      </div>
 
       {/* ─── 待簽核 + 警示（main + side） ─── */}
       <div style={{

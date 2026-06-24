@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../lib/supabase'
 import LoadingSpinner from '../../../components/LoadingSpinner'
+import MyTasksWidget from './MyTasksWidget'
 import { todayTW, monthStartTW } from '../../../lib/datetime'
 
 export default function StaffDashboard({ profile }) {
@@ -63,6 +64,11 @@ export default function StaffDashboard({ profile }) {
       <div style={{ marginBottom: 24 }}>
         <h2 style={{ fontSize: 24, fontWeight: 800, marginBottom: 4 }}>{greeting}，{empName}</h2>
         <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>{profile?.store} · {profile?.dept} · {profile?.position || '員工'}</p>
+      </div>
+
+      {/* 我的任務 */}
+      <div style={{ marginBottom: 20 }}>
+        <MyTasksWidget />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 20 }}>

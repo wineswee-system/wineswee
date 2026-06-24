@@ -18,7 +18,6 @@ import { usePendingApprovals } from '../../lib/usePendingApprovals'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { chartPalette, chartTextTokens } from '../../lib/theme/tokens'
 import KpiCard from './components/KpiCard'
-import MyTasksWidget from './components/MyTasksWidget'
 import DashboardAiChat from './components/DashboardAiChat'
 import DashboardCharts from './components/DashboardCharts'
 
@@ -1042,11 +1041,6 @@ export default function TeamDashboard() {
         activeWorkflows={activeWorkflows}
       />
 
-      {/* ─── 我的任務 ─── */}
-      <div style={{ marginBottom: 16 }}>
-        <MyTasksWidget />
-      </div>
-
       {/* ─── 待簽核 + 警示（main + side） ─── */}
       <div style={{
         display: 'grid',
@@ -1396,7 +1390,7 @@ export default function TeamDashboard() {
                 const due = t.due_date ? daysBetween(t.due_date, today) : null
                 return (
                   <div key={t.id}
-                    onClick={() => navigate('/process/tasks')}
+                    onClick={() => navigate(`/process/tasks?focus=${t.id}`)}
                     style={{
                       padding: 12, borderRadius: 10, border: `1px solid ${C.borderSubtle}`,
                       background: C.bg2, cursor: 'pointer',

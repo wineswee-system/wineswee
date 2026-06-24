@@ -4,6 +4,7 @@ import { toast } from '../../lib/toast'
 import FormBindingsPicker from '../FormBindingsPicker'
 import SearchableSelect, { empOptions } from '../SearchableSelect'
 import FillFormModal from './FillFormModal'
+import SettlePickerModal from './SettlePickerModal'
 import { applyTypeFor, bindingFillPath } from './bindingFillUrl'
 
 const STATUS_STYLE = {
@@ -23,6 +24,7 @@ export default function TaskFormsTab({ task, formBindings, setFormBindings }) {
   const [pickerFor, setPickerFor] = useState(null)   // binding.id 目前展開選人的列
   const [busyId, setBusyId] = useState(null)         // 正在送指派 / 切模式的列
   const [fillBinding, setFillBinding] = useState(null) // 自己填 inline 彈窗
+  const [settlePicker, setSettlePicker] = useState(null) // 核銷段挑單
 
   // 載入員工清單（指派他人填寫用）
   useEffect(() => {
@@ -49,16 +51,20 @@ export default function TaskFormsTab({ task, formBindings, setFormBindings }) {
   const actionFor = (b) => {
     if (isLocked(b)) return { label: '🔒 申請核准後解鎖', clickable: false }
     if (b.form_type === 'expense_settle')
-      return b.form_id ? { label: '→ 去核銷', clickable: true } : { label: '等申請建立', clickable: false }
+      return b.form_id ? { label: '→ 去核銷', clickable: true } : { label: '→ 選擇要核銷的單', clickable: true }
     if (b.form_type === 'goods_transfer_receipt')
       return b.form_id ? { label: '→ 去驗收', clickable: true } : { label: '等申請建立', clickable: false }
     if (!b.form_id) return { label: '→ 去填寫', clickable: true }
     return { label: '', clickable: false }
   }
 
-  // 點動作：一律以任務內 overlay 開啟（自訂表單 inline / 重型用 iframe）
+  // 點動作：核銷段未綁單 → 先挑要核銷的費用申請單；其餘以任務內 overlay 開啟
   const onAction = (b) => {
-    setFillBinding(b)
+    if (b.form_type === 'expense_settle' && !b.form_id) {
+      setSettlePicker(b)
+    } else {
+      setFillBinding(b)
+    }
   }
 
   // 切「自己填」：清掉指派
@@ -248,6 +254,19 @@ export default function TaskFormsTab({ task, formBindings, setFormBindings }) {
           bindings={formBindings}
           onClose={() => setFillBinding(null)}
           onDone={reloadBindings}
+        />
+      )}
+
+      {settlePicker && (
+        <SettlePickerModal
+          binding={settlePicker}
+          task={task}
+          onClose={() => setSettlePicker(null)}
+          onPicked={(reqId) => {
+            setSettlePicker(null)
+            reloadBindings()
+            window.open(`/process/expense-requests?focus=${reqId}&settle=1`, '_blank')
+          }}
         />
       )}
     </div>

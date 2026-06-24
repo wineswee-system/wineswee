@@ -249,7 +249,7 @@ export default function ProjectDetailPanel({
 
   return (
     <div className="fade-in" style={{ display: 'flex', alignItems: 'flex-start', gap: 0 }}>
-    <div style={{ flex: 1, minWidth: 0, maxWidth: 520 }}>
+    <div style={{ flex: 1, minWidth: 0 }}>
       <div className="page-header">
         <div className="page-header-row">
           <div>

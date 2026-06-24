@@ -624,7 +624,12 @@ export default function DeployModal({
                                       background: !isOther ? 'var(--accent-cyan-dim)' : 'transparent', color: !isOther ? 'var(--accent-cyan)' : 'var(--text-muted)' }}>
                                     執行人填
                                   </button>
-                                  <button type="button" onClick={() => setStepFormFill(i, key, { fill_mode: 'other' })}
+                                  <button type="button" onClick={() => {
+                                    // 預設帶入該步驟的負責人（可再改）
+                                    const assigneeName = deployForm.assignees?.[i]
+                                    const defId = assigneeName ? (employees.find(e => e.name === assigneeName)?.id || null) : null
+                                    setStepFormFill(i, key, { fill_mode: 'other', assignee_id: ff.assignee_id || defId })
+                                  }}
                                     style={{ padding: '2px 10px', borderRadius: 10, fontSize: 11, fontWeight: 700, cursor: 'pointer',
                                       border: '1px solid ' + (isOther ? 'var(--accent-cyan)' : 'var(--border-subtle)'),
                                       background: isOther ? 'var(--accent-cyan-dim)' : 'transparent', color: isOther ? 'var(--accent-cyan)' : 'var(--text-muted)' }}>

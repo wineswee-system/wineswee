@@ -829,6 +829,7 @@ export default function Tasks() {
             value={form.required_forms || []}
             onChange={v => set('required_forms', v)}
             employees={employees}
+            defaultAssigneeId={employees.find(e => e.name === form.assignee)?.id || null}
           />
 
           {/* 附件（選填） */}

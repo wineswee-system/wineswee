@@ -27,7 +27,7 @@ const norm = (arr) => (arr || []).map(it => ({
 
 // templateMode：範本/步驟定義用 — 只選「自己填 / 他人填(指定人)」，不提供當場填寫
 //   （範本是定義，不是當下填表；實際填寫在部署成任務後）
-export default function BoundFormsField({ value = [], onChange, employees = [], templateMode = false }) {
+export default function BoundFormsField({ value = [], onChange, employees = [], templateMode = false, defaultAssigneeId = null }) {
   const items = norm(value)
   const [capturingIdx, setCapturingIdx] = useState(null)
   const keyOf = (o) => `${o.form_type}-${o.form_template_id ?? 'null'}`
@@ -70,7 +70,7 @@ export default function BoundFormsField({ value = [], onChange, employees = [], 
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                   <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>誰來填：</span>
                   <ModePill active={!isOther} onClick={() => setItem(i, { fill_mode: 'self', assignee_id: null })}>自己填</ModePill>
-                  <ModePill active={isOther} onClick={() => setItem(i, { fill_mode: 'other', _draft: null })}>他人填</ModePill>
+                  <ModePill active={isOther} onClick={() => setItem(i, { fill_mode: 'other', _draft: null, assignee_id: f.assignee_id || defaultAssigneeId })}>他人填</ModePill>
 
                   {/* 他人填 → 選人 */}
                   {isOther && (

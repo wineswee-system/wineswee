@@ -890,6 +890,7 @@ export default function InstanceDetailView({
             value={taskForm.required_forms || []}
             onChange={v => setTaskForm(f => ({ ...f, required_forms: v }))}
             employees={employees}
+            defaultAssigneeId={employees.find(e => e.name === taskForm.assignee)?.id || null}
           />
         </Modal>
       )}

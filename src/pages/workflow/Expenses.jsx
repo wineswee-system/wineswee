@@ -304,7 +304,7 @@ export default function Expenses() {
         <div className="page-header-row">
           <div>
             <h2><span className="header-icon">🧾</span> 經常性費用報銷</h2>
-            <p>經常性費用報銷與審核</p>
+            <p>日常營運而週期性發生的常態支出</p>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             {(isAdmin || hasPermission('finance.edit')) && (

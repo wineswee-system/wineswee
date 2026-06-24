@@ -890,7 +890,7 @@ function buildExpenseSettleTodoNotification(details: {
   ];
   const id = details.request_id;
   const liffUrl = details.liff_id
-    ? `https://liff.line.me/${details.liff_id}?to=${encodeURIComponent(`/expense-request?settle_submit=${id}`)}`
+    ? `https://liff.line.me/${details.liff_id}?to=${encodeURIComponent(`/expense-request?settle_id=${id}`)}`
     : null;
   const footer = liffUrl ? {
     type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '14px',

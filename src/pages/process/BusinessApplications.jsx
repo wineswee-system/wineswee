@@ -12,8 +12,8 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 //   - scope='business_non_expense'  → 非費用組
 
 const FIXED_EXPENSE = [
-  { icon: Wallet,  name: '申請費用', desc: '預算申請 → 核准 → 核銷(驗收)兩階段', action: '/process/expense-requests', color: 'var(--accent-cyan)', dim: 'var(--accent-cyan-dim)', tag: '兩階段' },
-  { icon: Receipt, name: '經常性費用申請', desc: '出差交通、住宿、餐費申報（單階段直接核銷(驗收)）', action: '/process/expenses', color: 'var(--accent-green)', dim: 'var(--accent-green-dim)' },
+  { icon: Wallet,  name: '非經常性費用申請', desc: '預算申請 → 核准 → 核銷(驗收)兩階段', action: '/process/expense-requests', color: 'var(--accent-cyan)', dim: 'var(--accent-cyan-dim)', tag: '兩階段' },
+  { icon: Receipt, name: '經常性費用報銷', desc: '出差交通、住宿、餐費申報（單階段直接核銷(驗收)）', action: '/process/expenses', color: 'var(--accent-green)', dim: 'var(--accent-green-dim)' },
 ]
 
 const FIXED_NON_EXPENSE = [

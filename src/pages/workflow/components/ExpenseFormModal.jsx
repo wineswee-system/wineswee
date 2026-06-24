@@ -59,6 +59,50 @@ function StoreSelect({ value, onChange, stores, error }) {
   )
 }
 
+// 核銷(驗收)單位 — 級聯:選部門→部門主管;選營運部→再選門市→店長。
+// 解析出的核銷人即時預覽(實際核銷人由 DB trigger 在「已核准」時依 dept/store 重算寫入)。
+function SettleUnitField({ departments, stores, employees, deptId, storeId, onDept, onStore, errorDept, errorStore }) {
+  const dept = departments.find(d => String(d.id) === String(deptId))
+  const isOps = dept?.name === '營運部'
+  const store = stores.find(s => String(s.id) === String(storeId))
+  const managerId = isOps ? store?.manager_id : dept?.manager_id
+  const managerName = managerId ? (employees.find(e => String(e.id) === String(managerId))?.name) : null
+  const selPicked = isOps ? !!storeId : !!deptId
+
+  return (
+    <div className={(errorDept || errorStore) ? 'field-error' : undefined}>
+      <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>
+        核銷(驗收)單位 <span style={{ color: 'var(--accent-red)' }}>*</span>
+      </label>
+      <select
+        value={deptId || ''}
+        onChange={e => onDept(e.target.value)}
+        style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }}
+      >
+        <option value="">— 請選擇部門 —</option>
+        {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+      </select>
+      {isOps && (
+        <select
+          value={storeId || ''}
+          onChange={e => onStore(e.target.value)}
+          style={{ width: '100%', marginTop: 6, padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }}
+        >
+          <option value="">— 請選擇門市 —</option>
+          {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+        </select>
+      )}
+      {/* 核銷人預覽 */}
+      {selPicked && (
+        managerName
+          ? <div style={{ fontSize: 12, color: 'var(--accent-cyan)', marginTop: 6 }}>→ 核銷人:{managerName}</div>
+          : <div style={{ fontSize: 12, color: 'var(--accent-orange)', marginTop: 6 }}>⚠ 此單位尚未設定主管，將無人收到核銷通知</div>
+      )}
+      {(errorDept || errorStore) && <div className="field-error-msg">⚠ 請選擇核銷(驗收)單位{isOps ? '的門市' : ''}</div>}
+    </div>
+  )
+}
+
 /**
  * ExpenseFormModal — create/edit expense request form modal with line items editor.
  *
@@ -91,6 +135,7 @@ export default function ExpenseFormModal({
   isExpense, setIsExpense,
   onSubmit, saving, errors, setErrors,
   currency, currencies = [], onCurrencyChange,
+  departments = [],
 }) {
   if (!open) return null
 
@@ -264,20 +309,32 @@ export default function ExpenseFormModal({
             </div>
           )}
 
-          {/* Currency — expense only */}
+          {/* Currency + 核銷(驗收)單位 — expense only.
+              auto-fit minmax：寬夠兩欄(幣別 | 核銷單位)、窄則降一欄 */}
           {isExpense && (
-            <div>
-              <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>幣別</label>
-              <select
-                value={currency || 'TWD'}
-                onChange={e => onCurrencyChange(e.target.value)}
-                style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }}
-              >
-                {(currencies && currencies.length > 0
-                  ? currencies.map(c => <option key={c.code} value={c.code}>{c.code} — {c.name}</option>)
-                  : [['TWD','台幣'],['USD','美元'],['JPY','日幣'],['CNY','人民幣'],['EUR','歐元'],['NZD','紐西蘭幣'],['AUD','澳幣']]
-                      .map(([code, name]) => <option key={code} value={code}>{code} — {name}</option>))}
-              </select>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, alignItems: 'start' }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>幣別</label>
+                <select
+                  value={currency || 'TWD'}
+                  onChange={e => onCurrencyChange(e.target.value)}
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }}
+                >
+                  {(currencies && currencies.length > 0
+                    ? currencies.map(c => <option key={c.code} value={c.code}>{c.code} — {c.name}</option>)
+                    : [['TWD','台幣'],['USD','美元'],['JPY','日幣'],['CNY','人民幣'],['EUR','歐元'],['NZD','紐西蘭幣'],['AUD','澳幣']]
+                        .map(([code, name]) => <option key={code} value={code}>{code} — {name}</option>))}
+                </select>
+              </div>
+              {departments.length > 0 && (
+                <SettleUnitField
+                  departments={departments} stores={stores} employees={employees}
+                  deptId={form.settle_department_id} storeId={form.settle_store_id}
+                  onDept={(v) => { set('settle_department_id', v); set('settle_store_id', ''); clearError('settle_department_id', setErrors) }}
+                  onStore={(v) => { set('settle_store_id', v); clearError('settle_store_id', setErrors) }}
+                  errorDept={errors.settle_department_id} errorStore={errors.settle_store_id}
+                />
+              )}
             </div>
           )}
 

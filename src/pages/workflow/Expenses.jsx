@@ -297,12 +297,12 @@ export default function Expenses() {
       <div className="page-header">
         <div className="page-header-row">
           <div>
-            <h2><span className="header-icon">🧾</span> 經常性費用申請</h2>
-            <p>經常性費用申請與審核</p>
+            <h2><span className="header-icon">🧾</span> 經常性費用報銷</h2>
+            <p>經常性費用報銷與審核</p>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             {(isAdmin || hasPermission('finance.edit')) && (
-              <button className="btn btn-secondary" onClick={() => navigate('/process/settings/chains/edit?formType=expense&label=經常性費用申請')} title="設定經常性費用申請簽核流程">
+              <button className="btn btn-secondary" onClick={() => navigate('/process/settings/chains/edit?formType=expense&label=經常性費用報銷')} title="設定經常性費用報銷簽核流程">
                 <Settings size={14} /> 簽核設定
               </button>
             )}
@@ -408,10 +408,10 @@ export default function Expenses() {
 
       {showModal && (
         <Modal
-          title={editingId ? '✏️ 編輯重送（駁回後修改）' : '新增經常性費用申請'}
+          title={editingId ? '✏️ 編輯重送（駁回後修改）' : '新增經常性費用報銷'}
           onClose={() => { setShowModal(false); setErrors({}); setEditingId(null) }}
           onSubmit={handleSubmit}
-          successMessage={editingId ? '已重新送審，主管會收到通知' : '經常性費用申請已送出，等待主管簽核'}
+          successMessage={editingId ? '已重新送審，主管會收到通知' : '經常性費用報銷已送出，等待主管簽核'}
         >
           <Field label="員工" required error={errors.employee} errorMsg="請選擇員工">
             <SearchableSelect
@@ -476,7 +476,7 @@ export default function Expenses() {
           <ApprovalDetailModal
             open={!!detailRow}
             onClose={() => { setDetailRow(null); setDetailChainSteps([]) }}
-            docTitle="經常性費用申請"
+            docTitle="經常性費用報銷"
             docNo={detailRow.id}
             status={detailRow.status}
             applicant={{

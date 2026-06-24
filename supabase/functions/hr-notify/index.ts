@@ -857,6 +857,59 @@ function buildApprovalDelegatedNotification(details: {
   };
 }
 
+// ── expense_settle_todo：非經常性費用申請「已核准」→ 提醒核銷(驗收)單位的人去送核銷單 ──
+function buildExpenseSettleTodoNotification(details: {
+  request_id?: number;
+  applicant_name?: string;
+  title?: string;
+  amount?: number;
+  currency?: string;
+  store?: string;
+  settle_unit_label?: string;
+  liff_id?: string | null;
+}) {
+  const C = { brand: '#06b6d4', muted: '#666666', dark: '#444444' };
+  const sym = CUR_SYM[details.currency || 'TWD'] || (details.currency ?? 'NT$');
+  const row = (label: string, value: string) => ({
+    type: 'box', layout: 'baseline', spacing: 'sm', contents: [
+      { type: 'text', text: label, size: 'sm', color: C.muted, flex: 2 },
+      { type: 'text', text: value, size: 'sm', color: C.dark, flex: 5, wrap: true },
+    ],
+  });
+  const body: any[] = [
+    { type: 'text', text: '申請已核准 · 等你送核銷(驗收)單', weight: 'bold', size: 'sm', wrap: true, color: C.brand },
+    { type: 'separator', margin: 'sm' },
+    row('單號', `#${details.request_id ?? ''}`),
+    ...(details.applicant_name ? [row('申請人', details.applicant_name)] : []),
+    ...(details.title ? [row('項目', details.title)] : []),
+    ...(details.amount != null ? [row('預估金額', `${sym} ${Number(details.amount).toLocaleString()}`)] : []),
+    ...(details.store ? [row('門市', details.store)] : []),
+    ...(details.settle_unit_label ? [row('核銷單位', details.settle_unit_label)] : []),
+    { type: 'separator', margin: 'sm' },
+    { type: 'text', text: '此申請已通過簽核，請前往填寫實際金額、上傳收據並送出核銷(驗收)單。', size: 'xs', color: C.muted, wrap: true, margin: 'sm' },
+  ];
+  const id = details.request_id;
+  const liffUrl = details.liff_id
+    ? `https://liff.line.me/${details.liff_id}?to=${encodeURIComponent(`/expense-request?settle_submit=${id}`)}`
+    : null;
+  const footer = liffUrl ? {
+    type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '14px',
+    contents: [{ type: 'button', style: 'primary', height: 'sm', color: C.brand,
+      action: { type: 'uri', label: '去送核銷(驗收)單', uri: liffUrl } }],
+  } : undefined;
+  return {
+    type: 'flex',
+    altText: `🧾 待你送核銷(驗收)單：${details.title || ''} #${details.request_id ?? ''}`,
+    contents: {
+      type: 'bubble', size: 'kilo',
+      header: { type: 'box', layout: 'vertical', backgroundColor: C.brand, paddingAll: '14px',
+        contents: [{ type: 'text', text: '🧾 待你送核銷(驗收)單', color: '#FFFFFF', weight: 'bold', size: 'md' }] },
+      body: { type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '14px', contents: body },
+      ...(footer ? { footer } : {}),
+    },
+  };
+}
+
 // ── contract_expiry_batch：合約 + 證件到期預警彙整（推給所有 admin/manager）─
 function buildExpiryBatchNotification(alerts: any[]) {
   const DOC_LABELS: Record<string, string> = {
@@ -1306,6 +1359,7 @@ serve(async (req) => {
       || type === "task_with_bindings_assigned"
       || type === "form_binding_fill_assigned"
       || type === "approval_delegated"
+      || type === "expense_settle_todo"
       || type === "interview_completed"
       || type === "goods_transfer_step_assigned"
       || type === "goods_transfer_receipt_pending"
@@ -1406,6 +1460,8 @@ serve(async (req) => {
       message = buildFormBindingFillNotification({ ...details, liff_id: acct?.liffId || null });
     } else if (type === "approval_delegated") {
       message = buildApprovalDelegatedNotification({ ...details, liff_id: acct?.liffId || null });
+    } else if (type === "expense_settle_todo") {
+      message = buildExpenseSettleTodoNotification({ ...details, liff_id: acct?.liffId || null });
     } else if (type === "interview_completed") {
       message = buildInterviewCompleted({ ...details, liff_id: acct?.liffId || null });
     } else {

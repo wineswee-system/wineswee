@@ -56,6 +56,7 @@ export default function ExpenseRequests() {
   const [currencies, setCurrencies] = useState([])
   const [employees, setEmployees] = useState([])
   const [stores, setStores] = useState([])
+  const [departments, setDepartments] = useState([])  // 核銷(驗收)單位下拉用（含 manager_id）
   const [organization, setOrganization] = useState(null)  // { name, logo_url } — 印簽呈用
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -89,7 +90,7 @@ export default function ExpenseRequests() {
       .select('id, name, name_en, employee_number, dept, department_id, store, store_id, position, status, signature_url')
       .eq('status', '在職').order('name')
     if (orgId) empQuery = empQuery.eq('organization_id', orgId)
-    const [reqRes, accRes, empRes, orgRes, extraRes, storeRes, curRes] = await Promise.all([
+    const [reqRes, accRes, empRes, orgRes, extraRes, storeRes, curRes, deptRes] = await Promise.all([
       reqQuery,
       getAccounts(orgId),
       empQuery,
@@ -99,15 +100,20 @@ export default function ExpenseRequests() {
         .select('id, source_id, insert_before_step, assignee_id, requested_by_id, reason, status, created_at')
         .eq('source_table', 'expense_requests')
         .eq('status', 'pending'),
-      // 門市清單給費用表單下拉用
-      supabase.from('stores').select('id, name').order('name'),
+      // 門市清單給費用表單下拉用（manager_id 給「核銷單位→營運部→門市」解析店長）
+      supabase.from('stores').select('id, name, manager_id').order('name'),
       getCurrencies(),
+      // 部門清單給「核銷(驗收)單位」下拉用（manager_id 給解析部門主管）
+      (orgId
+        ? supabase.from('departments').select('id, name, manager_id').eq('organization_id', orgId).order('name')
+        : supabase.from('departments').select('id, name, manager_id').order('name')),
     ])
     setRequests(reqRes.data || [])
     setAccounts(accRes.data || [])
     setCurrencies(curRes?.data || [])
     setEmployees((empRes.data || []).filter(e => e.status === '在職'))
     setStores(storeRes?.data || [])
+    setDepartments(deptRes?.data || [])
     setOrganization(orgRes?.data || null)
     // 把 extras 索引化：{ [source_id]: extra_row }（每張單同一 step 只會有一筆 pending）
     const idx = {}
@@ -225,6 +231,8 @@ export default function ExpenseRequests() {
       store: req.store || '',
       supplier: req.supplier || '',
       currency: req.currency || 'TWD',
+      settle_department_id: req.settle_department_id ? String(req.settle_department_id) : '',
+      settle_store_id: req.settle_store_id ? String(req.settle_store_id) : '',
     })
     const items = Array.isArray(req.items) && req.items.length > 0
       ? req.items.map(it => ({
@@ -248,7 +256,13 @@ export default function ExpenseRequests() {
     // 非費用：只驗 申請人 + 主旨；費用：驗會計科目 + 品項合計 + 門市必填
     if (isExpense) {
       const validateForm = { ...form, _total: total }
-      if (!validateRequired(validateForm, ['employee', 'account_code', 'title', '_total', 'store'], setErrors, { zeroInvalid: true })) return
+      if (!validateRequired(validateForm, ['employee', 'account_code', 'title', '_total', 'store', 'settle_department_id'], setErrors, { zeroInvalid: true })) return
+      // 核銷(驗收)單位選「營運部」時，門市也必填
+      const selDept = departments.find(d => String(d.id) === String(form.settle_department_id))
+      if (selDept?.name === '營運部' && !form.settle_store_id) {
+        setErrors(prev => ({ ...prev, settle_store_id: true }))
+        return
+      }
     } else {
       if (!validateRequired(form, ['employee', 'title'], setErrors)) return
     }
@@ -275,6 +289,9 @@ export default function ExpenseRequests() {
       items: isExpense ? validItems : null,
       store: isExpense ? (form.store || null) : null,
       currency: isExpense ? (form.currency || 'TWD') : 'TWD',
+      // 核銷(驗收)單位 — 申請時指定，通過後 trigger 解析核銷人
+      settle_department_id: isExpense && form.settle_department_id ? Number(form.settle_department_id) : null,
+      settle_store_id: isExpense && form.settle_store_id ? Number(form.settle_store_id) : null,
       organization_id: profile?.organization_id ?? null,
     }
     if (!payload.organization_id) {
@@ -737,13 +754,13 @@ export default function ExpenseRequests() {
       <div className="page-header">
         <div className="page-header-row">
           <div>
-            <h2><span className="header-icon">📝</span> 申請（申請與核銷(驗收)）</h2>
+            <h2><span className="header-icon">📝</span> 非經常性費用申請</h2>
             <p>事項 / 採購 / 預算申請：先申請核准，發生費用後再核銷(驗收)入帳</p>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             {isAdmin && (
               <>
-                <button className="btn btn-secondary" onClick={() => navigate('/process/settings/chains/edit?formType=expense_request&label=費用申請&mode=amount_grouped')} title="設定費用申請的金額分組簽核流程">
+                <button className="btn btn-secondary" onClick={() => navigate('/process/settings/chains/edit?formType=expense_request&label=非經常性費用申請&mode=amount_grouped')} title="設定非經常性費用申請的金額分組簽核流程">
                   <Settings size={14} /> 申請簽核
                 </button>
                 <button className="btn btn-secondary" onClick={() => navigate('/process/settings/chains/edit?formType=expense_settle&label=費用核銷&mode=amount_grouped')} title="設定費用核銷的金額分組簽核流程">
@@ -917,6 +934,7 @@ export default function ExpenseRequests() {
         employees={employees}
         accounts={accounts}
         stores={stores}
+        departments={departments}
         editingId={editingId}
         isExpense={isExpense}
         setIsExpense={setIsExpense}
@@ -1076,7 +1094,7 @@ export default function ExpenseRequests() {
           <ApprovalDetailModal
             open={!!showDetail}
             onClose={() => { setShowDetail(null); setDetailChainSteps([]) }}
-            docTitle={`費用申請 #${showDetail.id}`}
+            docTitle={`非經常性費用申請 #${showDetail.id}`}
             docNo={showDetail.id}
             status={showDetail.status}
             applicant={{

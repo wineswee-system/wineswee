@@ -19,6 +19,8 @@ import { useRealtimeTasks, useRealtimeWorkflowInstances } from '../../lib/hooks/
 import LoadingSpinner from '../../components/LoadingSpinner'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import TaskDetailPanel from '../../components/TaskDetailPanel'
+import SelfFillQueue from '../../components/tasks/SelfFillQueue'
+import { createTaskBindings } from '../../lib/createTaskBindings'
 import { notifyTaskAssignee, notifyTaskConfirmationResult, notifyApproval } from '../../lib/lineNotify'
 import { useAuth } from '../../contexts/AuthContext'
 import { useAuditLog } from '../../lib/useAuditLog'
@@ -57,6 +59,7 @@ export default function Workflows() {
   const [departments, setDepartments] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [selfFillQueue, setSelfFillQueue] = useState(null)  // 建立任務後自己填表單跳出佇列
   const [projects, setProjects] = useState([])
 
   // Filters
@@ -624,11 +627,12 @@ export default function Workflows() {
         }
       }
 
-      // 綁定表單
-      for (const f of (taskForm.required_forms || [])) {
-        await supabase.rpc('create_task_form_binding', {
-          p_task_id: data.id, p_form_type: f.form_type, p_form_template_id: f.form_template_id || null,
+      // 綁定表單（自己填/他人填 + 暫存落地）+ 取得建立後待跳出佇列
+      {
+        const q = await createTaskBindings(data.id, taskForm.required_forms, profile, {
+          onDraftError: (f, e) => toast.error(`「${f.label}」表單送出失敗：` + (e.message || '未知錯誤')),
         })
+        if (q) setSelfFillQueue(q)
       }
 
       setShowAddTaskModal(false)
@@ -1075,6 +1079,8 @@ export default function Workflows() {
                 p_task_id: taskId,
                 p_form_type: f.form_type,
                 p_form_template_id: f.form_template_id || null,
+                p_fill_mode: f.fill_mode || 'self',
+                p_assignee_id: f.fill_mode === 'other' ? (f.assignee_id || null) : null,
               })
               if (error) {
                 console.error(`[deploy] step ${i + 1} form_binding 失敗:`, error)
@@ -1428,6 +1434,7 @@ export default function Workflows() {
           approvalChains={approvalChains}
           categories={categories}
           onManageCategories={() => setShowCategoryModal(true)}
+          employees={employees}
           isEdit={!!editingTplId}
         />
       )}
@@ -1465,6 +1472,11 @@ export default function Workflows() {
           onDelete={handleDeleteCategory}
           onClose={() => setShowCategoryModal(false)}
         />
+      )}
+
+      {/* 建立任務後：自己填的綁定表單依序自動跳出來填 */}
+      {selfFillQueue && (
+        <SelfFillQueue bindings={selfFillQueue.bindings} allBindings={selfFillQueue.all} onDone={() => setSelfFillQueue(null)} />
       )}
     </div>
   )

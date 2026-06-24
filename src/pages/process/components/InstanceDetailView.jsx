@@ -9,7 +9,7 @@ import TaskContextMenu from '../../../components/ui/TaskContextMenu'
 import Modal, { Field } from '../../../components/Modal'
 import SearchableSelect, { empOptions } from '../../../components/SearchableSelect'
 import TaskDetailPanel from '../../../components/TaskDetailPanel'
-import FormBindingsPicker from '../../../components/FormBindingsPicker'
+import BoundFormsField from '../../../components/tasks/BoundFormsField'
 import WorkflowDagView from '../../../components/tasks/WorkflowDagView'
 
 const STATUS_LIST = ['未開始', '待簽核', '進行中', '待確認', '已完成', '已退回', '已擱置']
@@ -885,20 +885,12 @@ export default function InstanceDetailView({
             )}
           </div>
 
-          {/* ★ 綁定表單 — 任務完成前需填完 */}
-          <div style={{
-            marginTop: 12, padding: 12, borderRadius: 8,
-            background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)',
-          }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 4 }}>📋 綁定表單（選填）</div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
-              執行人需填完選定的表單，全部完成才能完成此任務
-            </div>
-            <FormBindingsPicker
-              value={taskForm.required_forms || []}
-              onChange={v => setTaskForm(f => ({ ...f, required_forms: v }))}
-            />
-          </div>
+          {/* ★ 綁定表單 — 任務完成前需填完；可指定每張誰來填 */}
+          <BoundFormsField
+            value={taskForm.required_forms || []}
+            onChange={v => setTaskForm(f => ({ ...f, required_forms: v }))}
+            employees={employees}
+          />
         </Modal>
       )}
       {showEditModal && (

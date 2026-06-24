@@ -24,7 +24,9 @@ const norm = (arr) => (arr || []).map(it => ({
   _draft: it.fill_mode === 'other' ? null : (it._draft ?? null),
 }))
 
-export default function BoundFormsField({ value = [], onChange, employees = [] }) {
+// templateMode：範本/步驟定義用 — 只選「自己填 / 他人填(指定人)」，不提供當場填寫
+//   （範本是定義，不是當下填表；實際填寫在部署成任務後）
+export default function BoundFormsField({ value = [], onChange, employees = [], templateMode = false }) {
   const items = norm(value)
   const [capturingIdx, setCapturingIdx] = useState(null)
   const keyOf = (o) => `${o.form_type}-${o.form_template_id ?? 'null'}`
@@ -81,8 +83,13 @@ export default function BoundFormsField({ value = [], onChange, employees = [] }
                     </div>
                   )}
 
+                  {/* 範本模式:自己填不當場填，部署成任務後由執行人填 */}
+                  {!isOther && templateMode && (
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>部署後由執行人填寫</span>
+                  )}
+
                   {/* 自己填 + 可暫存 → 當場填寫 */}
-                  {!isOther && draftable && (
+                  {!isOther && !templateMode && draftable && (
                     filled ? (
                       <button type="button" onClick={() => setCapturingIdx(i)}
                         style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 10px', borderRadius: 10, fontSize: 11, fontWeight: 700, border: '1px solid var(--accent-green)', background: 'var(--accent-green-dim)', color: 'var(--accent-green)', cursor: 'pointer' }}>
@@ -97,7 +104,7 @@ export default function BoundFormsField({ value = [], onChange, employees = [] }
                   )}
 
                   {/* 自己填 + 不可暫存(重型) → 建立後跳出填 */}
-                  {!isOther && !draftable && (
+                  {!isOther && !templateMode && !draftable && (
                     <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>建立任務後跳出填寫</span>
                   )}
                 </div>

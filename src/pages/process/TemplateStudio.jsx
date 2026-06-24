@@ -85,6 +85,7 @@ export default function TemplateStudio() {
   const [categories, setCategories] = useState(DEFAULT_CATEGORIES)
   const [otherTemplates, setOtherTemplates] = useState([])  // trigger picker (excludes self)
   const [departments, setDepartments] = useState([])
+  const [employees, setEmployees] = useState([])
 
   // Version history state
   const [versions, setVersions] = useState([])
@@ -102,12 +103,13 @@ export default function TemplateStudio() {
   // ── Load reference data + template (if editing) ──
   useEffect(() => {
     const fetchAll = async () => {
-      const [clRes, acRes, tplsRes, catsRes, deptRes] = await Promise.allSettled([
+      const [clRes, acRes, tplsRes, catsRes, deptRes, empRes] = await Promise.allSettled([
         supabase.from('checklists').select('id, name, items').order('name'),
         supabase.from('approval_chains').select('id, name, approval_chain_steps(count)').order('name'),
         supabase.from('sop_templates').select('id, name').order('name'),
         supabase.from('workflow_categories').select('id, name').eq('scope', 'workflow').order('name'),
         supabase.from('departments').select('id, name').order('name'),
+        supabase.from('employees').select('id, name, name_en, position, dept, store').eq('status', '在職').order('name'),
       ])
 
       if (clRes.status === 'fulfilled' && clRes.value.data) {
@@ -128,6 +130,9 @@ export default function TemplateStudio() {
       }
       if (deptRes.status === 'fulfilled' && deptRes.value.data) {
         setDepartments(deptRes.value.data)
+      }
+      if (empRes.status === 'fulfilled' && empRes.value.data) {
+        setEmployees(empRes.value.data)
       }
 
       // Load existing template in edit mode
@@ -962,6 +967,7 @@ export default function TemplateStudio() {
                 steps={steps}
                 stepIndex={selectedStep}
                 departments={departments}
+                employees={employees}
                 disabled={tpl.status === 'archived'}
               />
             </>

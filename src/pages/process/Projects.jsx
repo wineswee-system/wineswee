@@ -10,6 +10,8 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 import { confirm } from '../../lib/confirm'
 import ProjectDetailPanel from './components/ProjectDetailPanel'
 import ProjectListView from './components/ProjectListView'
+import SelfFillQueue from '../../components/tasks/SelfFillQueue'
+import { createTaskBindings } from '../../lib/createTaskBindings'
 
 const emptyForm = { name: '', description: '', status: '規劃中', priority: '中', owner: '', department: '', store: '', start_date: '', end_date: '', budget: '', template_id: '' }
 
@@ -30,6 +32,7 @@ export default function Projects() {
   const [approvalChains, setApprovalChains] = useState([])
   const [departments, setDepartments] = useState([])
   const [comments, setComments] = useState([])
+  const [selfFillQueue, setSelfFillQueue] = useState(null)  // 建立任務後自己填表單跳出佇列
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [showDeployModal, setShowDeployModal] = useState(false)
@@ -348,11 +351,7 @@ export default function Projects() {
                   }))
                 )
               }
-              for (const f of (t.required_forms || [])) {
-                await supabase.rpc('create_task_form_binding', {
-                  p_task_id: row.id, p_form_type: f.form_type, p_form_template_id: f.form_template_id || null,
-                })
-              }
+              await createTaskBindings(row.id, t.required_forms, profile)
               // 第一步（進行中）才推；未開始的後續步驟等 cascade 由 DB trigger 推
               if (row.status === '進行中' && row.assignee) {
                 notifyTaskAssignee(row.assignee, row.title, wf.name || wf.template_name || '', row.id, {
@@ -394,11 +393,7 @@ export default function Projects() {
                 }))
               )
             }
-            for (const f of (t.required_forms || [])) {
-              await supabase.rpc('create_task_form_binding', {
-                p_task_id: row.id, p_form_type: f.form_type, p_form_template_id: f.form_template_id || null,
-              })
-            }
+            await createTaskBindings(row.id, t.required_forms, profile)
           }
         }
         if (pendingWfAttach.length > 0 || pendingWfCreate.length > 0 || pendingTasks.length > 0) load()
@@ -546,11 +541,12 @@ export default function Projects() {
         }))
       )
     }
-    // 綁定表單
-    for (const f of (fd.required_forms || [])) {
-      await supabase.rpc('create_task_form_binding', {
-        p_task_id: data.id, p_form_type: f.form_type, p_form_template_id: f.form_template_id || null,
+    // 綁定表單（自己填/他人填 + 暫存落地）+ 取得建立後待跳出佇列
+    {
+      const q = await createTaskBindings(data.id, fd.required_forms, profile, {
+        onDraftError: (f, e) => toast.error(`「${f.label}」表單送出失敗：` + (e.message || '未知錯誤')),
       })
+      if (q) setSelfFillQueue(q)
     }
     setTasks(prev => [...prev, data])
     if (!formData) {
@@ -604,11 +600,12 @@ export default function Projects() {
         }))
       )
     }
-    // 綁定表單
-    for (const f of (fd.required_forms || [])) {
-      await supabase.rpc('create_task_form_binding', {
-        p_task_id: data.id, p_form_type: f.form_type, p_form_template_id: f.form_template_id || null,
+    // 綁定表單（自己填/他人填 + 暫存落地）+ 取得建立後待跳出佇列
+    {
+      const q = await createTaskBindings(data.id, fd.required_forms, profile, {
+        onDraftError: (f, e) => toast.error(`「${f.label}」表單送出失敗：` + (e.message || '未知錯誤')),
       })
+      if (q) setSelfFillQueue(q)
     }
     setTasks(prev => [...prev, data])
     return true
@@ -809,6 +806,7 @@ export default function Projects() {
     const pComments = comments.filter(c => c.project_id === p.id)
 
     return (
+      <>
       <ProjectDetailPanel
         p={p}
         stats={stats}
@@ -903,11 +901,16 @@ export default function Projects() {
         onLinkExpense={setExpenseProject}
         onUnlinkExpense={(id) => setExpenseProject(id, null)}
       />
+      {selfFillQueue && (
+        <SelfFillQueue bindings={selfFillQueue.bindings} allBindings={selfFillQueue.all} onDone={() => setSelfFillQueue(null)} />
+      )}
+      </>
     )
   }
 
   // List view
   return (
+    <>
     <ProjectListView
       projects={projects}
       templates={templates}
@@ -962,5 +965,9 @@ export default function Projects() {
       onDeleteTemplate={handleDeleteTemplate}
       tplSaving={tplSaving}
     />
+      {selfFillQueue && (
+        <SelfFillQueue bindings={selfFillQueue.bindings} allBindings={selfFillQueue.all} onDone={() => setSelfFillQueue(null)} />
+      )}
+    </>
   )
 }

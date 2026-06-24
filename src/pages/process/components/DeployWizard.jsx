@@ -666,6 +666,8 @@ export default function DeployWizard({ template, stores, employees, departments,
               p_task_id: task.id,
               p_form_type: f.form_type,
               p_form_template_id: f.form_template_id || null,
+              p_fill_mode: f.fill_mode || 'self',
+              p_assignee_id: f.fill_mode === 'other' ? (f.assignee_id || null) : null,
             })
             if (fbErr) formBindingWarnings++
           }

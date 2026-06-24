@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { CheckSquare, Shield, FileText, Zap, ChevronDown, ChevronRight, GitBranch, GitMerge, Bell, Clock } from 'lucide-react'
 import { Field } from '../../../components/Modal'
-import FormBindingsPicker from '../../../components/FormBindingsPicker'
+import BoundFormsField from '../../../components/tasks/BoundFormsField'
 
 /**
  * Collapsible section used inside StepEditor for optional configuration blocks.
@@ -48,7 +48,7 @@ function Section({ icon, label, color, children, defaultOpen = false }) {
  *   steps          — Array of all steps (for conditional branch pickers)
  *   stepIndex      — 0-based index of the current step (to exclude self from pickers)
  */
-export default function StepEditor({ step, onChange, checklists = [], approvalChains = [], templates = [], steps = [], stepIndex = -1, departments = [] }) {
+export default function StepEditor({ step, onChange, checklists = [], approvalChains = [], templates = [], steps = [], stepIndex = -1, departments = [], employees = [] }) {
   if (!step) {
     return (
       <div style={{
@@ -198,9 +198,11 @@ export default function StepEditor({ step, onChange, checklists = [], approvalCh
           color="var(--accent-cyan)"
           defaultOpen={(step.required_forms?.length || 0) > 0}
         >
-          <FormBindingsPicker
+          <BoundFormsField
             value={step.required_forms || []}
             onChange={v => set('required_forms', v)}
+            employees={employees}
+            templateMode
           />
         </Section>
 

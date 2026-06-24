@@ -1,11 +1,12 @@
 import { Plus, Trash2, CheckSquare, Shield, Settings, FileText } from 'lucide-react'
 import Modal, { Field } from '../../../components/Modal'
-import FormBindingsPicker from '../../../components/FormBindingsPicker'
+import BoundFormsField from '../../../components/tasks/BoundFormsField'
 
 export default function CreateTemplateModal({
   newTpl, setNewTpl, onClose, onSubmit,
   checklists = [], approvalChains = [],
   categories = [], onManageCategories,
+  employees = [],
   isEdit = false,
 }) {
   const addTplStep = () => setNewTpl(t => ({
@@ -114,9 +115,11 @@ export default function CreateTemplateModal({
               <FileText size={11} style={{ color: 'var(--accent-cyan)' }} />
               綁定表單（完成此 step 前需填完）
             </div>
-            <FormBindingsPicker
+            <BoundFormsField
               value={step.required_forms || []}
               onChange={(next) => updateTplStep(i, 'required_forms', next)}
+              employees={employees}
+              templateMode
             />
           </div>
         </div>

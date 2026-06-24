@@ -954,7 +954,7 @@ export default function InstanceDetailView({
       {/* 右側：點步驟後滑出該任務詳情（對齊專案頁主從版面，取代原本全螢幕 modal） */}
       {selectedStep && (
         <div style={{
-          flex: '0 0 480px', minWidth: 0,
+          flex: '1 1 0', minWidth: 0,
           borderLeft: '1px solid var(--border-medium)',
           background: 'var(--bg-primary)',
           position: 'sticky', top: 0, alignSelf: 'flex-start',

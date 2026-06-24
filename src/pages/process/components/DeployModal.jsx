@@ -1,8 +1,13 @@
 import { useMemo, useEffect, useState } from 'react'
 import { Rocket, Calendar, User, AlertTriangle, CheckCircle2, Bell, Settings, Copy, ChevronDown, ChevronRight } from 'lucide-react'
-import Modal, { Field } from '../../../components/Modal'
+import Modal, { Field, ModalOverlay } from '../../../components/Modal'
 import SearchableSelect, { empOptions } from '../../../components/SearchableSelect'
 import { empLabel } from '../../../lib/empLabel'
+import { Pencil, CheckCircle2 as CheckIcon } from 'lucide-react'
+import CustomFormFill from '../../workflow/CustomFormFill'
+import ExpenseFormDraft from '../../workflow/components/ExpenseFormDraft'
+import ExpenseSimpleDraft from '../../workflow/components/ExpenseSimpleDraft'
+import { isDraftableType } from '../../../lib/commitBindingDraft'
 
 import { toast } from '../../../lib/toast'
 import { confirm } from '../../../lib/confirm'
@@ -87,6 +92,7 @@ export default function DeployModal({
   const [expandedSteps, setExpandedSteps] = useState(new Set())
   // 「加審批人員」picker 暫存：{ [stepIndex]: { emp, pri } }
   const [confPick, setConfPick] = useState({})
+  const [capturing, setCapturing] = useState(null)  // {stepIdx, form} 部署時先填表單
   const toggleExpand = (i) => {
     setExpandedSteps(prev => {
       const next = new Set(prev)
@@ -256,7 +262,13 @@ export default function DeployModal({
     .filter(e => e.status !== '離職')
     .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
 
+  const capForm = capturing?.form
+  const capKey = capForm ? ffKey(capForm) : null
+  const capDraft = capForm ? deployForm.step_extras?.[capturing.stepIdx]?.form_fills?.[capKey]?._draft : null
+  const onCaptured = (draft) => { setStepFormFill(capturing.stepIdx, capKey, { fill_mode: 'self', _draft: draft }); setCapturing(null) }
+
   return (
+    <>
     <Modal title={`🚀 部署「${deployTemplate?.name}」`} onClose={onClose}
       onSubmit={deployResult ? onClose : (validation.valid ? onDeploy : null)}
       submitLabel={deployResult ? '查看流程進度 →' : deploying ? '部署中...' : '確認部署'}
@@ -628,6 +640,20 @@ export default function DeployModal({
                                       />
                                     </div>
                                   )}
+                                  {/* 執行人填 + 可暫存 → 部署時可先填(否則留給執行人填) */}
+                                  {!isOther && isDraftableType(rf.form_type) && (
+                                    ff._draft ? (
+                                      <button type="button" onClick={() => setCapturing({ stepIdx: i, form: rf })}
+                                        style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 10px', borderRadius: 10, fontSize: 11, fontWeight: 700, cursor: 'pointer', border: '1px solid var(--accent-green)', background: 'var(--accent-green-dim)', color: 'var(--accent-green)' }}>
+                                        <CheckIcon size={12} /> 已填寫・點此重填
+                                      </button>
+                                    ) : (
+                                      <button type="button" onClick={() => setCapturing({ stepIdx: i, form: rf })}
+                                        style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 10px', borderRadius: 10, fontSize: 11, fontWeight: 700, cursor: 'pointer', border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-muted)' }}>
+                                        <Pencil size={12} /> 部署時先填（選填）
+                                      </button>
+                                    )
+                                  )}
                                 </div>
                               </div>
                             )
@@ -704,5 +730,29 @@ export default function DeployModal({
         </>
       )}
     </Modal>
+
+    {/* 部署時先填表單（擷取暫存，部署時連同任務一起送出）*/}
+    {capForm && capForm.form_type === 'form_submission' && (
+      <ModalOverlay onClose={() => setCapturing(null)}>
+        <div className="modal-shell modal-lg" style={{ animation: 'fadeIn 0.15s ease', display: 'flex', flexDirection: 'column' }}>
+          <div className="modal-shell-header">
+            <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>填寫表單：{capForm.label || '表單'}</h3>
+            <button onClick={() => setCapturing(null)} aria-label="Close"
+              style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 4, flexShrink: 0, fontSize: 18, lineHeight: 1 }}>✕</button>
+          </div>
+          <div className="modal-shell-body" style={{ padding: 20 }}>
+            <CustomFormFill templateId={capForm.form_template_id} embedded
+              onCapture={onCaptured} onClose={() => setCapturing(null)} />
+          </div>
+        </div>
+      </ModalOverlay>
+    )}
+    {capForm && (capForm.form_type === 'expense_request' || capForm.form_type === 'expense_apply') && (
+      <ExpenseFormDraft initialDraft={capDraft} onCapture={onCaptured} onClose={() => setCapturing(null)} />
+    )}
+    {capForm && capForm.form_type === 'expense' && (
+      <ExpenseSimpleDraft initialDraft={capDraft} onCapture={onCaptured} onClose={() => setCapturing(null)} />
+    )}
+    </>
   )
 }

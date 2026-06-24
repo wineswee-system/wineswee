@@ -21,6 +21,7 @@ import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import TaskDetailPanel from '../../components/TaskDetailPanel'
 import SelfFillQueue from '../../components/tasks/SelfFillQueue'
 import { createTaskBindings } from '../../lib/createTaskBindings'
+import { commitBindingDraft } from '../../lib/commitBindingDraft'
 import { notifyTaskAssignee, notifyTaskConfirmationResult, notifyApproval } from '../../lib/lineNotify'
 import { useAuth } from '../../contexts/AuthContext'
 import { useAuditLog } from '../../lib/useAuditLog'
@@ -1078,7 +1079,7 @@ export default function Workflows() {
             for (const f of reqForms) {
               const ff = stepFormFills[`${f.form_type}-${f.form_template_id ?? 'null'}`] || {}
               const fillMode = ff.fill_mode === 'other' ? 'other' : 'self'
-              const { error } = await supabase.rpc('create_task_form_binding', {
+              const { data: bRes, error } = await supabase.rpc('create_task_form_binding', {
                 p_task_id: taskId,
                 p_form_type: f.form_type,
                 p_form_template_id: f.form_template_id || null,
@@ -1088,6 +1089,10 @@ export default function Workflows() {
               if (error) {
                 console.error(`[deploy] step ${i + 1} form_binding 失敗:`, error)
                 subFailures.push(`第 ${i + 1} 步「表單綁定」未掛上：${error.message}`)
+              } else if (bRes?.binding_id && fillMode !== 'other' && ff._draft) {
+                // 部署時先填的表單 → 落地
+                try { await commitBindingDraft(bRes.binding_id, { form_type: f.form_type, form_template_id: f.form_template_id, _draft: ff._draft }, profile) }
+                catch (e) { subFailures.push(`第 ${i + 1} 步「表單送出」失敗：${e.message || e}`) }
               }
             }
           }

@@ -104,9 +104,13 @@ export default function BoundFormsField({ value = [], onChange, employees = [], 
                     )
                   )}
 
-                  {/* 自己填 + 不可暫存(重型) → 建立後跳出填 */}
+                  {/* 自己填 + 不可暫存(重型) → 建立後填；驗收段是「選單核銷」不是跳表單 */}
                   {!isOther && !templateMode && !draftable && (
-                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>建立任務後跳出填寫</span>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                      {f.form_type === 'expense_settle' ? '建立後到任務內選單核銷'
+                        : f.form_type === 'goods_transfer_receipt' ? '建立後到任務內驗收'
+                        : '建立任務後跳出填寫'}
+                    </span>
                   )}
                 </div>
               </div>

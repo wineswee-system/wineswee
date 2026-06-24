@@ -47,6 +47,7 @@ const POSITIONS = [
   { label: '專員', level: 'office_staff' },
   { label: '行政助理', level: 'office_staff' },
   { label: '會計', level: 'office_staff' },
+  { label: '儲備幹部', level: 'store_staff' },
   { label: '業務代表', level: 'store_staff' },
   { label: '門市人員', level: 'store_staff' },
   { label: '收銀員', level: 'store_staff' },

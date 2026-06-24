@@ -113,13 +113,21 @@ export default function HrTabContent({
 
           <SectionTitle icon="👔" text="職位" />
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            <div><div style={L}>主職位</div><input className="form-input" style={{ width: '100%' }} value={form.position || ''} onChange={e => set('position', e.target.value)} placeholder="輸入職位" /></div>
+            <div><div style={L}>主職位</div><input className="form-input" list="hr-position-opts" style={{ width: '100%' }} value={form.position || ''} onChange={e => set('position', e.target.value)} placeholder="輸入或選擇職位" /></div>
             <div><div style={L}>職等</div><input className="form-input" style={{ width: '100%' }} value={form.grade || ''} onChange={e => set('grade', e.target.value)} placeholder="M1 / S3" /></div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            <div><div style={L}>副職位</div><input className="form-input" style={{ width: '100%' }} value={form.position_secondary || ''} onChange={e => set('position_secondary', e.target.value)} placeholder="選填" /></div>
-            <div><div style={L}>第三職位</div><input className="form-input" style={{ width: '100%' }} value={form.position_third || ''} onChange={e => set('position_third', e.target.value)} placeholder="選填" /></div>
+            <div><div style={L}>副職位</div><input className="form-input" list="hr-position-opts" style={{ width: '100%' }} value={form.position_secondary || ''} onChange={e => set('position_secondary', e.target.value)} placeholder="選填" /></div>
+            <div><div style={L}>第三職位</div><input className="form-input" list="hr-position-opts" style={{ width: '100%' }} value={form.position_third || ''} onChange={e => set('position_third', e.target.value)} placeholder="選填" /></div>
           </div>
+          <datalist id="hr-position-opts">
+            <option value="儲備幹部" />
+            <option value="店長" /><option value="副店長" /><option value="資深店長" /><option value="督導" />
+            <option value="經理" /><option value="副理" /><option value="主管" /><option value="組長" /><option value="主任" />
+            <option value="專員" /><option value="行政助理" /><option value="會計" />
+            <option value="門市人員" /><option value="門市正職人員" /><option value="門市兼職人員" /><option value="正職人員" /><option value="兼職人員" />
+            <option value="收銀員" /><option value="倉管人員" />
+          </datalist>
           <div style={{ marginTop: 14 }}>
             <div style={L}>角色（系統權限）</div>
             <select className="form-input" style={{ width: '100%' }} value={form.role_id || ''}

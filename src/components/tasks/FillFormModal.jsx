@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { ModalOverlay } from '../Modal'
 import CustomFormFill from '../../pages/workflow/CustomFormFill'
 import ExpenseRequestCreate from '../../pages/workflow/components/ExpenseRequestCreate'
@@ -19,13 +20,25 @@ import { bindingFillPath } from './bindingFillUrl'
 const NATIVE_EXPENSE = new Set(['expense_request', 'expense_apply'])
 
 export default function FillFormModal({ binding, bindings = [], onClose, onDone }) {
+  const isCustom = binding?.form_type === 'form_submission'
+  const isNativeExpense = !!binding && NATIVE_EXPENSE.has(binding.form_type) && !binding.form_id
+  const isHeavyOpenPage = !!binding && !isCustom && !isNativeExpense
+
+  // 重型(經常性費用/調撥/稽核/驗收段)→ 開頁;副作用必須在 effect 內(不可在 render 階段)
+  useEffect(() => {
+    if (!isHeavyOpenPage) return
+    const url = bindingFillPath(binding, bindings)
+    if (url) window.open(url, '_blank')
+    onClose?.()
+  }, [isHeavyOpenPage]) // eslint-disable-line react-hooks/exhaustive-deps
+
   if (!binding) return null
 
   const close = () => onClose?.()
   const done = () => { onClose?.(); onDone?.() }
 
   // ── 自訂表單：inline CustomFormFill ──
-  if (binding.form_type === 'form_submission') {
+  if (isCustom) {
     return (
       <ModalOverlay onClose={close}>
         <div className="modal-shell modal-lg" style={{ animation: 'fadeIn 0.15s ease', display: 'flex', flexDirection: 'column' }}>
@@ -43,13 +56,10 @@ export default function FillFormModal({ binding, bindings = [], onClose, onDone 
   }
 
   // ── 費用申請：原生內嵌（ExpenseRequestCreate 自帶 ModalOverlay）──
-  if (NATIVE_EXPENSE.has(binding.form_type) && !binding.form_id) {
+  if (isNativeExpense) {
     return <ExpenseRequestCreate bindingId={binding.id} onClose={close} onDone={done} />
   }
 
-  // ── 其他重型：暫時開頁（不用 iframe）──
-  const url = bindingFillPath(binding, bindings)
-  if (url) window.open(url, '_blank')
-  close()
+  // ── 其他重型：由上面的 useEffect 開頁,這裡不渲染 ──
   return null
 }

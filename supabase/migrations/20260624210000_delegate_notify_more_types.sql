@@ -44,7 +44,7 @@ BEGIN
           'rt', p_rt, 'request_id', p_request_id, 'doc_label', p_doc_label,
           'applicant_name', p_applicant_name, 'summary', p_summary,
           'amount', p_amount, 'currency', p_currency, 'store', p_store,
-          'step_name', v_cs.step_name, 'liff_to', p_liff_to)));
+          'step_name', v_cs.label, 'liff_to', p_liff_to)));
   END LOOP;
 END $$;
 

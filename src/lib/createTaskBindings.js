@@ -17,9 +17,9 @@ export async function createTaskBindings(taskId, requiredForms, profile, { onDra
       p_assignee_id: f.fill_mode === 'other' ? (f.assignee_id || null) : null,
     })
     const bId = bRes?.binding_id
-    if (bId && f.fill_mode !== 'other' && f._draft) {
-      try { await commitBindingDraft(bId, f, profile) }
-      catch (e) { onDraftError?.(f, e) }
+    if (f.fill_mode !== 'other' && f._draft) {
+      if (!bId) { onDraftError?.(f, new Error(bRes?.error || '綁定建立失敗,表單未送出')) }
+      else { try { await commitBindingDraft(bId, f, profile) } catch (e) { onDraftError?.(f, e) } }
     }
   }
   return buildSelfFillQueue(taskId, requiredForms)

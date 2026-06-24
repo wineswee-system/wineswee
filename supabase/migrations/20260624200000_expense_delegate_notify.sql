@@ -74,7 +74,7 @@ BEGIN
           'amount',          COALESCE(NEW.actual_amount, NEW.estimated_amount),
           'currency',        NEW.currency,
           'store',           NEW.store,
-          'step_name',       v_cs.step_name
+          'step_name',       v_cs.label
         )
       )
     );

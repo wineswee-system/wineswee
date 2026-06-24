@@ -25,9 +25,11 @@ export default function ApprovalDelegations() {
   const load = async () => {
     setLoading(true)
     const orgId = profile?.organization_id
+    let empQ = supabase.from('employees').select('id, name, name_en, position, dept').eq('status', '在職').order('name')
+    if (orgId) empQ = empQ.eq('organization_id', orgId)
     const [rRes, eRes] = await Promise.all([
       supabase.from('approval_delegation_rules').select('*').order('created_at', { ascending: false }),
-      supabase.from('employees').select('id, name, name_en, position, dept').eq('status', '在職').order('name'),
+      empQ,
     ])
     setRules(rRes.data || [])
     setEmployees(eRes.data || [])

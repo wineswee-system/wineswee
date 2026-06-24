@@ -57,7 +57,7 @@ export default function ExpenseFormDraft({ initialDraft, onCapture, onClose, bus
       if (!validateRequired(form, ['employee', 'title'], setErrors)) return
     }
     if ((files || []).filter(Boolean).length === 0) {
-      const proceed = await confirm('尚未附上任何附件（訂購單、報價單等），確定要直接帶入？')
+      const proceed = await confirm({ message: '尚未附上任何附件（訂購單、報價單等），確定要直接帶入？' })
       if (!proceed) return
     }
 

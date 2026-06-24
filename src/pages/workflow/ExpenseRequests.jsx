@@ -890,7 +890,7 @@ export default function ExpenseRequests() {
                           </span>
                         )
                       })()}
-                      {r.is_expense !== false && r.status === '已核准' && r.employee_id === profile?.id && (
+                      {r.is_expense !== false && (r.status === '已核准' || r.status === '核銷已退回') && (r.employee_id === profile?.id || r.settle_assignee_id === profile?.id) && (
                         <button className="btn btn-primary" style={{ padding: '4px 8px', fontSize: 11 }} onClick={() => openSettle(r)}>
                           <Send size={12} /> 核銷(驗收)
                         </button>

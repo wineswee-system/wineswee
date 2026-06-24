@@ -291,7 +291,8 @@ export default function ExpenseRequests() {
       currency: isExpense ? (form.currency || 'TWD') : 'TWD',
       // 核銷(驗收)單位 — 申請時指定，通過後 trigger 解析核銷人
       settle_department_id: isExpense && form.settle_department_id ? Number(form.settle_department_id) : null,
-      settle_store_id: isExpense && form.settle_store_id ? Number(form.settle_store_id) : null,
+      // 營運部選「總部」(__HQ__) → 門市存 null，部門維持營運部 → trigger 解析成營運部經理
+      settle_store_id: isExpense && form.settle_store_id && form.settle_store_id !== '__HQ__' ? Number(form.settle_store_id) : null,
       organization_id: profile?.organization_id ?? null,
     }
     if (!payload.organization_id) {

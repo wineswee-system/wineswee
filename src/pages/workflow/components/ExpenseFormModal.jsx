@@ -64,8 +64,10 @@ function StoreSelect({ value, onChange, stores, error }) {
 function SettleUnitField({ departments, stores, employees, deptId, storeId, onDept, onStore, errorDept, errorStore }) {
   const dept = departments.find(d => String(d.id) === String(deptId))
   const isOps = dept?.name === '營運部'
+  const isHQ = storeId === '__HQ__'  // 營運部→總部:落回營運部經理(營運部 dept manager)
   const store = stores.find(s => String(s.id) === String(storeId))
-  const managerId = isOps ? store?.manager_id : dept?.manager_id
+  // 營運部選總部 → 營運部經理(dept.manager_id);選門市 → 店長(store.manager_id);其他部門 → 部門主管
+  const managerId = isOps ? (isHQ ? dept?.manager_id : store?.manager_id) : dept?.manager_id
   const managerName = managerId ? (employees.find(e => String(e.id) === String(managerId))?.name) : null
   const selPicked = isOps ? !!storeId : !!deptId
 
@@ -89,6 +91,7 @@ function SettleUnitField({ departments, stores, employees, deptId, storeId, onDe
           style={{ width: '100%', marginTop: 6, padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }}
         >
           <option value="">— 請選擇門市 —</option>
+          <option value="__HQ__">總部（營運部經理）</option>
           {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
       )}

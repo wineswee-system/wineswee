@@ -90,6 +90,12 @@ export default function Expenses() {
     return urls
   }
 
+  // 核准/駁回後重抓清單（明細 modal onChanged 用）。只刷 expenses，不重置表單。
+  const load = async () => {
+    const { data } = await getExpenses()
+    setExpenses(data || [])
+  }
+
   useEffect(() => {
     const orgId = profile?.organization_id
     Promise.all([

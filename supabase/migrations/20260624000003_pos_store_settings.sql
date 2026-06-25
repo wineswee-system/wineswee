@@ -3,8 +3,8 @@
 
 CREATE TABLE pos_store_settings (
   id                    UUID    PRIMARY KEY DEFAULT gen_random_uuid(),
-  organization_id       UUID    NOT NULL REFERENCES organizations(id),
-  store_id              UUID    NOT NULL REFERENCES stores(id),
+  organization_id       INT     NOT NULL REFERENCES organizations(id),
+  store_id              INT     NOT NULL REFERENCES stores(id),
   qr_ordering_enabled   BOOLEAN DEFAULT false,
   -- 'manual'  — staff sees 🔔 notification and taps confirm before kitchen print
   -- 'auto'    — guest items go straight to kitchen without staff tap

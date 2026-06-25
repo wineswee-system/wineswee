@@ -4,8 +4,8 @@
 -- Menu categories
 CREATE TABLE pos_menu_categories (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  organization_id UUID NOT NULL REFERENCES organizations(id),
-  store_id      UUID NOT NULL REFERENCES stores(id),
+  organization_id INT NOT NULL REFERENCES organizations(id),
+  store_id      INT  NOT NULL REFERENCES stores(id),
   name          TEXT NOT NULL,
   display_order INT  DEFAULT 0,
   is_active     BOOLEAN DEFAULT true,
@@ -15,8 +15,8 @@ CREATE TABLE pos_menu_categories (
 -- Menu items
 CREATE TABLE pos_menu_items (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  organization_id UUID NOT NULL REFERENCES organizations(id),
-  store_id        UUID NOT NULL REFERENCES stores(id),
+  organization_id INT NOT NULL REFERENCES organizations(id),
+  store_id        INT  NOT NULL REFERENCES stores(id),
   category_id     UUID REFERENCES pos_menu_categories(id),
   name            TEXT NOT NULL,
   description     TEXT,
@@ -43,8 +43,8 @@ CREATE TABLE pos_menu_item_skus (
 -- skus.unit_cost is procurement cost only — retail_price lives here
 CREATE TABLE pos_products (
   id              UUID    PRIMARY KEY DEFAULT gen_random_uuid(),
-  organization_id UUID    NOT NULL REFERENCES organizations(id),
-  store_id        UUID    NOT NULL REFERENCES stores(id),
+  organization_id INT     NOT NULL REFERENCES organizations(id),
+  store_id        INT     NOT NULL REFERENCES stores(id),
   sku_id          BIGINT  REFERENCES skus(id),
   name            TEXT    NOT NULL,
   barcode         TEXT,
@@ -60,8 +60,8 @@ CREATE TABLE pos_products (
 -- Work shifts — tracks order counter for per-shift sequential order numbers
 CREATE TABLE pos_shifts (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  organization_id UUID NOT NULL REFERENCES organizations(id),
-  store_id        UUID NOT NULL REFERENCES stores(id),
+  organization_id INT NOT NULL REFERENCES organizations(id),
+  store_id        INT  NOT NULL REFERENCES stores(id),
   employee_id     UUID REFERENCES employees(id),
   opened_at       TIMESTAMPTZ DEFAULT now(),
   closed_at       TIMESTAMPTZ,
@@ -72,8 +72,8 @@ CREATE TABLE pos_shifts (
 -- Orders — one per table session; walk-in tables have no reservation_id
 CREATE TABLE pos_orders (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  organization_id UUID NOT NULL REFERENCES organizations(id),
-  store_id        UUID NOT NULL REFERENCES stores(id),
+  organization_id INT NOT NULL REFERENCES organizations(id),
+  store_id        INT  NOT NULL REFERENCES stores(id),
   table_id        UUID REFERENCES res_tables(id),
   reservation_id  UUID REFERENCES reservations(id),
   shift_id        UUID REFERENCES pos_shifts(id),
@@ -107,8 +107,8 @@ CREATE TABLE pos_order_items (
 -- Payments — multiple rows per order support split-bill; each row gets its own invoice
 CREATE TABLE pos_payments (
   id              UUID    PRIMARY KEY DEFAULT gen_random_uuid(),
-  organization_id UUID    NOT NULL REFERENCES organizations(id),
-  store_id        UUID    NOT NULL REFERENCES stores(id),
+  organization_id INT     NOT NULL REFERENCES organizations(id),
+  store_id        INT     NOT NULL REFERENCES stores(id),
   order_id        UUID    NOT NULL REFERENCES pos_orders(id),
   amount          NUMERIC(10,2) NOT NULL,
   payment_method  TEXT    NOT NULL CHECK (payment_method IN ('cash','card','line_pay','jkopay','other')),
@@ -125,8 +125,8 @@ CREATE TABLE pos_payments (
 -- QR self-ordering sessions — token links guest phone to a table's open order
 CREATE TABLE qr_order_sessions (
   id              UUID    PRIMARY KEY DEFAULT gen_random_uuid(),
-  organization_id UUID    NOT NULL REFERENCES organizations(id),
-  store_id        UUID    NOT NULL REFERENCES stores(id),
+  organization_id INT     NOT NULL REFERENCES organizations(id),
+  store_id        INT     NOT NULL REFERENCES stores(id),
   table_id        UUID    NOT NULL REFERENCES res_tables(id),
   order_id        UUID    REFERENCES pos_orders(id),
   token           TEXT    NOT NULL UNIQUE DEFAULT encode(gen_random_bytes(16), 'hex'),
@@ -158,7 +158,7 @@ ALTER TABLE qr_order_sessions    ENABLE ROW LEVEL SECURITY;
 
 -- Helper: current authenticated user's organization
 CREATE OR REPLACE FUNCTION auth_org_id()
-RETURNS UUID LANGUAGE sql STABLE SECURITY DEFINER AS $$
+RETURNS INT LANGUAGE sql STABLE SECURITY DEFINER AS $$
   SELECT organization_id FROM employees WHERE auth_user_id = auth.uid() LIMIT 1
 $$;
 

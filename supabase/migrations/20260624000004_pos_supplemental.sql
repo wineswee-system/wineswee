@@ -11,8 +11,8 @@ ALTER TABLE pos_products
 -- Return / refund records
 CREATE TABLE IF NOT EXISTS pos_returns (
   id                  UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
-  organization_id     UUID          NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-  store_id            UUID          NOT NULL,
+  organization_id     INT           NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  store_id            INT           NOT NULL,
   order_id            UUID          REFERENCES pos_orders(id),
   employee_id         UUID,
   return_items        JSONB         NOT NULL DEFAULT '[]',

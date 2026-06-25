@@ -857,8 +857,10 @@ export default function Workflows() {
 
   const handleDeleteTemplate = async (tpl) => {
     if (!(await confirm({ message: `確定刪除範本「${tpl.name}」？此操作無法復原。` }))) return
-    const { error } = await deleteWorkflow(tpl.id)
+    // ★ 修：範本在 sop_templates，原本誤用 deleteWorkflow 刪到 workflows 表 → 沒真的刪、刷新又出現
+    const { data: deleted, error } = await supabase.from('sop_templates').delete().eq('id', tpl.id).select()
     if (error) { toast.error('刪除失敗：' + error.message); return }
+    if (!deleted?.length) { toast.error('刪除失敗（可能沒有權限）'); return }
     setTemplates(prev => prev.filter(t => t.id !== tpl.id))
   }
 

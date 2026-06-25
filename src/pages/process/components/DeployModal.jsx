@@ -746,8 +746,11 @@ export default function DeployModal({
         </div>
       </ModalOverlay>
     )}
-    {capForm && (capForm.form_type === 'expense_request' || capForm.form_type === 'expense_apply') && (
-      <ExpenseFormDraft initialDraft={capDraft} onCapture={onCaptured} onClose={() => setCapturing(null)} />
+    {capForm && (capForm.form_type === 'expense_request' || capForm.form_type === 'expense_apply'
+              || capForm.form_type === 'order_request' || capForm.form_type === 'order_apply') && (
+      <ExpenseFormDraft initialDraft={capDraft}
+        docType={(capForm.form_type === 'order_request' || capForm.form_type === 'order_apply') ? 'order' : 'expense'}
+        onCapture={onCaptured} onClose={() => setCapturing(null)} />
     )}
     {capForm && capForm.form_type === 'expense' && (
       <ExpenseSimpleDraft initialDraft={capDraft} onCapture={onCaptured} onClose={() => setCapturing(null)} />

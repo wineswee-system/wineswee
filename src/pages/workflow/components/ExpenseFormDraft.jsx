@@ -20,7 +20,8 @@ const emptyForm = {
 }
 const emptyItem = () => ({ name: '', qty: '', unit_price: '', subtotal: 0 })
 
-export default function ExpenseFormDraft({ initialDraft, onCapture, onClose, busy = false }) {
+// docType：'expense'(費用申請) | 'order'(叫貨申請) — 寫進 payload 區分同表資料
+export default function ExpenseFormDraft({ initialDraft, onCapture, onClose, busy = false, docType = 'expense' }) {
   const { profile } = useAuth()
   const [accounts, setAccounts] = useState([])
   const [currencies, setCurrencies] = useState([])
@@ -75,6 +76,7 @@ export default function ExpenseFormDraft({ initialDraft, onCapture, onClose, bus
       employee: form.employee,
       employee_id: emp?.id || null,
       department: emp?.dept || null,
+      doc_type: docType,
       is_expense: isExpense,
       account_code: isExpense ? form.account_code : null,
       account_name: isExpense ? (acc?.name || '') : null,

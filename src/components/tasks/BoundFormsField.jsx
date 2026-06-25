@@ -139,9 +139,11 @@ export default function BoundFormsField({ value = [], onChange, employees = [], 
           </div>
         </ModalOverlay>
       )}
-      {cap && (cap.form_type === 'expense_request' || cap.form_type === 'expense_apply') && (
+      {cap && (cap.form_type === 'expense_request' || cap.form_type === 'expense_apply'
+              || cap.form_type === 'order_request' || cap.form_type === 'order_apply') && (
         <ExpenseFormDraft
           initialDraft={cap._draft}
+          docType={(cap.form_type === 'order_request' || cap.form_type === 'order_apply') ? 'order' : 'expense'}
           onCapture={(draft) => { setItem(capturingIdx, { _draft: draft }); setCapturingIdx(null) }}
           onClose={() => setCapturingIdx(null)}
         />

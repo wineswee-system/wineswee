@@ -110,7 +110,9 @@ export async function commitBindingDraft(bindingId, item, profile) {
   if (!item?._draft) return
   if (item.form_type === 'form_submission') {
     await commitFormSubmissionDraft(bindingId, item._draft, profile)
-  } else if (item.form_type === 'expense_request' || item.form_type === 'expense_apply') {
+  } else if (item.form_type === 'expense_request' || item.form_type === 'expense_apply'
+          || item.form_type === 'order_request' || item.form_type === 'order_apply') {
+    // 叫貨(order) draft 的 payload 已帶 doc_type='order'（ExpenseFormDraft 注入）；費用走預設 'expense'
     await commitExpenseDraft(bindingId, item._draft, profile)
   } else if (item.form_type === 'expense') {
     await commitSimpleExpenseDraft(bindingId, item._draft, profile)
@@ -122,5 +124,6 @@ export async function commitBindingDraft(bindingId, item, profile) {
 export function isDraftableType(formType) {
   return formType === 'form_submission'
     || formType === 'expense_request' || formType === 'expense_apply'
+    || formType === 'order_request' || formType === 'order_apply'
     || formType === 'expense'
 }

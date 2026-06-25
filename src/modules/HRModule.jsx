@@ -85,6 +85,7 @@ export default memo(function HRModule() {
       <Route path="travel" element={<BusinessTravel />} />
       <Route path="expenses" element={<Expenses />} />
       <Route path="expense-requests" element={<ExpenseRequests />} />
+      <Route path="order-requests" element={<ExpenseRequests docType="order" />} />
       <Route path="bonus" element={<Bonus />} />
       <Route path="labor-inspection" element={<LaborInspection />} />
       <Route path="training" element={<Training />} />

@@ -74,6 +74,7 @@ export default function ProcessModule() {
       <Route path="store-audits" element={<StoreAudits />} />
       {/* 業務表單 alias 路由 — 讓頂部 tab 維持「專案流程」 */}
       <Route path="expense-requests" element={<ExpenseRequests />} />
+      <Route path="order-requests" element={<ExpenseRequests docType="order" />} />
       <Route path="expenses" element={<Expenses />} />
       <Route path="forms/custom/:templateId" element={<CustomFormFill />} />
       <Route path="forms/submissions" element={<FormSubmissions />} />

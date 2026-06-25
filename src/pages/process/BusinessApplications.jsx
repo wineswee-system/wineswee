@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Wallet, Receipt, FileText, ClipboardList, Package } from 'lucide-react'
+import { Wallet, Receipt, FileText, ClipboardList, Package, ShoppingCart } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -14,6 +14,7 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 const FIXED_EXPENSE = [
   { icon: Wallet,  name: '非經常性費用申請', desc: '單次或特定、偶發性的支出', action: '/process/expense-requests', color: 'var(--accent-cyan)', dim: 'var(--accent-cyan-dim)', tag: '兩階段' },
   { icon: Receipt, name: '經常性費用報銷', desc: '日常營運而週期性發生的常態支出', action: '/process/expenses', color: 'var(--accent-green)', dim: 'var(--accent-green-dim)' },
+  { icon: ShoppingCart, name: '叫貨申請單', desc: '向廠商叫貨 / 補貨 → 申請核准 + 到貨入庫核銷', action: '/process/order-requests', color: 'var(--accent-purple)', dim: 'var(--accent-purple-dim)', tag: '兩階段' },
 ]
 
 const FIXED_NON_EXPENSE = [

@@ -45,7 +45,15 @@ const emptyForm = {
 
 const emptyItem = () => ({ name: '', qty: '', unit_price: '', subtotal: 0 })
 
-export default function ExpenseRequests() {
+// docType: 'expense' = 非經常性費用申請(預設) / 'order' = 叫貨申請單(同表同引擎,靠 doc_type 區分)
+const DOC_CFG = {
+  expense: { label: '非經常性費用申請', icon: '📝', subtitle: '事項 / 採購 / 預算申請：先申請核准，發生費用後再核銷(驗收)入帳',
+             chainFormType: 'expense_request', chainLabel: '費用申請', settleFormType: 'expense_settle', settleLabel: '費用核銷' },
+  order:   { label: '叫貨申請單',       icon: '📦', subtitle: '叫貨申請：先申請核准，到貨後再入庫核銷(驗收)',
+             chainFormType: 'order_request', chainLabel: '叫貨申請', settleFormType: 'order_settle', settleLabel: '叫貨核銷' },
+}
+export default function ExpenseRequests({ docType = 'expense' } = {}) {
+  const DOC = DOC_CFG[docType] || DOC_CFG.expense
   const { profile, isAdmin, hasPermission } = useAuth()
   const canDeleteAll = hasPermission('hr_form.delete_all')
   const { canApprove } = usePendingApprovals()
@@ -83,7 +91,7 @@ export default function ExpenseRequests() {
   const load = async () => {
     setLoading(true)
     const orgId = profile?.organization_id
-    let reqQuery = supabase.from('expense_requests').select('*').is('deleted_at', null).order('created_at', { ascending: false })
+    let reqQuery = supabase.from('expense_requests').select('*').is('deleted_at', null).eq('doc_type', docType).order('created_at', { ascending: false })
     if (orgId) reqQuery = reqQuery.eq('organization_id', orgId)
     // 費用頁用員工的 id/name/dept/編號/門市（下拉+payload）+ signature_url（簽呈 PDF 蓋章），不需 getEmployees 的 56 欄
     let empQuery = supabase.from('employees')
@@ -294,6 +302,7 @@ export default function ExpenseRequests() {
       // 營運部選「總部」(__HQ__) → 門市存 null，部門維持營運部 → trigger 解析成營運部經理
       settle_store_id: isExpense && form.settle_store_id && form.settle_store_id !== '__HQ__' ? Number(form.settle_store_id) : null,
       organization_id: profile?.organization_id ?? null,
+      doc_type: docType,
     }
     if (!payload.organization_id) {
       setError('身份未載入完成，請重新登入再操作')
@@ -755,21 +764,23 @@ export default function ExpenseRequests() {
       <div className="page-header">
         <div className="page-header-row">
           <div>
-            <h2><span className="header-icon">📝</span> 非經常性費用申請</h2>
-            <p>事項 / 採購 / 預算申請：先申請核准，發生費用後再核銷(驗收)入帳</p>
+            <h2><span className="header-icon">{DOC.icon}</span> {DOC.label}</h2>
+            <p>{DOC.subtitle}</p>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             {isAdmin && (
               <>
-                <button className="btn btn-secondary" onClick={() => navigate('/process/settings/chains/edit?formType=expense_request&label=費用申請&mode=amount_grouped')} title="設定非經常性費用申請的金額分組簽核流程（簽核鏈 category 維持「費用申請」）">
+                <button className="btn btn-secondary" onClick={() => navigate(`/process/settings/chains/edit?formType=${DOC.chainFormType}&label=${DOC.chainLabel}&mode=amount_grouped`)} title={`設定${DOC.label}的金額分組簽核流程`}>
                   <Settings size={14} /> 申請簽核
                 </button>
-                <button className="btn btn-secondary" onClick={() => navigate('/process/settings/chains/edit?formType=expense_settle&label=費用核銷&mode=amount_grouped')} title="設定費用核銷的金額分組簽核流程">
+                <button className="btn btn-secondary" onClick={() => navigate(`/process/settings/chains/edit?formType=${DOC.settleFormType}&label=${DOC.settleLabel}&mode=amount_grouped`)} title={`設定${DOC.settleLabel}的金額分組簽核流程`}>
                   <Settings size={14} /> 核銷簽核(驗收)
                 </button>
-                <button className="btn btn-secondary" onClick={() => navigate('/process/settings/chains/edit?formType=non_expense_request&label=非費用申請')} title="設定非費用申請的簽核流程">
-                  <Settings size={14} /> 非費用簽核
-                </button>
+                {docType === 'expense' && (
+                  <button className="btn btn-secondary" onClick={() => navigate('/process/settings/chains/edit?formType=non_expense_request&label=非費用申請')} title="設定非費用申請的簽核流程">
+                    <Settings size={14} /> 非費用簽核
+                  </button>
+                )}
               </>
             )}
             <button className="btn btn-primary" onClick={() => {
@@ -1100,7 +1111,7 @@ export default function ExpenseRequests() {
           <ApprovalDetailModal
             open={!!showDetail}
             onClose={() => { setShowDetail(null); setDetailChainSteps([]) }}
-            docTitle={`非經常性費用申請 #${showDetail.id}`}
+            docTitle={`${DOC.label} #${showDetail.id}`}
             docNo={showDetail.id}
             status={showDetail.status}
             applicant={{

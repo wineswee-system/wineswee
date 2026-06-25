@@ -428,7 +428,9 @@ export default function ExpenseFormModal({
                   {carriedAtts.map((a, i) => (
                     <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, padding: '4px 8px', background: 'var(--accent-cyan-dim)', borderRadius: 6 }}>
                       <FileText size={12} style={{ color: 'var(--accent-cyan)', flexShrink: 0 }} />
-                      <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.file_name}</span>
+                      {a.url
+                        ? <a href={a.url} target="_blank" rel="noreferrer" title="點開檢視" style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--accent-cyan)', textDecoration: 'underline', cursor: 'pointer' }}>{a.file_name}</a>
+                        : <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.file_name}</span>}
                       <button type="button" onClick={() => onRemoveCarried?.(i)} aria-label="移除"
                         style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-red)', padding: 0, lineHeight: 1, flexShrink: 0 }}>
                         <X size={13} />

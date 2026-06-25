@@ -242,7 +242,10 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
       supabase.from('expense_request_attachments')
         .select('file_name, storage_path, file_size, file_type, stage')
         .eq('request_id', req.id).eq('stage', 'request')
-        .then(({ data }) => setCarriedAtts(data || []))
+        .then(({ data }) => setCarriedAtts((data || []).map(a => ({
+          ...a,
+          url: supabase.storage.from('attachments').getPublicUrl(a.storage_path).data?.publicUrl,
+        }))))
     } else {
       setCarriedAtts([])
     }

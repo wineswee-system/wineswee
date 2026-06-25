@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Calendar, Clock, ChevronLeft, ChevronRight, CalendarOff, ArrowLeftRight } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import { isAbsence, ABSENCE_CONFIG, getMonthDates, formatYearMonth, parseYearMonth, getDayLabel, isWeekendDay, parseTime, getNetWorkHours, formatShiftLabel } from '../../lib/scheduleUtils'
+import { isAbsence, ABSENCE_CONFIG, getMonthDates, formatYearMonth, parseYearMonth, getDayLabel, isWeekendDay, parseTime, getNetWorkHours, getShiftHours, formatShiftLabel } from '../../lib/scheduleUtils'
 import { todayTW } from '../../lib/datetime'
 
 import { toast } from '../../lib/toast'
@@ -289,6 +289,7 @@ export default function MySchedule() {
 // ── Off Request Sub-component ──
 // 每月 16 號前選下個月希望休，正職限 10 天，兼職限 13 天
 function OffRequestForm({ empName, empId, employmentType }) {
+  const { profile: authProfile } = useAuth()
   const [myRequests, setMyRequests] = useState([])
   const [submitting, setSubmitting] = useState(false)
 
@@ -324,7 +325,7 @@ function OffRequestForm({ empName, empId, employmentType }) {
     setSubmitting(true)
     const exists = myRequests.find(r => r.date === date)
     if (exists) {
-      await supabase.rpc('soft_delete_request', { p_table: 'off_requests', p_id: exists.id, p_deleted_by: profile?.id ?? null })
+      await supabase.rpc('soft_delete_request', { p_table: 'off_requests', p_id: exists.id, p_deleted_by: authProfile?.id ?? null })
       setMyRequests(prev => prev.filter(r => r.date !== date))
     } else {
       if (isAtLimit) { setSubmitting(false); return }

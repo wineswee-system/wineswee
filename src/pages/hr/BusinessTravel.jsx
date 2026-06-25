@@ -45,9 +45,9 @@ export default function BusinessTravel() {
   const [loadingChain, setLoadingChain] = useState(false)
   const detailRowIdRef = useRef(null)
 
-  useEffect(() => {
+  const load = () => {
     const orgId = profile?.organization_id
-    Promise.all([
+    return Promise.all([
       getBusinessTrips(),
       supabase.from('employees').select('id, name, dept, department_id, position, signature_url, departments!department_id(name)').eq('status', '在職').order('name'),
       supabase.from('departments').select('*').order('name'),
@@ -65,7 +65,9 @@ export default function BusinessTravel() {
     }).finally(() => {
       setLoading(false)
     })
-  }, [])
+  }
+
+  useEffect(() => { load() }, [])
 
   // Dashboard ApprovalCenter 跳過來時 ?focus=ID 自動開明細
   const [searchParams, setSearchParams] = useSearchParams()

@@ -102,9 +102,9 @@ export default function Overtime() {
   }
 
   // employees 多帶 store_id 進來，這樣選人後可查 step
-  useEffect(() => {
+  const load = () => {
     const orgId = profile?.organization_id
-    Promise.all([
+    return Promise.all([
       getOvertimeRequests({ month: monthFilter }),
       supabase.from('employees').select('id, name, dept, store_id, department_id, position, signature_url, departments!department_id(name), salary_structures(salary_type)').eq('status', '在職').order('name'),
       supabase.from('departments').select('*').order('name'),
@@ -127,7 +127,9 @@ export default function Overtime() {
     }).finally(() => {
       setLoading(false)
     })
-  }, [monthFilter, profile?.organization_id])
+  }
+
+  useEffect(() => { load() }, [monthFilter, profile?.organization_id])
 
   // 抓「已有人 approved 過」的 OT id（駁回不算）— 用來鎖編輯/撤回
   // 走 SECURITY DEFINER RPC 繞 approval_step_history 的 RLS

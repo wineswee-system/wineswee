@@ -10,7 +10,7 @@ import Modal, { Field } from '../../components/Modal'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { toast } from '../../lib/toast'
 import {
-  findFormChainByApplicantType, loadChainStepsBatch, approveChainStep,
+  findFormChainByApplicantType, loadChainStepsBatch, approveChainStep, notifyApprovers,
 } from '../../lib/hrChain'
 import ApprovalDetailModal from '../../components/ApprovalDetailModal'
 import { printLoaSignOff } from '../../lib/signOffAdapters'

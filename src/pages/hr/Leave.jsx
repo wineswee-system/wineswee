@@ -120,9 +120,9 @@ export default function Leave() {
     }
     return urls
   }
-  useEffect(() => {
+  const load = () => {
     const orgId = profile?.organization_id
-    Promise.all([
+    return Promise.all([
       getLeaveRequests({ orgId, month: leaveMonth }),
       getActiveEmployees('id, name, dept, store_id, department_id, position, join_date, phone, signature_url, salary_type, weekly_hours, departments!department_id(name)', orgId),
       getDepartments(orgId),
@@ -162,7 +162,9 @@ export default function Leave() {
     }).finally(() => {
       setLoading(false)
     })
-  }, [leaveMonth]) // eslint-disable-line react-hooks/exhaustive-deps
+  }
+
+  useEffect(() => { load() }, [leaveMonth]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const set = (k, v) => {
     setForm(f => ({ ...f, [k]: v }))

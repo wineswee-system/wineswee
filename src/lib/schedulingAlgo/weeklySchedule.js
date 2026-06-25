@@ -9,7 +9,7 @@
  */
 
 import {
-  parseTime, getNetWorkHours, getRestMinutes, isAbsence,
+  parseTime, getNetWorkHours, getShiftHours, getRestMinutes, isAbsence,
   isWeekendDay, getWorkSystemConstraints,
   formatShiftLabel, parseShiftRange,
 } from '../scheduleUtils'

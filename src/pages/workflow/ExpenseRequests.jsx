@@ -170,9 +170,8 @@ export default function ExpenseRequests() {
 
   // Upload files to Supabase Storage
   const uploadFiles = async (requestId, fileList, stage = 'request') => {
-    // ★ 上限：每個 request 每個 stage 最多 3 個附件（對齊 UI 3 個 slot）
-    //   之前沒 check 已有數量 → 編輯重送會累積（#128 案例累積到 6 個）
-    const MAX_ATTACHMENTS_PER_STAGE = 3
+    // ★ 上限：每個 request 每個 stage 最多 20 個附件
+    const MAX_ATTACHMENTS_PER_STAGE = 20
     const { count: existing } = await supabase
       .from('expense_request_attachments')
       .select('id', { count: 'exact', head: true })

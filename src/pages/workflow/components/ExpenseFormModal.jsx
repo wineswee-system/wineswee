@@ -414,61 +414,55 @@ export default function ExpenseFormModal({
               style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)', minHeight: 50, resize: 'vertical' }} />
           </div>
 
-          {/* File upload — 3 slots.
-              用 auto-fit minmax — 寬夠 3 欄、窄夠 2 欄、再窄 1 欄，全自動 */}
+          {/* File upload — 動態多檔（最多 20）*/}
           <div>
-            <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 600 }}>附件（訂購單、報價單...）</label>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8 }}>
-              {[0, 1, 2].map(idx => {
-                const file = files[idx]
-                return (
-                  <label key={idx} style={{
-                    position: 'relative',
-                    border: '2px dashed var(--accent-red)',
-                    borderRadius: 8, padding: 10, minHeight: 92, textAlign: 'center', cursor: 'pointer',
+            <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 600 }}>
+              附件（訂購單、報價單...）<span style={{ fontWeight: 400, color: 'var(--text-muted)', fontSize: 12 }}> · {(files || []).filter(Boolean).length}/20</span>
+            </label>
+            {(files || []).filter(Boolean).length > 0 && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 8, marginBottom: 8 }}>
+                {(files || []).filter(Boolean).map((file, i) => (
+                  <div key={i} style={{
+                    position: 'relative', border: '1px solid var(--accent-red)', background: 'var(--accent-red-dim)',
+                    borderRadius: 8, padding: 10, minHeight: 80, textAlign: 'center',
                     display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6,
-                    background: file ? 'var(--accent-red-dim)' : 'transparent',
-                    transition: 'background .15s',
                   }}>
-                    <input
-                      type="file"
-                      accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv"
-                      style={{ display: 'none' }}
-                      onChange={e => {
-                        const f = e.target.files?.[0]
-                        if (!f) return
-                        setFiles(prev => { const next = [...prev]; next[idx] = f; return next })
-                        e.target.value = ''
-                      }}
-                    />
-                    {file ? (
-                      <>
-                        {file.type?.startsWith('image')
-                          ? <Image size={22} style={{ color: 'var(--accent-red)' }} />
-                          : <FileText size={22} style={{ color: 'var(--accent-red)' }} />}
-                        <div style={{ fontSize: 11, color: 'var(--text-primary)', wordBreak: 'break-all', lineHeight: 1.3 }}>{file.name}</div>
-                        <button
-                          type="button"
-                          onClick={e => { e.preventDefault(); e.stopPropagation(); setFiles(prev => prev.filter((_, j) => j !== idx)) }}
-                          style={{ position: 'absolute', top: 4, right: 4, background: 'rgba(0,0,0,0.5)', border: 'none', borderRadius: '50%', color: '#fff', width: 20, height: 20, padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                        >
-                          <X size={12} />
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <Upload size={22} style={{ color: 'var(--accent-red)', opacity: 0.55 }} />
-                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>點此上傳</div>
-                      </>
-                    )}
-                  </label>
-                )
-              })}
-            </div>
+                    {file.type?.startsWith('image')
+                      ? <Image size={20} style={{ color: 'var(--accent-red)' }} />
+                      : <FileText size={20} style={{ color: 'var(--accent-red)' }} />}
+                    <div style={{ fontSize: 11, color: 'var(--text-primary)', wordBreak: 'break-all', lineHeight: 1.3 }}>{file.name}</div>
+                    <button type="button"
+                      onClick={() => setFiles(prev => prev.filter(Boolean).filter((_, j) => j !== i))}
+                      style={{ position: 'absolute', top: 4, right: 4, background: 'rgba(0,0,0,0.5)', border: 'none', borderRadius: '50%', color: '#fff', width: 20, height: 20, padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <X size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {(files || []).filter(Boolean).length < 20 && (
+              <label style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                border: '2px dashed var(--accent-red)', borderRadius: 8, padding: '12px', cursor: 'pointer',
+                color: 'var(--accent-red)', fontSize: 13, fontWeight: 600,
+              }}>
+                <input type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv" style={{ display: 'none' }}
+                  onChange={e => {
+                    const picked = Array.from(e.target.files || [])
+                    e.target.value = ''
+                    if (!picked.length) return
+                    setFiles(prev => {
+                      const cur = (prev || []).filter(Boolean)
+                      return [...cur, ...picked].slice(0, 20)
+                    })
+                  }} />
+                <Upload size={16} /> 新增附件（可多選）
+              </label>
+            )}
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8, lineHeight: 1.5 }}>
               支援格式：JPG / PNG / GIF / WebP / PDF / Excel (XLS、XLSX) / CSV
               <br />
-              單檔最大 10MB · 最多 3 個附件
+              單檔最大 10MB · 最多 20 個附件
             </div>
           </div>
         </div>

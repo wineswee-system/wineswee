@@ -7,141 +7,23 @@
 // 全部用 postback 不留聊天室文字，結果用單行文字回覆。
 
 import { registerPostback, setPending, type PostbackHandler } from './postback-handlers.ts';
+import { cmdTaskDone } from './command-handlers.ts';
 
 function txt(s: string) { return { type: "text", text: s }; }
 
 // ── Handler: complete ────────────────────────────────────────────────────────
-// 直接 update task.status = 'completed'，附帶 cascade 觸發 metadata.trigger_actions
-
+// ★ 修(2026-06-25)：原本自己 raw update status='completed'(英文)→ 全系統任務狀態是
+//   中文('已完成'/'待處理'/'進行中')，App 不認得、cascade 用 .eq('status','pending') 也永遠
+//   不 match → 按鈕等於壞的。改成走跟文字指令 /任務 X 完成 同一支 cmdTaskDone：
+//   設 '已完成'、有簽核鏈導去 LIFF、cascade 交給 DB trigger _task_cascade_on_complete。
+//   (LIFF/Web 走 web_complete_task RPC，也是同樣由 DB 統一處理。)
 const handleComplete: PostbackHandler = async (params, ctx) => {
-  const taskId = Number(params.id);
-  if (!taskId) return [txt("⚠️ 缺少任務 ID")];
-
   const empId = ctx.lineUser?.employee_id;
   if (!empId) return [txt("❌ 你的 LINE 還沒綁員工，請先 /註冊 姓名")];
-
-  const { data: task } = await ctx.db.from("tasks")
-    .select("id, title, status, assignee_id, metadata")
-    .eq("id", taskId).maybeSingle();
-  if (!task) return [txt("❌ 找不到此任務")];
-  if (task.assignee_id != null && task.assignee_id !== empId) {
-    return [txt("⚠️ 你不是這個任務的負責人，不能完成")];
-  }
-  if (task.status === "completed") return [txt(`⚠️ 「${task.title}」已是完成狀態`)];
-
-  const { error } = await ctx.db.from("tasks")
-    .update({ status: "completed", completed_at: new Date().toISOString() })
-    .eq("id", taskId);
-  if (error) return [txt(`❌ 完成失敗：${error.message}`)];
-
-  // Cascade：metadata.trigger_actions 中列出的任務 → 啟動 + 推 LINE 給負責人
-  const triggerActions: any[] = ((task.metadata as any)?.trigger_actions ?? []);
-  let triggered = 0;
-  let notified = 0;
-  for (const tid of triggerActions) {
-    const { data: t2 } = await ctx.db.from("tasks")
-      .update({ status: "in_progress" })
-      .eq("id", tid).eq("status", "pending")
-      .select("id, title, priority, due_date, assignee_id")
-      .maybeSingle();
-    if (!t2) continue;
-    triggered++;
-
-    // 推給該任務的負責人
-    if (t2.assignee_id) {
-      const ok = await pushNewTaskNotification(ctx, t2, task.title);
-      if (ok) notified++;
-    }
-  }
-
-  const tail = triggered > 0
-    ? `\n🔔 觸發 ${triggered} 個後續任務啟動${notified > 0 ? `（已通知 ${notified} 位負責人）` : ""}`
-    : "";
-  return [txt(`✅ 已完成「${task.title}」${tail}`)];
+  if (!params.id) return [txt("⚠️ 缺少任務 ID")];
+  const msg = await cmdTaskDone(String(params.id), empId, ctx.db, ctx.accessToken);
+  return Array.isArray(msg) ? msg : [msg];
 };
-
-// 推「新任務啟動」通知給後續任務的負責人（小 flex bubble）
-async function pushNewTaskNotification(
-  ctx: any,
-  newTask: { id: number; title: string; priority?: string; due_date?: string; assignee_id?: number },
-  triggeredByTitle: string,
-): Promise<boolean> {
-  try {
-    const { data: target } = await ctx.db.rpc("liff_resolve_line_target", { p_emp_id: newTask.assignee_id });
-    const lineUserId = (target as any)?.line_user_id;
-    if (!lineUserId) return false;
-
-    const due = newTask.due_date ? newTask.due_date.slice(0, 10) : "無截止日";
-    const priorityColor: Record<string, string> = { low: "#4CAF50", medium: "#E67E22", high: "#E74C3C", urgent: "#8E44AD" };
-    const priorityLabel: Record<string, string> = { low: "🟢低", medium: "🟡中", high: "🔴高", urgent: "🚨緊急" };
-    const pColor = priorityColor[newTask.priority ?? ""] ?? "#95A5A6";
-    const pLabel = priorityLabel[newTask.priority ?? ""] ?? newTask.priority ?? "—";
-
-    const liffTaskId = ctx.liffIds.task || ctx.liffIds.dashboard || "";
-    const liffUri = liffTaskId
-      ? `https://liff.line.me/${liffTaskId.trim()}?to=${encodeURIComponent("/tasks")}`
-      : null;
-
-    const bubble = {
-      type: "bubble",
-      size: "kilo",
-      header: {
-        type: "box", layout: "vertical", paddingAll: "12px", backgroundColor: pColor,
-        contents: [
-          { type: "text", text: "🔔 新任務啟動", color: "#FFFFFF", weight: "bold", size: "md" },
-          { type: "text", text: `由「${triggeredByTitle}」完成觸發`, color: "#FFFFFFCC", size: "xxs", wrap: true, margin: "xs" },
-        ],
-      },
-      body: {
-        type: "box", layout: "vertical", paddingAll: "14px", spacing: "sm",
-        contents: [
-          { type: "text", text: newTask.title, weight: "bold", size: "md", color: "#111827", wrap: true },
-          { type: "separator", margin: "sm" },
-          { type: "box", layout: "horizontal", contents: [
-            { type: "text", text: "優先", color: "#9CA3AF", size: "xs", flex: 2 },
-            { type: "text", text: pLabel, color: pColor, size: "xs", flex: 5, weight: "bold" },
-          ]},
-          { type: "box", layout: "horizontal", contents: [
-            { type: "text", text: "截止", color: "#9CA3AF", size: "xs", flex: 2 },
-            { type: "text", text: due, color: "#333333", size: "xs", flex: 5, weight: "bold" },
-          ]},
-        ],
-      },
-      footer: {
-        type: "box", layout: "vertical", paddingAll: "10px", spacing: "xs",
-        contents: [
-          {
-            type: "button",
-            action: { type: "postback", label: "✅ 標記完成", data: `action=complete&type=task&id=${newTask.id}` },
-            style: "primary", color: "#27AE60", height: "sm",
-          },
-          ...(liffUri ? [{
-            type: "button",
-            action: { type: "uri", label: "📋 看任務列表", uri: liffUri },
-            style: "secondary", height: "sm",
-          }] : []),
-        ],
-      },
-    };
-
-    const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    if (!supabaseUrl || !serviceKey) return false;
-
-    const res = await fetch(`${supabaseUrl}/functions/v1/line-push`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
-      body: JSON.stringify({
-        to: lineUserId,
-        messages: [{ type: "flex", altText: `🔔 新任務：${newTask.title}`, contents: bubble }],
-      }),
-    });
-    return res.ok;
-  } catch (err) {
-    console.warn("[postback-task] cascade push failed", err);
-    return false;
-  }
-}
 
 // ── Handler: postpone ────────────────────────────────────────────────────────
 

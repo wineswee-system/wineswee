@@ -24,7 +24,7 @@ function StoreSelect({ value, onChange, stores, error }) {
   return (
     <div className={error ? 'field-error' : undefined}>
       <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>
-        門市 <span style={{ color: 'var(--accent-red)' }}>*</span>
+        申請單位 <span style={{ color: 'var(--accent-red)' }}>*</span>
       </label>
       <select
         value={selectValue}
@@ -40,7 +40,7 @@ function StoreSelect({ value, onChange, stores, error }) {
         }}
         style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }}
       >
-        <option value="">— 請選擇門市 —</option>
+        <option value="">— 請選擇申請單位 —</option>
         {storeNames.map(name => <option key={name} value={name}>{name}</option>)}
         <option value="__OTHER__">其他（自填）</option>
       </select>
@@ -49,12 +49,12 @@ function StoreSelect({ value, onChange, stores, error }) {
           type="text"
           value={value || ''}
           onChange={e => onChange(e.target.value)}
-          placeholder="請輸入門市名稱"
+          placeholder="請輸入申請單位名稱"
           autoFocus
           style={{ width: '100%', marginTop: 6, padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }}
         />
       )}
-      {error && <div className="field-error-msg">⚠ 請選擇或輸入門市</div>}
+      {error && <div className="field-error-msg">⚠ 請選擇或輸入申請單位</div>}
     </div>
   )
 }

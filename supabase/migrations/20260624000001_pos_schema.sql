@@ -75,8 +75,8 @@ CREATE TABLE IF NOT EXISTS pos_orders (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id INT NOT NULL REFERENCES organizations(id),
   store_id        INT  NOT NULL REFERENCES stores(id),
-  table_id        UUID REFERENCES res_tables(id),
-  reservation_id  UUID REFERENCES reservations(id),
+  table_id        UUID,  -- FK to res_tables(id) added when reservation migration is applied
+  reservation_id  UUID,  -- FK to reservations(id) added when reservation migration is applied
   shift_id        UUID REFERENCES pos_shifts(id),
   order_number    TEXT,
   status          TEXT DEFAULT 'open' CHECK (status IN ('open', 'submitted', 'paid', 'voided')),
@@ -128,7 +128,7 @@ CREATE TABLE IF NOT EXISTS qr_order_sessions (
   id              UUID    PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id INT     NOT NULL REFERENCES organizations(id),
   store_id        INT     NOT NULL REFERENCES stores(id),
-  table_id        UUID    NOT NULL REFERENCES res_tables(id),
+  table_id        UUID    NOT NULL,  -- FK to res_tables(id) added when reservation migration is applied
   order_id        UUID    REFERENCES pos_orders(id),
   token           TEXT    NOT NULL UNIQUE DEFAULT encode(gen_random_bytes(16), 'hex'),
   expires_at      TIMESTAMPTZ NOT NULL DEFAULT now() + INTERVAL '4 hours',

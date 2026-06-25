@@ -376,11 +376,22 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
       await uploadFiles(data.id, files, 'request')
     }
 
-    // 複製重送：把彈窗內「留下的」舊附件複製到新單（共用 storage_path，不重傳）
+    // 複製重送：把彈窗內「留下的」舊附件複製到新單。
+    // ★ 連 storage 檔也複製一份到新單自己的路徑 → 各自獨立，刪原單不影響新單（反之亦然）。
+    //   不動原單任何紀錄；copy 失敗才退回共用原路徑（至少看得到）。
     if (carriedAtts.length > 0 && data) {
-      await supabase.from('expense_request_attachments').insert(
-        carriedAtts.map(a => ({ ...a, request_id: data.id, uploaded_by: form.employee || '系統' }))
-      )
+      const rows = []
+      for (const a of carriedAtts) {
+        const newPath = `expense-requests/${data.id}/request/${Date.now()}_${safeStorageName(a.file_name)}`
+        const { error: cpErr } = await supabase.storage.from('attachments').copy(a.storage_path, newPath)
+        rows.push({
+          file_name: a.file_name,
+          storage_path: cpErr ? a.storage_path : newPath,
+          file_size: a.file_size, file_type: a.file_type, stage: 'request',
+          request_id: data.id, uploaded_by: form.employee || '系統',
+        })
+      }
+      await supabase.from('expense_request_attachments').insert(rows)
     }
     setCarriedAtts([])
 

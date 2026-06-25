@@ -140,7 +140,9 @@ export default function ExpenseFormModal({
   onSubmit, saving, errors, setErrors,
   currency, currencies = [], onCurrencyChange,
   departments = [],
+  docType = 'expense',  // 'order' = 叫貨/採購 → 一律費用，不顯示「非費用」切換
 }) {
+  const isOrder = docType === 'order'
   if (!open) return null
 
   const csvRef = useRef(null)
@@ -212,7 +214,7 @@ export default function ExpenseFormModal({
       >
         {/* Header */}
         <div className="modal-shell-header">
-          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>{editingId ? '✏️ 編輯重送（駁回後修改）' : '新增申請（事項 / 採購 / 預算）'}</h3>
+          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>{editingId ? '✏️ 編輯重送（駁回後修改）' : (isOrder ? '🛒 新增叫貨申請（採購）' : '新增申請（事項 / 採購 / 預算）')}</h3>
           <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', flexShrink: 0 }} onClick={onClose}><X size={20} /></button>
         </div>
 
@@ -231,24 +233,26 @@ export default function ExpenseFormModal({
             {errors.employee && <div className="field-error-msg">⚠ 請選擇申請人</div>}
           </div>
 
-          {/* Expense / Non-expense toggle */}
-          <div>
-            <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>申請類型</label>
-            <div style={{ display: 'flex', gap: 6 }}>
-              {[{ val: true, label: '費用' }, { val: false, label: '非費用' }].map(opt => (
-                <button key={String(opt.val)} type="button"
-                  onClick={() => { setIsExpense(opt.val); set('account_code', '') }}
-                  style={{
-                    flex: 1, padding: '7px 0', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                    background: isExpense === opt.val ? 'var(--accent-blue)' : 'var(--bg-main)',
-                    color: isExpense === opt.val ? '#fff' : 'var(--text-secondary)',
-                    border: isExpense === opt.val ? 'none' : '1px solid var(--border)',
-                  }}>
-                  {opt.label}
-                </button>
-              ))}
+          {/* Expense / Non-expense toggle — 叫貨/採購一律費用，不顯示切換 */}
+          {!isOrder && (
+            <div>
+              <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>申請類型</label>
+              <div style={{ display: 'flex', gap: 6 }}>
+                {[{ val: true, label: '費用' }, { val: false, label: '非費用' }].map(opt => (
+                  <button key={String(opt.val)} type="button"
+                    onClick={() => { setIsExpense(opt.val); set('account_code', '') }}
+                    style={{
+                      flex: 1, padding: '7px 0', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                      background: isExpense === opt.val ? 'var(--accent-blue)' : 'var(--bg-main)',
+                      color: isExpense === opt.val ? '#fff' : 'var(--text-secondary)',
+                      border: isExpense === opt.val ? 'none' : '1px solid var(--border)',
+                    }}>
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Account code — expense only */}
           {isExpense && (

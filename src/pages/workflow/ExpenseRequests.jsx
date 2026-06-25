@@ -270,7 +270,7 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
         }))
       : [emptyItem()]
     setLineItems(items)
-    setIsExpense(req.is_expense !== false)
+    setIsExpense(docType === 'order' ? true : req.is_expense !== false)
     setFiles([])
     setErrors({})
     setShowModal(true)
@@ -1003,6 +1003,7 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
         currency={form.currency}
         currencies={currencies}
         onCurrencyChange={v => setForm(f => ({ ...f, currency: v }))}
+        docType={docType}
       />
 
       {/* Settlement Modal */}

@@ -761,7 +761,7 @@ export default function ExpenseRequests() {
           <div style={{ display: 'flex', gap: 8 }}>
             {isAdmin && (
               <>
-                <button className="btn btn-secondary" onClick={() => navigate('/process/settings/chains/edit?formType=expense_request&label=非經常性費用申請&mode=amount_grouped')} title="設定非經常性費用申請的金額分組簽核流程">
+                <button className="btn btn-secondary" onClick={() => navigate('/process/settings/chains/edit?formType=expense_request&label=費用申請&mode=amount_grouped')} title="設定非經常性費用申請的金額分組簽核流程（簽核鏈 category 維持「費用申請」）">
                   <Settings size={14} /> 申請簽核
                 </button>
                 <button className="btn btn-secondary" onClick={() => navigate('/process/settings/chains/edit?formType=expense_settle&label=費用核銷&mode=amount_grouped')} title="設定費用核銷的金額分組簽核流程">

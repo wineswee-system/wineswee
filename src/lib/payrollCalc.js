@@ -240,16 +240,22 @@ export async function computeBatchPayroll({ month, orgId, employees, storeFilter
     // - FT（月薪）：≤8h ×1（月薪已含當日工資）；>8h 依 §24 延長（前2h ×1.34、再 ×1.67）
     // - PT (isHourly)：×2 全程
 
+    // 休息日加班時數換算（deem）：≤2→2、2<h<8→8、≥8→實際(上限12)。只用於 FT 休息日。
+    const deemHours = (h) => h <= 2 ? 2 : h < 8 ? 8 : Math.min(h, 12)
+
     // ── 單筆 (per-row) 倍率計算 — 給 detail UI 顯示用 ──
     // 依員工分類給 holiday 的倍率算法（PT ×2 / 行政 ×1 / 門市 1.34/1.67）
     const calcRowPayAndLabel = (hours, cat) => {
       const h = Number(hours) || 0
       if (cat === 'restday') {
-        const rd1 = Math.min(h, 2)
-        const rd2 = Math.min(Math.max(h - 2, 0), 6)
-        const rd3 = Math.max(h - 8, 0)
+        // PT ×2 全程；FT 先 deem 時數再套階梯
+        if (isHourly) return { _pay: Math.ceil(h * hourlyRate * 2), _rate_label: '×2.0' }
+        const dh = deemHours(h)
+        const rd1 = Math.min(dh, 2)
+        const rd2 = Math.min(Math.max(dh - 2, 0), 6)
+        const rd3 = Math.max(dh - 8, 0)
         const pay = Math.ceil(rd1 * hourlyRate * 1.34 + rd2 * hourlyRate * 1.67 + rd3 * hourlyRate * 2.67)
-        const label = h <= 2 ? '×1.34' : h <= 8 ? '×1.34 / ×1.67' : '×1.34 / ×1.67 / ×2.67'
+        const label = dh <= 2 ? '×1.34' : dh <= 8 ? '×1.34 / ×1.67' : '×1.34 / ×1.67 / ×2.67'
         return { _pay: pay, _rate_label: label }
       }
       if (cat === 'weekly_off') {
@@ -259,11 +265,12 @@ export async function computeBatchPayroll({ month, orgId, employees, storeFilter
       }
       if (cat === 'holiday') {
         if (isHourly) return { _pay: Math.ceil(h * hourlyRate * 2), _rate_label: '×2.0' }
-        // FT 國定假日：≤8h ×1（月薪已含當日）；>8h 依 §24 延長（前2h ×1.34、再 ×1.67）
-        const base = Math.min(h, 8) * hourlyRate
+        // FT 國定假日：有上班(>0) → 固定 8h×時薪×1（多給一天）；超過8h §24延長（前2h×1.34、後×1.67）
+        if (h <= 0) return { _pay: 0, _rate_label: '' }
+        const base = 8 * hourlyRate
         const ot1 = Math.min(Math.max(h - 8, 0), 2) * hourlyRate * 1.34
         const ot2 = Math.max(h - 10, 0) * hourlyRate * 1.67
-        return { _pay: Math.ceil(base + ot1 + ot2), _rate_label: h <= 8 ? '×1.0' : '×1.0 / ×1.34 / ×1.67' }
+        return { _pay: Math.ceil(base + ot1 + ot2), _rate_label: h <= 8 ? '固定8h' : '固定8h / ×1.34 / ×1.67' }
       }
       // weekday
       const pay = h <= 2
@@ -306,21 +313,24 @@ export async function computeBatchPayroll({ month, orgId, employees, storeFilter
           ? Math.ceil(h * hourlyRate * 1.34)
           : Math.ceil(2 * hourlyRate * 1.34 + (h - 2) * hourlyRate * 1.67)
       )
-      // 休息日：每日 前 2h × 1.34，3~8h × 1.67，9~12h × 2.67
+      // 休息日：PT ×2 全程；FT 先 deem 時數再每日套階梯 前2×1.34、3~8×1.67、9~12×2.67
       const restday = sumByDay('restday', h => {
-        const rd1 = Math.min(h, 2)
-        const rd2 = Math.min(Math.max(h - 2, 0), 6)
-        const rd3 = Math.max(h - 8, 0)
+        if (isHourly) return Math.ceil(h * hourlyRate * 2)
+        const dh = deemHours(h)
+        const rd1 = Math.min(dh, 2)
+        const rd2 = Math.min(Math.max(dh - 2, 0), 6)
+        const rd3 = Math.max(dh - 8, 0)
         return Math.ceil(rd1 * hourlyRate * 1.34 + rd2 * hourlyRate * 1.67 + rd3 * hourlyRate * 2.67)
       })
       // 例假：PT ×2；regular/admin ×1 現金 + 補休一天（補休由 OT 登錄端另外建）
       const weeklyOff = isHourly
         ? Math.ceil((bucket.weekly_off || 0) * hourlyRate * 2)
         : Math.ceil((bucket.weekly_off || 0) * hourlyRate * 1)
-      // 國定假日 OT：PT ×2 全程；FT ≤8h ×1、>8h 依 §24 延長（前2h ×1.34、再 ×1.67）
+      // 國定假日 OT：PT ×2 全程；FT 有上班固定 8h×1，超過8h §24延長（前2h ×1.34、再 ×1.67）
       const holiday = sumByDay('holiday', h => {
         if (isHourly) return Math.ceil(h * hourlyRate * 2)
-        const base = Math.min(h, 8) * hourlyRate
+        if (h <= 0) return 0
+        const base = 8 * hourlyRate
         const ot1 = Math.min(Math.max(h - 8, 0), 2) * hourlyRate * 1.34
         const ot2 = Math.max(h - 10, 0) * hourlyRate * 1.67
         return Math.ceil(base + ot1 + ot2)

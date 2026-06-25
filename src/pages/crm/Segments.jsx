@@ -203,6 +203,10 @@ export default function Segments() {
   const [previewLoading, setPreviewLoading] = useState(false)
   const [campaignSegment, setCampaignSegment] = useState(null)
 
+  // RFM scoring panel
+  const [rfmCounts,  setRfmCounts]  = useState(null)
+  const [rfmScoring, setRfmScoring] = useState(false)
+
   // AI Natural Language Segment
   const [nlQuery, setNlQuery] = useState('')
   const [nlLoading, setNlLoading] = useState(false)
@@ -228,6 +232,26 @@ export default function Segments() {
     }
   }
 
+  const loadRfmCounts = async () => {
+    const { data } = await supabase
+      .from('members')
+      .select('rfm_segment')
+      .eq('organization_id', orgId)
+      .not('rfm_segment', 'is', null)
+    const counts = {}
+    for (const m of (data ?? [])) {
+      counts[m.rfm_segment] = (counts[m.rfm_segment] ?? 0) + 1
+    }
+    setRfmCounts(counts)
+  }
+
+  const runRfmScoring = async () => {
+    setRfmScoring(true)
+    await supabase.rpc('score_rfm_all', { p_org_id: orgId })
+    await loadRfmCounts()
+    setRfmScoring(false)
+  }
+
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
   const load = async () => {
@@ -239,6 +263,7 @@ export default function Segments() {
   }
 
   useEffect(() => { load() }, [])
+  useEffect(() => { if (orgId) loadRfmCounts() }, [orgId])
 
   const addRule = () => {
     setRules(prev => [...prev, { field: 'total_spent', operator: 'gte', value: '' }])
@@ -339,6 +364,50 @@ export default function Segments() {
             <Plus size={14} /> 新增分群
           </button>
         </div>
+      </div>
+
+      {/* RFM Scoring Panel */}
+      <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)', borderRadius: 12, padding: '16px 20px', marginBottom: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>RFM 客群分佈</div>
+          <button
+            onClick={runRfmScoring}
+            disabled={rfmScoring}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 8, border: 'none', background: rfmScoring ? 'var(--bg-tertiary)' : 'var(--accent-cyan)', color: rfmScoring ? 'var(--text-muted)' : '#fff', fontSize: 13, fontWeight: 600, cursor: rfmScoring ? 'not-allowed' : 'pointer' }}
+          >
+            {rfmScoring ? <Loader size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <Sparkles size={13} />}
+            {rfmScoring ? '計算中…' : '重新計算 RFM'}
+          </button>
+        </div>
+        {rfmCounts === null ? (
+          <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>尚無 RFM 評分資料 — 點擊「重新計算」執行首次評分</div>
+        ) : (
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            {[
+              { key: 'Champions', label: '頂級客戶',   color: 'var(--accent-cyan)',   bg: 'var(--accent-cyan-dim)'   },
+              { key: 'Loyal',     label: '忠誠客戶',   color: 'var(--accent-green)',  bg: 'var(--accent-green-dim)'  },
+              { key: 'New',       label: '新客戶',     color: 'var(--accent-blue)',   bg: 'var(--accent-blue-dim)'   },
+              { key: 'At Risk',   label: '流失風險',   color: 'var(--accent-orange)', bg: 'var(--accent-orange-dim)' },
+              { key: 'Lapsed',    label: '已流失',     color: 'var(--accent-red)',    bg: 'var(--accent-red-dim)'    },
+              { key: 'Other',     label: '其他',       color: 'var(--text-muted)',    bg: 'var(--bg-tertiary)'       },
+            ].map(({ key, label, color, bg }) => (
+              <div
+                key={key}
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: bg, borderRadius: 10, padding: '10px 18px', minWidth: 88 }}
+              >
+                <div style={{ fontSize: 22, fontWeight: 700, color }}>{rfmCounts[key] ?? 0}</div>
+                <div style={{ fontSize: 11, color, fontWeight: 600, marginTop: 2 }}>{label}</div>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>{key}</div>
+              </div>
+            ))}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '10px 18px', minWidth: 88 }}>
+              <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-secondary)' }}>
+                {Object.values(rfmCounts).reduce((a, b) => a + b, 0)}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, marginTop: 2 }}>已評分</div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Preset Segment Buttons */}

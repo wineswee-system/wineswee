@@ -6,7 +6,7 @@ import { usePendingApprovals } from '../../../lib/usePendingApprovals'
 import LoadingSpinner from '../../../components/LoadingSpinner'
 import {
   Users, Wallet, Calendar, ClipboardCheck, CalendarOff,
-  ChevronRight, CheckCircle2, Inbox, FileCheck, FileText,
+  ChevronRight, CheckCircle2, Inbox, FileCheck, FileText, ShoppingCart,
 } from 'lucide-react'
 
 // 已簽核 type → 路由 (對齊 GROUPS 的 route)，給 SignedView row 跳轉用
@@ -57,8 +57,17 @@ const GROUPS = [
   {
     key: 'finance', label: '經費', icon: Wallet, color: 'var(--accent-green)',
     tabs: [
-      { key: 'expense_request', label: '申請', table: 'expense_requests', route: '/hr/expense-requests', pendingStatus: '申請中' },
-      { key: 'expense_settle',  label: '核銷(驗收)', table: 'expense_requests', route: '/hr/expense-requests', pendingStatus: '待核銷' },
+      // docType:'expense' → 同表 expense_requests 但只收費用單（叫貨單 doc_type='order' 切到下面「叫貨」群組）
+      { key: 'expense_request', label: '申請', table: 'expense_requests', route: '/hr/expense-requests', pendingStatus: '申請中', docType: 'expense' },
+      { key: 'expense_settle',  label: '核銷(驗收)', table: 'expense_requests', route: '/hr/expense-requests', pendingStatus: '待核銷', docType: 'expense' },
+    ],
+  },
+  {
+    key: 'order', label: '叫貨', icon: ShoppingCart, color: 'var(--accent-purple)',
+    tabs: [
+      // 同 expense_requests 表，doc_type='order' 才收；route 走叫貨頁
+      { key: 'order_request', label: '申請', table: 'expense_requests', route: '/process/order-requests', pendingStatus: '申請中', docType: 'order' },
+      { key: 'order_settle',  label: '驗收', table: 'expense_requests', route: '/process/order-requests', pendingStatus: '待核銷', docType: 'order' },
     ],
   },
   {
@@ -104,6 +113,8 @@ const PERM_KEY_MAP = {
   expense: 'expenses',
   expense_request: 'expense_requests',
   expense_settle: 'expense_settles',
+  order_request: 'expense_requests',   // 叫貨單同 expense_requests 表，撈同一份 id 後依 doc_type 過濾
+  order_settle:  'expense_settles',
   resignation:   'resignation_requests',
   loa:           'leave_of_absence_requests',
   transfer:      'personnel_transfer_requests',
@@ -155,6 +166,10 @@ function PendingApprovalsView() {
       // 撈回後依當前 sub-tab 的 pendingStatus 再 filter
       if (t.key === 'shift_swap_peer' || t.key === 'shift_swap_manager') {
         rows = rows.filter(r => r.status === t.pendingStatus)
+      }
+      // 費用 / 叫貨同表 expense_requests，撈回同一份 id 後依 doc_type 拆群組
+      if (t.docType) {
+        rows = rows.filter(r => (r.doc_type || 'expense') === t.docType)
       }
       map[t.key] = rows
     })
@@ -367,6 +382,16 @@ function getRowDisplay(row, tabKey) {
       return {
         title: `${row.employee} · 核銷(驗收) ${row.title || ''}`,
         subtitle: `實際 NT$ ${Number(row.actual_amount || row.estimated_amount || 0).toLocaleString()}`,
+      }
+    case 'order_request':
+      return {
+        title: `${row.employee} · 叫貨 ${row.title || ''}`,
+        subtitle: `${row.supplier ? row.supplier + ' · ' : ''}預估 NT$ ${Number(row.estimated_amount || 0).toLocaleString()}`,
+      }
+    case 'order_settle':
+      return {
+        title: `${row.employee} · 驗收 ${row.title || ''}`,
+        subtitle: `實收 NT$ ${Number(row.actual_amount || row.estimated_amount || 0).toLocaleString()}`,
       }
     case 'loa':
       return {

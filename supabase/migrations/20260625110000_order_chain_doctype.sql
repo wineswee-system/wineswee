@@ -2,7 +2,7 @@
 -- 叫貨申請單 簽核鏈:配鏈 trigger 依 doc_type 區分 category
 -- 2026-06-25  Phase B
 --
--- doc_type='order'(叫貨)→ 優先找 category '叫貨申請'/'叫貨-非費用申請'/'叫貨核銷' chain;
+-- doc_type='order'(叫貨)→ 優先找 category '叫貨申請'/'叫貨-非費用申請'/'叫貨驗收' chain;
 --   找不到 → fallback 用 '費用申請'/'非費用申請'/'費用核銷'(所以叫貨「先跟費用一樣」即可用)。
 -- doc_type='expense' → 行為完全不變。
 -- 之後 admin 在簽核鏈設定建一條叫貨 chain,就會自動接手(不用自動複製、不冒險動 schema)。
@@ -81,7 +81,7 @@ BEGIN
 
   IF v_order THEN
     SELECT id INTO v_chain_id FROM public.approval_chains
-     WHERE category = '叫貨核銷' AND COALESCE(is_active, true) = true
+     WHERE category = '叫貨驗收' AND COALESCE(is_active, true) = true
        AND (min_amount IS NULL OR min_amount <= v_amount)
        AND (max_amount IS NULL OR max_amount >= v_amount)
      ORDER BY COALESCE(min_amount, 0) DESC LIMIT 1;

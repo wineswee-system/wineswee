@@ -65,7 +65,7 @@ BEGIN
     WHEN 'goods_transfer_receipt' THEN '調撥-入庫驗收'
     WHEN 'order_request'  THEN '叫貨申請'
     WHEN 'order_apply'    THEN '叫貨-申請'
-    WHEN 'order_settle'   THEN '叫貨-核銷(驗收)'
+    WHEN 'order_settle'   THEN '叫貨-驗收'
   END;
 
   SELECT id INTO v_id FROM task_form_bindings

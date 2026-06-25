@@ -219,6 +219,7 @@ export function exportExpenseRequestPdf(req, opts = {}) {
   if (!req) return
   const fmt = (n) => n != null ? formatCurrency(n, req.currency || 'TWD') : '-'
   const isNonExpense = req.is_expense === false
+  const isOrder = req.doc_type === 'order'   // 叫貨單：標題/備註用「叫貨/驗收」
 
   const rawItems = req.items
   const items = Array.isArray(rawItems)
@@ -280,13 +281,13 @@ export function exportExpenseRequestPdf(req, opts = {}) {
   }
 
   if (!isNonExpense && req.notes) {
-    sections.push({ title: '核銷(驗收)備註', text: req.notes })
+    sections.push({ title: isOrder ? '驗收備註' : '核銷(驗收)備註', text: req.notes })
   }
 
   printSignOff({
     companyName: opts.companyName || '',
     logoUrl: opts.logoUrl || '',
-    docTitle: isNonExpense ? '非費用申請' : '費用申請',
+    docTitle: isOrder ? '叫貨申請單' : (isNonExpense ? '非費用申請' : '費用申請'),
     docNo: req.id,
     applicant: { name: req.employee, dept: req.department },
     date: req.created_at ? String(req.created_at).slice(0, 10).replace(/-/g, '/') : '',

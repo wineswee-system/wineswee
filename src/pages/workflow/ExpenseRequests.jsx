@@ -46,12 +46,18 @@ const emptyForm = {
 const emptyItem = () => ({ name: '', qty: '', unit_price: '', subtotal: 0 })
 
 // docType: 'expense' = 非經常性費用申請(預設) / 'order' = 叫貨申請單(同表同引擎,靠 doc_type 區分)
+// settleVerb：第二階段動詞 — 費用叫「核銷」，叫貨叫「驗收」（DB 狀態欄位不變,只改顯示）
 const DOC_CFG = {
   expense: { label: '非經常性費用申請', icon: '📝', subtitle: '事項 / 採購 / 預算申請：先申請核准，發生費用後再核銷(驗收)入帳',
-             chainFormType: 'expense_request', chainLabel: '費用申請', settleFormType: 'expense_settle', settleLabel: '費用核銷' },
-  order:   { label: '叫貨申請單',       icon: '📦', subtitle: '叫貨申請：先申請核准，到貨後再入庫核銷(驗收)',
-             chainFormType: 'order_request', chainLabel: '叫貨申請', settleFormType: 'order_settle', settleLabel: '叫貨核銷' },
+             chainFormType: 'expense_request', chainLabel: '費用申請', settleFormType: 'expense_settle', settleLabel: '費用核銷', settleVerb: '核銷' },
+  order:   { label: '叫貨申請單',       icon: '🛒', subtitle: '叫貨申請：先申請核准，到貨後再入庫驗收',
+             chainFormType: 'order_request', chainLabel: '叫貨申請', settleFormType: 'order_settle', settleLabel: '叫貨驗收', settleVerb: '驗收' },
 }
+// 把含「核銷」的顯示字串，依 docType 換成「驗收」（叫貨用）。
+// 先收掉雙標「核銷(驗收)」→「驗收」，再把單獨「核銷」→「驗收」，避免「驗收(驗收)」。
+const verb = (s, doc) => doc?.settleVerb === '驗收'
+  ? String(s).replace(/核銷\(驗收\)/g, '驗收').replace(/核銷/g, '驗收')
+  : s
 export default function ExpenseRequests({ docType = 'expense' } = {}) {
   const DOC = DOC_CFG[docType] || DOC_CFG.expense
   const { profile, isAdmin, hasPermission } = useAuth()
@@ -714,10 +720,10 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
         STEP_NOT_FOUND: 'chain step 設定異常',
         PENDING_EXTRA_STEP: '此關有加簽待處理，請等加簽完成後再核准',
       }
-      toast.error(map[data?.error] || data?.error || '核銷(驗收)失敗')
+      toast.error(verb(map[data?.error] || data?.error || '核銷(驗收)失敗', DOC))
       return
     }
-    toast.success(data.fully_settled ? '核銷(驗收)完成' : `推進到下一關（第 ${data.advanced_to_step + 1} 關）`)
+    toast.success(data.fully_settled ? verb('核銷(驗收)完成', DOC) : `推進到下一關（第 ${data.advanced_to_step + 1} 關）`)
     load()
     setShowDetail(null)
     returnNav()  // 從「我的待簽」點來的，簽完自動回待簽
@@ -774,7 +780,7 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
                   <Settings size={14} /> 申請簽核
                 </button>
                 <button className="btn btn-secondary" onClick={() => navigate(`/process/settings/chains/edit?formType=${DOC.settleFormType}&label=${DOC.settleLabel}&mode=amount_grouped`)} title={`設定${DOC.settleLabel}的金額分組簽核流程`}>
-                  <Settings size={14} /> 核銷簽核(驗收)
+                  <Settings size={14} /> {verb('核銷簽核(驗收)', DOC)}
                 </button>
                 {docType === 'expense' && (
                   <button className="btn btn-secondary" onClick={() => navigate('/process/settings/chains/edit?formType=non_expense_request&label=非費用申請')} title="設定非費用申請的簽核流程">
@@ -809,7 +815,7 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
         {['申請中', '已核准', '未送核銷', '待核銷', '已核銷', '已駁回', '核銷已退回'].map(s => (
           <div key={s} className="card" style={{ padding: '12px 16px', cursor: 'pointer', border: tab === s ? `2px solid ${STATUS_COLORS[s].color}` : undefined }}
             onClick={() => setTab(tab === s ? 'all' : s)}>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{displayStatus(s)}</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{verb(displayStatus(s), DOC)}</div>
             <div style={{ fontSize: 20, fontWeight: 700, color: STATUS_COLORS[s].color }}>{counts[s] || 0}</div>
           </div>
         ))}
@@ -880,7 +886,7 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
                       </span>
                     )}
                   </td>
-                  <td><span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 12, fontWeight: 600, background: sc.bg, color: sc.color }}>{displayStatus(r.status)}</span></td>
+                  <td><span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 12, fontWeight: 600, background: sc.bg, color: sc.color }}>{verb(displayStatus(r.status), DOC)}</span></td>
                   <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{r.created_at?.slice(0, 10)}</td>
                   <td onClick={(e) => e.stopPropagation()}>
                     <div style={{ display: 'flex', gap: 4 }}>
@@ -903,15 +909,15 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
                       })()}
                       {r.is_expense !== false && (r.status === '已核准' || r.status === '核銷已退回') && (r.settle_assignee_id === profile?.id || (!r.settle_assignee_id && r.employee_id === profile?.id)) && (
                         <button className="btn btn-primary" style={{ padding: '4px 8px', fontSize: 11 }} onClick={() => openSettle(r)}>
-                          <Send size={12} /> 核銷(驗收)
+                          <Send size={12} /> {verb('核銷(驗收)', DOC)}
                         </button>
                       )}
                       {r.status === '待核銷' && canApprove('expense_settles', r.id) && (
-                        <span style={{ fontSize: 11, color: 'var(--accent-cyan)', fontWeight: 600 }}>點明細核銷(驗收)</span>
+                        <span style={{ fontSize: 11, color: 'var(--accent-cyan)', fontWeight: 600 }}>{verb('點明細核銷(驗收)', DOC)}</span>
                       )}
                       {r.status === '核銷已退回' && r.employee === profile?.name && (
                         <button className="btn btn-primary" style={{ padding: '4px 8px', fontSize: 11, background: 'var(--accent-orange)' }} onClick={() => openSettle(r)}>
-                          ✏️ 重新核銷(驗收)
+                          ✏️ {verb('重新核銷(驗收)', DOC)}
                         </button>
                       )}
                       {['申請中','待審','已駁回','已退回'].includes(r.status) && r.employee === profile?.name && (
@@ -977,6 +983,7 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
         saving={saving}
         errors={errors}
         setErrors={setErrors}
+        settleVerb={DOC.settleVerb}
       />
 
       {/* Detail Modal — split layout 與其他簽核表單一致 */}
@@ -1170,8 +1177,8 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
                     if (!data?.ok) { toast.error('退回失敗：' + (data?.error || 'unknown')); return }
                   },
                   onChanged: refreshDetail,
-                  approveLabel: '核准核銷(驗收)',
-                  rejectLabel: '核銷(驗收)退回',
+                  approveLabel: verb('核准核銷(驗收)', DOC),
+                  rejectLabel: verb('核銷(驗收)退回', DOC),
                 }
               }
               return null

@@ -218,9 +218,9 @@ export default function ExpenseRequests() {
     return results
   }
 
-  // 進入「編輯重送」模式（駁回後申請人想改內容再送出）
-  const openEditResubmit = (req) => {
-    setEditingId(req.id)
+  // 進入「編輯重送」模式（駁回後申請人想改內容再送出）；asClone=true → 以舊單為範本開全新單(不動原單)
+  const openEditResubmit = (req, asClone = false) => {
+    setEditingId(asClone ? null : req.id)
     setForm({
       employee: req.employee || '',
       account_code: req.account_code || '',
@@ -242,8 +242,9 @@ export default function ExpenseRequests() {
         }))
       : [emptyItem()]
     setLineItems(items)
-    setIsExpense(true)
+    setIsExpense(req.is_expense !== false)
     setFiles([])
+    setErrors({})
     setShowModal(true)
   }
 
@@ -905,6 +906,11 @@ export default function ExpenseRequests() {
                       {['申請中','待審','已駁回','已退回'].includes(r.status) && r.employee === profile?.name && (
                         <button className="btn btn-primary" style={{ padding: '4px 8px', fontSize: 11, background: 'var(--accent-orange)' }} onClick={() => openEditResubmit(r)}>
                           ✏️ {(r.status === '已駁回' || r.status === '已退回') ? '編輯重送' : '編輯'}
+                        </button>
+                      )}
+                      {r.employee === profile?.name && (
+                        <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: 11, color: 'var(--accent-cyan)' }} onClick={() => openEditResubmit(r, true)} title="以這張為範本，開一張全新申請（不動原單）">
+                          📋 複製重送
                         </button>
                       )}
                       {canDeleteAll && (

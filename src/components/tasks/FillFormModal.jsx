@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { ModalOverlay } from '../Modal'
 import CustomFormFill from '../../pages/workflow/CustomFormFill'
 import ExpenseRequestCreate from '../../pages/workflow/components/ExpenseRequestCreate'
+import ExpenseSimpleCreate from '../../pages/workflow/components/ExpenseSimpleCreate'
 import { bindingFillPath } from './bindingFillUrl'
 
 /**
@@ -22,7 +23,8 @@ const NATIVE_EXPENSE = new Set(['expense_request', 'expense_apply'])
 export default function FillFormModal({ binding, bindings = [], onClose, onDone }) {
   const isCustom = binding?.form_type === 'form_submission'
   const isNativeExpense = !!binding && NATIVE_EXPENSE.has(binding.form_type) && !binding.form_id
-  const isHeavyOpenPage = !!binding && !isCustom && !isNativeExpense
+  const isSimpleExpense = !!binding && binding.form_type === 'expense' && !binding.form_id  // 經常性費用報銷 → 內嵌填
+  const isHeavyOpenPage = !!binding && !isCustom && !isNativeExpense && !isSimpleExpense
 
   // 重型(經常性費用/調撥/稽核/驗收段)→ 開頁;副作用必須在 effect 內(不可在 render 階段)
   useEffect(() => {
@@ -55,9 +57,14 @@ export default function FillFormModal({ binding, bindings = [], onClose, onDone 
     )
   }
 
-  // ── 費用申請：原生內嵌（ExpenseRequestCreate 自帶 ModalOverlay）──
+  // ── 非經常性費用申請：原生內嵌（ExpenseRequestCreate 自帶 ModalOverlay）──
   if (isNativeExpense) {
     return <ExpenseRequestCreate bindingId={binding.id} onClose={close} onDone={done} />
+  }
+
+  // ── 經常性費用報銷：原生內嵌（ExpenseSimpleCreate 自帶 Modal）──
+  if (isSimpleExpense) {
+    return <ExpenseSimpleCreate bindingId={binding.id} onClose={close} onDone={done} />
   }
 
   // ── 其他重型：由上面的 useEffect 開頁,這裡不渲染 ──

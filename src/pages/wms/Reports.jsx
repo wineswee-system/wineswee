@@ -13,6 +13,12 @@ export default function WMSReports() {
   const [error, setError] = useState(null)
   const [deadStockDays, setDeadStockDays] = useState(90)
   const [activeTab, setActiveTab] = useState('alerts')
+  const [posConsumption, setPosConsumption] = useState([])
+  const [posLoading,     setPosLoading]     = useState(false)
+  const [posDateFrom,    setPosDateFrom]    = useState(() => {
+    const d = new Date(); d.setDate(d.getDate() - 7); return d.toISOString().slice(0, 10)
+  })
+  const [posDateTo, setPosDateTo] = useState(() => new Date().toISOString().slice(0, 10))
 
   useEffect(() => {
     Promise.all([
@@ -84,6 +90,30 @@ export default function WMSReports() {
     setTurnoverData(results)
   }
 
+  async function loadPosConsumption() {
+    setPosLoading(true)
+    const { data } = await supabase
+      .from('pos_order_items')
+      .select('name, item_type, unit_price, quantity, pos_orders(status)')
+      .gte('created_at', `${posDateFrom}T00:00:00`)
+      .lte('created_at', `${posDateTo}T23:59:59`)
+
+    const groups = {}
+    for (const item of data ?? []) {
+      if (item.pos_orders?.status === 'voided') continue
+      const key = `${item.item_type}::${item.name}`
+      if (!groups[key]) groups[key] = { name: item.name, item_type: item.item_type, qty: 0, total: 0 }
+      groups[key].qty   += item.quantity
+      groups[key].total += Number(item.unit_price) * item.quantity
+    }
+    setPosConsumption(Object.values(groups).sort((a, b) => b.total - a.total))
+    setPosLoading(false)
+  }
+
+  useEffect(() => {
+    if (activeTab === 'pos_consumption') loadPosConsumption()
+  }, [activeTab, posDateFrom, posDateTo])
+
   const computeDeadStock = (transactions, skusData) => {
     const now = new Date()
     // 找每個 SKU 最後異動日
@@ -142,6 +172,7 @@ export default function WMSReports() {
           { key: 'alerts', label: '異常預警' },
           { key: 'turnover', label: '庫存周轉率' },
           { key: 'deadstock', label: '呆滯庫存分析' },
+          { key: 'pos_consumption', label: 'POS 消耗' },
         ].map(tab => (
           <button key={tab.key} className={`btn ${activeTab === tab.key ? 'btn-primary' : 'btn-secondary'}`}
             style={{ fontSize: 13 }} onClick={() => setActiveTab(tab.key)}>
@@ -356,6 +387,65 @@ export default function WMSReports() {
           )}
         </div>
       )}
+      {/* ═══ POS 消耗 Tab ═══ */}
+      {activeTab === 'pos_consumption' && (
+        <div className="card">
+          <div className="card-header">
+            <div className="card-title"><span className="card-title-icon">🛒</span> POS 銷售消耗</div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input type="date" value={posDateFrom} onChange={e => setPosDateFrom(e.target.value)}
+                style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid var(--border-primary)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: 12 }} />
+              <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>~</span>
+              <input type="date" value={posDateTo} onChange={e => setPosDateTo(e.target.value)}
+                style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid var(--border-primary)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: 12 }} />
+            </div>
+          </div>
+          {posLoading ? (
+            <div className="card-body" style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 32 }}>載入中…</div>
+          ) : posConsumption.length === 0 ? (
+            <div className="card-body" style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 32 }}>此期間無 POS 銷售記錄</div>
+          ) : (
+            <>
+              <div className="data-table-wrapper">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>品名</th>
+                      <th>類型</th>
+                      <th style={{ textAlign: 'right' }}>數量</th>
+                      <th style={{ textAlign: 'right' }}>小計</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {posConsumption.map((item, i) => (
+                      <tr key={i}>
+                        <td style={{ fontWeight: 500 }}>{item.name}</td>
+                        <td>
+                          <span style={{ fontSize: 12 }}>
+                            {item.item_type === 'menu' ? '🍜 菜單' : item.item_type === 'product' ? '🛒 商品' : '自訂'}
+                          </span>
+                        </td>
+                        <td style={{ textAlign: 'right' }}>{item.qty}</td>
+                        <td style={{ textAlign: 'right', fontWeight: 600 }}>${Math.round(item.total).toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr style={{ fontWeight: 700 }}>
+                      <td colSpan={2} style={{ color: 'var(--text-secondary)', fontSize: 13 }}>合計</td>
+                      <td style={{ textAlign: 'right' }}>{posConsumption.reduce((s, i) => s + i.qty, 0)}</td>
+                      <td style={{ textAlign: 'right', color: 'var(--accent-cyan)' }}>
+                        ${Math.round(posConsumption.reduce((s, i) => s + i.total, 0)).toLocaleString()}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
     </div>
   )
 }

@@ -240,8 +240,8 @@ export async function computeBatchPayroll({ month, orgId, employees, storeFilter
     // - FT（月薪）：≤8h ×1（月薪已含當日工資）；>8h 依 §24 延長（前2h ×1.34、再 ×1.67）
     // - PT (isHourly)：×2 全程
 
-    // 休息日加班時數換算（deem）：≤2→2、2<h<8→8、≥8→實際(上限12)。只用於 FT 休息日。
-    const deemHours = (h) => h <= 2 ? 2 : h < 8 ? 8 : Math.min(h, 12)
+    // 休息日加班時數換算（deem）：≤4→4、4<h<8→8、≥8→實際(上限12,9~12h走×2.67)。只用於 FT 休息日。
+    const deemHours = (h) => h <= 4 ? 4 : h < 8 ? 8 : Math.min(h, 12)
 
     // ── 單筆 (per-row) 倍率計算 — 給 detail UI 顯示用 ──
     // 依員工分類給 holiday 的倍率算法（PT ×2 / 行政 ×1 / 門市 1.34/1.67）

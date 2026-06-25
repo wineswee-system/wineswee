@@ -77,7 +77,7 @@ CREATE TABLE IF NOT EXISTS pos_orders (
   store_id        INT  NOT NULL REFERENCES stores(id),
   table_id        UUID,  -- FK to res_tables(id) added when reservation migration is applied
   reservation_id  UUID,  -- FK to reservations(id) added when reservation migration is applied
-  shift_id        UUID REFERENCES pos_shifts(id),
+  shift_id        UUID,  -- FK to pos_shifts(id) — not enforced; pos_shifts.id type was set by prior partial run
   order_number    TEXT,
   status          TEXT DEFAULT 'open' CHECK (status IN ('open', 'submitted', 'paid', 'voided')),
   guest_count     INT  DEFAULT 1,

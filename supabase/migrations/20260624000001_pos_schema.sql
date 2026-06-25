@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS pos_menu_items (
 CREATE TABLE IF NOT EXISTS pos_menu_item_skus (
   id           UUID    PRIMARY KEY DEFAULT gen_random_uuid(),
   menu_item_id UUID    NOT NULL REFERENCES pos_menu_items(id) ON DELETE CASCADE,
-  sku_id       BIGINT  NOT NULL REFERENCES skus(id),
+  sku_id       BIGINT  NOT NULL,  -- references skus(id); FK omitted — skus.id type varies by env
   quantity     NUMERIC(10,4) NOT NULL DEFAULT 1,
   unit         TEXT
 );
@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS pos_products (
   id              UUID    PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id INT     NOT NULL REFERENCES organizations(id),
   store_id        INT     NOT NULL REFERENCES stores(id),
-  sku_id          BIGINT  REFERENCES skus(id),
+  sku_id          BIGINT,  -- references skus(id); FK omitted — skus.id type varies by env
   name            TEXT    NOT NULL,
   barcode         TEXT,
   retail_price    NUMERIC(10,2) NOT NULL DEFAULT 0,
@@ -63,7 +63,7 @@ CREATE TABLE IF NOT EXISTS pos_shifts (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id INT NOT NULL REFERENCES organizations(id),
   store_id        INT  NOT NULL REFERENCES stores(id),
-  employee_id     UUID REFERENCES employees(id),
+  employee_id     UUID,  -- references employees(id); FK omitted — employees.id is INT not UUID
   opened_at       TIMESTAMPTZ DEFAULT now(),
   closed_at       TIMESTAMPTZ,
   order_counter   INT  DEFAULT 0,
@@ -82,7 +82,7 @@ CREATE TABLE IF NOT EXISTS pos_orders (
   status          TEXT DEFAULT 'open' CHECK (status IN ('open', 'submitted', 'paid', 'voided')),
   guest_count     INT  DEFAULT 1,
   note            TEXT,
-  opened_by       UUID REFERENCES employees(id),
+  opened_by       UUID,  -- references employees(id); FK omitted — employees.id is INT not UUID
   opened_at       TIMESTAMPTZ DEFAULT now(),
   submitted_at    TIMESTAMPTZ,
   paid_at         TIMESTAMPTZ
@@ -120,7 +120,7 @@ CREATE TABLE IF NOT EXISTS pos_payments (
   invoice_number  TEXT,
   invoice_status  TEXT    DEFAULT 'pending' CHECK (invoice_status IN ('pending','issued','voided')),
   paid_at         TIMESTAMPTZ DEFAULT now(),
-  employee_id     UUID    REFERENCES employees(id)
+  employee_id     UUID    -- references employees(id); FK omitted — employees.id is INT not UUID
 );
 
 -- QR self-ordering sessions — token links guest phone to a table's open order

@@ -43,7 +43,7 @@ function fieldVisible(field, data) {
 
 // 員工填寫單一自訂表單。Reads template from form_templates, renders fields,
 // submits to form_submissions.
-export default function CustomFormFill({ templateId: propTemplateId, embedded: propEmbedded, bindingId: propBindingId, onCapture, onClose }) {
+export default function CustomFormFill({ templateId: propTemplateId, embedded: propEmbedded, bindingId: propBindingId, initialData, onCapture, onClose }) {
   const params = useParams()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -121,11 +121,12 @@ export default function CustomFormFill({ templateId: propTemplateId, embedded: p
             const raw = f.default ?? (f.type === 'checkbox' ? false : '')
             initial[f.key] = resolveDefaultToken(raw, profile)
           }
-          setData(initial)
+          // 複製重送：用來源單的值預填（沒傳 initialData 就照原本走預設）
+          setData(initialData ? { ...initial, ...initialData } : initial)
         }
       })
       .finally(() => setLoading(false))
-  }, [templateId, profile])
+  }, [templateId, profile])  // eslint-disable-line react-hooks/exhaustive-deps
 
   const setField = (key, val) => setData(d => ({ ...d, [key]: val }))
 

@@ -52,6 +52,8 @@ export default function FormSubmissions() {
   const [rejecting, setRejecting] = useState(false)   // 上傳+RPC busy state
   const [showCompanyModal, setShowCompanyModal] = useState(false)
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [cloneData, setCloneData] = useState(null)        // 複製重送：來源單的 data 預填
+  const [cloneTemplateId, setCloneTemplateId] = useState(null)  // 複製來源的 template（all 視圖也能複製）
   const [showChainModal, setShowChainModal] = useState(false)
   const [companyName, setCompanyName] = useState(loadCompanyName)
   const [logoUrl, setLogoUrl] = useState('')
@@ -553,6 +555,12 @@ export default function FormSubmissions() {
                         <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px', color: 'var(--accent-purple)' }} onClick={() => handlePrint(s)} title="列印簽呈 PDF">
                           <Printer size={11} /> 列印
                         </button>
+                        {s.applicant_id === profile?.id && (
+                          <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px', color: 'var(--accent-cyan)' }} title="以這張為範本開一張全新申請（不動原單）"
+                            onClick={() => { setCloneData(s.data || {}); setCloneTemplateId(s.template_id); setShowCreateModal(true) }}>
+                            📋 複製
+                          </button>
+                        )}
                         {canApprove && (
                           <>
                             <AsyncButton className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px', color: 'var(--accent-green)' }} onClick={() => handleApprove(s)} busyLabel="處理中…">
@@ -708,8 +716,8 @@ export default function FormSubmissions() {
       )}
 
       {/* + 新增申請 Modal (內嵌 CustomFormFill 元件) */}
-      {showCreateModal && templateFilter && (
-        <ModalOverlay onClose={() => setShowCreateModal(false)}>
+      {showCreateModal && (templateFilter || cloneTemplateId) && (
+        <ModalOverlay onClose={() => { setShowCreateModal(false); setCloneData(null); setCloneTemplateId(null) }}>
           <div onClick={(e) => e.stopPropagation()} style={{
             background: 'var(--bg-card)', borderRadius: 12,
             width: 'min(720px, 96vw)', maxHeight: '88vh', overflow: 'auto',
@@ -720,15 +728,16 @@ export default function FormSubmissions() {
               <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>
                 + 新增{templateName || '申請'}
               </h3>
-              <button onClick={() => setShowCreateModal(false)}
+              <button onClick={() => { setShowCreateModal(false); setCloneData(null); setCloneTemplateId(null) }}
                 style={{ background: 'transparent', border: 'none', cursor: 'pointer',
                          color: 'var(--text-muted)', fontSize: 22, padding: 4 }}>×</button>
             </div>
             <div style={{ padding: 20 }}>
               <CustomFormFill
-                templateId={templateFilter}
+                templateId={cloneTemplateId || templateFilter}
+                initialData={cloneData}
                 embedded
-                onClose={() => { setShowCreateModal(false); load() }}
+                onClose={() => { setShowCreateModal(false); setCloneData(null); setCloneTemplateId(null); load() }}
               />
             </div>
           </div>

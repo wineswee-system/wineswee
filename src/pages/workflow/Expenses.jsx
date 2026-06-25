@@ -178,9 +178,17 @@ export default function Expenses() {
     // ── 新增路徑 ──
     // 從 URL 取 binding_id（任務頁帶過來的）
     const bindingId = searchParams.get('binding_id')
-    const fullPayload = { ...payload, status: '待審核' }
+    // ★ 修：補 organization_id + employee_id。沒帶 org → auto-apply 簽核鏈直接 bail（org IS NULL 就 return）
+    //   → approval_chain_id 留 null → guard「尚未設定費用報銷簽核鏈」擋掉 insert（原本錯誤又被吞掉 → 沒紀錄）
+    const fullPayload = {
+      ...payload,
+      status: '待審核',
+      organization_id: profile?.organization_id ?? null,
+      employee_id: employees.find(e2 => e2.name === form.employee)?.id ?? null,
+    }
     if (bindingId) fullPayload.linked_binding_id = Number(bindingId)
-    const { data } = await createExpense(fullPayload)
+    const { data, error: insErr } = await createExpense(fullPayload)
+    if (insErr) { toast.error('送出失敗：' + insErr.message); return }
     if (data) {
       setExpenses(prev => [...prev, data])
       // 附件上傳（與 LIFF 同 bucket）

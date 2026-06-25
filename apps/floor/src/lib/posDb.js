@@ -145,7 +145,8 @@ export async function voidOrder(orderId) {
     .eq('id', orderId)
 }
 
-// Creates a pos_payments row, marks order paid, invalidates QR session, completes linked reservation
+// Creates a pos_payments row, marks order paid, invalidates QR session, completes linked reservation,
+// then fires complete-order edge function in the background (invoice issuance + inventory deduction).
 export async function completePayment({ orderId, storeId, orgId, employeeId, amount, method, carrierType = null, carrierId = null, splitIndex = 1, splitTotal = 1 }) {
   const { data: payment, error: payErr } = await supabase
     .from('pos_payments')
@@ -190,6 +191,12 @@ export async function completePayment({ orderId, storeId, orgId, employeeId, amo
       .update({ status: 'completed' })
       .eq('id', order.reservation_id)
   }
+
+  // Fire-and-forget: invoice issuance + inventory deduction run server-side.
+  // Receipt prints immediately; if the edge function fails, invoice_status stays
+  // 'pending' and can be retried from the InvoiceList page.
+  supabase.functions.invoke('complete-order', { body: { paymentId: payment.id } })
+    .catch(() => {})
 
   return { data: payment }
 }

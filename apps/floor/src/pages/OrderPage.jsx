@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { QRCodeSVG } from 'qrcode.react'
 import { useStore } from '../contexts/StoreContext'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
@@ -37,9 +38,10 @@ export default function OrderPage() {
   const [mergeList,     setMergeList]     = useState([])
   const [qrSession,     setQrSession]     = useState(null)
   const [confirmCancel, setConfirmCancel] = useState(null)
+  const [qrApproveMode, setQrApproveMode] = useState('manual') // 'manual' | 'auto'
 
   const stateRef = useRef({})
-  stateRef.current = { order, orderItems, storeId, table }
+  stateRef.current = { order, orderItems, storeId, table, qrApproveMode }
 
   useEffect(() => {
     if (!storeId || !orgId || !tableId) return
@@ -57,6 +59,15 @@ export default function OrderPage() {
         const { data: items } = await getOrderItems(ord.id)
         setOrderItems(items ?? [])
       }
+
+      // Load QR approval mode for auto-confirm behaviour
+      const { data: settings } = await supabase
+        .from('pos_store_settings')
+        .select('qr_approval_mode')
+        .eq('store_id', storeId)
+        .maybeSingle()
+      if (settings?.qr_approval_mode) setQrApproveMode(settings.qr_approval_mode)
+
       setLoading(false)
     }
     init()
@@ -73,13 +84,32 @@ export default function OrderPage() {
   }, [tab, storeId])
 
   // Realtime: guest self-order additions
+  // When qr_approval_mode = 'auto', new guest items are sent to kitchen immediately.
+  // When 'manual' (default), staff sees the 🔔 banner and taps ✓ to confirm.
   useEffect(() => {
     if (!order?.id) return
     const orderId = order.id
     const ch = supabase
       .channel(`pos-order-${orderId}`)
       .on('postgres_changes', {
-        event: '*', schema: 'public', table: 'pos_order_items',
+        event: 'INSERT', schema: 'public', table: 'pos_order_items',
+        filter: `order_id=eq.${orderId}`,
+      }, async (payload) => {
+        const { data: fresh } = await getOrderItems(orderId)
+        setOrderItems(fresh ?? [])
+
+        // Auto-confirm: if the new item is from guest and mode is auto, send to kitchen
+        const { qrApproveMode: mode, order: ord, table: tbl } = stateRef.current
+        if (mode === 'auto' && payload.new?.source === 'guest' && !payload.new?.sent_to_kitchen) {
+          await submitToKitchen(orderId)
+          const guestItems = (fresh ?? []).filter(i => i.source === 'guest' && !i.sent_to_kitchen)
+          if (guestItems.length > 0) await printKitchenTicket(ord, tbl, guestItems, '客人點餐')
+          const { data: confirmed } = await getOrderItems(orderId)
+          setOrderItems(confirmed ?? [])
+        }
+      })
+      .on('postgres_changes', {
+        event: 'UPDATE', schema: 'public', table: 'pos_order_items',
         filter: `order_id=eq.${orderId}`,
       }, async () => {
         const { data } = await getOrderItems(orderId)
@@ -499,8 +529,15 @@ export default function OrderPage() {
         <Overlay onClose={() => setQrSession(null)}>
           <div style={{ background: '#fff', borderRadius: 14, padding: 24, width: 320, display: 'flex', flexDirection: 'column', gap: 14, alignItems: 'center' }}>
             <div style={{ fontSize: 16, fontWeight: 700, color: '#111827' }}>📱 QR 自助點餐</div>
-            <div style={{ fontSize: 12, color: '#0891b2', wordBreak: 'break-all', textAlign: 'center', fontFamily: 'monospace' }}>{qrSession.url}</div>
-            <div style={{ fontSize: 13, color: '#6b7280', textAlign: 'center' }}>讓顧客掃描此 URL，或複製到 QR 產生器列印</div>
+            <div style={{ padding: 12, background: '#fff', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+              <QRCodeSVG value={qrSession.url} size={200} level="M" />
+            </div>
+            <div style={{ fontSize: 13, color: '#6b7280', textAlign: 'center' }}>讓顧客用手機掃描以自助點餐</div>
+            <button
+              onClick={() => { navigator.clipboard?.writeText(qrSession.url) }}
+              style={{ background: '#f1f5f9', color: '#374151', border: 'none', borderRadius: 8, padding: '8px 0', fontSize: 13, cursor: 'pointer', width: '100%' }}>
+              複製連結
+            </button>
             <button onClick={() => setQrSession(null)}
               style={{ background: '#e2e8f0', color: '#374151', border: 'none', borderRadius: 9, padding: '10px 0', fontSize: 14, cursor: 'pointer', width: '100%' }}>
               關閉

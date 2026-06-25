@@ -15,7 +15,8 @@ import { logError } from './lib/systemLogger.js'
 
 // ── Standalone pages (not part of any module) ──
 const DemoLanding = lazy(() => import('./pages/DemoLanding'))
-const Dashboard = lazy(() => import('./pages/Dashboard'))
+const Dashboard   = lazy(() => import('./pages/Dashboard'))
+const GuestMenu   = lazy(() => import('./pages/pos/GuestMenu'))
 // 舊的 Liff* 頁面（2026-04-23 移除）已搬到獨立 repo aska911023/sme-ops-liff
 const PortalLayout = lazy(() => import('./pages/portal/PortalLayout'))
 const PortalHome = lazy(() => import('./pages/portal/PortalHome'))
@@ -223,6 +224,8 @@ export default function App() {
         <Routes>
           <Route path="/demo" element={<PortalGuard><DemoLanding /></PortalGuard>} />
           <Route path="/login" element={<Suspense fallback={<LoadingSpinner />}><Login /></Suspense>} />
+          {/* Guest QR self-order menu — public, no auth required */}
+          <Route path="/menu/:storeId/:tableId" element={<Suspense fallback={<LoadingSpinner />}><GuestMenu /></Suspense>} />
           {/* /liff/* routes 已移除 — 由獨立 LIFF app (sme-ops-liff.vercel.app) 處理 */}
           <Route path="/portal" element={<PortalGuard><PortalLayout /></PortalGuard>}>
             <Route index element={<PortalHome />} />

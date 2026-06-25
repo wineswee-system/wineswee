@@ -49,7 +49,7 @@ export async function getPosProductByBarcode(storeId, barcode) {
 export async function getOrCreateOrder(storeId, orgId, tableId, employeeId) {
   const { data: existing } = await supabase
     .from('pos_orders')
-    .select('id, status, order_number, guest_count, note, opened_at')
+    .select('id, status, order_number, guest_count, note, shift_id, opened_at')
     .eq('store_id', storeId)
     .eq('table_id', tableId)
     .in('status', ['open', 'submitted'])
@@ -57,16 +57,42 @@ export async function getOrCreateOrder(storeId, orgId, tableId, employeeId) {
 
   if (existing) return { data: existing, error: null }
 
+  // Find or create the open shift for this store
+  let { data: shift } = await supabase
+    .from('pos_shifts')
+    .select('id, order_counter')
+    .eq('store_id', storeId)
+    .eq('status', 'open')
+    .maybeSingle()
+
+  if (!shift) {
+    const { data: newShift } = await supabase
+      .from('pos_shifts')
+      .insert({ organization_id: orgId, store_id: storeId, employee_id: employeeId, status: 'open' })
+      .select('id, order_counter')
+      .single()
+    shift = newShift
+  }
+
+  // Atomic increment via DB function → returns '001', '042', etc.
+  let orderNumber = null
+  if (shift?.id) {
+    const { data: num } = await supabase.rpc('next_order_number', { p_shift_id: shift.id })
+    orderNumber = num
+  }
+
   return supabase
     .from('pos_orders')
     .insert({
       organization_id: orgId,
       store_id: storeId,
       table_id: tableId,
+      shift_id: shift?.id ?? null,
+      order_number: orderNumber,
       opened_by: employeeId,
       status: 'open',
     })
-    .select('id, status, order_number, guest_count, note, opened_at')
+    .select('id, status, order_number, guest_count, note, shift_id, opened_at')
     .single()
 }
 

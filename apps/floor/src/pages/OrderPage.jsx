@@ -33,12 +33,14 @@ export default function OrderPage() {
   const [submitting, setSubmitting]     = useState(false)
   const [scanFeedback, setScanFeedback] = useState('')
 
-  const [showPayment,   setShowPayment]   = useState(false)
-  const [showMerge,     setShowMerge]     = useState(false)
-  const [mergeList,     setMergeList]     = useState([])
-  const [qrSession,     setQrSession]     = useState(null)
-  const [confirmCancel, setConfirmCancel] = useState(null)
-  const [qrApproveMode, setQrApproveMode] = useState('manual') // 'manual' | 'auto'
+  const [showPayment,     setShowPayment]     = useState(false)
+  const [showMerge,       setShowMerge]       = useState(false)
+  const [mergeList,       setMergeList]       = useState([])
+  const [qrSession,       setQrSession]       = useState(null)
+  const [confirmCancel,   setConfirmCancel]   = useState(null)
+  const [qrApproveMode,   setQrApproveMode]   = useState('manual')
+  const [customItem,      setCustomItem]      = useState(null)  // null | { barcode: string }
+  const [customForm,      setCustomForm]      = useState({ name: '', price: '', taxRate: '0.05' })
 
   const stateRef = useRef({})
   stateRef.current = { order, orderItems, storeId, table, qrApproveMode }
@@ -143,13 +145,29 @@ export default function OrderPage() {
     if (!ord?.id) return
     const { data: product } = await getPosProductByBarcode(sid, barcode)
     if (!product) {
-      setScanFeedback(`找不到條碼：${barcode}`)
-      setTimeout(() => setScanFeedback(''), 2500)
+      // Unknown barcode → open custom item modal pre-filled with the scanned code
+      setCustomForm({ name: '', price: '', taxRate: '0.05' })
+      setCustomItem({ barcode })
       return
     }
     await addOrIncrement(ord.id, 'product', product)
     setScanFeedback(`已加入：${product.name}`)
     setTimeout(() => setScanFeedback(''), 1500)
+  }
+
+  async function handleAddCustomItem() {
+    const { order: ord } = stateRef.current
+    if (!ord?.id || !customForm.name.trim() || !customForm.price) return
+    const price = parseFloat(customForm.price)
+    if (isNaN(price) || price < 0) return
+    await addOrderItem(ord.id, {
+      itemType: 'custom',
+      name: customForm.name.trim(),
+      unitPrice: price,
+      taxRate: parseFloat(customForm.taxRate ?? 0.05),
+    })
+    setCustomItem(null)
+    refreshItems()
   }
 
   async function addOrIncrement(orderId, type, item) {
@@ -375,6 +393,19 @@ export default function OrderPage() {
                 {tab === 'menu' ? '此分類暫無菜單' : '尚未設定商品，請在管理後台新增'}
               </div>
             )}
+
+            {tab === 'product' && (
+              <button
+                onClick={() => { setCustomForm({ name: '', price: '', taxRate: '0.05' }); setCustomItem({ barcode: '' }) }}
+                style={{
+                  background: '#fff', border: '2px dashed #d1d5db',
+                  borderRadius: 10, padding: 12, cursor: 'pointer', textAlign: 'center',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, color: '#6b7280',
+                }}>
+                <span style={{ fontSize: 22 }}>＋</span>
+                <span style={{ fontSize: 13, fontWeight: 600 }}>自訂品項</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -541,6 +572,77 @@ export default function OrderPage() {
             <button onClick={() => setQrSession(null)}
               style={{ background: '#e2e8f0', color: '#374151', border: 'none', borderRadius: 9, padding: '10px 0', fontSize: 14, cursor: 'pointer', width: '100%' }}>
               關閉
+            </button>
+          </div>
+        </Overlay>
+      )}
+
+      {customItem && (
+        <Overlay onClose={() => setCustomItem(null)}>
+          <div style={{ background: '#fff', borderRadius: 14, padding: 24, width: 340, display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: '#111827' }}>
+              {customItem.barcode ? `🔍 找不到條碼 ${customItem.barcode}` : '自訂品項'}
+            </div>
+            <div style={{ fontSize: 13, color: '#6b7280' }}>
+              輸入品項名稱和售價，建立自訂項目（不扣庫存，收據顯示此名稱）
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <label style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>品項名稱 *</label>
+              <input
+                autoFocus
+                value={customForm.name}
+                onChange={e => setCustomForm(f => ({ ...f, name: e.target.value }))}
+                placeholder="例：當日特餐"
+                style={{
+                  background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 8,
+                  color: '#111827', padding: '10px 12px', fontSize: 15, outline: 'none', width: '100%', boxSizing: 'border-box',
+                }}
+              />
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>售價 (NT$) *</label>
+                <input
+                  type="number" min={0} step={1}
+                  value={customForm.price}
+                  onChange={e => setCustomForm(f => ({ ...f, price: e.target.value }))}
+                  placeholder="0"
+                  style={{
+                    background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 8,
+                    color: '#111827', padding: '10px 12px', fontSize: 15, outline: 'none', width: '100%', boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>稅率</label>
+                <select
+                  value={customForm.taxRate}
+                  onChange={e => setCustomForm(f => ({ ...f, taxRate: e.target.value }))}
+                  style={{
+                    background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 8,
+                    color: '#111827', padding: '10px 12px', fontSize: 15, cursor: 'pointer', outline: 'none', width: '100%', appearance: 'none',
+                  }}>
+                  <option value="0.05">5%（含稅）</option>
+                  <option value="0">0%（免稅）</option>
+                </select>
+              </div>
+            </div>
+            <button
+              disabled={!customForm.name.trim() || !customForm.price}
+              onClick={handleAddCustomItem}
+              style={{
+                background: customForm.name.trim() && customForm.price ? '#0891b2' : '#e2e8f0',
+                color: customForm.name.trim() && customForm.price ? '#fff' : '#9ca3af',
+                border: 'none', borderRadius: 9, padding: '13px 0',
+                fontSize: 15, fontWeight: 700,
+                cursor: customForm.name.trim() && customForm.price ? 'pointer' : 'not-allowed',
+                width: '100%',
+              }}>
+              加入訂單
+            </button>
+            <button onClick={() => setCustomItem(null)}
+              style={{ background: '#e2e8f0', color: '#374151', border: 'none', borderRadius: 9, padding: '10px 0', fontSize: 14, cursor: 'pointer', width: '100%' }}>
+              取消
             </button>
           </div>
         </Overlay>

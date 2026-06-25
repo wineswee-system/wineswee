@@ -52,6 +52,8 @@ export default function TaskFormsTab({ task, formBindings, setFormBindings }) {
     if (isLocked(b)) return { label: '🔒 申請核准後解鎖', clickable: false }
     if (b.form_type === 'expense_settle')
       return b.form_id ? { label: '→ 去核銷', clickable: true } : { label: '→ 選擇要核銷的單', clickable: true }
+    if (b.form_type === 'order_settle')
+      return b.form_id ? { label: '→ 去核銷', clickable: true } : { label: '等申請建立', clickable: false }
     if (b.form_type === 'goods_transfer_receipt')
       return b.form_id ? { label: '→ 去驗收', clickable: true } : { label: '等申請建立', clickable: false }
     if (!b.form_id) return { label: '→ 去填寫', clickable: true }

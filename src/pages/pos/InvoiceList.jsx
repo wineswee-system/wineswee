@@ -46,12 +46,11 @@ export default function InvoiceList() {
   useEffect(() => { load() }, [storeId, dateFrom, dateTo, invStatus])
 
   async function handleVoid(paymentId) {
-    await supabase
-      .from('pos_payments')
-      .update({ invoice_status: 'voided' })
-      .eq('id', paymentId)
-    setVoidConfirm(null)
-    load()
+    const { error } = await supabase.functions.invoke('void-invoice', { body: { paymentId } })
+    if (!error) {
+      setVoidConfirm(null)
+      load()
+    }
   }
 
   async function handleIssue(paymentId) {

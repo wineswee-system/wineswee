@@ -84,8 +84,9 @@ export const groupNav = {
       children: [
         { icon: PieChart,    label: '營運總覽', path: '/pos' },
         { icon: Monitor,     label: '收銀台',   path: '/pos/terminal' },
-        { icon: DollarSign,  label: '交班日結', path: '/pos/shifts' },
-        { icon: BookText,    label: '菜單管理', path: '/pos/menu' },
+        { icon: DollarSign,   label: '交班日結', path: '/pos/shifts' },
+        { icon: FileBarChart, label: 'Z 報表',  path: '/pos/z-report' },
+        { icon: BookText,     label: '菜單管理', path: '/pos/menu' },
         { icon: ShoppingBag, label: '商品目錄', path: '/pos/products' },
         { icon: QrCode,       label: 'QR 點餐設定', path: '/pos/qr-settings' },
         { icon: Award,        label: '員工業績',    path: '/pos/staff-performance' },

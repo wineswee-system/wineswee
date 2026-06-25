@@ -28,8 +28,12 @@ export const PAGE_PERM = {
   '/hr/surveys':          'survey.view_result',
   '/hr/attrition':        'ai_attrition.view',
   // 簽核鏈設定：只有 approval_chain.edit（admin / super_admin）能進，堵繞 URL
-  '/process/settings/chains':      'approval_chain.edit',
-  '/process/settings/chains/edit': 'approval_chain.edit',
+  '/process/settings/chains':                 'approval_chain.edit',
+  '/process/settings/chains/edit':            'approval_chain.edit',
+  '/process/settings/expense-chains':         'approval_chain.edit',
+  '/process/settings/transfer-apply-chains':  'approval_chain.edit',
+  '/process/settings/transfer-receipt-chains':'approval_chain.edit',
+  '/process/settings/delegation':             'approval.delegate_manage',
 }
 
 function NoPermission() {

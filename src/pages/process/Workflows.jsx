@@ -743,6 +743,7 @@ export default function Workflows() {
     const stepsToSave = aiDraftSteps.length > 0 ? aiDraftSteps : (aiResult.steps || [])
     const { data } = await supabase.from('sop_templates').insert({
       name, category, description, steps: stepsToSave,
+      organization_id: profile?.organization_id ?? null,
     }).select().single()
     if (data) {
       setTemplates(prev => [...prev, data])
@@ -807,6 +808,8 @@ export default function Workflows() {
       description: newTpl.description,
       steps: validSteps,
       approval_chain_id: newTpl.approval_chain_id || null,
+      // ★ 補 organization_id：沒帶的話 org-scoped RLS 會讓同組其他人看不到此範本
+      organization_id: profile?.organization_id ?? null,
     }
 
     if (editingTplId) {

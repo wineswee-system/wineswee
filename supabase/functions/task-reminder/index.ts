@@ -240,7 +240,7 @@ serve(async (req: Request) => {
       let reminderQ = sb.from("tasks")
         .select("id, title, due_date, assignee, assignee_id, reminder_at, status, metadata, description, notes, store")
         .lte("reminder_at", now)
-        .not("status", "in", '("已完成","已取消")')
+        .not("status", "in", '("已完成","已取消","completed","cancelled")')
         .limit(200);
       if (orgId) reminderQ = reminderQ.eq("organization_id", orgId);
       const { data: rawReminderTasks } = await reminderQ;
@@ -270,7 +270,7 @@ serve(async (req: Request) => {
       let overdueQ = sb.from("tasks")
         .select("id, title, due_date, assignee, assignee_id, metadata, status, description, notes, store")
         .lt("due_date", now)
-        .not("status", "in", '("已完成","已取消")')
+        .not("status", "in", '("已完成","已取消","completed","cancelled")')
         .limit(50);
       if (orgId) overdueQ = overdueQ.eq("organization_id", orgId);
       const { data: overdueTasks } = await overdueQ;
@@ -304,7 +304,7 @@ serve(async (req: Request) => {
         .select("id, title, due_date, assignee, assignee_id, metadata, status, description, notes, store")
         .gte("due_date", todayStr)
         .lt("due_date", `${tomorrowStr}T23:59:59`)
-        .not("status", "in", '("已完成","已取消")')
+        .not("status", "in", '("已完成","已取消","completed","cancelled")')
         .limit(50);
       if (orgId) dueSoonQ = dueSoonQ.eq("organization_id", orgId);
       const { data: dueSoonTasks } = await dueSoonQ;

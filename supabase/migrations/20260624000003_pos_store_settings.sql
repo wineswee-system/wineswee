@@ -1,7 +1,7 @@
 -- Per-store POS / QR settings
 -- One row per store; created via upsert on first save from QRSettings page
 
-CREATE TABLE pos_store_settings (
+CREATE TABLE IF NOT EXISTS pos_store_settings (
   id                    UUID    PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id       INT     NOT NULL REFERENCES organizations(id),
   store_id              INT     NOT NULL REFERENCES stores(id),
@@ -16,5 +16,8 @@ CREATE TABLE pos_store_settings (
 );
 
 ALTER TABLE pos_store_settings ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "staff" ON pos_store_settings FOR ALL TO authenticated
-  USING (organization_id = auth_org_id());
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'pos_store_settings' AND policyname = 'staff') THEN
+    CREATE POLICY "staff" ON pos_store_settings FOR ALL TO authenticated USING (organization_id = auth_org_id());
+  END IF;
+END $$;

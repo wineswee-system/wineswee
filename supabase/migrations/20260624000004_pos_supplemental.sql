@@ -9,6 +9,7 @@ ALTER TABLE pos_products
   ADD COLUMN IF NOT EXISTS show_in_qr_menu BOOLEAN NOT NULL DEFAULT true;
 
 -- Return / refund records
+-- pos_returns: return/refund records per order
 CREATE TABLE IF NOT EXISTS pos_returns (
   id                  UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id     INT           NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
@@ -25,12 +26,12 @@ CREATE TABLE IF NOT EXISTS pos_returns (
 
 ALTER TABLE pos_returns ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "tenant_pos_returns" ON pos_returns
-  USING (
-    organization_id = (
-      SELECT organization_id FROM employees WHERE id = auth.uid() LIMIT 1
-    )
-  );
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'pos_returns' AND policyname = 'tenant_pos_returns') THEN
+    CREATE POLICY "tenant_pos_returns" ON pos_returns
+      USING (organization_id = (SELECT organization_id FROM employees WHERE id = auth.uid() LIMIT 1));
+  END IF;
+END $$;
 
 -- Performance indexes for QR session validation and guest item rate-limiting
 CREATE INDEX IF NOT EXISTS idx_qr_sessions_token

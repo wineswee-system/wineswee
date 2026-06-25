@@ -22,6 +22,7 @@ BEGIN
 END;
 $$;
 
+DROP TRIGGER IF EXISTS trg_pos_product_availability ON skus;
 CREATE TRIGGER trg_pos_product_availability
   AFTER UPDATE OF stock_qty ON skus
   FOR EACH ROW

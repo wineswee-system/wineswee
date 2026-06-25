@@ -92,29 +92,22 @@ BEGIN
 END;
 $$;
 
+COMMIT;
+
 -- ═══════════════════════════════════════════════════════════
--- 3. NIGHTLY CRON
+-- 3. NIGHTLY CRON (outside transaction — pg_cron requirement)
 -- ═══════════════════════════════════════════════════════════
 
-DO $$
+DO $outer$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_cron') THEN
-    PERFORM cron.unschedule('rfm_nightly_score');
+    IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'rfm_nightly_score') THEN
+      PERFORM cron.unschedule('rfm_nightly_score');
+    END IF;
     PERFORM cron.schedule(
       'rfm_nightly_score',
       '15 0 * * *',
-      $cron$
-        DO $$
-        DECLARE v_org BIGINT;
-        BEGIN
-          FOR v_org IN SELECT id FROM public.organizations LOOP
-            PERFORM public.score_rfm_all(v_org);
-          END LOOP;
-        END;
-        $$;
-      $cron$
+      'SELECT public.score_rfm_all(id) FROM public.organizations'
     );
   END IF;
-END $$;
-
-COMMIT;
+END $outer$;

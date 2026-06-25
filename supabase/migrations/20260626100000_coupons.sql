@@ -78,7 +78,7 @@ CREATE TABLE IF NOT EXISTS public.coupon_assignments (
 
   -- Redemption
   used_at             TIMESTAMPTZ,
-  used_at_purchase_id BIGINT REFERENCES public.member_purchases(id) ON DELETE SET NULL,
+  used_at_purchase_id BIGINT,   -- FK added below once member_purchases exists
 
   -- Expiry can be overridden per assignment (falls back to coupon.valid_until)
   expires_at          TIMESTAMPTZ,
@@ -95,36 +95,48 @@ CREATE INDEX IF NOT EXISTS idx_ca_used   ON public.coupon_assignments(used_at) W
 -- 3. FK BACK-REFS (deferred — tables now exist)
 -- ═══════════════════════════════════════════════════════════
 
--- member_levels.welcome_coupon_id → coupons
+-- member_levels.welcome_coupon_id → coupons (if table exists)
 DO $$
 BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint WHERE conname = 'fk_ml_welcome_coupon'
-  ) THEN
+  IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'member_levels')
+    AND NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_ml_welcome_coupon')
+  THEN
     ALTER TABLE public.member_levels
       ADD CONSTRAINT fk_ml_welcome_coupon
       FOREIGN KEY (welcome_coupon_id) REFERENCES public.coupons(id) ON DELETE SET NULL;
   END IF;
 END $$;
 
--- birthday_reward_config.coupon_id → coupons
+-- birthday_reward_config.coupon_id → coupons (if table exists)
 DO $$
 BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint WHERE conname = 'fk_brc_coupon'
-  ) THEN
+  IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'birthday_reward_config')
+    AND NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_brc_coupon')
+  THEN
     ALTER TABLE public.birthday_reward_config
       ADD CONSTRAINT fk_brc_coupon
       FOREIGN KEY (coupon_id) REFERENCES public.coupons(id) ON DELETE SET NULL;
   END IF;
 END $$;
 
--- member_purchases.coupon_id → coupon_assignments
+-- coupon_assignments.used_at_purchase_id → member_purchases (if table exists)
 DO $$
 BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint WHERE conname = 'fk_mp_coupon'
-  ) THEN
+  IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'member_purchases')
+    AND NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_ca_purchase')
+  THEN
+    ALTER TABLE public.coupon_assignments
+      ADD CONSTRAINT fk_ca_purchase
+      FOREIGN KEY (used_at_purchase_id) REFERENCES public.member_purchases(id) ON DELETE SET NULL;
+  END IF;
+END $$;
+
+-- member_purchases.coupon_id → coupon_assignments (if table exists)
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'member_purchases')
+    AND NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_mp_coupon')
+  THEN
     ALTER TABLE public.member_purchases
       ADD CONSTRAINT fk_mp_coupon
       FOREIGN KEY (coupon_id) REFERENCES public.coupon_assignments(id) ON DELETE SET NULL;

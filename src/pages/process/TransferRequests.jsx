@@ -8,7 +8,8 @@ import Modal, { Field } from '../../components/Modal'
 import SearchableSelect from '../../components/SearchableSelect'
 import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
-import { uploadFormAttachments, listFormAttachments, getAttachmentSignedUrl, cloneFormAttachments } from '../../lib/formAttachments'
+import { uploadFormAttachments, listFormAttachments, getAttachmentSignedUrl, cloneFormAttachments, loadCarriedFormAttachments } from '../../lib/formAttachments'
+import CarriedAttachments from '../../components/CarriedAttachments'
 import { printGoodsTransferSignOff } from '../../lib/signOffAdapters'
 import { postBindingFillDone } from '../../lib/embeddedBinding'
 
@@ -61,6 +62,8 @@ export default function TransferRequests() {
   const [showFormModal, setShowFormModal] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [cloneSourceId, setCloneSourceId] = useState(null)  // 複製重送：來源單 id（送出後複製附件）
+  const [carriedAtts, setCarriedAtts] = useState([])  // 複製重送帶入的舊附件（彈窗內可看/可刪）
+  const removeCarriedAtt = (idx) => setCarriedAtts(prev => prev.filter((_, i) => i !== idx))
   const [form, setForm] = useState(emptyForm())
   const [detailRow, setDetailRow] = useState(null)
   const [searchParams, setSearchParams] = useSearchParams()
@@ -212,11 +215,11 @@ export default function TransferRequests() {
       }
       // 複製重送：把來源單的附件複製到新單（含 storage 檔，獨立，不動原單）
       if (cloneSourceId && !editingId && targetId) {
-        const src = await listFormAttachments('goods_transfer_apply', cloneSourceId)
-        if (src?.length) {
-          await cloneFormAttachments({ formType: 'goods_transfer_apply', toFormId: targetId, organizationId: profile?.organization_id, uploaderEmpId: profile?.id, uploaderName: profile?.name, atts: src })
+        if (carriedAtts.length) {
+          await cloneFormAttachments({ formType: 'goods_transfer_apply', toFormId: targetId, organizationId: profile?.organization_id, uploaderEmpId: profile?.id, uploaderName: profile?.name, atts: carriedAtts })
         }
         setCloneSourceId(null)
+        setCarriedAtts([])
       }
       setShowFormModal(false)
       setEditingId(null)
@@ -257,6 +260,7 @@ export default function TransferRequests() {
   const handleClone = (row) => {
     setEditingId(null)
     setCloneSourceId(row.id)
+    loadCarriedFormAttachments('goods_transfer_apply', row.id).then(setCarriedAtts)
     setForm({
       transfer_type: row.transfer_type,
       from_store_id: row.from_store_id,
@@ -415,7 +419,9 @@ export default function TransferRequests() {
           autoApplicantId={autoApplicantId}
           empMap={empMap}
           profileId={profile?.id}
-          onClose={() => { setShowFormModal(false); setEditingId(null); setCloneSourceId(null) }}
+          onClose={() => { setShowFormModal(false); setEditingId(null); setCloneSourceId(null); setCarriedAtts([]) }}
+          carriedAtts={carriedAtts}
+          onRemoveCarried={removeCarriedAtt}
           onSubmit={handleSubmit}
         />
       )}
@@ -437,7 +443,7 @@ export default function TransferRequests() {
 }
 
 // ── 表單 Modal ─────────────────────────────────────────────────────────────
-function TransferFormModal({ form, setForm, editingId, stores, autoApplicantId, empMap, profileId, onClose, onSubmit }) {
+function TransferFormModal({ form, setForm, editingId, stores, autoApplicantId, empMap, profileId, onClose, onSubmit, carriedAtts = [], onRemoveCarried }) {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
   const isStoreToStore = form.transfer_type === 'store_to_store'
 
@@ -559,6 +565,7 @@ function TransferFormModal({ form, setForm, editingId, stores, autoApplicantId, 
       </Field>
 
       <Field label="附件（截圖 / PDF，最多 5 個）">
+        <CarriedAttachments atts={carriedAtts} onRemove={onRemoveCarried} />
         <label style={{
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
           padding: '10px', borderRadius: 8, border: '2px dashed var(--border-medium)',

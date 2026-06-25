@@ -111,6 +111,16 @@ export async function cloneFormAttachments({ formType, toFormId, organizationId,
   return { copied }
 }
 
+// 複製重送用：載入來源單附件並附上可點開的 signed url，
+// 回傳的每筆保留 storage_bucket/storage_path/file_name/file_size/mime_type（給 cloneFormAttachments 用）+ url（給彈窗點開）。
+export async function loadCarriedFormAttachments(formType, sourceId) {
+  const rows = await listFormAttachments(formType, sourceId)
+  return Promise.all((rows || []).map(async (a) => ({
+    ...a,
+    url: await getAttachmentSignedUrl({ bucket: a.storage_bucket || 'attachments', path: a.storage_path }),
+  })))
+}
+
 export async function getAttachmentSignedUrl({ bucket = 'attachments', path, expiresIn = 3600 }) {
   const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, expiresIn)
   if (error) {

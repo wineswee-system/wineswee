@@ -11,6 +11,7 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
+import CarriedAttachments from '../../components/CarriedAttachments'
 import { printExpenseSimpleSignOff } from '../../lib/signOffAdapters'
 import ApprovalDetailModal from '../../components/ApprovalDetailModal'
 import { buildFormChainSteps } from '../../lib/buildChainSteps'
@@ -493,6 +494,10 @@ export default function Expenses() {
           </Field>
           <Field label="收據附件（最多 5 個）">
             <div>
+              <CarriedAttachments
+                atts={cloneSourceAtts.map(url => ({ url, file_name: decodeURIComponent(String(url).split('?')[0].split('/').pop() || '附件') }))}
+                onRemove={(i) => setCloneSourceAtts(prev => prev.filter((_, j) => j !== i))}
+              />
               <input type="file" multiple accept="image/*,application/pdf"
                 onChange={handleFileSelect}
                 style={{ fontSize: 12 }}

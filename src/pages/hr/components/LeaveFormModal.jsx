@@ -5,6 +5,7 @@ import SearchableSelect, { empOptions } from '../../../components/SearchableSele
 import Time24 from '../../../components/Time24'
 import { LEAVE_TYPES, getLeaveTypeInfo } from '../../../lib/leavePolicy'
 import { clearError } from '../../../lib/formValidation'
+import CarriedAttachments from '../../../components/CarriedAttachments'
 import { countWorkDays, snapToStep, diffHours } from '../../../lib/leaveDaysCalc'
 import { supabase } from '../../../lib/supabase'
 
@@ -29,6 +30,8 @@ export default function LeaveFormModal({
   uploading,
   leaves,
   holidays,
+  carriedAtts = [],
+  onRemoveCarried,
 }) {
   const set = (k, v) => {
     setForm(f => ({ ...f, [k]: v }))
@@ -253,6 +256,7 @@ export default function LeaveFormModal({
       </Field>
       <Field label="附件（最多 5 個）">
         <div>
+          <CarriedAttachments atts={carriedAtts} onRemove={onRemoveCarried} />
           <input type="file" multiple accept="image/*,application/pdf"
             onChange={onFileSelect}
             style={{ fontSize: 12 }}

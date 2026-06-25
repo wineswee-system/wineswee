@@ -16,7 +16,8 @@ import ApprovalDetailModal from '../../components/ApprovalDetailModal'
 import { buildFormChainSteps } from '../../lib/buildChainSteps'
 import { createApprovalWorkflow } from '../../lib/workflowIntegration'
 import { validateRequired, clearError } from '../../lib/formValidation'
-import { uploadFormAttachments, listFormAttachments, cloneFormAttachments } from '../../lib/formAttachments'
+import { uploadFormAttachments, cloneFormAttachments, loadCarriedFormAttachments } from '../../lib/formAttachments'
+import CarriedAttachments from '../../components/CarriedAttachments'
 import { usePendingApprovals } from '../../lib/usePendingApprovals'
 import { useChainGuard } from '../../lib/useChainGuard'
 
@@ -48,6 +49,8 @@ export default function PunchCorrection() {
   const [form, setForm] = useState({ employee: isStaff ? (profile?.name || '') : '', date: '', type: 'clock_out', correction_time: '', reason: '', store: '' })
   const [editingId, setEditingId] = useState(null)
   const [cloneSourceId, setCloneSourceId] = useState(null)  // 複製重送：來源單 id（送出後複製附件）
+  const [carriedAtts, setCarriedAtts] = useState([])  // 複製重送帶入的舊附件（彈窗內可看/可刪）
+  const removeCarriedAtt = (idx) => setCarriedAtts(prev => prev.filter((_, i) => i !== idx))
   const [errors, setErrors] = useState({})
   const [organization, setOrganization] = useState(null)  // 印簽呈用
   // 附件（對齊 Leave）：上傳到 attachments bucket / punch/ 子目錄
@@ -219,13 +222,13 @@ export default function PunchCorrection() {
         await uploadAttachments(data.id, emp?.id)
         setAttachFiles([])
       }
-      // 複製重送：把來源單的附件複製到新單（含 storage 檔，獨立）
+      // 複製重送：把彈窗裡「留下的」舊附件複製到新單（含 storage 檔，獨立）
       if (cloneSourceId) {
-        const src = await listFormAttachments('correction', cloneSourceId)
-        if (src?.length) {
-          await cloneFormAttachments({ formType: 'correction', toFormId: data.id, organizationId: profile?.organization_id, uploaderEmpId: emp?.id, uploaderName: form.employee, atts: src })
+        if (carriedAtts.length) {
+          await cloneFormAttachments({ formType: 'correction', toFormId: data.id, organizationId: profile?.organization_id, uploaderEmpId: emp?.id, uploaderName: form.employee, atts: carriedAtts })
         }
         setCloneSourceId(null)
+        setCarriedAtts([])
       }
       setCorrections(prev => [data, ...prev])
       setShowModal(false)
@@ -248,7 +251,7 @@ export default function PunchCorrection() {
   }
 
   // 複製：以舊單為範本開全新單（含附件，不動原單）
-  const openClonePunch = (c) => { openEditPunch(c); setEditingId(null); setCloneSourceId(c.id) }
+  const openClonePunch = (c) => { openEditPunch(c); setEditingId(null); setCloneSourceId(c.id); loadCarriedFormAttachments('correction', c.id).then(setCarriedAtts) }
 
   const handleApprove = async (id) => {
     const correction = corrections.find(c => c.id === id)
@@ -448,7 +451,7 @@ export default function PunchCorrection() {
       {showModal && (
         <Modal
           title={editingId ? '✏️ 編輯補登申請' : '新增補登申請'}
-          onClose={() => { setShowModal(false); setErrors({}); setEditingId(null); setCloneSourceId(null) }}
+          onClose={() => { setShowModal(false); setErrors({}); setEditingId(null); setCloneSourceId(null); setCarriedAtts([]) }}
           onSubmit={handleSubmit}
           successMessage={editingId ? '已重新送審，主管會收到通知' : '補登申請已送出，等待主管簽核'}
         >
@@ -492,6 +495,7 @@ export default function PunchCorrection() {
           </Field>
           <Field label="附件（最多 5 個）">
             <div>
+              <CarriedAttachments atts={carriedAtts} onRemove={removeCarriedAtt} />
               <input type="file" multiple accept="image/*,application/pdf"
                 onChange={handleFileSelect}
                 style={{ fontSize: 12 }}

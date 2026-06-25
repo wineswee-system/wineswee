@@ -17,7 +17,8 @@ import { printOvertimeSignOff } from '../../lib/signOffAdapters'
 import ApprovalDetailModal from '../../components/ApprovalDetailModal'
 import { buildFormChainSteps } from '../../lib/buildChainSteps'
 import { validateRequired, clearError } from '../../lib/formValidation'
-import { uploadFormAttachments, listFormAttachments, cloneFormAttachments } from '../../lib/formAttachments'
+import { uploadFormAttachments, cloneFormAttachments, loadCarriedFormAttachments } from '../../lib/formAttachments'
+import CarriedAttachments from '../../components/CarriedAttachments'
 import { usePendingApprovals } from '../../lib/usePendingApprovals'
 import { useChainGuard } from '../../lib/useChainGuard'
 
@@ -59,6 +60,8 @@ export default function Overtime() {
   const [showModal, setShowModal] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [cloneSourceId, setCloneSourceId] = useState(null)  // 複製重送：來源單 id（送出後複製其附件）
+  const [carriedAtts, setCarriedAtts] = useState([])  // 複製重送帶入的舊附件（彈窗內可看/可刪，送出時複製留下的）
+  const removeCarriedAtt = (idx) => setCarriedAtts(prev => prev.filter((_, i) => i !== idx))
   const [form, setForm] = useState({ employee: '', date: '', start_time: '', end_time: '', hours: 0, reason: '', store: '', ot_type: 'pay' })
   const [stores, setStores] = useState([])
   const [error, setError] = useState(null)
@@ -213,13 +216,13 @@ export default function Overtime() {
           await uploadAttachments(data.id, empRow?.id)
           setAttachFiles([])
         }
-        // 複製重送：把來源單的附件複製到新單（含 storage 檔，獨立）
+        // 複製重送：把彈窗裡「留下的」舊附件複製到新單（含 storage 檔，獨立）
         if (cloneSourceId) {
-          const src = await listFormAttachments('overtime', cloneSourceId)
-          if (src?.length) {
-            await cloneFormAttachments({ formType: 'overtime', toFormId: data.id, organizationId: profile?.organization_id, uploaderEmpId: empRow?.id, uploaderName: form.employee, atts: src })
+          if (carriedAtts.length) {
+            await cloneFormAttachments({ formType: 'overtime', toFormId: data.id, organizationId: profile?.organization_id, uploaderEmpId: empRow?.id, uploaderName: form.employee, atts: carriedAtts })
           }
           setCloneSourceId(null)
+          setCarriedAtts([])
         }
         setRecords(prev => [...prev, data])
         setShowModal(false)
@@ -535,6 +538,7 @@ export default function Overtime() {
                         <button className="btn btn-sm btn-secondary" style={{ color: 'var(--accent-cyan)' }} title="以這張為範本開一張全新申請（含附件，不動原單）" onClick={() => {
                           setEditingId(null)
                           setCloneSourceId(o.id)
+                          loadCarriedFormAttachments('overtime', o.id).then(setCarriedAtts)
                           setForm({ employee: o.employee, date: o.date || '', start_time: o.start_time || '', end_time: o.end_time || '', hours: o.hours || 0, reason: o.reason || '', store: o.store || '', ot_type: o.ot_type || 'pay' })
                           setShowModal(true)
                         }}>📋 複製</button>
@@ -560,7 +564,7 @@ export default function Overtime() {
       {showModal && (
         <Modal
           title={editingId ? '✏️ 編輯重送（駁回後修改）' : '新增加班申請'}
-          onClose={() => { setShowModal(false); setErrors({}); setEditingId(null); setCloneSourceId(null) }}
+          onClose={() => { setShowModal(false); setErrors({}); setEditingId(null); setCloneSourceId(null); setCarriedAtts([]) }}
           onSubmit={handleSubmit}
           successMessage={editingId ? '已重新送審，主管會收到通知' : '加班申請已送出，等待主管簽核'}
         >
@@ -738,6 +742,7 @@ export default function Overtime() {
           </Field>
           <Field label="附件（最多 5 個）">
             <div>
+              <CarriedAttachments atts={carriedAtts} onRemove={removeCarriedAtt} />
               <input type="file" multiple accept="image/*,application/pdf"
                 onChange={handleFileSelect}
                 style={{ fontSize: 12 }}

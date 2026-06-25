@@ -777,6 +777,8 @@ export default function Leave() {
         uploading={uploading}
         leaves={leaves}
         holidays={holidays}
+        carriedAtts={cloneSourceAtts.map(url => ({ url, file_name: decodeURIComponent(String(url).split('?')[0].split('/').pop() || '附件') }))}
+        onRemoveCarried={(i) => setCloneSourceAtts(prev => prev.filter((_, j) => j !== i))}
       />
 
       {/* Policy Reference Modal */}

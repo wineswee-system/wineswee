@@ -8,7 +8,7 @@ import Modal, { Field } from '../../components/Modal'
 import SearchableSelect from '../../components/SearchableSelect'
 import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
-import { uploadFormAttachments, listFormAttachments, getAttachmentSignedUrl } from '../../lib/formAttachments'
+import { uploadFormAttachments, listFormAttachments, getAttachmentSignedUrl, cloneFormAttachments } from '../../lib/formAttachments'
 import { printGoodsTransferSignOff } from '../../lib/signOffAdapters'
 import { postBindingFillDone } from '../../lib/embeddedBinding'
 
@@ -60,6 +60,7 @@ export default function TransferRequests() {
   const [search, setSearch] = useState('')
   const [showFormModal, setShowFormModal] = useState(false)
   const [editingId, setEditingId] = useState(null)
+  const [cloneSourceId, setCloneSourceId] = useState(null)  // 複製重送：來源單 id（送出後複製附件）
   const [form, setForm] = useState(emptyForm())
   const [detailRow, setDetailRow] = useState(null)
   const [searchParams, setSearchParams] = useSearchParams()
@@ -209,6 +210,14 @@ export default function TransferRequests() {
         })
         if (res.errors?.length) toast.error(`部分附件上傳失敗：${res.errors.length} 筆`)
       }
+      // 複製重送：把來源單的附件複製到新單（含 storage 檔，獨立，不動原單）
+      if (cloneSourceId && !editingId && targetId) {
+        const src = await listFormAttachments('goods_transfer_apply', cloneSourceId)
+        if (src?.length) {
+          await cloneFormAttachments({ formType: 'goods_transfer_apply', toFormId: targetId, organizationId: profile?.organization_id, uploaderEmpId: profile?.id, uploaderName: profile?.name, atts: src })
+        }
+        setCloneSourceId(null)
+      }
       setShowFormModal(false)
       setEditingId(null)
       setForm(emptyForm())
@@ -236,6 +245,27 @@ export default function TransferRequests() {
       reasons: row.reasons || [],
       reason_other: row.reason_other || '',
       attachments: row.attachments || [],
+      items: (row.items || []).sort((a, b) => a.line_no - b.line_no).map(it => ({
+        line_no: it.line_no, product_code: it.product_code, product_name: it.product_name,
+        spec: it.spec || '', unit: it.unit || '', requested_qty: it.requested_qty, notes: it.notes || '',
+      })),
+    })
+    setShowFormModal(true)
+  }
+
+  // 複製：以舊單為範本開全新單（含品項與附件，不動原單，任何狀態都可）
+  const handleClone = (row) => {
+    setEditingId(null)
+    setCloneSourceId(row.id)
+    setForm({
+      transfer_type: row.transfer_type,
+      from_store_id: row.from_store_id,
+      to_store_id: row.to_store_id,
+      needed_date: row.needed_date || '',
+      reasons: row.reasons || [],
+      reason_other: row.reason_other || '',
+      attachments: [],
+      attachFiles: [],
       items: (row.items || []).sort((a, b) => a.line_no - b.line_no).map(it => ({
         line_no: it.line_no, product_code: it.product_code, product_name: it.product_name,
         spec: it.spec || '', unit: it.unit || '', requested_qty: it.requested_qty, notes: it.notes || '',
@@ -359,6 +389,11 @@ export default function TransferRequests() {
                       </button>
                     </>
                   )}
+                  {r.applicant_id === profile?.id && (
+                    <button className="btn btn-sm btn-secondary" style={{ color: 'var(--accent-cyan)' }} onClick={() => handleClone(r)} title="以這張為範本開一張全新調撥（含品項與附件，不動原單）">
+                      📋
+                    </button>
+                  )}
                   {['草稿','申請審核中'].includes(r.status) && r.applicant_id === profile?.id && (
                     <button className="btn btn-sm btn-secondary" onClick={() => handleDelete(r)} title="撤回" style={{ color: 'var(--accent-red)' }}>
                       <Trash2 size={11} />
@@ -380,7 +415,7 @@ export default function TransferRequests() {
           autoApplicantId={autoApplicantId}
           empMap={empMap}
           profileId={profile?.id}
-          onClose={() => { setShowFormModal(false); setEditingId(null) }}
+          onClose={() => { setShowFormModal(false); setEditingId(null); setCloneSourceId(null) }}
           onSubmit={handleSubmit}
         />
       )}

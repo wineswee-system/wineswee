@@ -88,6 +88,7 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
   const [isExpense, setIsExpense] = useState(true)
   const [errors, setErrors] = useState({})
   const [editingId, setEditingId] = useState(null)  // null = 新增, 數字 = 編輯重送
+  const [cloneSourceId, setCloneSourceId] = useState(null)  // 複製重送：來源單 id（用來複製附件）
   const [files, setFiles] = useState([])
   const [settleFiles, setSettleFiles] = useState([])
   const [attachments, setAttachments] = useState({})
@@ -235,6 +236,7 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
   // 進入「編輯重送」模式（駁回後申請人想改內容再送出）；asClone=true → 以舊單為範本開全新單(不動原單)
   const openEditResubmit = (req, asClone = false) => {
     setEditingId(asClone ? null : req.id)
+    setCloneSourceId(asClone ? req.id : null)  // 複製模式記來源單 → submit 後複製其附件
     setForm({
       employee: req.employee || '',
       account_code: req.account_code || '',
@@ -363,6 +365,19 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
     // Upload attachments
     if (files.length > 0 && data) {
       await uploadFiles(data.id, files, 'request')
+    }
+
+    // 複製重送：把來源單的申請附件 row 複製到新單（共用 storage_path，不重傳）
+    if (cloneSourceId && data) {
+      const { data: srcAtts } = await supabase.from('expense_request_attachments')
+        .select('file_name, storage_path, file_size, file_type, stage')
+        .eq('request_id', cloneSourceId).eq('stage', 'request')
+      if (srcAtts?.length) {
+        await supabase.from('expense_request_attachments').insert(
+          srcAtts.map(a => ({ ...a, request_id: data.id, uploaded_by: form.employee || '系統' }))
+        )
+      }
+      setCloneSourceId(null)
     }
 
     // Create approval workflow + 把 instance.id 寫回 expense_request 建立雙向 link
@@ -947,7 +962,7 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
       {/* New Request Modal */}
       <ExpenseFormModal
         open={showModal}
-        onClose={() => { setShowModal(false); setErrors({}) }}
+        onClose={() => { setShowModal(false); setErrors({}); setCloneSourceId(null) }}
         form={form}
         setForm={setForm}
         lineItems={lineItems}

@@ -85,11 +85,15 @@ async function uploadSimpleExpenseFiles(expenseId, attachFiles, empId) {
   return urls
 }
 
-export async function commitSimpleExpenseDraft(bindingId, draft, _profile) {
+export async function commitSimpleExpenseDraft(bindingId, draft, profile) {
   const fullPayload = {
     ...draft.payload,
     amount: Number(draft.payload.amount),
     status: '待審核',
+    // ★ 補 employee_id（RLS can_insert_request 要它；NULL 連 admin 都會被擋）
+    //   + organization_id（auto-apply 簽核鏈 trigger 看 org IS NULL 就不套鏈 → guard 擋）
+    employee_id: draft.empId ?? null,
+    organization_id: profile?.organization_id ?? null,
     linked_binding_id: bindingId ? Number(bindingId) : null,
   }
   const { data, error } = await createExpense(fullPayload)

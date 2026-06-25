@@ -16,7 +16,7 @@ import ApprovalDetailModal from '../../components/ApprovalDetailModal'
 import { buildFormChainSteps } from '../../lib/buildChainSteps'
 import { createApprovalWorkflow } from '../../lib/workflowIntegration'
 import { validateRequired, clearError } from '../../lib/formValidation'
-import { uploadFormAttachments } from '../../lib/formAttachments'
+import { uploadFormAttachments, listFormAttachments, cloneFormAttachments } from '../../lib/formAttachments'
 import { usePendingApprovals } from '../../lib/usePendingApprovals'
 import { useChainGuard } from '../../lib/useChainGuard'
 
@@ -47,6 +47,7 @@ export default function PunchCorrection() {
   const [search, setSearch] = useState('')
   const [form, setForm] = useState({ employee: isStaff ? (profile?.name || '') : '', date: '', type: 'clock_out', correction_time: '', reason: '', store: '' })
   const [editingId, setEditingId] = useState(null)
+  const [cloneSourceId, setCloneSourceId] = useState(null)  // 複製重送：來源單 id（送出後複製附件）
   const [errors, setErrors] = useState({})
   const [organization, setOrganization] = useState(null)  // 印簽呈用
   // 附件（對齊 Leave）：上傳到 attachments bucket / punch/ 子目錄
@@ -218,6 +219,14 @@ export default function PunchCorrection() {
         await uploadAttachments(data.id, emp?.id)
         setAttachFiles([])
       }
+      // 複製重送：把來源單的附件複製到新單（含 storage 檔，獨立）
+      if (cloneSourceId) {
+        const src = await listFormAttachments('correction', cloneSourceId)
+        if (src?.length) {
+          await cloneFormAttachments({ formType: 'correction', toFormId: data.id, organizationId: profile?.organization_id, uploaderEmpId: emp?.id, uploaderName: form.employee, atts: src })
+        }
+        setCloneSourceId(null)
+      }
       setCorrections(prev => [data, ...prev])
       setShowModal(false)
       setForm({ employee: profile?.name || '', date: '', type: 'clock_out', correction_time: '', reason: '', store: '' })
@@ -237,6 +246,9 @@ export default function PunchCorrection() {
     })
     setShowModal(true)
   }
+
+  // 複製：以舊單為範本開全新單（含附件，不動原單）
+  const openClonePunch = (c) => { openEditPunch(c); setEditingId(null); setCloneSourceId(c.id) }
 
   const handleApprove = async (id) => {
     const correction = corrections.find(c => c.id === id)
@@ -410,6 +422,11 @@ export default function PunchCorrection() {
                           ✏️ {(['已駁回','已退回'].includes(c.status)) ? '編輯重送' : '編輯'}
                         </button>
                       )}
+                      {c.employee === profile?.name && (
+                        <button className="btn btn-sm btn-secondary" style={{ padding: '4px 8px', fontSize: 11, color: 'var(--accent-cyan)' }} title="以這張為範本開一張全新申請（含附件，不動原單）" onClick={() => openClonePunch(c)}>
+                          📋 複製
+                        </button>
+                      )}
                       <button className="btn btn-sm btn-secondary" style={{ padding: '4px 8px', fontSize: 11 }} title="下載簽呈"
                         onClick={() => printWithChain(c)}>
                         <Printer size={11} />
@@ -431,7 +448,7 @@ export default function PunchCorrection() {
       {showModal && (
         <Modal
           title={editingId ? '✏️ 編輯補登申請' : '新增補登申請'}
-          onClose={() => { setShowModal(false); setErrors({}); setEditingId(null) }}
+          onClose={() => { setShowModal(false); setErrors({}); setEditingId(null); setCloneSourceId(null) }}
           onSubmit={handleSubmit}
           successMessage={editingId ? '已重新送審，主管會收到通知' : '補登申請已送出，等待主管簽核'}
         >

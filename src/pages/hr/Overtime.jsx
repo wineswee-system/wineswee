@@ -17,7 +17,7 @@ import { printOvertimeSignOff } from '../../lib/signOffAdapters'
 import ApprovalDetailModal from '../../components/ApprovalDetailModal'
 import { buildFormChainSteps } from '../../lib/buildChainSteps'
 import { validateRequired, clearError } from '../../lib/formValidation'
-import { uploadFormAttachments } from '../../lib/formAttachments'
+import { uploadFormAttachments, listFormAttachments, cloneFormAttachments } from '../../lib/formAttachments'
 import { usePendingApprovals } from '../../lib/usePendingApprovals'
 import { useChainGuard } from '../../lib/useChainGuard'
 
@@ -58,6 +58,7 @@ export default function Overtime() {
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [editingId, setEditingId] = useState(null)
+  const [cloneSourceId, setCloneSourceId] = useState(null)  // 複製重送：來源單 id（送出後複製其附件）
   const [form, setForm] = useState({ employee: '', date: '', start_time: '', end_time: '', hours: 0, reason: '', store: '', ot_type: 'pay' })
   const [stores, setStores] = useState([])
   const [error, setError] = useState(null)
@@ -209,6 +210,14 @@ export default function Overtime() {
         if (attachFiles.length > 0) {
           await uploadAttachments(data.id, empRow?.id)
           setAttachFiles([])
+        }
+        // 複製重送：把來源單的附件複製到新單（含 storage 檔，獨立）
+        if (cloneSourceId) {
+          const src = await listFormAttachments('overtime', cloneSourceId)
+          if (src?.length) {
+            await cloneFormAttachments({ formType: 'overtime', toFormId: data.id, organizationId: profile?.organization_id, uploaderEmpId: empRow?.id, uploaderName: form.employee, atts: src })
+          }
+          setCloneSourceId(null)
         }
         setRecords(prev => [...prev, data])
         setShowModal(false)
@@ -520,6 +529,14 @@ export default function Overtime() {
                           }}>✏️ {isRejected ? '編輯重送' : '編輯'}</button>
                         )
                       })()}
+                      {o.employee === profile?.name && (
+                        <button className="btn btn-sm btn-secondary" style={{ color: 'var(--accent-cyan)' }} title="以這張為範本開一張全新申請（含附件，不動原單）" onClick={() => {
+                          setEditingId(null)
+                          setCloneSourceId(o.id)
+                          setForm({ employee: o.employee, date: o.date || '', start_time: o.start_time || '', end_time: o.end_time || '', hours: o.hours || 0, reason: o.reason || '', store: o.store || '', ot_type: o.ot_type || 'pay' })
+                          setShowModal(true)
+                        }}>📋 複製</button>
+                      )}
                       <button className="btn btn-sm btn-secondary" title="下載簽呈"
                         onClick={() => printWithChain(o)}>
                         <Printer size={11} />
@@ -541,7 +558,7 @@ export default function Overtime() {
       {showModal && (
         <Modal
           title={editingId ? '✏️ 編輯重送（駁回後修改）' : '新增加班申請'}
-          onClose={() => { setShowModal(false); setErrors({}); setEditingId(null) }}
+          onClose={() => { setShowModal(false); setErrors({}); setEditingId(null); setCloneSourceId(null) }}
           onSubmit={handleSubmit}
           successMessage={editingId ? '已重新送審，主管會收到通知' : '加班申請已送出，等待主管簽核'}
         >

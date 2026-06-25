@@ -14,13 +14,21 @@ async function resolveStockByName(itemName) {
  * Subscribes to cross-module events that affect inventory and warehouse operations.
  */
 export function registerWMSHandlers(bus) {
-  // ── Sales order created → reserve stock for order items ──
-  // NOTE: stock_levels 沒有 reserved_qty 欄位；預留邏輯暫以事件記錄，等 schema 補欄位再持久化
+  // ── Sales order confirmed → reserve stock for order items ──
   bus.subscribe('sales.order.confirmed', async function onOrderConfirmedReserveStock(event) {
     const { order_id, order_number, items } = event.payload
     if (!items || items.length === 0) return
 
-    // 僅發 wms.stock.reserved 事件讓下游知道（DB 沒欄位可記，跳過更新）
+    for (const item of items) {
+      const stock = await resolveStockByName(item.name)
+      if (!stock) continue
+      const newReserved = (stock.reserved_qty || 0) + (item.qty || 0)
+      await supabase
+        .from('stock_levels')
+        .update({ reserved_qty: newReserved })
+        .eq('id', stock.id)
+    }
+
     await bus.publish('wms.stock.reserved', {
       order_id,
       order_number,
@@ -53,6 +61,34 @@ export function registerWMSHandlers(bus) {
       source_id: transaction_id,
       store,
       items: items.map(i => ({ name: i.name, qty: -(i.qty || 0) })),
+    }, {
+      causation_id: event.id,
+      correlation_id: event.metadata.correlation_id,
+    })
+  })
+
+  // ── POS transaction refunded → restore stock ──
+  bus.subscribe('pos.transaction.refunded', async function onPOSRefundRestoreStock(event) {
+    const { refund_id, items, store } = event.payload
+    if (!items || items.length === 0) return
+
+    for (const item of items) {
+      const stock = await resolveStockByName(item.name)
+      if (!stock) continue
+
+      const newQty = (stock.quantity || 0) + (item.qty || 0)
+      await supabase
+        .from('stock_levels')
+        .update({ quantity: newQty })
+        .eq('id', stock.id)
+    }
+
+    await bus.publish('wms.stock.adjusted', {
+      reason: 'POS退款還庫',
+      source_type: 'pos_refund',
+      source_id: refund_id,
+      store,
+      items: items.map(i => ({ name: i.name, qty: i.qty || 0 })),
     }, {
       causation_id: event.id,
       correlation_id: event.metadata.correlation_id,

@@ -12,6 +12,8 @@ export const POS_EVENTS = {
       total: { type: 'number', required: true },
       payment_method: { type: 'string', required: false },
       items: { type: 'array', required: false },
+      customer_id: { type: 'number', required: false },
+      points_used: { type: 'number', required: false },
     },
   },
   'pos.transaction.refunded': {
@@ -65,6 +67,42 @@ export const POS_EVENTS = {
       employee_id: { type: 'string', required: true },
       name: { type: 'string', required: true },
       reason: { type: 'string', required: false },
+    },
+  },
+  'pos.order.submitted': {
+    domain: 'pos',
+    action: 'order.submitted',
+    version: 1,
+    description: '顧客透過 QR 自助點餐送出',
+    payload: {
+      order_id:      { type: 'string',  required: true  },
+      store_id:      { type: 'string',  required: true  },
+      table_id:      { type: 'string',  required: false },
+      table_number:  { type: 'string',  required: false },
+      item_count:    { type: 'number',  required: true  },
+      auto_approved: { type: 'boolean', required: true  },
+    },
+  },
+  'pos.order.confirmed': {
+    domain: 'pos',
+    action: 'order.confirmed',
+    version: 1,
+    description: '店員確認 QR 點餐並送往廚房',
+    payload: {
+      order_id:     { type: 'string', required: true  },
+      store_id:     { type: 'string', required: false },
+      confirmed_by: { type: 'string', required: false },
+    },
+  },
+  'pos.order.ready': {
+    domain: 'pos',
+    action: 'order.ready',
+    version: 1,
+    description: '廚房完成製作，訂單可取餐',
+    payload: {
+      order_id:     { type: 'string', required: true  },
+      store_id:     { type: 'string', required: false },
+      table_number: { type: 'string', required: false },
     },
   },
 }

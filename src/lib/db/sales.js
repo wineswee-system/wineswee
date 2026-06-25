@@ -127,6 +127,9 @@ export const getPOSTransactions = (orgId) => {
   return q
 }
 
+export const getPOSTransactionByNumber = (transactionNumber) =>
+  supabase.from('pos_transactions').select('*').eq('transaction_number', transactionNumber).maybeSingle()
+
 export const createPOSTransaction = (data) =>
   supabase.rpc('secure_create_pos_transaction', {
     p_store: data.store,
@@ -200,6 +203,20 @@ export const getAllPointTransactions = (orgId) => {
   let q = supabase.from('point_transactions').select('*').order('id', { ascending: false })
   if (orgId) q = q.eq('organization_id', orgId)
   return q
+}
+
+// POS member lookup — search by phone or member_number (used at checkout)
+export async function searchMemberByQuery(query, orgId) {
+  if (!query?.trim()) return null
+  const q = query.trim()
+  let req = supabase
+    .from('members')
+    .select('id, name, phone, member_number, level, level_id, available_points, lifetime_spend, total_spent, organization_id')
+    .or(`phone.ilike.%${q}%,member_number.ilike.%${q}%`)
+    .limit(1)
+  if (orgId) req = req.eq('organization_id', orgId)
+  const { data } = await req
+  return data?.[0] ?? null
 }
 
 export const createPointTransaction = (data) =>

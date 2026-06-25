@@ -299,3 +299,15 @@ export async function printToThermal(port, escposData) {
   await writer.write(encoder.encode(escposData));
   writer.releaseLock();
 }
+
+// Kick cash drawer via ESC/POS (requires Web Serial connection)
+// Sends pulse on both pin 2 and pin 5 to cover all common drawer models
+export async function kickCashDrawer(port) {
+  if (!port?.writable) throw new Error('Printer not connected');
+  const writer = port.writable.getWriter();
+  // ESC p m t1 t2 — open cash drawer
+  // pin 2: \x1B\x70\x00\x19\xFA  pin 5: \x1B\x70\x01\x19\xFA
+  const cmd = new Uint8Array([0x1B, 0x70, 0x00, 0x19, 0xFA, 0x1B, 0x70, 0x01, 0x19, 0xFA]);
+  await writer.write(cmd);
+  writer.releaseLock();
+}

@@ -293,6 +293,33 @@ export const HR_EVENTS = {
       overall_score: { type: 'number', required: false },
     },
   },
+  'hr.shift.assigned': {
+    domain: 'hr',
+    action: 'shift.assigned',
+    version: 1,
+    description: '員工班次排定（排班表指派）',
+    payload: {
+      schedule_id:  { type: 'string', required: true },
+      employee_id:  { type: 'string', required: true },
+      employee:     { type: 'string', required: true },
+      date:         { type: 'string', required: true },
+      shift:        { type: 'string', required: true },
+      start_time:   { type: 'string', required: false },
+      end_time:     { type: 'string', required: false },
+    },
+  },
+  'hr.shift.published': {
+    domain: 'hr',
+    action: 'shift.published',
+    version: 1,
+    description: '月排班表發布',
+    payload: {
+      month:          { type: 'string', required: true },
+      store_id:       { type: 'number', required: false },
+      published_by:   { type: 'string', required: false },
+      employee_count: { type: 'number', required: false },
+    },
+  },
   'hr.attrition.high_risk': {
     domain: 'hr',
     action: 'attrition.high_risk',

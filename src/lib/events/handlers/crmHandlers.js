@@ -38,7 +38,7 @@ export function registerCRMHandlers(bus) {
 
   // ── POS transaction completed → update loyalty points (DB-driven tiers) ──
   bus.subscribe('pos.transaction.completed', async function onPOSTransactionUpdateLoyalty(event) {
-    const { customer_id, total, store } = event.payload
+    const { customer_id, total, store, points_used } = event.payload
     if (!customer_id) return
 
     const { data: member } = await supabase
@@ -71,12 +71,14 @@ export function registerCRMHandlers(bus) {
       newLevel = { id: null, name: legacyTier.level }
     }
 
-    const newAvailablePoints = (member.available_points || 0) + pointsEarned
+    const pointsRedeemed = Number(points_used) || 0
+    const newAvailablePoints = (member.available_points || 0) + pointsEarned - pointsRedeemed
     const tierChanged = levels?.length
       ? newLevel.id !== (member.level_id ?? null)
       : newLevel.name !== member.level
 
-    await Promise.all([
+    const earnBalance = (member.available_points || 0) + pointsEarned
+    const dbOps = [
       supabase.from('members').update({
         total_points:     newLifetimePoints,
         available_points: newAvailablePoints,
@@ -94,11 +96,27 @@ export function registerCRMHandlers(bus) {
         organization_id: member.organization_id || null,
         type:            'earn',
         points:          pointsEarned,
-        balance:         newAvailablePoints,
+        balance:         earnBalance,
         reference:       `POS-${event.id || Date.now()}`,
         description:     `POS消費累點 ($${total.toLocaleString()})`,
       }),
-    ])
+    ]
+
+    if (pointsRedeemed > 0) {
+      dbOps.push(
+        supabase.from('point_transactions').insert({
+          member_id:       member.id,
+          organization_id: member.organization_id || null,
+          type:            'redeem',
+          points:          -pointsRedeemed,
+          balance:         newAvailablePoints,
+          reference:       `POS-REDEEM-${event.id || Date.now()}`,
+          description:     `POS點數折抵（${pointsRedeemed}點，折抵NT$${Math.floor(pointsRedeemed * 0.5)}）`,
+        })
+      )
+    }
+
+    await Promise.all(dbOps)
 
     if (tierChanged && newLevel.id) {
       await supabase.from('member_level_history').insert({
@@ -133,6 +151,20 @@ export function registerCRMHandlers(bus) {
       causation_id:   event.id,
       correlation_id: event.metadata?.correlation_id,
     })
+
+    if (pointsRedeemed > 0) {
+      await bus.publish('crm.points.redeemed', {
+        member_id:       String(member.id),
+        member_name:     member.name,
+        points:          pointsRedeemed,
+        balance:         newAvailablePoints,
+        discount_amount: Math.floor(pointsRedeemed * 0.5),
+        source:          'pos_transaction',
+      }, {
+        causation_id:   event.id,
+        correlation_id: event.metadata?.correlation_id,
+      })
+    }
   })
 
   // ── POS transaction completed → record member_purchase + lines ──
@@ -140,28 +172,58 @@ export function registerCRMHandlers(bus) {
     const { customer_id, total, store_id, transaction_id, payment_method, items } = event.payload
     if (!customer_id || !items?.length) return
 
+    // Fetch member to get organization_id (NOT NULL in schema)
+    const { data: member } = await supabase
+      .from('members')
+      .select('id, organization_id')
+      .eq('id', customer_id)
+      .maybeSingle()
+    if (!member?.organization_id) return
+
+    // Normalize zh-TW display labels → DB enum values
+    const PM_MAP = {
+      '現金': 'cash',      'cash': 'cash',
+      '信用卡': 'card',    '刷卡': 'card',     'card': 'card',
+      '行動支付': 'line_pay', 'LINE Pay': 'line_pay', 'line_pay': 'line_pay',
+      'Apple Pay': 'apple_pay', 'apple_pay': 'apple_pay',
+      '銀行轉帳': 'transfer', 'transfer': 'transfer',
+      '兌換券': 'voucher',  'voucher': 'voucher',
+    }
+    const pmNorm = PM_MAP[payment_method] ?? null
+
+    // Safely coerce transaction_id to integer (rejects non-numeric strings like "POS-123456")
+    const txnIdInt = transaction_id && /^\d+$/.test(String(transaction_id))
+      ? Number(transaction_id) : null
+
     const { data: purchase, error } = await supabase.from('member_purchases').insert({
-      member_id: customer_id,
-      store_id: store_id || null,
-      transaction_id: transaction_id || null,
-      total_amount: total,
-      payment_method: payment_method || null,
+      member_id:       customer_id,
+      organization_id: member.organization_id,
+      store_id:        store_id || null,
+      transaction_id:  txnIdInt,
+      total_amount:    total,
+      payment_method:  pmNorm,
     }).select().single()
 
-    if (error || !purchase) return
+    if (error || !purchase) {
+      if (error) console.warn('[CRM] member_purchases insert failed:', error.message)
+      return
+    }
 
+    // POS item categories are zh-TW free-text; DB enum is wine/beer/… — store null to avoid CHECK violation
     const lines = items.map(item => ({
-      purchase_id: purchase.id,
-      product_id: item.product_id || item.sku_id || null,
-      product_name: item.product_name || item.name || '',
-      product_category: item.product_category || item.category || null,
-      product_type: item.product_type || null,
-      qty: item.qty ?? item.quantity ?? 1,
-      unit_price: item.unit_price ?? item.price ?? 0,
-      subtotal: item.subtotal ?? (item.qty ?? 1) * (item.unit_price ?? item.price ?? 0),
+      purchase_id:      purchase.id,
+      product_id:       item.product_id || item.sku_id || null,
+      product_name:     item.product_name || item.name || '',
+      product_category: null,
+      product_type:     item.product_type || null,
+      qty:              item.qty ?? item.quantity ?? 1,
+      unit_price:       item.unit_price ?? item.price ?? 0,
+      subtotal:         item.subtotal ?? (item.qty ?? 1) * (item.unit_price ?? item.price ?? 0),
     }))
 
-    await supabase.from('member_purchase_lines').insert(lines)
+    await supabase.from('member_purchase_lines').insert(lines).then(({ error: le }) => {
+      if (le) console.warn('[CRM] member_purchase_lines insert failed:', le.message)
+    })
   })
 
   // ── POS transaction refunded → reverse loyalty points ──

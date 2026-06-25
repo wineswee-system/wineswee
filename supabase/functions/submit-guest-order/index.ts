@@ -66,7 +66,6 @@ Deno.serve(async (req) => {
       .order('created_at')
 
     if (recentItems) {
-      // Group items into submission batches (items within 2s of each other = 1 batch)
       let batches = 0
       let lastTs  = 0
       for (const row of recentItems) {
@@ -76,25 +75,42 @@ Deno.serve(async (req) => {
       if (batches >= 3) return json({ error: '點餐太頻繁，請稍後再試' }, 429)
     }
 
-    // Insert items with source='guest'
+    // Read store approval mode — determines whether items go straight to kitchen
+    const { data: storeSettings } = await supabase
+      .from('pos_store_settings')
+      .select('qr_approval_mode')
+      .eq('store_id', storeId)
+      .maybeSingle()
+
+    const autoApprove = storeSettings?.qr_approval_mode === 'auto'
+
+    // Insert items with source='guest'; item_status reflects approval mode
     const rows = items.map(item => ({
-      order_id:       orderId,
-      item_type:      item.itemType,
-      menu_item_id:   item.menuItemId ?? null,
-      pos_product_id: item.posProductId ?? null,
-      name:           item.name,
-      unit_price:     item.unitPrice,
-      tax_rate:       item.taxRate ?? 0.05,
-      quantity:       item.quantity,
-      note:           item.note || note || '',
-      source:         'guest',
-      sent_to_kitchen: false,
+      order_id:        orderId,
+      item_type:       item.itemType,
+      menu_item_id:    item.menuItemId ?? null,
+      pos_product_id:  item.posProductId ?? null,
+      name:            item.name,
+      unit_price:      item.unitPrice,
+      tax_rate:        item.taxRate ?? 0.05,
+      quantity:        item.quantity,
+      note:            item.note || note || '',
+      source:          'guest',
+      sent_to_kitchen: autoApprove,
+      item_status:     autoApprove ? 'confirmed' : 'pending',
     }))
 
     const { error: insertError } = await supabase.from('pos_order_items').insert(rows)
     if (insertError) throw insertError
 
-    return json({ ok: true, count: rows.length })
+    // Advance order to 'submitted' so POS terminal knows there are pending items
+    await supabase
+      .from('pos_orders')
+      .update({ status: 'submitted', order_source: 'qr' })
+      .eq('id', orderId)
+      .eq('status', 'open')
+
+    return json({ ok: true, count: rows.length, autoApproved: autoApprove })
   } catch (e) {
     const msg = e instanceof Error ? e.message : '伺服器錯誤'
     return json({ error: msg }, 500)

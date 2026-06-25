@@ -1,4 +1,5 @@
-import { Plus, Minus, Trash2, ShoppingCart, CreditCard } from 'lucide-react'
+import { useState } from 'react'
+import { Plus, Minus, Trash2, ShoppingCart, CreditCard, Search, User, X } from 'lucide-react'
 
 export default function POSCartPanel({
   cart,
@@ -7,6 +8,9 @@ export default function POSCartPanel({
   subtotal,
   discount,
   setDiscount,
+  pointsUsed,
+  setPointsUsed,
+  pointsDiscount,
   tax,
   total,
   selectedPayment,
@@ -20,7 +24,23 @@ export default function POSCartPanel({
   setCarrierValue,
   handleCheckout,
   paymentMethodMap,
+  selectedMember,
+  onMemberSearch,
+  onMemberClear,
 }) {
+  const [memberQuery, setMemberQuery] = useState('')
+  const [searching, setSearching] = useState(false)
+  const [notFound, setNotFound] = useState(false)
+
+  async function handleMemberSearch() {
+    if (!memberQuery.trim()) return
+    setSearching(true)
+    setNotFound(false)
+    const found = await onMemberSearch(memberQuery)
+    setSearching(false)
+    if (!found) setNotFound(true)
+    else setMemberQuery('')
+  }
   return (
     <div style={{ flex: '1 1 40%', display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div className="card" style={{ marginBottom: 0, flex: 1, display: 'flex', flexDirection: 'column' }}>
@@ -49,19 +69,100 @@ export default function POSCartPanel({
           ))}
         </div>
 
+        {/* Member Lookup */}
+        <div style={{ padding: '10px 16px', borderTop: '1px solid var(--border-primary)' }}>
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+            <User size={12} /> 會員識別
+          </div>
+          {selectedMember ? (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--accent-cyan-dim)', border: '1px solid var(--accent-cyan)', borderRadius: 8, padding: '8px 12px' }}>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--accent-cyan)' }}>{selectedMember.name}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>
+                    {selectedMember.level} · 點數 {(selectedMember.available_points || 0).toLocaleString()} · 累計消費 NT$ {((selectedMember.lifetime_spend || selectedMember.total_spent || 0)).toLocaleString()}
+                  </div>
+                </div>
+                <button onClick={onMemberClear} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}>
+                  <X size={14} />
+                </button>
+              </div>
+              {(selectedMember.available_points || 0) > 0 && (
+                <div style={{ marginTop: 8, padding: '8px 10px', background: 'var(--bg-primary)', borderRadius: 8, border: '1px solid var(--border-primary)' }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 6 }}>
+                    折抵點數（1點 = NT$0.5，可用 {(selectedMember.available_points || 0).toLocaleString()} 點）
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <input
+                      type="number" min={0} max={selectedMember.available_points || 0} step={1}
+                      value={pointsUsed}
+                      onChange={e => setPointsUsed(Math.min(Math.max(0, Math.floor(Number(e.target.value) || 0)), selectedMember.available_points || 0))}
+                      style={{ flex: 1, background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)', borderRadius: 6, padding: '4px 8px', color: 'var(--text-primary)', fontSize: 12, textAlign: 'right' }}
+                    />
+                    <span style={{ fontSize: 11, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>點</span>
+                    <button
+                      onClick={() => setPointsUsed(selectedMember.available_points || 0)}
+                      style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid var(--accent-cyan)', background: 'var(--accent-cyan-dim)', cursor: 'pointer', color: 'var(--text-primary)', fontSize: 11, whiteSpace: 'nowrap' }}
+                    >
+                      全部折抵
+                    </button>
+                    {pointsUsed > 0 && (
+                      <button onClick={() => setPointsUsed(0)} style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid var(--border-primary)', background: 'var(--bg-tertiary)', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 11 }}>
+                        清除
+                      </button>
+                    )}
+                  </div>
+                  {pointsUsed > 0 && (
+                    <div style={{ fontSize: 11, color: 'var(--accent-cyan)', marginTop: 4 }}>
+                      折抵金額：NT$ {pointsDiscount.toLocaleString()}
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          ) : (
+            <div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <input
+                  type="text"
+                  placeholder="輸入電話 / 會員編號後按 Enter"
+                  value={memberQuery}
+                  onChange={e => { setMemberQuery(e.target.value); setNotFound(false) }}
+                  onKeyDown={e => e.key === 'Enter' && handleMemberSearch()}
+                  style={{ flex: 1, background: 'var(--bg-primary)', border: '1px solid var(--border-primary)', borderRadius: 6, padding: '6px 10px', color: 'var(--text-primary)', fontSize: 12 }}
+                />
+                <button
+                  onClick={handleMemberSearch}
+                  disabled={searching || !memberQuery.trim()}
+                  style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border-primary)', background: 'var(--bg-tertiary)', cursor: 'pointer', color: 'var(--text-primary)', display: 'flex', alignItems: 'center' }}
+                >
+                  {searching ? '…' : <Search size={13} />}
+                </button>
+              </div>
+              {notFound && <div style={{ fontSize: 11, color: 'var(--accent-red)', marginTop: 4 }}>找不到會員，以一般顧客結帳</div>}
+            </div>
+          )}
+        </div>
+
         {/* Totals & Payment */}
         <div style={{ padding: 16, borderTop: '1px solid var(--border-primary)', background: 'var(--bg-secondary)', borderRadius: '0 0 12px 12px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 13 }}>
             <span>小計</span><span>NT$ {subtotal.toLocaleString()}</span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, fontSize: 13 }}>
-            <span>折扣</span>
+            <span>手動折扣</span>
             <input
               type="number" min={0} value={discount}
               onChange={e => setDiscount(Math.max(0, Number(e.target.value)))}
               style={{ width: 80, textAlign: 'right', background: 'var(--bg-primary)', border: '1px solid var(--border-primary)', borderRadius: 6, padding: '2px 8px', color: 'var(--text-primary)', fontSize: 13 }}
             />
           </div>
+          {pointsUsed > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 13, color: 'var(--accent-cyan)' }}>
+              <span>點數折抵 ({pointsUsed.toLocaleString()}點)</span>
+              <span>- NT$ {pointsDiscount.toLocaleString()}</span>
+            </div>
+          )}
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 13 }}>
             <span>稅金 (5%)</span><span>NT$ {tax.toLocaleString()}</span>
           </div>

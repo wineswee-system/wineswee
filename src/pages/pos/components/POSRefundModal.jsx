@@ -6,6 +6,7 @@ export default function POSRefundModal({
   setRefundTxnId,
   refundItems,
   refundResult,
+  refundLoading,
   handleRefund,
   toggleRefundItem,
   processRefundSubmit,
@@ -44,7 +45,9 @@ export default function POSRefundModal({
                 onChange={e => setRefundTxnId(e.target.value)}
                 style={{ flex: 1 }}
               />
-              <button className="btn btn-primary" onClick={handleRefund} style={{ padding: '8px 16px' }}>查詢</button>
+              <button className="btn btn-primary" onClick={handleRefund} disabled={refundLoading} style={{ padding: '8px 16px' }}>
+                {refundLoading ? '查詢中...' : '查詢'}
+              </button>
             </div>
           </Field>
 

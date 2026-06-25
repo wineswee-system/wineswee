@@ -39,21 +39,54 @@ export function registerPOSHandlers(bus) {
     })
   })
 
-  // ── POS shift opened → log shift start ──
-  bus.subscribe('pos.shift.opened', async function onShiftOpenedLog(event) {
+  // ── POS shift opened → write HR attendance clock-in ──
+  bus.subscribe('pos.shift.opened', async function onShiftOpenedSyncAttendance(event) {
     const { shift_id, store, cashier, opening_cash } = event.payload
-    console.info(`[POS] Shift ${shift_id} opened by ${cashier} at ${store}, opening cash: NT$${opening_cash}`)
+    const today = new Date().toISOString().slice(0, 10)
+    const clockIn = new Date().toISOString()
+
+    await supabase.from('attendance_records').insert({
+      employee: cashier,
+      date: today,
+      clock_in: clockIn,
+      status: '上班',
+      source: 'pos_shift',
+      pos_shift_id: String(shift_id),
+    }).then(({ error }) => {
+      if (error) console.warn(`[POS] attendance clock-in failed for ${cashier}:`, error.message)
+    })
   })
 
-  // ── POS shift closed → generate shift summary for analytics ──
-  bus.subscribe('pos.shift.closed', async function onShiftClosedSummary(event) {
+  // ── POS shift closed → write HR attendance clock-out + hours ──
+  bus.subscribe('pos.shift.closed', async function onShiftClosedSyncAttendance(event) {
     const { shift_id, store, cashier, closing_cash, cash_difference } = event.payload
+    const today = new Date().toISOString().slice(0, 10)
+    const clockOut = new Date().toISOString()
 
-    // Log significant cash variances
+    // Find the clock-in record written when shift opened
+    const { data: existing } = await supabase
+      .from('attendance_records')
+      .select('id, clock_in')
+      .eq('employee', cashier)
+      .eq('date', today)
+      .eq('pos_shift_id', String(shift_id))
+      .maybeSingle()
+
+    if (existing) {
+      const hours = existing.clock_in
+        ? Math.round((Date.parse(clockOut) - Date.parse(existing.clock_in)) / 36000) / 100
+        : null
+      await supabase.from('attendance_records').update({
+        clock_out: clockOut,
+        status: '正常',
+        hours,
+      }).eq('id', existing.id).then(({ error }) => {
+        if (error) console.warn(`[POS] attendance clock-out failed for ${cashier}:`, error.message)
+      })
+    }
+
     if (Math.abs(cash_difference || 0) > 100) {
-      console.warn(
-        `[POS] Cash variance NT$${cash_difference} on shift ${shift_id} (${store}/${cashier})`
-      )
+      console.warn(`[POS] Cash variance NT$${cash_difference} on shift ${shift_id} (${store}/${cashier})`)
     }
   })
 }

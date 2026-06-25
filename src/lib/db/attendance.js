@@ -91,3 +91,30 @@ export const updateOvertimeStatus = (id, status, rejectReason) =>
     p_status: status,
     p_reject_reason: rejectReason || null,
   })
+
+// Get an employee's scheduled shift for a given date (used by POS shift open)
+export async function getEmployeeShiftForDate(employeeName, date) {
+  const { data: schedule } = await supabase
+    .from('schedules')
+    .select('id, employee, date, shift')
+    .eq('employee', employeeName)
+    .eq('date', date)
+    .maybeSingle()
+  if (!schedule) return null
+  const { data: def } = await supabase
+    .from('shift_definitions')
+    .select('id, name, start_time, end_time, break_minutes, color')
+    .eq('name', schedule.shift)
+    .maybeSingle()
+  return { ...schedule, definition: def }
+}
+
+// Get all active employees for POS shift picker dropdown
+export function getEmployeesActive(orgId) {
+  let q = supabase
+    .from('employees')
+    .select('id, name, department, position')
+    .order('name')
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}

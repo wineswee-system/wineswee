@@ -26,6 +26,7 @@ export default function ExpenseFormDraft({ initialDraft, onCapture, onClose, bus
   const [currencies, setCurrencies] = useState([])
   const [employees, setEmployees] = useState([])
   const [stores, setStores] = useState([])
+  const [departments, setDepartments] = useState([])  // 核銷(驗收)單位下拉
   const [form, setForm] = useState(() => initialDraft?._formState?.form || { ...emptyForm, employee: profile?.name || '' })
   const [lineItems, setLineItems] = useState(() => initialDraft?._formState?.lineItems || [emptyItem()])
   const [files, setFiles] = useState(() => initialDraft?.files || [])
@@ -38,12 +39,16 @@ export default function ExpenseFormDraft({ initialDraft, onCapture, onClose, bus
       .select('id, name, name_en, employee_number, dept, department_id, store, store_id, position, status, signature_url')
       .eq('status', '在職').order('name')
     if (orgId) empQuery = empQuery.eq('organization_id', orgId)
-    Promise.all([getAccounts(orgId), empQuery, supabase.from('stores').select('id, name').order('name'), getCurrencies()])
-      .then(([accRes, empRes, storeRes, curRes]) => {
+    const deptQuery = orgId
+      ? supabase.from('departments').select('id, name, manager_id').eq('organization_id', orgId).order('name')
+      : supabase.from('departments').select('id, name, manager_id').order('name')
+    Promise.all([getAccounts(orgId), empQuery, supabase.from('stores').select('id, name, manager_id').order('name'), getCurrencies(), deptQuery])
+      .then(([accRes, empRes, storeRes, curRes, deptRes]) => {
         setAccounts(accRes?.data || [])
         setEmployees((empRes?.data || []).filter(e => e.status === '在職'))
         setStores(storeRes?.data || [])
         setCurrencies(curRes?.data || [])
+        setDepartments(deptRes?.data || [])
       })
   }, [profile?.organization_id, profile?.name])
 
@@ -52,7 +57,9 @@ export default function ExpenseFormDraft({ initialDraft, onCapture, onClose, bus
     const total = validItems.length > 0 ? validItems.reduce((s, li) => s + (li.subtotal || 0), 0) : Number(form.estimated_amount)
 
     if (isExpense) {
-      if (!validateRequired({ ...form, _total: total }, ['employee', 'account_code', 'title', '_total', 'store'], setErrors, { zeroInvalid: true })) return
+      if (!validateRequired({ ...form, _total: total }, ['employee', 'account_code', 'title', '_total', 'store', 'settle_department_id'], setErrors, { zeroInvalid: true })) return
+      const selDept = departments.find(d => String(d.id) === String(form.settle_department_id))
+      if (selDept?.name === '營運部' && !form.settle_store_id) { setErrors(prev => ({ ...prev, settle_store_id: true })); return }
     } else {
       if (!validateRequired(form, ['employee', 'title'], setErrors)) return
     }
@@ -78,6 +85,9 @@ export default function ExpenseFormDraft({ initialDraft, onCapture, onClose, bus
       items: isExpense ? validItems : null,
       store: isExpense ? (form.store || null) : null,
       currency: isExpense ? (form.currency || 'TWD') : 'TWD',
+      // 核銷(驗收)單位:營運部選總部(__HQ__)→門市存 null、部門維持營運部
+      settle_department_id: isExpense && form.settle_department_id ? Number(form.settle_department_id) : null,
+      settle_store_id: isExpense && form.settle_store_id && form.settle_store_id !== '__HQ__' ? Number(form.settle_store_id) : null,
       organization_id: orgId,
     }
     // _formState 供重填時還原表單；files 為記憶體內 File 物件，任務儲存時才真正上傳
@@ -92,7 +102,7 @@ export default function ExpenseFormDraft({ initialDraft, onCapture, onClose, bus
       form={form} setForm={setForm}
       lineItems={lineItems} setLineItems={setLineItems}
       files={files} setFiles={setFiles}
-      employees={employees} accounts={accounts} stores={stores}
+      employees={employees} accounts={accounts} stores={stores} departments={departments}
       editingId={null}
       isExpense={isExpense} setIsExpense={setIsExpense}
       onSubmit={handleCapture} saving={busy} errors={errors} setErrors={setErrors}

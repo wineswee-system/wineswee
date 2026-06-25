@@ -19,6 +19,8 @@ import Levels from '../pages/crm/Levels'
 import Groups from '../pages/crm/Groups'
 import Surveys from '../pages/crm/Surveys'
 import PilotRuns from '../pages/crm/PilotRuns'
+import Coupons from '../pages/crm/Coupons'
+import PurchaseRecords from '../pages/crm/PurchaseRecords'
 
 export default function CRMModule() {
   return (
@@ -36,7 +38,9 @@ export default function CRMModule() {
       <Route path="levels" element={<Levels />} />
       <Route path="groups" element={<Groups />} />
       <Route path="surveys" element={<Surveys />} />
-      <Route path="pilots" element={<PilotRuns />} />
+      <Route path="pilots"    element={<PilotRuns />} />
+      <Route path="coupons"   element={<Coupons />} />
+      <Route path="purchases" element={<PurchaseRecords />} />
       <Route path="forms" element={<FormBuilder />} />
       <Route path="workflows" element={<WorkflowBuilder />} />
       <Route path="messages" element={<MessageLog />} />

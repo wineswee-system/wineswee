@@ -265,3 +265,86 @@ export const rejectPilotRun = (id, notes, decidedBy) =>
     status:         'rejected',
     updated_at:     new Date().toISOString(),
   }).eq('id', id).select().single()
+
+// ── Coupons ────────────────────────────────────────────────
+
+export const getCoupons = (orgId, { status } = {}) => {
+  let q = supabase.from('coupons').select('*').order('created_at', { ascending: false })
+  if (orgId)  q = q.eq('organization_id', orgId)
+  if (status) q = q.eq('status', status)
+  return q
+}
+
+export const getCouponById = (id) =>
+  supabase.from('coupons').select('*').eq('id', id).single()
+
+export const createCoupon = (data) =>
+  supabase.from('coupons').insert(data).select().single()
+
+export const updateCoupon = (id, data) =>
+  supabase.from('coupons')
+    .update({ ...data, updated_at: new Date().toISOString() })
+    .eq('id', id).select().single()
+
+export const deleteCoupon = (id) =>
+  supabase.from('coupons').delete().eq('id', id)
+
+// ── Coupon Assignments ─────────────────────────────────────
+
+export const getMemberCoupons = (memberId) =>
+  supabase.from('coupon_assignments')
+    .select('*, coupons(id, code, name, type, value, valid_until, min_purchase)')
+    .eq('member_id', memberId)
+    .order('assigned_at', { ascending: false })
+
+export const getCouponAssignments = (couponId) =>
+  supabase.from('coupon_assignments')
+    .select('*, members(id, name, phone, member_number)')
+    .eq('coupon_id', couponId)
+    .order('assigned_at', { ascending: false })
+
+export const assignCoupon = (couponId, memberId, orgId, reason, assignedBy) =>
+  supabase.from('coupon_assignments').insert({
+    coupon_id:         couponId,
+    member_id:         memberId,
+    organization_id:   orgId,
+    assignment_reason: reason || 'individual',
+    assigned_by:       assignedBy || null,
+  }).select().single()
+
+export const redeemCoupon = (assignmentId, purchaseId) =>
+  supabase.from('coupon_assignments').update({
+    used_at:             new Date().toISOString(),
+    used_at_purchase_id: purchaseId || null,
+  }).eq('id', assignmentId).select().single()
+
+export const bulkAssignCoupon = (couponId, memberIds, orgId, reason) => {
+  const rows = memberIds.map(mid => ({
+    coupon_id:         couponId,
+    member_id:         mid,
+    organization_id:   orgId,
+    assignment_reason: reason || 'broadcast',
+  }))
+  return supabase.from('coupon_assignments').upsert(rows, { onConflict: 'coupon_id,member_id' }).select()
+}
+
+// ── Member Purchases (global browse) ──────────────────────
+
+export const getAllMemberPurchases = (orgId, { memberId, storeId, dateFrom, dateTo, limit = 200 } = {}) => {
+  let q = supabase.from('member_purchases')
+    .select('*, members(id, name, phone, member_number), stores(name)')
+    .order('purchased_at', { ascending: false })
+    .limit(limit)
+  if (orgId)    q = q.eq('organization_id', orgId)
+  if (memberId) q = q.eq('member_id', memberId)
+  if (storeId)  q = q.eq('store_id', storeId)
+  if (dateFrom) q = q.gte('purchased_at', `${dateFrom}T00:00:00`)
+  if (dateTo)   q = q.lte('purchased_at', `${dateTo}T23:59:59`)
+  return q
+}
+
+export const getMemberPurchaseSummary = (memberId) =>
+  supabase.from('member_purchases')
+    .select('total_amount, purchased_at')
+    .eq('member_id', memberId)
+    .order('purchased_at', { ascending: false })

@@ -44,11 +44,13 @@ export const groupNav = {
         { icon: Users, label: '客戶分群', path: '/crm/segments' },
         { icon: TrendingUp, label: '銷售漏斗', path: '/crm/pipeline' },
         { icon: Calendar, label: '活動排程', path: '/crm/activities' },
-        { icon: Award, label: '會員管理', path: '/crm/members' },
-        { icon: Award, label: '會員等級設定', path: '/crm/levels' },
-        { icon: Users, label: '會員群組', path: '/crm/groups' },
-        { icon: FileText, label: '問卷管理', path: '/crm/surveys' },
-        { icon: Sparkles, label: 'Pilot 試跑', path: '/crm/pilots' },
+        { icon: Award,       label: '會員管理',    path: '/crm/members' },
+        { icon: Award,       label: '會員等級設定', path: '/crm/levels' },
+        { icon: Users,       label: '會員群組',    path: '/crm/groups' },
+        { icon: Gift,        label: '優惠券管理',  path: '/crm/coupons' },
+        { icon: ShoppingBag, label: '消費紀錄',    path: '/crm/purchases' },
+        { icon: FileText,    label: '問卷管理',    path: '/crm/surveys' },
+        { icon: Sparkles,    label: 'Pilot 試跑',  path: '/crm/pilots' },
       ]
     },
     {

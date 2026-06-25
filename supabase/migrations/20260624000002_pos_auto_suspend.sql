@@ -2,6 +2,9 @@
 -- Triggered AFTER UPDATE of stock_qty on skus
 -- Re-enable must be manual — staff decides when product is ready again
 
+-- Ensure stock_qty exists on skus (may be missing if skus pre-dates this column)
+ALTER TABLE public.skus ADD COLUMN IF NOT EXISTS stock_qty NUMERIC(12,2) DEFAULT 0;
+
 CREATE OR REPLACE FUNCTION trg_fn_pos_product_availability()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN

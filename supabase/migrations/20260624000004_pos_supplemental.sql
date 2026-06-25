@@ -29,7 +29,8 @@ ALTER TABLE pos_returns ENABLE ROW LEVEL SECURITY;
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'pos_returns' AND policyname = 'tenant_pos_returns') THEN
     CREATE POLICY "tenant_pos_returns" ON pos_returns
-      USING (organization_id = (SELECT organization_id FROM employees WHERE id = auth.uid() LIMIT 1));
+      FOR ALL TO authenticated
+      USING (organization_id = auth_org_id());
   END IF;
 END $$;
 

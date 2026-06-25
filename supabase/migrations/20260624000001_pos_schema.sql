@@ -130,7 +130,7 @@ CREATE TABLE IF NOT EXISTS qr_order_sessions (
   store_id        INT     NOT NULL REFERENCES stores(id),
   table_id        UUID    NOT NULL,  -- FK to res_tables(id) added when reservation migration is applied
   order_id        UUID    REFERENCES pos_orders(id),
-  token           TEXT    NOT NULL UNIQUE DEFAULT encode(gen_random_bytes(16), 'hex'),
+  token           TEXT    NOT NULL UNIQUE DEFAULT encode(uuid_send(gen_random_uuid()), 'hex'),
   expires_at      TIMESTAMPTZ NOT NULL DEFAULT now() + INTERVAL '4 hours',
   created_at      TIMESTAMPTZ DEFAULT now(),
   revoked_at      TIMESTAMPTZ

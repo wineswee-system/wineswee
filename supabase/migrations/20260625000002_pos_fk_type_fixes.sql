@@ -23,6 +23,10 @@
 
 BEGIN;
 
+-- pos_shifts may have been created before employee_id was added to the schema
+-- (CREATE TABLE IF NOT EXISTS skipped if table existed). Ensure column is present.
+ALTER TABLE public.pos_shifts ADD COLUMN IF NOT EXISTS employee_id INT;
+
 -- ─── P1a: pos_shifts.employee_id UUID → INT ───────────────────────────────
 
 DO $$ BEGIN
@@ -297,10 +301,22 @@ END $$;
 -- queries (pos_orders WHERE shift_id = ?), cashier reports, and ON DELETE
 -- cascade scans all seq-scan their target tables.
 
-CREATE INDEX IF NOT EXISTS idx_pos_shifts_employee    ON public.pos_shifts(employee_id);
-CREATE INDEX IF NOT EXISTS idx_pos_orders_opened_by   ON public.pos_orders(opened_by);
-CREATE INDEX IF NOT EXISTS idx_pos_orders_shift        ON public.pos_orders(shift_id);
-CREATE INDEX IF NOT EXISTS idx_pos_payments_employee  ON public.pos_payments(employee_id);
-CREATE INDEX IF NOT EXISTS idx_pos_returns_employee   ON public.pos_returns(employee_id);
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='pos_shifts' AND column_name='employee_id') THEN
+    EXECUTE 'CREATE INDEX IF NOT EXISTS idx_pos_shifts_employee ON public.pos_shifts(employee_id)';
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='pos_orders' AND column_name='opened_by') THEN
+    EXECUTE 'CREATE INDEX IF NOT EXISTS idx_pos_orders_opened_by ON public.pos_orders(opened_by)';
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='pos_orders' AND column_name='shift_id') THEN
+    EXECUTE 'CREATE INDEX IF NOT EXISTS idx_pos_orders_shift ON public.pos_orders(shift_id)';
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='pos_payments' AND column_name='employee_id') THEN
+    EXECUTE 'CREATE INDEX IF NOT EXISTS idx_pos_payments_employee ON public.pos_payments(employee_id)';
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='pos_returns' AND column_name='employee_id') THEN
+    EXECUTE 'CREATE INDEX IF NOT EXISTS idx_pos_returns_employee ON public.pos_returns(employee_id)';
+  END IF;
+END $$;
 
 COMMIT;

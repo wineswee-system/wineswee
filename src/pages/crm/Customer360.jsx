@@ -1,6 +1,6 @@
 ﻿import { useState, useEffect } from 'react'
-import { Search, X, User, DollarSign, ShoppingCart, Award, Clock, Phone, Mail, Video, MapPin, MessageCircle, Share2, Headphones, CheckSquare, UserPlus, FileText, Send, Paperclip, Plus } from 'lucide-react'
-import { getMembers, getSalesOrders, getAccountsReceivable, getPointTransactions, getPOSTransactions, getCRMActivities, getCRMNotes, createCRMActivity } from '../../lib/db'
+import { Search, X, User, DollarSign, ShoppingCart, Award, Clock, Phone, Mail, Video, MapPin, MessageCircle, Share2, Headphones, CheckSquare, UserPlus, FileText, Send, Paperclip, Plus, Gift, Calendar } from 'lucide-react'
+import { getMembers, getSalesOrders, getAccountsReceivable, getPointTransactions, getPOSTransactions, getCRMActivities, getCRMNotes, createCRMActivity, getMemberCoupons, getAllMemberPurchases } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import AttachmentsPanel from './components/AttachmentsPanel'
@@ -79,6 +79,9 @@ export default function Customer360() {
   const [selected, setSelected] = useState(null)
   const [detail, setDetail] = useState(null)
   const [detailLoading, setDetailLoading] = useState(false)
+  const [viewTab, setViewTab] = useState('crm')
+  const [b2cData, setB2cData] = useState(null)
+  const [b2cLoading, setB2cLoading] = useState(false)
 
   useEffect(() => {
     getMembers(orgId).then(({ data }) => { setMembers(data || []); setLoading(false) })
@@ -98,6 +101,8 @@ export default function Customer360() {
     setSelected(member)
     setDetailLoading(true)
     setTimelineFilter('all')
+    setViewTab('crm')
+    setB2cData(null)
     const [soRes, arRes, ptRes, posRes, actRes, noteRes, msgRes] = await Promise.all([
       getSalesOrders(orgId),
       getAccountsReceivable(orgId),
@@ -135,6 +140,16 @@ export default function Customer360() {
     }
     setQuickForm({ type: 'call', subject: '', description: '' })
     setShowQuickLog(false)
+  }
+
+  const loadB2cData = async (member) => {
+    setB2cLoading(true)
+    const [couponRes, purchaseRes] = await Promise.all([
+      getMemberCoupons(member.id),
+      getAllMemberPurchases(orgId, { memberId: member.id, limit: 20 }),
+    ])
+    setB2cData({ coupons: couponRes.data ?? [], purchases: purchaseRes.data ?? [] })
+    setB2cLoading(false)
   }
 
   if (loading) return <LoadingSpinner />
@@ -196,6 +211,26 @@ export default function Customer360() {
                 </div>
               </div>
 
+              {/* View tab switcher */}
+              <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
+                {[{ key: 'crm', label: 'CRM 視角' }, { key: 'member', label: '會員 360' }].map(t => (
+                  <button
+                    key={t.key}
+                    onClick={() => {
+                      setViewTab(t.key)
+                      if (t.key === 'member' && !b2cData) loadB2cData(selected)
+                    }}
+                    style={{
+                      padding: '6px 16px', borderRadius: 8, border: '1px solid var(--border)',
+                      background: viewTab === t.key ? 'var(--accent-cyan)' : 'var(--bg-card)',
+                      color: viewTab === t.key ? '#fff' : 'var(--text-secondary)',
+                      fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                    }}
+                  >{t.label}</button>
+                ))}
+              </div>
+
+              {viewTab === 'crm' && (<>
               {/* KPI cards */}
               <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', marginBottom: 16 }}>
                 <div className="stat-card" style={{ '--card-accent': 'var(--accent-green)', '--card-accent-dim': 'var(--accent-green-dim)' }}>
@@ -393,6 +428,89 @@ export default function Customer360() {
                   <AttachmentsPanel entityType="customer" entityId={selected.id} />
                 </div>
               </div>
+              </>}
+
+              {viewTab === 'member' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  {b2cLoading ? (
+                    <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>載入中…</div>
+                  ) : (<>
+                    {/* B2C summary strip */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                      {[
+                        { label: '終身消費',   value: fmt(selected.lifetime_spend ?? selected.total_spent ?? 0), color: 'var(--accent-green)'  },
+                        { label: '可用點數',   value: (selected.available_points || 0).toLocaleString() + ' 點', color: 'var(--accent-purple)' },
+                        { label: 'RFM 分群',   value: selected.rfm_segment ?? '未評分', color: selected.rfm_segment ? 'var(--accent-cyan)' : 'var(--text-muted)' },
+                      ].map(({ label, value, color }) => (
+                        <div key={label} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, padding: '14px 16px' }}>
+                          <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4 }}>{label}</div>
+                          <div style={{ fontSize: 17, fontWeight: 700, color }}>{value}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Active coupons */}
+                    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12, padding: 16 }}>
+                      <h4 style={{ margin: '0 0 12px', fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <Gift size={14} /> 持有優惠券 ({(b2cData?.coupons ?? []).filter(c => !c.used_at).length} 張可用)
+                      </h4>
+                      {!b2cData?.coupons?.length ? (
+                        <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>尚未持有優惠券</div>
+                      ) : (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                          {b2cData.coupons.map(c => (
+                            <div
+                              key={c.id}
+                              style={{
+                                padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+                                background: c.used_at ? 'var(--bg-tertiary, #1e1e2e)' : 'var(--accent-cyan-dim)',
+                                color: c.used_at ? 'var(--text-muted)' : 'var(--accent-cyan)',
+                                border: `1px solid ${c.used_at ? 'var(--border)' : 'var(--accent-cyan)'}`,
+                                textDecoration: c.used_at ? 'line-through' : 'none',
+                              }}
+                            >
+                              {c.coupons?.code ?? c.code} · {c.coupons?.name ?? c.name}
+                              {c.used_at && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 400 }}>已使用</span>}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Purchase history */}
+                    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12, padding: 16 }}>
+                      <h4 style={{ margin: '0 0 12px', fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <Calendar size={14} /> 消費紀錄 (近 20 筆)
+                      </h4>
+                      {!b2cData?.purchases?.length ? (
+                        <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>尚無消費紀錄</div>
+                      ) : (
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                          <thead>
+                            <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                              {['時間', '分店', '金額', '積分'].map(h => (
+                                <th key={h} style={{ padding: '4px 8px', textAlign: 'left', color: 'var(--text-secondary)', fontWeight: 600 }}>{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {b2cData.purchases.map(p => (
+                              <tr key={p.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                                <td style={{ padding: '6px 8px', color: 'var(--text-muted)', fontSize: 12 }}>
+                                  {p.purchased_at ? new Date(p.purchased_at).toLocaleString('zh-TW', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
+                                </td>
+                                <td style={{ padding: '6px 8px', color: 'var(--text-secondary)' }}>{p.stores?.name ?? '—'}</td>
+                                <td style={{ padding: '6px 8px', fontWeight: 700, color: 'var(--accent-green)' }}>NT${Number(p.total_amount).toLocaleString()}</td>
+                                <td style={{ padding: '6px 8px', color: 'var(--accent-purple)' }}>{p.points_earned ? `+${p.points_earned}` : '—'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  </>)}
+                </div>
+              )}
             </div>
           )}
         </div>

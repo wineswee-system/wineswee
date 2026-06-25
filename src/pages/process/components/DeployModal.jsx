@@ -382,7 +382,6 @@ export default function DeployModal({
             指派負責人 + 每步預估天數
           </div>
           {tplSteps.map((step, i) => {
-            const { matched, others } = getMatchingEmployees(step.role, employees, departments)
             const offset = deployForm.step_offsets?.[i] ?? (i + 1)
             const dueDate = deployForm.planned_start_date
               ? new Date(new Date(deployForm.planned_start_date).getTime() + offset * 86400000).toISOString().slice(0, 10)
@@ -407,17 +406,12 @@ export default function DeployModal({
                       預設角色：{step.role || '-'} · 截止：{dueDate} {override.due_time || batch.due_time || '17:00'}
                     </div>
                   </div>
-                  <select className="form-input" style={{ width: '100%', fontSize: 12 }}
-                    value={deployForm.assignees?.[i] || ''}
-                    onChange={e => setDeployForm(f => ({ ...f, assignees: { ...f.assignees, [i]: e.target.value } }))}>
-                    <option value="">請選擇</option>
-                    {matched.length > 0 && (
-                      <optgroup label={`✦ 建議（${step.role}）`}>{matched.map(renderOption)}</optgroup>
-                    )}
-                    {others.length > 0 && (
-                      <optgroup label="其他員工">{others.map(renderOption)}</optgroup>
-                    )}
-                  </select>
+                  <SearchableSelect
+                    value={deployForm.assignees?.[i] || null}
+                    onChange={(v) => setDeployForm(f => ({ ...f, assignees: { ...f.assignees, [i]: v || '' } }))}
+                    options={empOptions(employees, { keyBy: 'name' })}
+                    placeholder="請選擇 / 搜尋員工..."
+                  />
                   <input className="form-input" type="number" min="0" max="180"
                     style={{ width: '100%', fontSize: 12 }} title="從開始日起算第幾天到期"
                     value={offset}

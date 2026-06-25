@@ -560,6 +560,36 @@ export default function HeadcountRequest() {
                               setShowForm(true)
                             }}>✏️ {['已駁回','已退回'].includes(r.status) ? '編輯重送' : '編輯'}</button>
                         )}
+                        {r.employee_id === profile?.id && (
+                          <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px', color: 'var(--accent-cyan)' }} title="以這張為範本開一張全新申請（不動原單）"
+                            onClick={() => {
+                              setEditingId(null)
+                              setForm({
+                                employee_id: r.employee_id,
+                                applicant_dept_id: r.applicant_dept_id || '',
+                                request_date: r.request_date || new Date().toISOString().slice(0, 10),
+                                need_dept_id: r.need_dept_id || '',
+                                store_id: r.store_id || '',
+                                headcount: r.headcount || 1,
+                                new_reason: r.new_reason || '',
+                                job_title: r.job_title || '',
+                                job_type: r.job_type || '正職',
+                                job_description: r.job_description || '',
+                                salary_type: r.salary_type || '月薪',
+                                salary_range: r.salary_range || '',
+                                management_resp: r.management_resp || '',
+                                business_travel: r.business_travel || '',
+                                work_shift: r.work_shift || '',
+                                rest_policy: r.rest_policy || '',
+                                experience_required: r.experience_required || '',
+                                education_required: r.education_required || '',
+                                major_required: r.major_required || '',
+                                tool_required: r.tool_required || '',
+                                other_conditions: r.other_conditions || '',
+                              })
+                              setShowForm(true)
+                            }}>📋 複製</button>
+                        )}
                         <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px' }} title="下載簽呈"
                           onClick={() => printWithChain(r)}>
                           <Printer size={11} />

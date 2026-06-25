@@ -369,6 +369,20 @@ export default function Resignation() {
                               setShowForm(true)
                             }}>✏️ {(['已駁回','已退回'].includes(r.status)) ? '編輯重送' : '編輯'}</button>
                         )}
+                        {r.employee_id === profile?.id && (
+                          <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px', color: 'var(--accent-cyan)' }} title="以這張為範本開一張全新申請（不動原單）"
+                            onClick={() => {
+                              setEditingId(null)
+                              setForm({
+                                employee_id: r.employee_id,
+                                planned_resign_date: r.planned_resign_date || '',
+                                reason: r.reason || '個人因素',
+                                reason_detail: r.reason_detail || '',
+                                handover_notes: r.handover_notes || '',
+                              })
+                              setShowForm(true)
+                            }}>📋 複製</button>
+                        )}
                         <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px' }} title="下載簽呈"
                           onClick={() => printWithChain(r)}>
                           <Printer size={11} />

@@ -122,6 +122,9 @@ export default function TransferRequest() {
     setShowForm(true)
   }
 
+  // 複製：以舊單為範本開全新單（不動原單）
+  const openClone = (r) => { openEdit(r); setEditingId(null) }
+
   function emptyForm() {
     return {
       employee_id: '',
@@ -402,6 +405,11 @@ export default function TransferRequest() {
                         {canEdit && (
                           <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px', color: 'var(--accent-cyan)' }} onClick={() => openEdit(r)}>
                             <Pencil size={11} /> {['已駁回','已退回'].includes(r.status) ? '編輯重送' : '編輯'}
+                          </button>
+                        )}
+                        {r.employee_id === profile?.id && (
+                          <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px', color: 'var(--accent-cyan)' }} title="以這張為範本開一張全新申請（不動原單）" onClick={() => openClone(r)}>
+                            📋 複製
                           </button>
                         )}
                         {canCancel && (

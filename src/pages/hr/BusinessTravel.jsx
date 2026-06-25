@@ -319,6 +319,20 @@ export default function BusinessTravel() {
                           setShowModal(true)
                         }}>✏️ {(t.status === '已駁回' || t.status === '已退回') ? '編輯重送' : '編輯'}</button>
                       )}
+                      {t.employee === profile?.name && (
+                        <button className="btn btn-sm btn-secondary" style={{ color: 'var(--accent-cyan)' }} title="以這張為範本開一張全新申請（不動原單）" onClick={() => {
+                          setEditingId(null)
+                          setForm({
+                            employee: t.employee,
+                            destination: t.destination || '',
+                            start_date: t.start_date || '',
+                            end_date: t.end_date || '',
+                            purpose: t.purpose || '',
+                            budget: t.budget?.toString() || '',
+                          })
+                          setShowModal(true)
+                        }}>📋 複製</button>
+                      )}
                       <button className="btn btn-sm btn-secondary" title="下載簽呈"
                         onClick={() => printWithChain(t)}>
                         <Printer size={11} />

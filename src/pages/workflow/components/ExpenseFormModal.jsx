@@ -133,6 +133,7 @@ export default function ExpenseFormModal({
   form, setForm,
   lineItems, setLineItems,
   files, setFiles,
+  carriedAtts = [], onRemoveCarried,
   employees, accounts, stores,
   editingId,
   isExpense, setIsExpense,
@@ -419,6 +420,24 @@ export default function ExpenseFormModal({
             <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 600 }}>
               附件（訂購單、報價單...）<span style={{ fontWeight: 400, color: 'var(--text-muted)', fontSize: 12 }}> · {(files || []).filter(Boolean).length}/20</span>
             </label>
+            {/* 複製重送：從原單帶入的舊附件（會一起送出，可逐一移除） */}
+            {carriedAtts.length > 0 && (
+              <div style={{ marginBottom: 8 }}>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>📎 從原單帶入（送出時一併複製，可移除）</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {carriedAtts.map((a, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, padding: '4px 8px', background: 'var(--accent-cyan-dim)', borderRadius: 6 }}>
+                      <FileText size={12} style={{ color: 'var(--accent-cyan)', flexShrink: 0 }} />
+                      <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.file_name}</span>
+                      <button type="button" onClick={() => onRemoveCarried?.(i)} aria-label="移除"
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-red)', padding: 0, lineHeight: 1, flexShrink: 0 }}>
+                        <X size={13} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             {(files || []).filter(Boolean).length > 0 && (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 8, marginBottom: 8 }}>
                 {(files || []).filter(Boolean).map((file, i) => (

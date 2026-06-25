@@ -88,7 +88,8 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
   const [isExpense, setIsExpense] = useState(true)
   const [errors, setErrors] = useState({})
   const [editingId, setEditingId] = useState(null)  // null = 新增, 數字 = 編輯重送
-  const [cloneSourceId, setCloneSourceId] = useState(null)  // 複製重送：來源單 id（用來複製附件）
+  const [carriedAtts, setCarriedAtts] = useState([])  // 複製重送帶過來的舊附件（彈窗內可刪，送出時複製留下的）
+  const removeCarriedAtt = (idx) => setCarriedAtts(prev => prev.filter((_, i) => i !== idx))
   const [files, setFiles] = useState([])
   const [settleFiles, setSettleFiles] = useState([])
   const [attachments, setAttachments] = useState({})
@@ -236,7 +237,15 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
   // 進入「編輯重送」模式（駁回後申請人想改內容再送出）；asClone=true → 以舊單為範本開全新單(不動原單)
   const openEditResubmit = (req, asClone = false) => {
     setEditingId(asClone ? null : req.id)
-    setCloneSourceId(asClone ? req.id : null)  // 複製模式記來源單 → submit 後複製其附件
+    // 複製模式：把來源單的舊附件帶進彈窗（可刪/可改），送出時複製留下的；編輯模式不帶
+    if (asClone) {
+      supabase.from('expense_request_attachments')
+        .select('file_name, storage_path, file_size, file_type, stage')
+        .eq('request_id', req.id).eq('stage', 'request')
+        .then(({ data }) => setCarriedAtts(data || []))
+    } else {
+      setCarriedAtts([])
+    }
     setForm({
       employee: req.employee || '',
       account_code: req.account_code || '',
@@ -367,18 +376,13 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
       await uploadFiles(data.id, files, 'request')
     }
 
-    // 複製重送：把來源單的申請附件 row 複製到新單（共用 storage_path，不重傳）
-    if (cloneSourceId && data) {
-      const { data: srcAtts } = await supabase.from('expense_request_attachments')
-        .select('file_name, storage_path, file_size, file_type, stage')
-        .eq('request_id', cloneSourceId).eq('stage', 'request')
-      if (srcAtts?.length) {
-        await supabase.from('expense_request_attachments').insert(
-          srcAtts.map(a => ({ ...a, request_id: data.id, uploaded_by: form.employee || '系統' }))
-        )
-      }
-      setCloneSourceId(null)
+    // 複製重送：把彈窗內「留下的」舊附件複製到新單（共用 storage_path，不重傳）
+    if (carriedAtts.length > 0 && data) {
+      await supabase.from('expense_request_attachments').insert(
+        carriedAtts.map(a => ({ ...a, request_id: data.id, uploaded_by: form.employee || '系統' }))
+      )
     }
+    setCarriedAtts([])
 
     // Create approval workflow + 把 instance.id 寫回 expense_request 建立雙向 link
     if (data) {
@@ -962,13 +966,15 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
       {/* New Request Modal */}
       <ExpenseFormModal
         open={showModal}
-        onClose={() => { setShowModal(false); setErrors({}); setCloneSourceId(null) }}
+        onClose={() => { setShowModal(false); setErrors({}); setCarriedAtts([]) }}
         form={form}
         setForm={setForm}
         lineItems={lineItems}
         setLineItems={setLineItems}
         files={files}
         setFiles={setFiles}
+        carriedAtts={carriedAtts}
+        onRemoveCarried={removeCarriedAtt}
         employees={employees}
         accounts={accounts}
         stores={stores}

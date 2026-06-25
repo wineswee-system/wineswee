@@ -36,6 +36,7 @@ export default function Expenses() {
   const [error, setError] = useState(null)
   const [showModal, setShowModal] = useState(false)
   const [editingId, setEditingId] = useState(null)
+  const [cloneSourceAtts, setCloneSourceAtts] = useState([])  // 複製重送：來源單的附件 URL（送出後複製 storage 檔）
   const [form, setForm] = useState({ employee: '', category: CATEGORIES[0], amount: '', date: '', description: '', receipt: true })
   const [errors, setErrors] = useState({})
   const [organization, setOrganization] = useState(null)  // 印簽呈用
@@ -195,6 +196,21 @@ export default function Expenses() {
       const empRow = employees.find(e2 => e2.name === form.employee)
       if (attachFiles.length > 0) {
         await uploadAttachments(data.id, empRow?.id)
+      }
+      // 複製重送：把來源單的附件 storage 檔複製一份到新單（各自獨立，不動原單）
+      if (cloneSourceAtts.length > 0) {
+        const newUrls = []
+        for (const url of cloneSourceAtts) {
+          const m = String(url).match(/\/expense-receipts\/(.+)$/)
+          if (!m) { newUrls.push(url); continue }
+          const oldPath = decodeURIComponent(m[1].split('?')[0])
+          const ext = (oldPath.split('.').pop() || 'bin').toLowerCase()
+          const newPath = `emp-${empRow?.id || 'x'}/${data.id}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`
+          const { error: cpErr } = await supabase.storage.from('expense-receipts').copy(oldPath, newPath)
+          newUrls.push(cpErr ? url : supabase.storage.from('expense-receipts').getPublicUrl(newPath).data.publicUrl)
+        }
+        if (newUrls.length) await supabase.from('expenses').update({ attachments: newUrls }).eq('id', data.id)
+        setCloneSourceAtts([])
       }
       setShowModal(false)
       setAttachFiles([])
@@ -402,6 +418,21 @@ export default function Expenses() {
                           setShowModal(true)
                         }}>✏️ {(e.status === '已駁回' || e.status === '已退回') ? '編輯重送' : '編輯'}</button>
                       )}
+                      {e.employee === profile?.name && (
+                        <button className="btn btn-sm btn-secondary" style={{ color: 'var(--accent-cyan)' }} title="以這張為範本開一張全新報銷（含附件，不動原單）" onClick={() => {
+                          setEditingId(null)
+                          setCloneSourceAtts(Array.isArray(e.attachments) ? e.attachments : [])
+                          setForm({
+                            employee: e.employee,
+                            category: e.category || CATEGORIES[0],
+                            amount: e.amount?.toString() || '',
+                            date: e.date || '',
+                            description: e.description || '',
+                            receipt: e.receipt ?? true,
+                          })
+                          setShowModal(true)
+                        }}>📋 複製</button>
+                      )}
                       <button className="btn btn-sm btn-secondary" title="下載簽呈"
                         onClick={() => printWithChain(e)}>
                         <Printer size={11} />
@@ -423,7 +454,7 @@ export default function Expenses() {
       {showModal && (
         <Modal
           title={editingId ? '✏️ 編輯重送（駁回後修改）' : '新增經常性費用報銷'}
-          onClose={() => { setShowModal(false); setErrors({}); setEditingId(null) }}
+          onClose={() => { setShowModal(false); setErrors({}); setEditingId(null); setCloneSourceAtts([]) }}
           onSubmit={handleSubmit}
           successMessage={editingId ? '已重新送審，主管會收到通知' : '經常性費用報銷已送出，等待主管簽核'}
         >

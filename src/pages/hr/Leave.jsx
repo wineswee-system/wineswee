@@ -45,6 +45,7 @@ export default function Leave() {
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [editingId, setEditingId] = useState(null)
+  const [cloneSourceAtts, setCloneSourceAtts] = useState([])  // 複製重送：來源單附件 URL（送出後複製 storage 檔）
   const [showPolicyModal, setShowPolicyModal] = useState(false)
   const [form, setForm] = useState({ employee: '', type: 'annual', start_date: '', end_date: '', start_time: '09:00', end_time: '18:00', unit: 'day', hours: 0, days: 1, reason: '' })
   const [validationMsg, setValidationMsg] = useState('')
@@ -348,6 +349,21 @@ export default function Leave() {
       // 附件上傳（與 LIFF 同 bucket / path 規則）
       if (attachFiles.length > 0) {
         await uploadAttachments(data.id, empRow?.id)
+      }
+      // 複製重送：把來源單的附件 storage 檔複製一份到新單（各自獨立，不動原單）
+      if (cloneSourceAtts.length > 0) {
+        const newUrls = []
+        for (const url of cloneSourceAtts) {
+          const m = String(url).match(/\/leave-attachments\/(.+)$/)
+          if (!m) { newUrls.push(url); continue }
+          const oldPath = decodeURIComponent(m[1].split('?')[0])
+          const ext = (oldPath.split('.').pop() || 'bin').toLowerCase()
+          const newPath = `emp-${empRow?.id || 'x'}/${data.id}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`
+          const { error: cpErr } = await supabase.storage.from('leave-attachments').copy(oldPath, newPath)
+          newUrls.push(cpErr ? url : supabase.storage.from('leave-attachments').getPublicUrl(newPath).data.publicUrl)
+        }
+        if (newUrls.length) await supabase.from('leave_requests').update({ attachments: newUrls }).eq('id', data.id)
+        setCloneSourceAtts([])
       }
       setShowModal(false)
       setAttachFiles([])
@@ -691,6 +707,25 @@ export default function Leave() {
                           }}>✏️ {isRejected ? '編輯重送' : '編輯'}</button>
                         )
                       })()}
+                      {l.employee === profile?.name && (
+                        <button className="btn btn-sm btn-secondary" style={{ color: 'var(--accent-cyan)' }} title="以這張為範本開一張全新假單（含附件，不動原單）" onClick={() => {
+                          setEditingId(null)
+                          setCloneSourceAtts(Array.isArray(l.attachments) ? l.attachments : [])
+                          setForm({
+                            employee: l.employee || '',
+                            type: l.type || 'annual',
+                            start_date: l.start_date || '',
+                            end_date: l.end_date || '',
+                            start_time: l.start_time || '09:00',
+                            end_time: l.end_time || '18:00',
+                            unit: l.start_time ? 'hour' : 'day',
+                            hours: l.hours || 0,
+                            days: l.days || 1,
+                            reason: l.reason || '',
+                          })
+                          setShowModal(true)
+                        }}>📋 複製</button>
+                      )}
                       {l.status === '待審核' && l.employee === profile?.name && !signedIds.has(l.id) && (
                         <AsyncButton className="btn btn-sm btn-secondary"
                           style={{ color: 'var(--accent-red)' }}
@@ -723,7 +758,7 @@ export default function Leave() {
       {/* New / Edit Leave Modal */}
       <LeaveFormModal
         open={showModal}
-        onClose={() => { setShowModal(false); setValidationMsg(''); setErrors({}); setEditingId(null) }}
+        onClose={() => { setShowModal(false); setValidationMsg(''); setErrors({}); setEditingId(null); setCloneSourceAtts([]) }}
         form={form}
         setForm={setForm}
         employees={employees}

@@ -304,8 +304,8 @@ export async function cmdManagerAssign(nameQuery: string, title: string, db: Sup
   const { error } = await db.from("tasks").insert({
     title,
     assignee_id: assignee.id,
-    status: "in_progress",
-    priority: "medium",
+    status: "進行中",
+    priority: "中",
   });
 
   if (error) return text(`❌ 指派失敗：${error.message}`);
@@ -560,8 +560,8 @@ async function finalizeTaskCreation(
   const insertPayload: Record<string, any> = {
     title: data.title,
     assignee_id: assignedTo,
-    status: "pending",
-    priority: "medium",
+    status: "待處理",
+    priority: "中",
   };
 
   if (data.workflow_instance_id) insertPayload.workflow_instance_id = data.workflow_instance_id;

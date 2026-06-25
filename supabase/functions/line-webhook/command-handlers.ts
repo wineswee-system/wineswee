@@ -28,10 +28,10 @@ export async function checkWorkflowCompletion(
     .eq("id", workflowInstanceId)
     .maybeSingle();
 
-  if (!instance || instance.status === "completed") return;
+  if (!instance || instance.status === "已完成") return;
 
   await db.from("workflow_instances").update({
-    status: "completed",
+    status: "已完成",
     completed_at: new Date().toISOString(),
   }).eq("id", workflowInstanceId);
 
@@ -248,8 +248,8 @@ export async function cmdTaskCreate(userId: string, title: string, db: SupabaseC
   const { error } = await db.from("tasks").insert({
     title,
     assignee_id: employeeId,
-    status: "pending",
-    priority: "medium",
+    status: "待處理",
+    priority: "中",
   });
 
   if (error) return text(`❌ 建立失敗：${error.message}`);
@@ -615,7 +615,7 @@ export async function cmdTaskConfirmRespond(rawId: string, action: string, userI
       confirmation_status: "approved",
       confirmation_responded_at: new Date().toISOString(),
       confirmation_notes: "所有確認人已核准",
-      status: "completed",
+      status: "已完成",
       completed_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }).eq("id", task.id);

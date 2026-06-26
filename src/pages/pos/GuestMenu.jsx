@@ -158,11 +158,12 @@ const S = {
     fontSize: 14, fontWeight: active ? 800 : 500, cursor: 'pointer',
   }),
   logoWrap: {
-    width: 108, height: 108, borderRadius: 24,
+    width: 140, height: 140, borderRadius: 28,
     background: 'rgba(255,255,255,.12)',
-    border: '1.5px solid rgba(201,164,85,.4)',
-    overflow: 'hidden', marginBottom: 24, flexShrink: 0,
-    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 48,
+    border: '2px solid rgba(201,164,85,.5)',
+    overflow: 'hidden', marginBottom: 28, flexShrink: 0,
+    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 60,
+    boxShadow: '0 8px 32px rgba(0,0,0,.3)',
   },
   welLine:  { width: 44, height: 1.5, background: C.gold, margin: '0 auto 22px', opacity: .8 },
   welName:  { fontSize: 32, fontWeight: 800, color: C.white, letterSpacing: '1px', marginBottom: 12 },
@@ -328,6 +329,14 @@ function LogoImg({ logoUrl, storeName = '', size = 100, radius = 22, fontSize = 
   )
 }
 
+// 依語言取品項名稱，fallback 到中文
+function itemName(item, lang) {
+  if (lang === 'en') return item.name_en || item.name
+  if (lang === 'ja') return item.name_ja || item.name
+  if (lang === 'ko') return item.name_ko || item.name
+  return item.name
+}
+
 function Spinner() {
   return (
     <>
@@ -414,7 +423,7 @@ export default function GuestMenu() {
         supabase.from('pos_menu_categories').select('id, name, display_order')
           .eq('store_id', storeId).eq('is_active', true).order('display_order'),
         supabase.from('pos_menu_items')
-          .select('id, name, description, unit_price, tax_rate, image_url, category_id')
+          .select('id, name, name_en, name_ja, name_ko, description, unit_price, tax_rate, image_url, category_id')
           .eq('store_id', storeId).eq('is_available', true).order('display_order'),
       ])
       setCategories(cats ?? [])
@@ -466,8 +475,9 @@ export default function GuestMenu() {
           : <div style={S.thumbPH}>🍽️</div>
         }
         <div style={S.itemBody}>
-          <div style={S.itemName}>{item.name}</div>
-          {item.description && <div style={S.itemDesc}>{item.description}</div>}
+          <div style={S.itemName}>{itemName(item, lang)}</div>
+          {lang === 'zh' && item.description && <div style={S.itemDesc}>{item.description}</div>}
+          {lang !== 'zh' && item.name !== itemName(item, lang) && <div style={S.itemDesc}>{item.name}</div>}
           <div style={S.itemPrice}>NT$ {Number(item.unit_price).toLocaleString()}</div>
         </div>
         <div style={{ flexShrink: 0 }}>
@@ -513,7 +523,7 @@ export default function GuestMenu() {
 
         {/* Logo */}
         <div style={S.logoWrap}>
-          <LogoImg logoUrl={logoUrl} storeName={storeName} size={100} radius={0} fontSize={44} />
+          <LogoImg logoUrl={logoUrl} storeName={storeName} size={140} radius={0} fontSize={60} />
         </div>
 
         <div style={S.welLine} />

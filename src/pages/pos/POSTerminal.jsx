@@ -88,9 +88,6 @@ export default function POSTerminal() {
   })
   const [showRecallMenu, setShowRecallMenu] = useState(false)
 
-  // Split payment [{method: string, amount: number}]
-  const [paymentSplits, setPaymentSplits] = useState([])
-
   // Offline mode
   const [isOfflineMode, setIsOfflineMode] = useState(false)
 
@@ -731,12 +728,86 @@ export default function POSTerminal() {
               </button>
             )}
             <POSQROrderQueue />
+
+            {/* Hold / Recall controls */}
+            {cart.length > 0 && (
+              <button
+                className="btn"
+                style={{
+                  background: 'var(--accent-orange-dim)',
+                  border: '1px solid var(--accent-orange)',
+                  color: 'var(--accent-orange)',
+                }}
+                onClick={holdOrder}
+              >
+                掛單
+              </button>
+            )}
+            <div style={{ position: 'relative' }}>
+              <button
+                className="btn"
+                style={{
+                  background: 'var(--bg-tertiary)',
+                  border: '1px solid var(--border-primary)',
+                  display: 'flex', alignItems: 'center', gap: 6,
+                }}
+                onClick={() => setShowRecallMenu(v => !v)}
+              >
+                叫回
+                {savedOrders.length > 0 && (
+                  <span style={{
+                    background: 'var(--accent-orange)',
+                    color: '#fff',
+                    borderRadius: '50%', fontSize: 11, fontWeight: 700,
+                    width: 18, height: 18,
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    {savedOrders.length}
+                  </span>
+                )}
+              </button>
+              {showRecallMenu && savedOrders.length > 0 && (
+                <div style={{
+                  position: 'absolute', top: '100%', right: 0, zIndex: 50,
+                  background: 'var(--bg-card)', border: '1px solid var(--border-primary)',
+                  borderRadius: 8, minWidth: 240, padding: 8, marginTop: 4,
+                }}>
+                  {savedOrders.map(o => (
+                    <button
+                      key={o.id}
+                      onClick={() => recallOrder(o)}
+                      style={{
+                        display: 'block', width: '100%', textAlign: 'left',
+                        padding: '8px 12px', borderRadius: 6, border: 'none',
+                        background: 'transparent', color: 'var(--text-primary)',
+                        cursor: 'pointer',
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)' }}
+                      onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+                    >
+                      {new Date(o.savedAt).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}
+                      　{o.cart.length} 項　NT{o.cart.reduce((s, i) => s + i.price * i.qty, 0)}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <button className="btn" style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-primary)' }} onClick={() => setShowRefund(true)}>
               <RotateCcw size={14} /> 退貨/退款
             </button>
           </div>
         </div>
       </div>
+
+      {isOfflineMode && (
+        <div style={{
+          background: 'var(--accent-orange-dim)', color: 'var(--accent-orange)',
+          padding: '6px 16px', fontSize: 13, textAlign: 'center',
+        }}>
+          ⚠️ 離線模式 — 顯示快取資料，交易將在連線後同步
+        </div>
+      )}
 
       <POSPaymentOverlay
         paymentStage={paymentStage}

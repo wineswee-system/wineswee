@@ -1,13 +1,14 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import QRCode from 'qrcode'
 import { supabase } from '../../lib/supabase'
 import { kitchenPrinter } from '../../lib/kitchenPrinter'
-import { useAuth } from '../../contexts/AuthContext'
+import { useAuth, useOrgId } from '../../contexts/AuthContext'
 import { useTenant } from '../../contexts/TenantContext'
 import { toast } from '../../lib/toast'
 
-// ── Inline styles (CSS-var only — no hardcoded colors) ─────────────────────
+// ── Styles ────────────────────────────────────────────────────────────────────
 const S = {
   page: {
     minHeight: '100dvh',
@@ -20,88 +21,80 @@ const S = {
   header: {
     background: 'var(--bg-secondary)',
     borderBottom: '1px solid var(--border-primary)',
-    padding: '14px 20px',
+    padding: '12px 16px',
     position: 'sticky',
     top: 0,
     zIndex: 20,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 12,
+    gap: 10,
+    flexShrink: 0,
   },
-  headerLeft: { display: 'flex', flexDirection: 'column', gap: 2 },
-  h1: { margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' },
-  sub: { margin: 0, fontSize: 13, color: 'var(--text-muted)' },
-  headerRight: { display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 },
-  iconBtn: {
-    padding: '7px 14px',
+  headerLeft:  { display: 'flex', flexDirection: 'column', gap: 1 },
+  h1:          { margin: 0, fontSize: 17, fontWeight: 700, color: 'var(--text-primary)' },
+  sub:         { margin: 0, fontSize: 12, color: 'var(--text-muted)' },
+  headerRight: { display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 },
+  iconBtn: (primary) => ({
+    padding: '7px 12px',
     borderRadius: 8,
-    border: '1px solid var(--border-primary)',
-    background: 'var(--bg-card)',
-    color: 'var(--text-secondary)',
-    fontSize: 13,
+    border: primary ? 'none' : '1px solid var(--border-primary)',
+    background: primary ? 'var(--accent-cyan)' : 'var(--bg-card)',
+    color: primary ? '#fff' : 'var(--text-secondary)',
+    fontSize: 12,
     fontWeight: 600,
     cursor: 'pointer',
-  },
+    whiteSpace: 'nowrap',
+  }),
   center: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    gap: 16,
-    padding: 32,
-    textAlign: 'center',
+    display: 'flex', flexDirection: 'column',
+    alignItems: 'center', justifyContent: 'center',
+    flex: 1, gap: 16, padding: 32, textAlign: 'center',
   },
 
-  // ── Table select ───────────────────────────────────────────────────────────
+  // ── Table select ─────────────────────────────────────────────────────────────
   tableGrid: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))',
-    gap: 12,
-    padding: 20,
+    gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
+    gap: 12, padding: 20,
   },
-  tableCard: (busy) => ({
+  tableCard: (status) => ({
     background: 'var(--bg-card)',
-    border: `2px solid ${busy ? 'var(--accent-orange)' : 'var(--accent-green)'}`,
-    borderRadius: 14,
-    padding: '18px 12px',
+    border: `2px solid ${
+      status === 'empty' ? 'var(--accent-green)' :
+      status === 'busy'  ? 'var(--accent-orange)' :
+                           'var(--accent-red)'
+    }`,
+    borderRadius: 14, padding: '18px 12px',
     cursor: 'pointer',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: 8,
+    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
     transition: 'all 0.15s',
   }),
   tableNum: { fontSize: 26, fontWeight: 800, color: 'var(--text-primary)' },
-  tableBadge: (busy) => ({
-    fontSize: 12,
-    fontWeight: 700,
-    padding: '3px 10px',
-    borderRadius: 20,
-    background: busy ? 'var(--accent-orange-dim)' : 'var(--accent-green-dim)',
-    color: busy ? 'var(--accent-orange)' : 'var(--accent-green)',
+  tableBadge: (status) => ({
+    fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 20,
+    background:
+      status === 'empty' ? 'var(--accent-green-dim)' :
+      status === 'busy'  ? 'var(--accent-orange-dim)' :
+                           'var(--accent-red-dim)',
+    color:
+      status === 'empty' ? 'var(--accent-green)' :
+      status === 'busy'  ? 'var(--accent-orange)' :
+                           'var(--accent-red)',
   }),
   tableCap: { fontSize: 12, color: 'var(--text-muted)' },
 
-  // ── Order phase ────────────────────────────────────────────────────────────
+  // ── Order phase ───────────────────────────────────────────────────────────────
+  orderBody: { display: 'flex', flex: 1, overflow: 'hidden' },
   catBar: {
-    display: 'flex',
-    gap: 8,
-    padding: '10px 16px',
-    overflowX: 'auto',
-    background: 'var(--bg-secondary)',
+    display: 'flex', gap: 8, padding: '10px 14px',
+    overflowX: 'auto', background: 'var(--bg-secondary)',
     borderBottom: '1px solid var(--border-primary)',
-    scrollbarWidth: 'none',
-    flexShrink: 0,
+    scrollbarWidth: 'none', flexShrink: 0,
   },
   catBtn: (active) => ({
-    flexShrink: 0,
-    padding: '7px 16px',
-    borderRadius: 20,
-    border: 'none',
-    cursor: 'pointer',
-    fontSize: 13,
+    flexShrink: 0, padding: '7px 16px', borderRadius: 20, border: 'none',
+    cursor: 'pointer', fontSize: 13,
     fontWeight: active ? 700 : 500,
     background: active ? 'var(--accent-cyan)' : 'var(--bg-card)',
     color: active ? '#fff' : 'var(--text-secondary)',
@@ -109,226 +102,321 @@ const S = {
   }),
   itemGrid: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(155px, 1fr))',
-    gap: 12,
-    padding: '16px 16px 160px',
-    overflowY: 'auto',
-    flex: 1,
+    gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))',
+    gap: 10, padding: '14px 14px 140px',
+    overflowY: 'auto', flex: 1,
   },
   itemCard: (inCart) => ({
     background: 'var(--bg-card)',
     border: `2px solid ${inCart ? 'var(--accent-cyan)' : 'var(--border-primary)'}`,
-    borderRadius: 12,
-    overflow: 'hidden',
-    cursor: 'pointer',
-    position: 'relative',
-    transition: 'border-color 0.15s',
+    borderRadius: 12, overflow: 'hidden', cursor: 'pointer',
+    position: 'relative', transition: 'border-color 0.15s',
   }),
-  img: { width: '100%', height: 100, objectFit: 'cover', display: 'block' },
-  imgPlaceholder: {
-    width: '100%',
-    height: 80,
+  img: { width: '100%', height: 90, objectFit: 'cover', display: 'block' },
+  imgPH: {
+    width: '100%', height: 75,
     background: 'var(--bg-secondary)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: 26,
-    color: 'var(--text-muted)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    fontSize: 24, color: 'var(--text-muted)',
   },
   cardBody: { padding: '8px 10px 10px' },
-  itemName: { fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.3, marginBottom: 2 },
+  itemName:  { fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.3, marginBottom: 2 },
   itemPrice: { fontSize: 14, fontWeight: 700, color: 'var(--accent-cyan)' },
-  qtyCntBadge: {
-    position: 'absolute',
-    top: 6,
-    right: 6,
-    background: 'var(--accent-cyan)',
-    color: '#fff',
-    borderRadius: 12,
-    fontSize: 12,
-    fontWeight: 700,
-    padding: '2px 7px',
+  badge: {
+    position: 'absolute', top: 6, right: 6,
+    background: 'var(--accent-cyan)', color: '#fff',
+    borderRadius: 12, fontSize: 12, fontWeight: 700, padding: '2px 7px',
   },
-  courseBadge: {
-    position: 'absolute',
-    top: 6,
-    left: 6,
-    background: 'var(--accent-purple-dim)',
-    color: 'var(--accent-purple)',
-    borderRadius: 10,
-    fontSize: 11,
-    fontWeight: 700,
-    padding: '2px 7px',
-    cursor: 'pointer',
-    userSelect: 'none',
-  },
-  qtyRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 6,
-    justifyContent: 'flex-end',
-  },
-  qtyBtn: (isRemove) => ({
-    width: 26,
-    height: 26,
-    borderRadius: 6,
-    border: 'none',
-    cursor: 'pointer',
-    background: isRemove ? 'var(--accent-red)' : 'var(--accent-cyan)',
-    color: '#fff',
-    fontSize: 16,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    lineHeight: 1,
-    flexShrink: 0,
+  qtyRow: { display: 'flex', alignItems: 'center', gap: 5, marginTop: 5, justifyContent: 'flex-end' },
+  qtyBtn: (rm) => ({
+    width: 24, height: 24, borderRadius: 6, border: 'none', cursor: 'pointer',
+    background: rm ? 'var(--accent-red)' : 'var(--accent-cyan)', color: '#fff',
+    fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, flexShrink: 0,
   }),
-  notePopup: {
-    position: 'fixed',
-    inset: 0,
-    zIndex: 50,
-    background: 'rgba(0,0,0,0.45)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  noteBox: {
-    background: 'var(--bg-card)',
-    borderRadius: 14,
-    padding: 20,
-    width: '100%',
-    maxWidth: 360,
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 12,
-  },
-  noteTitle: { fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', margin: 0 },
-  textarea: {
-    width: '100%',
+
+  // ── Right panel ───────────────────────────────────────────────────────────────
+  panel: {
+    width: 300, borderLeft: '1px solid var(--border-primary)',
     background: 'var(--bg-secondary)',
-    border: '1px solid var(--border-primary)',
-    borderRadius: 8,
-    padding: '10px 12px',
-    fontSize: 14,
-    color: 'var(--text-primary)',
-    outline: 'none',
-    resize: 'none',
-    boxSizing: 'border-box',
-    fontFamily: 'inherit',
+    display: 'flex', flexDirection: 'column',
+    overflowY: 'auto', flexShrink: 0,
   },
+  panelHead: {
+    padding: '12px 14px 8px',
+    fontSize: 13, fontWeight: 700, color: 'var(--text-muted)',
+    letterSpacing: '0.5px', textTransform: 'uppercase',
+    borderBottom: '1px solid var(--border-primary)',
+  },
+  panelRow: {
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+    padding: '8px 14px', gap: 8,
+    borderBottom: '1px solid var(--border-primary)',
+    fontSize: 13,
+  },
+  panelRowName: { flex: 1, color: 'var(--text-primary)', fontWeight: 500, lineHeight: 1.3 },
+  panelRowAmt:  { color: 'var(--text-secondary)', fontWeight: 600, flexShrink: 0, fontSize: 12 },
+  panelEmpty: { padding: '16px 14px', fontSize: 13, color: 'var(--text-muted)', textAlign: 'center' },
+  panelFoot: {
+    marginTop: 'auto', borderTop: '1px solid var(--border-primary)',
+    padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8,
+  },
+  panelTotal: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' },
+  panelTotalLabel: { fontSize: 13, color: 'var(--text-muted)' },
+  panelTotalAmt: { fontSize: 22, fontWeight: 800, color: 'var(--text-primary)' },
+
+  // ── Footer (mobile) ───────────────────────────────────────────────────────────
   footer: {
-    position: 'fixed',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    background: 'var(--bg-secondary)',
-    borderTop: '1px solid var(--border-primary)',
-    padding: '12px 16px',
-    zIndex: 30,
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 8,
+    position: 'fixed', bottom: 0, left: 0, right: 0,
+    background: 'var(--bg-secondary)', borderTop: '1px solid var(--border-primary)',
+    padding: '10px 14px', zIndex: 30,
+    display: 'flex', gap: 8, alignItems: 'center',
   },
-  footerRow: { display: 'flex', alignItems: 'center', gap: 10 },
-  submitBtn: (disabled) => ({
-    flex: 1,
-    padding: '12px 0',
-    borderRadius: 10,
-    border: 'none',
+  footChip: { fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', flexShrink: 0 },
+  footBtn: (primary, disabled) => ({
+    flex: 1, padding: '11px 0', borderRadius: 10, border: 'none',
     cursor: disabled ? 'not-allowed' : 'pointer',
-    background: disabled ? 'var(--bg-card)' : 'var(--accent-cyan)',
+    background: disabled ? 'var(--bg-card)' :
+                primary  ? 'var(--accent-cyan)' : 'var(--accent-green)',
     color: disabled ? 'var(--text-muted)' : '#fff',
-    fontSize: 15,
-    fontWeight: 700,
-    transition: 'background 0.15s',
+    fontSize: 14, fontWeight: 700, transition: 'background 0.15s',
   }),
-  chip: {
-    fontSize: 13,
-    fontWeight: 700,
-    color: 'var(--text-secondary)',
-    whiteSpace: 'nowrap',
-    flexShrink: 0,
-  },
-  noteToggle: (active) => ({
-    flexShrink: 0,
-    width: 38,
-    height: 38,
-    borderRadius: 8,
-    border: `1px solid ${active ? 'var(--accent-cyan)' : 'var(--border-primary)'}`,
-    background: active ? 'var(--accent-cyan-dim)' : 'var(--bg-card)',
-    color: active ? 'var(--accent-cyan)' : 'var(--text-muted)',
-    cursor: 'pointer',
-    fontSize: 18,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  }),
-  errBanner: {
-    margin: '8px 16px 0',
-    padding: '10px 14px',
-    background: 'var(--accent-red-dim)',
-    border: '1px solid var(--accent-red)',
-    borderRadius: 8,
-    fontSize: 13,
-    color: 'var(--accent-red)',
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-  },
+
+  // ── Note popup ────────────────────────────────────────────────────────────────
+  overlay: { position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 },
+  noteBox: { background: 'var(--bg-card)', borderRadius: 14, padding: 20, width: '100%', maxWidth: 360, display: 'flex', flexDirection: 'column', gap: 12 },
+  noteTitle: { fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', margin: 0 },
+  textarea: { width: '100%', background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)', borderRadius: 8, padding: '10px 12px', fontSize: 14, color: 'var(--text-primary)', outline: 'none', resize: 'none', boxSizing: 'border-box', fontFamily: 'inherit' },
   rowBtn: { display: 'flex', gap: 8, justifyContent: 'flex-end' },
-  smallBtn: (primary) => ({
-    padding: '6px 16px',
-    borderRadius: 8,
-    border: `1px solid ${primary ? 'var(--accent-cyan)' : 'var(--border-primary)'}`,
-    background: primary ? 'var(--accent-cyan)' : 'var(--bg-card)',
-    color: primary ? '#fff' : 'var(--text-secondary)',
-    fontSize: 13,
-    fontWeight: 600,
-    cursor: 'pointer',
-  }),
+  smallBtn: (p) => ({ padding: '7px 18px', borderRadius: 8, border: `1px solid ${p ? 'var(--accent-cyan)' : 'var(--border-primary)'}`, background: p ? 'var(--accent-cyan)' : 'var(--bg-card)', color: p ? '#fff' : 'var(--text-secondary)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }),
+
+  // ── Error banner ──────────────────────────────────────────────────────────────
+  errBanner: { margin: '8px 14px 0', padding: '10px 14px', background: 'var(--accent-red-dim)', border: '1px solid var(--accent-red)', borderRadius: 8, fontSize: 13, color: 'var(--accent-red)', display: 'flex', alignItems: 'center', gap: 8 },
+
+  // ── Checkout modal ────────────────────────────────────────────────────────────
+  coBox: { position: 'relative', zIndex: 1, background: 'var(--bg-card)', borderRadius: 16, border: '1px solid var(--border-primary)', width: '100%', maxWidth: 420, maxHeight: '90dvh', display: 'flex', flexDirection: 'column' },
+  coHead: { padding: '16px 20px 12px', borderBottom: '1px solid var(--border-primary)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 },
+  coTitle: { fontSize: 17, fontWeight: 800, color: 'var(--text-primary)' },
+  coClose: { background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 22, lineHeight: 1, padding: 4 },
+  coBody: { overflowY: 'auto', flex: 1, padding: '0 20px' },
+  coSection: { fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.8px', textTransform: 'uppercase', padding: '12px 0 4px' },
+  coRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '6px 0', borderBottom: '1px solid var(--border-primary)', fontSize: 14, gap: 8 },
+  coTotal: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '14px 20px', background: 'var(--bg-secondary)', borderTop: '2px solid var(--border-primary)', flexShrink: 0 },
+  coPayMethods: { display: 'flex', gap: 8, padding: '10px 20px', flexWrap: 'wrap', borderBottom: '1px solid var(--border-primary)', flexShrink: 0 },
+  coPayBtn: (active) => ({ padding: '8px 16px', borderRadius: 8, border: `1.5px solid ${active ? 'var(--accent-cyan)' : 'var(--border-primary)'}`, background: active ? 'var(--accent-cyan-dim)' : 'var(--bg-card)', color: active ? 'var(--accent-cyan)' : 'var(--text-secondary)', fontSize: 13, fontWeight: active ? 700 : 500, cursor: 'pointer' }),
+  coFoot: { padding: '14px 20px', display: 'flex', gap: 10, flexShrink: 0 },
 }
 
+function Spinner() {
+  return (
+    <>
+      <div style={{ width: 36, height: 36, border: '3px solid var(--border-primary)', borderTopColor: 'var(--accent-cyan)', borderRadius: '50%', animation: 'spin .8s linear infinite' }} />
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+    </>
+  )
+}
+
+// ── Checkout Modal ─────────────────────────────────────────────────────────────
+const PAY_METHODS = [
+  { key: 'cash',     label: '現金' },
+  { key: 'card',     label: '信用卡' },
+  { key: 'line_pay', label: 'LINE Pay' },
+  { key: 'jkopay',  label: '街口' },
+  { key: 'other',   label: '其他' },
+]
+
+function CheckoutModal({ tableNumber, allItems, orgId, storeId, orderId, onClose, onDone }) {
+  const [payMethod, setPayMethod] = useState('cash')
+  const [busy, setBusy] = useState(false)
+
+  const total = allItems.reduce((s, i) => s + Number(i.unit_price) * i.quantity, 0)
+
+  async function confirm() {
+    setBusy(true)
+    try {
+      await supabase.from('pos_payments').insert({
+        organization_id: orgId,
+        store_id: storeId,
+        order_id: orderId,
+        amount: total,
+        payment_method: payMethod,
+      })
+      await supabase.from('pos_orders').update({
+        status: 'paid',
+        paid_at: new Date().toISOString(),
+      }).eq('id', orderId)
+
+      toast.success(`T${tableNumber} 結帳完成 NT$${total.toLocaleString()}`)
+      onDone()
+    } catch (e) {
+      toast.error('結帳失敗：' + e.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return createPortal(
+    <div style={S.overlay}>
+      <div onClick={onClose} style={{ position: 'absolute', inset: 0 }} />
+      <div style={S.coBox}>
+        <div style={S.coHead}>
+          <span style={S.coTitle}>結帳 — 桌號 T{tableNumber}</span>
+          <button style={S.coClose} onClick={onClose}>×</button>
+        </div>
+
+        <div style={S.coBody}>
+          <div style={S.coSection}>品項明細</div>
+          {allItems.map((item, i) => (
+            <div key={item.id ?? i} style={S.coRow}>
+              <span style={{ flex: 1, color: 'var(--text-primary)' }}>{item.name} <span style={{ color: 'var(--text-muted)' }}>×{item.quantity}</span></span>
+              <span style={{ color: 'var(--text-secondary)', fontWeight: 600, flexShrink: 0 }}>NT${(Number(item.unit_price) * item.quantity).toLocaleString()}</span>
+            </div>
+          ))}
+          {allItems.length === 0 && (
+            <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 14 }}>無品項</div>
+          )}
+        </div>
+
+        <div style={S.coTotal}>
+          <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-muted)' }}>應收合計</span>
+          <span style={{ fontSize: 26, fontWeight: 800, color: 'var(--text-primary)' }}>NT${total.toLocaleString()}</span>
+        </div>
+
+        <div style={{ padding: '10px 20px 4px', fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.5px' }}>付款方式</div>
+        <div style={S.coPayMethods}>
+          {PAY_METHODS.map(m => (
+            <button key={m.key} style={S.coPayBtn(payMethod === m.key)} onClick={() => setPayMethod(m.key)}>{m.label}</button>
+          ))}
+        </div>
+
+        <div style={S.coFoot}>
+          <button style={{ ...S.smallBtn(false), flex: 1 }} onClick={onClose} disabled={busy}>取消</button>
+          <button
+            style={{ flex: 2, padding: '12px 0', borderRadius: 10, border: 'none', cursor: busy ? 'not-allowed' : 'pointer', background: busy ? 'var(--bg-card)' : 'var(--accent-green)', color: busy ? 'var(--text-muted)' : '#fff', fontSize: 15, fontWeight: 800, opacity: busy ? 0.7 : 1 }}
+            onClick={confirm} disabled={busy}
+          >
+            {busy ? '結帳中…' : '確認收款'}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  )
+}
+
+// ── Right-side order panel ────────────────────────────────────────────────────
+function OrderPanel({ existingItems, cart, items, storeId, orgId, orderId, tableNumber, onSubmit, onCheckout, submitBusy }) {
+  const cartEntries = Object.entries(cart).filter(([, v]) => v.qty > 0)
+  const newTotal    = cartEntries.reduce((s, [id, v]) => {
+    const item = items.find(i => i.id === id)
+    return s + (item ? Number(item.unit_price) * v.qty : 0)
+  }, 0)
+  const existTotal  = existingItems.reduce((s, i) => s + Number(i.unit_price) * i.quantity, 0)
+  const grandTotal  = existTotal + newTotal
+  const newCount    = cartEntries.reduce((s, [, v]) => s + v.qty, 0)
+
+  return (
+    <div style={S.panel}>
+      {/* Existing items */}
+      {existingItems.length > 0 && (
+        <>
+          <div style={S.panelHead}>已點 · NT${existTotal.toLocaleString()}</div>
+          {existingItems.map((item, i) => (
+            <div key={item.id ?? i} style={S.panelRow}>
+              <span style={S.panelRowName}>{item.name}</span>
+              <span style={S.panelRowAmt}>×{item.quantity}　NT${(Number(item.unit_price) * item.quantity).toLocaleString()}</span>
+            </div>
+          ))}
+        </>
+      )}
+
+      {/* Cart (new items) */}
+      {cartEntries.length > 0 && (
+        <>
+          <div style={{ ...S.panelHead, background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)' }}>新增 · NT${newTotal.toLocaleString()}</div>
+          {cartEntries.map(([id, v]) => {
+            const item = items.find(i => i.id === id)
+            if (!item) return null
+            return (
+              <div key={id} style={S.panelRow}>
+                <span style={S.panelRowName}>{item.name}</span>
+                <span style={{ ...S.panelRowAmt, color: 'var(--accent-cyan)' }}>×{v.qty}　NT${(Number(item.unit_price) * v.qty).toLocaleString()}</span>
+              </div>
+            )
+          })}
+        </>
+      )}
+
+      {existingItems.length === 0 && cartEntries.length === 0 && (
+        <div style={S.panelEmpty}>尚未點餐</div>
+      )}
+
+      {/* Footer */}
+      <div style={S.panelFoot}>
+        <div style={S.panelTotal}>
+          <span style={S.panelTotalLabel}>合計</span>
+          <span style={S.panelTotalAmt}>NT${grandTotal.toLocaleString()}</span>
+        </div>
+        {newCount > 0 && (
+          <button
+            style={{ width: '100%', padding: '10px 0', borderRadius: 10, border: 'none', cursor: submitBusy ? 'not-allowed' : 'pointer', background: submitBusy ? 'var(--bg-card)' : 'var(--accent-cyan)', color: submitBusy ? 'var(--text-muted)' : '#fff', fontSize: 14, fontWeight: 700 }}
+            onClick={onSubmit} disabled={submitBusy}
+          >
+            {submitBusy ? '送出中…' : `送廚房（${newCount} 品）`}
+          </button>
+        )}
+        {orderId && (
+          <button
+            style={{ width: '100%', padding: '10px 0', borderRadius: 10, border: 'none', cursor: 'pointer', background: 'var(--accent-green)', color: '#fff', fontSize: 14, fontWeight: 700 }}
+            onClick={onCheckout}
+          >
+            結帳 NT${grandTotal.toLocaleString()}
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── Main ──────────────────────────────────────────────────────────────────────
 export default function WaiterMode() {
-  const navigate = useNavigate()
+  const navigate  = useNavigate()
   const { user, profile } = useAuth()
+  const orgId     = useOrgId()
   const { tenant } = useTenant()
-  const storeId = profile?.store_id ?? tenant?.organization_id ?? null
+  const storeId   = profile?.store_id ?? null
 
-  const [phase, setPhase] = useState('loading') // loading|select_table|order|confirm|done|error
-  const [errMsg, setErrMsg] = useState('')
-
-  // Table select state
-  const [tables,       setTables]       = useState([])
-  const [activeOrders, setActiveOrders] = useState([]) // [{id, table_id}]
-  const [selTable,     setSelTable]     = useState(null)
-
-  // Order state
-  const [categories, setCategories] = useState([])
-  const [items,      setItems]      = useState([])
-  const [selCat,     setSelCat]     = useState(null)
-  const [cart,       setCart]       = useState({}) // { itemId: { qty, note, course } }
-  const [orderNote,  setOrderNote]  = useState('')
-  const [showNote,   setShowNote]   = useState(false)
-
-  // Per-item note popup
-  const [noteTarget, setNoteTarget] = useState(null)
-  const [noteDraft,  setNoteDraft]  = useState('')
-
-  // QR generation + reprint
-  const [showQr,     setShowQr]     = useState(false)
-  const [qrUrl,      setQrUrl]      = useState('')
-  const [genQr,      setGenQr]      = useState(false)
-  const [lastOrderId,       setLastOrderId]       = useState(null)
-  const [lastOrderItems,    setLastOrderItems]    = useState([])
+  const [phase,         setPhase]         = useState('loading')
+  const [errMsg,        setErrMsg]        = useState('')
+  const [tables,        setTables]        = useState([])
+  const [activeOrders,  setActiveOrders]  = useState([])
+  const [selTable,      setSelTable]      = useState(null)
+  const [orderId,       setOrderId]       = useState(null)
+  const [existingItems, setExistingItems] = useState([])
+  const [categories,    setCategories]    = useState([])
+  const [items,         setItems]         = useState([])
+  const [selCat,        setSelCat]        = useState(null)
+  const [cart,          setCart]          = useState({})
+  const [submitBusy,    setSubmitBusy]    = useState(false)
+  const [showCheckout,  setShowCheckout]  = useState(false)
+  const [showNote,      setShowNote]      = useState(false)
+  const [noteTarget,    setNoteTarget]    = useState(null)
+  const [noteDraft,     setNoteDraft]     = useState('')
+  const [showQr,        setShowQr]        = useState(false)
+  const [qrUrl,         setQrUrl]         = useState('')
+  const [genQr,         setGenQr]         = useState(false)
+  const [wide,          setWide]          = useState(typeof window !== 'undefined' && window.innerWidth >= 900)
   const qrCanvasRef = useRef(null)
+  const storeName   = profile?.store ?? ''
 
-  const storeName = profile?.store ?? ''
+  useEffect(() => {
+    const fn = () => setWide(window.innerWidth >= 900)
+    window.addEventListener('resize', fn)
+    return () => window.removeEventListener('resize', fn)
+  }, [])
 
   // ── Boot: load tables + active orders ─────────────────────────────────────
   useEffect(() => {
-    if (!user) { setErrMsg('auth'); setPhase('error'); return }
+    if (!user)    { setErrMsg('auth');     setPhase('error'); return }
     if (!storeId) { setErrMsg('no_store'); setPhase('error'); return }
 
     async function boot() {
@@ -356,24 +444,35 @@ export default function WaiterMode() {
       setItems(menuItems ?? [])
       if (cats?.length) setSelCat(cats[0].id)
     }
-    loadMenu().catch(e => { setErrMsg(e?.message ?? '菜單載入失敗') })
+    loadMenu().catch(e => setErrMsg(e?.message ?? '菜單載入失敗'))
   }, [phase, storeId])
 
+  // ── QR canvas ─────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!showQr || !qrUrl || !qrCanvasRef.current) return
+    QRCode.toCanvas(qrCanvasRef.current, qrUrl, { width: 220, margin: 2, color: { dark: '#0f172a', light: '#ffffff' } })
+  }, [showQr, qrUrl])
+
   // ── Derived ───────────────────────────────────────────────────────────────
-  const busyTableIds = new Set(activeOrders.map(o => o.table_id))
-  const visibleItems = selCat ? items.filter(i => i.category_id === selCat) : items
-  const cartEntries  = Object.entries(cart).filter(([, v]) => v.qty > 0)
-  const cartCount    = cartEntries.reduce((s, [, v]) => s + v.qty, 0)
-  const cartTotal    = cartEntries.reduce((s, [id, v]) => {
+  const cartEntries = Object.entries(cart).filter(([, v]) => v.qty > 0)
+  const cartCount   = cartEntries.reduce((s, [, v]) => s + v.qty, 0)
+  const cartTotal   = cartEntries.reduce((s, [id, v]) => {
     const item = items.find(i => i.id === id)
-    return s + (item ? item.unit_price * v.qty : 0)
+    return s + (item ? Number(item.unit_price) * v.qty : 0)
   }, 0)
+  const visibleItems = selCat ? items.filter(i => i.category_id === selCat) : items
+
+  const tableStatus = (tableId) => {
+    const order = activeOrders.find(o => o.table_id === tableId)
+    if (!order) return 'empty'
+    return 'busy'
+  }
 
   // ── Cart mutations ────────────────────────────────────────────────────────
   const addItem = useCallback((itemId) => {
     setCart(prev => {
       if (prev[itemId]) return { ...prev, [itemId]: { ...prev[itemId], qty: prev[itemId].qty + 1 } }
-      return { ...prev, [itemId]: { qty: 1, note: '', course: 1 } }
+      return { ...prev, [itemId]: { qty: 1, note: '' } }
     })
   }, [])
 
@@ -382,21 +481,8 @@ export default function WaiterMode() {
       const cur = prev[itemId]
       if (!cur) return prev
       const next = Math.max(0, cur.qty + delta)
-      if (next === 0) {
-        const { [itemId]: _removed, ...rest } = prev
-        return rest
-      }
+      if (next === 0) { const { [itemId]: _r, ...rest } = prev; return rest }
       return { ...prev, [itemId]: { ...cur, qty: next } }
-    })
-  }, [])
-
-  // Cycles course 1→2→3→1
-  const cycleCourse = useCallback((e, itemId) => {
-    e.stopPropagation()
-    setCart(prev => {
-      const cur = prev[itemId]
-      if (!cur) return prev
-      return { ...prev, [itemId]: { ...cur, course: (cur.course % 3) + 1 } }
     })
   }, [])
 
@@ -416,22 +502,40 @@ export default function WaiterMode() {
     setNoteTarget(null)
   }, [noteTarget, noteDraft])
 
-  // ── Walk-in QR generation ─────────────────────────────────────────────────
+  // ── Select table ──────────────────────────────────────────────────────────
+  async function selectTable(table) {
+    const activeOrder = activeOrders.find(o => o.table_id === table.id)
+    setSelTable(table)
+    setCart({})
+    setErrMsg('')
+
+    if (activeOrder) {
+      setOrderId(activeOrder.id)
+      const { data: existing } = await supabase
+        .from('pos_order_items')
+        .select('id, name, unit_price, quantity, note')
+        .eq('order_id', activeOrder.id)
+        .order('created_at')
+      setExistingItems(existing ?? [])
+    } else {
+      setOrderId(null)
+      setExistingItems([])
+    }
+    setPhase('order')
+  }
+
+  // ── Generate QR ───────────────────────────────────────────────────────────
   async function generateQR() {
     if (!selTable || !storeId) return
     setGenQr(true)
     try {
-      const token = crypto.randomUUID()
-      const { data: session, error } = await supabase
-        .from('qr_order_sessions')
-        .insert({
-          store_id:   storeId,
-          table_id:   selTable.id,
-          token,
-          expires_at: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
-        })
-        .select('token')
-        .single()
+      const { data: session, error } = await supabase.from('qr_order_sessions').insert({
+        organization_id: orgId,
+        store_id: storeId,
+        table_id: selTable.id,
+        token: crypto.randomUUID(),
+        expires_at: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
+      }).select('token').single()
       if (error) throw error
       setQrUrl(`${window.location.origin}/menu/${storeId}/${selTable.id}?token=${session.token}`)
       setShowQr(true)
@@ -442,146 +546,92 @@ export default function WaiterMode() {
     }
   }
 
-  // ── Kitchen ticket reprint ─────────────────────────────────────────────────
-  async function handleReprint() {
-    if (!lastOrderId) { toast.error('尚無可重印訂單'); return }
-    if (!kitchenPrinter.isConnected()) { toast.error('廚房印表機未連線'); return }
-    let itemsToPrint = lastOrderItems
-    if (!itemsToPrint.length) {
-      const { data } = await supabase
-        .from('pos_order_items')
-        .select('name, quantity, note, course')
-        .eq('order_id', lastOrderId)
-        .order('created_at')
-      itemsToPrint = data ?? []
-    }
-    kitchenPrinter.reprint({
-      orderNumber:  lastOrderId,
-      tableNumber:  selTable?.table_number ?? '?',
-      items:        itemsToPrint.map(i => ({ name: i.name, qty: i.quantity, note: i.note, course: i.course })),
-    })
-  }
-
-  // ── Submit ────────────────────────────────────────────────────────────────
+  // ── Submit cart to kitchen ────────────────────────────────────────────────
   async function handleSubmit() {
     if (cartCount === 0 || !selTable) return
-    setPhase('confirm')
+    setSubmitBusy(true)
     setErrMsg('')
-
     try {
-      // Reuse existing open order for the table, or create a new one
-      const { data: existing } = await supabase
-        .from('pos_orders')
-        .select('id')
-        .eq('store_id', storeId)
-        .eq('table_id', selTable.id)
-        .in('status', ['open', 'submitted'])
-        .maybeSingle()
+      let currentOrderId = orderId
 
-      let orderId = existing?.id ?? null
-
-      if (!orderId) {
+      if (!currentOrderId) {
         const { data: newOrder, error: oErr } = await supabase
           .from('pos_orders')
-          .insert({ store_id: storeId, table_id: selTable.id, status: 'submitted', opened_by: user.id, guest_count: 1 })
-          .select('id')
-          .single()
+          .insert({ organization_id: orgId, store_id: storeId, table_id: selTable.id, status: 'open', opened_by: user.id })
+          .select('id').single()
         if (oErr) throw oErr
-        orderId = newOrder.id
+        currentOrderId = newOrder.id
+        setOrderId(currentOrderId)
+        setActiveOrders(prev => [...prev, { id: currentOrderId, table_id: selTable.id, status: 'open' }])
       }
 
       const rows = cartEntries.map(([id, v]) => {
         const item = items.find(i => i.id === id)
         return {
-          order_id:        orderId,
-          store_id:        storeId,
+          order_id:        currentOrderId,
+          item_type:       'menu',
           menu_item_id:    id,
           name:            item?.name ?? '',
           unit_price:      item?.unit_price ?? 0,
           quantity:        v.qty,
           note:            v.note || null,
-          course:          v.course,
+          source:          'staff',
           sent_to_kitchen: true,
-          item_status:     'confirmed',
-          source:          'waiter',
         }
       })
 
       const { error: iErr } = await supabase.from('pos_order_items').insert(rows)
       if (iErr) throw iErr
 
-      // Optimistically mark table as busy so the grid updates when we return
-      setActiveOrders(prev =>
-        prev.some(o => o.table_id === selTable.id)
-          ? prev
-          : [...prev, { id: orderId, table_id: selTable.id, status: 'submitted' }]
-      )
-
-      // Save for reprint
-      setLastOrderId(orderId)
-      setLastOrderItems(rows.map(r => ({ name: r.name, qty: r.quantity, note: r.note, course: r.course })))
-
-      setPhase('done')
-      setTimeout(() => { setPhase('select_table'); setSelTable(null) }, 1500)
+      // Append to local existing items for display
+      setExistingItems(prev => [...prev, ...rows.map(r => ({ ...r, id: r.menu_item_id + Date.now() }))])
+      setCart({})
+      toast.success('已送廚房')
     } catch (e) {
-      setErrMsg(e?.message ?? '送出失敗，請稍後再試')
-      setPhase('order')
+      setErrMsg(e?.message ?? '送出失敗')
+    } finally {
+      setSubmitBusy(false)
     }
   }
 
-  // ── Loading ───────────────────────────────────────────────────────────────
+  // ── Back to table list ─────────────────────────────────────────────────────
+  function backToTables() {
+    setPhase('select_table')
+    setSelTable(null)
+    setOrderId(null)
+    setExistingItems([])
+    setCart({})
+    setErrMsg('')
+  }
+
+  // ── After checkout ─────────────────────────────────────────────────────────
+  function afterCheckout() {
+    setActiveOrders(prev => prev.filter(o => o.table_id !== selTable?.id))
+    setShowCheckout(false)
+    backToTables()
+  }
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // RENDERS
+  // ────────────────────────────────────────────────────────────────────────────
+
   if (phase === 'loading') return (
-    <div style={S.page}>
-      <div style={S.center}>
-        <Spinner />
-        <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>載入中…</span>
-      </div>
-    </div>
+    <div style={S.page}><div style={S.center}><Spinner /><span style={{ fontSize: 14, color: 'var(--text-muted)' }}>載入中…</span></div></div>
   )
 
-  // ── Error ─────────────────────────────────────────────────────────────────
   if (phase === 'error') {
-    if (errMsg === 'auth') return (
-      <div style={S.page}>
-        <div style={S.center}>
-          <div style={{ fontSize: 44 }}>🔒</div>
-          <div style={{ fontSize: 16, fontWeight: 700 }}>請先登入</div>
-          <button style={S.smallBtn(true)} onClick={() => navigate('/login')}>前往登入</button>
-        </div>
-      </div>
-    )
+    const msg = errMsg === 'auth' ? '請先登入' : errMsg === 'no_store' ? '無法取得門市資料，請聯繫管理員' : errMsg
     return (
       <div style={S.page}>
         <div style={S.center}>
-          <div style={{ fontSize: 44, color: 'var(--accent-red)' }}>!</div>
+          <div style={{ fontSize: 42, color: 'var(--accent-red)' }}>!</div>
           <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--accent-red)' }}>載入失敗</div>
-          <div style={{ fontSize: 14, color: 'var(--text-muted)' }}>{errMsg === 'no_store' ? '無法取得店舖資訊，請聯繫管理員' : errMsg}</div>
+          <div style={{ fontSize: 14, color: 'var(--text-muted)' }}>{msg}</div>
           <button style={S.smallBtn(false)} onClick={() => navigate('/pos')}>返回 POS</button>
         </div>
       </div>
     )
   }
-
-  // ── Done ──────────────────────────────────────────────────────────────────
-  if (phase === 'done') return (
-    <div style={S.page}>
-      <div style={S.center}>
-        <div style={{ fontSize: 60, color: 'var(--accent-green)' }}>✓</div>
-        <div style={{ fontSize: 18, fontWeight: 700 }}>訂單已送出廚房！</div>
-        <div style={{ fontSize: 14, color: 'var(--text-muted)' }}>正在返回桌位選擇…</div>
-      </div>
-    </div>
-  )
-
-  // ── Submitting (confirm phase = in-flight) ────────────────────────────────
-  if (phase === 'confirm') return (
-    <div style={S.page}>
-      <div style={S.center}>
-        <Spinner />
-        <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>送出中…</span>
-      </div>
-    </div>
-  )
 
   // ── SELECT TABLE ──────────────────────────────────────────────────────────
   if (phase === 'select_table') return (
@@ -591,34 +641,47 @@ export default function WaiterMode() {
           <h1 style={S.h1}>服務員點餐</h1>
           {storeName && <p style={S.sub}>{storeName}</p>}
         </div>
-        <div style={S.headerRight}>
-          <button style={S.iconBtn} onClick={() => navigate('/pos')}>← 返回</button>
-        </div>
+        <button style={S.iconBtn(false)} onClick={() => navigate('/pos')}>← 返回</button>
       </div>
 
       {tables.length === 0 ? (
         <div style={S.center}>
-          <div style={{ fontSize: 14, color: 'var(--text-muted)' }}>尚未設定任何桌位</div>
+          <div style={{ fontSize: 40 }}>🪑</div>
+          <div style={{ fontSize: 15, color: 'var(--text-muted)' }}>尚未設定桌位</div>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>請先至「訂位管理 → 桌台設定」新增桌台</div>
           <button style={S.smallBtn(false)} onClick={() => navigate('/pos')}>返回 POS</button>
         </div>
       ) : (
-        <div style={S.tableGrid}>
-          {tables.map(t => {
-            const busy = busyTableIds.has(t.id)
-            return (
-              <div key={t.id} style={S.tableCard(busy)} onClick={() => { setSelTable(t); setCart({}); setOrderNote(''); setPhase('order') }}>
-                <span style={S.tableNum}>T{t.table_number}</span>
-                <span style={S.tableBadge(busy)}>{busy ? '用餐中' : '空桌'}</span>
-                {t.capacity && <span style={S.tableCap}>{t.capacity} 人</span>}
+        <>
+          {/* Legend */}
+          <div style={{ display: 'flex', gap: 16, padding: '12px 20px 0', flexWrap: 'wrap' }}>
+            {[{ status: 'empty', label: '空桌' }, { status: 'busy', label: '用餐中' }].map(({ status, label }) => (
+              <div key={status} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ width: 10, height: 10, borderRadius: '50%', background: status === 'empty' ? 'var(--accent-green)' : 'var(--accent-orange)' }} />
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{label}</span>
               </div>
-            )
-          })}
-        </div>
+            ))}
+          </div>
+          <div style={S.tableGrid}>
+            {tables.map(t => {
+              const status = tableStatus(t.id)
+              return (
+                <div key={t.id} style={S.tableCard(status)} onClick={() => selectTable(t)}>
+                  <span style={S.tableNum}>T{t.table_number}</span>
+                  <span style={S.tableBadge(status)}>{status === 'empty' ? '空桌' : '用餐中'}</span>
+                  {t.capacity && <span style={S.tableCap}>{t.capacity} 人</span>}
+                </div>
+              )
+            })}
+          </div>
+        </>
       )}
     </div>
   )
 
   // ── ORDER ─────────────────────────────────────────────────────────────────
+  const allCheckoutItems = existingItems
+
   return (
     <div style={S.page}>
       {/* Header */}
@@ -628,33 +691,22 @@ export default function WaiterMode() {
           {storeName && <p style={S.sub}>{storeName}</p>}
         </div>
         <div style={S.headerRight}>
-          <button style={S.iconBtn} onClick={() => { setPhase('select_table'); setSelTable(null) }}>返回</button>
-          <button
-            style={{ ...S.iconBtn, fontSize: 12 }}
-            onClick={generateQR}
-            disabled={genQr}
-            title="為此桌產生 QR 點餐連結"
-          >
-            {genQr ? '…' : '生成QR'}
+          <button style={S.iconBtn(false)} onClick={backToTables}>← 返回</button>
+          <button style={S.iconBtn(false)} onClick={generateQR} disabled={genQr} title="產生 QR 點餐連結">
+            {genQr ? '…' : '📱 QR'}
           </button>
-          <button
-            style={{ ...S.iconBtn, fontSize: 12 }}
-            onClick={handleReprint}
-            title="重印廚房單"
-          >
-            🖨 重印
-          </button>
-          <button
-            style={{ ...S.iconBtn, background: cartCount > 0 ? 'var(--accent-cyan)' : 'var(--bg-card)', color: cartCount > 0 ? '#fff' : 'var(--text-muted)', borderColor: cartCount > 0 ? 'var(--accent-cyan)' : 'var(--border-primary)' }}
-            disabled={cartCount === 0}
-            onClick={handleSubmit}
-          >
-            送出
-          </button>
+          {orderId && (
+            <button style={S.iconBtn(true)} onClick={() => setShowCheckout(true)}>💳 結帳</button>
+          )}
+          {!wide && cartCount > 0 && (
+            <button style={S.iconBtn(true)} disabled={submitBusy} onClick={handleSubmit}>
+              {submitBusy ? '送出中…' : `送廚房 (${cartCount})`}
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Category tabs */}
+      {/* Category bar */}
       <div style={S.catBar}>
         <button style={S.catBtn(!selCat)} onClick={() => setSelCat(null)}>全部</button>
         {categories.map(c => (
@@ -662,7 +714,7 @@ export default function WaiterMode() {
         ))}
       </div>
 
-      {/* Error banner */}
+      {/* Error */}
       {errMsg && (
         <div style={S.errBanner}>
           <span style={{ flex: 1 }}>{errMsg}</span>
@@ -670,139 +722,130 @@ export default function WaiterMode() {
         </div>
       )}
 
-      {/* Item grid */}
-      <div style={S.itemGrid}>
-        {visibleItems.length === 0 && (
-          <div style={{ gridColumn: '1/-1', textAlign: 'center', paddingTop: 48, color: 'var(--text-muted)', fontSize: 14 }}>此分類暫無品項</div>
-        )}
-        {visibleItems.map(item => {
-          const entry  = cart[item.id]
-          const qty    = entry?.qty ?? 0
-          const inCart = qty > 0
-          return (
-            <div key={item.id} style={S.itemCard(inCart)} onClick={() => addItem(item.id)}>
-              {/* Course badge — click cycles 1→2→3→1 */}
-              {inCart && (
-                <span style={S.courseBadge} onClick={(e) => cycleCourse(e, item.id)}>
-                  輪{entry.course}
-                </span>
-              )}
-              {inCart && <span style={S.qtyCntBadge}>×{qty}</span>}
-              {item.image_url
-                ? <img src={item.image_url} alt={item.name} style={S.img} />
-                : <div style={S.imgPlaceholder}>🍽️</div>
-              }
-              <div style={S.cardBody}>
-                <div style={S.itemName}>{item.name}</div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 4 }}>
-                  <span style={S.itemPrice}>NT${item.unit_price}</span>
+      {/* Body: items + optional right panel */}
+      <div style={S.orderBody}>
+        {/* Item grid */}
+        <div style={{ ...S.itemGrid, paddingBottom: wide ? 32 : 140 }}>
+          {visibleItems.length === 0 && (
+            <div style={{ gridColumn: '1/-1', textAlign: 'center', paddingTop: 40, color: 'var(--text-muted)', fontSize: 14 }}>此分類暫無品項</div>
+          )}
+          {visibleItems.map(item => {
+            const entry = cart[item.id]
+            const qty   = entry?.qty ?? 0
+            const inCart = qty > 0
+            return (
+              <div key={item.id} style={S.itemCard(inCart)} onClick={() => addItem(item.id)}>
+                {inCart && <span style={S.badge}>×{qty}</span>}
+                {item.image_url
+                  ? <img src={item.image_url} alt={item.name} style={S.img} />
+                  : <div style={S.imgPH}>🍽️</div>
+                }
+                <div style={S.cardBody}>
+                  <div style={S.itemName}>{item.name}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 3 }}>
+                    <span style={S.itemPrice}>NT${Number(item.unit_price).toLocaleString()}</span>
+                    {inCart && (
+                      <div style={S.qtyRow} onClick={e => e.stopPropagation()}>
+                        <button style={S.qtyBtn(true)}  onClick={() => adjustQty(item.id, -1)}>−</button>
+                        <span style={{ fontSize: 13, fontWeight: 700, minWidth: 18, textAlign: 'center' }}>{qty}</span>
+                        <button style={S.qtyBtn(false)} onClick={() => adjustQty(item.id, 1)}>+</button>
+                      </div>
+                    )}
+                  </div>
                   {inCart && (
-                    <div style={S.qtyRow} onClick={e => e.stopPropagation()}>
-                      <button style={S.qtyBtn(true)}  onClick={() => adjustQty(item.id, -1)}>−</button>
-                      <span style={{ fontSize: 14, fontWeight: 700, minWidth: 20, textAlign: 'center', color: 'var(--text-primary)' }}>{qty}</span>
-                      <button style={S.qtyBtn(false)} onClick={() => adjustQty(item.id, 1)}>+</button>
+                    <div style={{ marginTop: 4, display: 'flex', justifyContent: 'flex-end' }} onClick={e => e.stopPropagation()}>
+                      <button
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: entry?.note ? 'var(--accent-cyan)' : 'var(--text-muted)', padding: '2px 0' }}
+                        onClick={(e) => openNotePopup(e, item.id)}
+                      >
+                        {entry?.note ? '📝 已備註' : '+ 備註'}
+                      </button>
                     </div>
                   )}
                 </div>
-                {inCart && (
-                  <div style={{ marginTop: 6, display: 'flex', justifyContent: 'flex-end' }} onClick={e => e.stopPropagation()}>
-                    <button
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: entry?.note ? 'var(--accent-cyan)' : 'var(--text-muted)', padding: '2px 0' }}
-                      onClick={(e) => openNotePopup(e, item.id)}
-                    >
-                      {entry?.note ? '📝 已備註' : '+ 備註'}
-                    </button>
-                  </div>
-                )}
               </div>
-            </div>
-          )
-        })}
-      </div>
-
-      {/* Footer */}
-      <div style={S.footer}>
-        <div style={S.footerRow}>
-          <button style={S.noteToggle(!!orderNote)} onClick={() => setShowNote(n => !n)} title="桌邊備註">📋</button>
-          <span style={S.chip}>{cartCount} 品・NT${cartTotal.toLocaleString()}</span>
-          <button style={S.submitBtn(cartCount === 0)} disabled={cartCount === 0} onClick={handleSubmit}>
-            送出訂單（NT${cartTotal.toLocaleString()}）
-          </button>
+            )
+          })}
         </div>
-        {showNote && (
-          <textarea
-            value={orderNote}
-            onChange={e => setOrderNote(e.target.value)}
-            placeholder="桌邊備註（例：1 位過敏花生、嬰兒椅 ×1）"
-            rows={2}
-            style={S.textarea}
-            autoFocus
+
+        {/* Right panel (wide only) */}
+        {wide && (
+          <OrderPanel
+            existingItems={existingItems}
+            cart={cart}
+            items={items}
+            storeId={storeId}
+            orgId={orgId}
+            orderId={orderId}
+            tableNumber={selTable?.table_number}
+            onSubmit={handleSubmit}
+            onCheckout={() => setShowCheckout(true)}
+            submitBusy={submitBusy}
           />
         )}
       </div>
 
-      {/* QR code modal */}
-      {showQr && qrUrl && (
-        <div style={S.notePopup} onClick={() => setShowQr(false)}>
-          <div style={{ ...S.noteBox, alignItems: 'center', gap: 16, maxWidth: 320 }} onClick={e => e.stopPropagation()}>
-            <p style={S.noteTitle}>桌號 T{selTable?.table_number} QR 點餐碼</p>
-            <canvas
-              ref={el => {
-                if (el && qrUrl) {
-                  QRCode.toCanvas(el, qrUrl, { width: 220, margin: 2, color: { dark: '#0f172a', light: '#ffffff' } })
-                  qrCanvasRef.current = el
-                }
-              }}
-            />
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center' }}>
-              有效期 4 小時 · 掃碼後可自助點餐
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button
-                style={S.smallBtn(false)}
-                onClick={() => {
-                  if (!qrCanvasRef.current) return
-                  const link = document.createElement('a')
-                  link.download = `QR-T${selTable?.table_number}.png`
-                  link.href = qrCanvasRef.current.toDataURL('image/png')
-                  link.click()
-                }}
-              >下載</button>
-              <button style={S.smallBtn(true)} onClick={() => setShowQr(false)}>關閉</button>
-            </div>
-          </div>
+      {/* Mobile footer */}
+      {!wide && (existingItems.length > 0 || cartCount > 0) && (
+        <div style={S.footer}>
+          <span style={S.footChip}>
+            {existingItems.reduce((s, i) => s + i.quantity, 0) + cartCount} 品
+          </span>
+          {cartCount > 0 && (
+            <button style={S.footBtn(false, submitBusy)} disabled={submitBusy} onClick={handleSubmit}>
+              {submitBusy ? '送出…' : `送廚房 NT$${cartTotal.toLocaleString()}`}
+            </button>
+          )}
+          {orderId && (
+            <button style={S.footBtn(true, false)} onClick={() => setShowCheckout(true)}>結帳</button>
+          )}
         </div>
       )}
 
-      {/* Per-item note popup */}
-      {noteTarget && (
-        <div style={S.notePopup} onClick={() => setNoteTarget(null)}>
-          <div style={S.noteBox} onClick={e => e.stopPropagation()}>
-            <p style={S.noteTitle}>品項備註 — {items.find(i => i.id === noteTarget)?.name}</p>
-            <textarea
-              value={noteDraft}
-              onChange={e => setNoteDraft(e.target.value)}
-              placeholder="例：不加蔥、少辣、醬料另上"
-              rows={3}
-              style={S.textarea}
-              autoFocus
-            />
+      {/* Item note popup */}
+      {noteTarget && createPortal(
+        <div style={S.overlay}>
+          <div onClick={() => setNoteTarget(null)} style={{ position: 'absolute', inset: 0 }} />
+          <div style={S.noteBox}>
+            <p style={S.noteTitle}>備註 — {items.find(i => i.id === noteTarget)?.name}</p>
+            <textarea rows={3} style={S.textarea} value={noteDraft} onChange={e => setNoteDraft(e.target.value)} placeholder="例：不要蔥、少辣、分開裝…" autoFocus />
             <div style={S.rowBtn}>
               <button style={S.smallBtn(false)} onClick={() => setNoteTarget(null)}>取消</button>
-              <button style={S.smallBtn(true)}  onClick={saveItemNote}>確認</button>
+              <button style={S.smallBtn(true)} onClick={saveItemNote}>確認</button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
+      )}
+
+      {/* QR popup */}
+      {showQr && qrUrl && createPortal(
+        <div style={S.overlay}>
+          <div onClick={() => setShowQr(false)} style={{ position: 'absolute', inset: 0 }} />
+          <div style={{ ...S.noteBox, alignItems: 'center', maxWidth: 320 }}>
+            <p style={{ ...S.noteTitle, textAlign: 'center' }}>掃碼點餐 — T{selTable?.table_number}</p>
+            <div style={{ background: '#fff', borderRadius: 12, padding: 10 }}>
+              <canvas ref={qrCanvasRef} />
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', wordBreak: 'break-all', textAlign: 'center' }}>{qrUrl}</div>
+            <button style={S.smallBtn(false)} onClick={() => setShowQr(false)}>關閉</button>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Checkout modal */}
+      {showCheckout && orderId && (
+        <CheckoutModal
+          tableNumber={selTable?.table_number}
+          allItems={allCheckoutItems}
+          orgId={orgId}
+          storeId={storeId}
+          orderId={orderId}
+          onClose={() => setShowCheckout(false)}
+          onDone={afterCheckout}
+        />
       )}
     </div>
-  )
-}
-
-function Spinner() {
-  return (
-    <>
-      <div style={{ width: 40, height: 40, border: '4px solid var(--border-primary)', borderTopColor: 'var(--accent-cyan)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-      <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
-    </>
   )
 }

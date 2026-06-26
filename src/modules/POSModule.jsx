@@ -13,6 +13,7 @@ import ZReport          from '../pages/pos/ZReport'
 import KitchenDisplay   from '../pages/pos/KitchenDisplay'
 import WaiterMode       from '../pages/pos/WaiterMode'
 import MonthlyReport    from '../pages/pos/MonthlyReport'
+import XReport          from '../pages/pos/XReport'
 
 export default function POSModule() {
   return (
@@ -31,6 +32,7 @@ export default function POSModule() {
       <Route path="orders"              element={<OrderHistory />} />
       <Route path="invoices"            element={<InvoiceList />} />
       <Route path="monthly-report"      element={<MonthlyReport />} />
+      <Route path="x-report"            element={<XReport />} />
     </Routes>
   )
 }

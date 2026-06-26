@@ -96,6 +96,7 @@ export const groupNav = {
         { icon: QrCode,       label: 'QR 桌台管理', path: '/pos/qr-tables' },
         { icon: Award,        label: '員工業績',    path: '/pos/staff-performance' },
         { icon: ClipboardList, label: '訂單記錄',   path: '/pos/orders' },
+        { icon: TrendingUp,   label: 'X 報表',      path: '/pos/x-report' },
         { icon: BarChart2,    label: '月業績報表',  path: '/pos/monthly-report' },
         { icon: Receipt,      label: '發票查詢',    path: '/pos/invoices' },
       ]

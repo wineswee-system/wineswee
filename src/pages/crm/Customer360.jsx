@@ -428,7 +428,7 @@ export default function Customer360() {
                   <AttachmentsPanel entityType="customer" entityId={selected.id} />
                 </div>
               </div>
-              </>}
+              </>)}
 
               {viewTab === 'member' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>

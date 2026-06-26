@@ -3,6 +3,7 @@ import { ModalOverlay } from '../Modal'
 import CustomFormFill from '../../pages/workflow/CustomFormFill'
 import ExpenseRequestCreate from '../../pages/workflow/components/ExpenseRequestCreate'
 import ExpenseSimpleCreate from '../../pages/workflow/components/ExpenseSimpleCreate'
+import EmbeddedSettleModal from './EmbeddedSettleModal'
 import { bindingFillPath } from './bindingFillUrl'
 
 /**
@@ -24,7 +25,8 @@ export default function FillFormModal({ binding, bindings = [], onClose, onDone 
   const isCustom = binding?.form_type === 'form_submission'
   const isNativeExpense = !!binding && NATIVE_EXPENSE.has(binding.form_type) && !binding.form_id
   const isSimpleExpense = !!binding && binding.form_type === 'expense' && !binding.form_id  // 經常性費用報銷 → 內嵌填
-  const isHeavyOpenPage = !!binding && !isCustom && !isNativeExpense && !isSimpleExpense
+  const isSettleEmbed = !!binding && binding.form_type === 'expense_settle' && !!binding.form_id
+  const isHeavyOpenPage = !!binding && !isCustom && !isNativeExpense && !isSimpleExpense && !isSettleEmbed
 
   // 重型(經常性費用/調撥/稽核/驗收段)→ 開頁;副作用必須在 effect 內(不可在 render 階段)
   useEffect(() => {
@@ -55,6 +57,11 @@ export default function FillFormModal({ binding, bindings = [], onClose, onDone 
         </div>
       </ModalOverlay>
     )
+  }
+
+  // ── 費用驗收段（已綁申請單）：inline EmbeddedSettleModal，不開新分頁 ──
+  if (isSettleEmbed) {
+    return <EmbeddedSettleModal binding={binding} onClose={close} onDone={done} />
   }
 
   // ── 非經常性費用申請：原生內嵌（ExpenseRequestCreate 自帶 ModalOverlay）──

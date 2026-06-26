@@ -246,6 +246,7 @@ export function exportExpenseRequestPdf(req, opts = {}) {
             ['供應商', req.supplier || ''],
             ['會計科目', req.account_code ? `${req.account_code}　${req.account_name || ''}` : ''],
             ['門市', req.store || ''],
+            ...(req.acceptance_units?.length ? [['驗收單位', req.acceptance_units.join('、')]] : []),
           ],
         },
       ]

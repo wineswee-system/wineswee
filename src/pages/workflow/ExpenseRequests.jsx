@@ -41,6 +41,7 @@ const fmtCur = (n, cur) => {
 const emptyForm = {
   employee: '', account_code: '', title: '', description: '',
   estimated_amount: '', store: '', supplier: '', currency: 'TWD',
+  acceptance_units: [],
 }
 
 const emptyItem = () => ({ name: '', qty: '', unit_price: '', subtotal: 0 })
@@ -260,6 +261,7 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
       currency: req.currency || 'TWD',
       settle_department_id: req.settle_department_id ? String(req.settle_department_id) : '',
       settle_store_id: req.settle_store_id ? String(req.settle_store_id) : '',
+      acceptance_units: Array.isArray(req.acceptance_units) ? req.acceptance_units : [],
     })
     const items = Array.isArray(req.items) && req.items.length > 0
       ? req.items.map(it => ({
@@ -317,6 +319,7 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
       items: isExpense ? validItems : null,
       store: isExpense ? (form.store || null) : null,
       currency: isExpense ? (form.currency || 'TWD') : 'TWD',
+      acceptance_units: isExpense ? (form.acceptance_units || []) : [],
       // 核銷(驗收)單位 — 申請時指定，通過後 trigger 解析核銷人
       settle_department_id: isExpense && form.settle_department_id ? Number(form.settle_department_id) : null,
       // 營運部選「總部」(__HQ__) → 門市存 null，部門維持營運部 → trigger 解析成營運部經理
@@ -1039,6 +1042,7 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
               { label: '門市', value: showDetail.store || '—' },
               { label: '供應商', value: showDetail.supplier || '—' },
               { label: '項目', value: showDetail.title || '—' },
+              ...(showDetail.acceptance_units?.length ? [{ label: '驗收單位', value: showDetail.acceptance_units.join('、') }] : []),
               ...(showDetail.description ? [{ label: '說明', value: showDetail.description, multiline: true }] : []),
             ]
 

@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from 'react'
+import { useRef, useState, useEffect, useCallback } from 'react'
 import { X, Plus, Upload, FileText, Image, Download } from 'lucide-react'
 import { ModalOverlay } from '../../../components/Modal'
 import SearchableSelect, { empOptions } from '../../../components/SearchableSelect'
@@ -102,6 +102,76 @@ function SettleUnitField({ departments, stores, employees, deptId, storeId, onDe
           : <div style={{ fontSize: 12, color: 'var(--accent-orange)', marginTop: 6 }}>⚠ 此單位尚未設定主管，將無人收到核銷通知</div>
       )}
       {(errorDept || errorStore) && <div className="field-error-msg">⚠ 請選擇核銷(驗收)單位{isOps ? '的門市' : ''}</div>}
+    </div>
+  )
+}
+
+// 驗收單位 — 多選門市（checkbox dropdown）
+function AcceptanceUnitsField({ stores, selected = [], onChange }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  const toggle = useCallback((name) => {
+    onChange(selected.includes(name) ? selected.filter(n => n !== name) : [...selected, name])
+  }, [selected, onChange])
+  useEffect(() => {
+    if (!open) return
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>驗收單位</label>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        style={{
+          width: '100%', padding: '8px 12px', borderRadius: 6, textAlign: 'left', cursor: 'pointer',
+          border: '1px solid var(--border)', background: 'var(--bg-main)', fontSize: 13,
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        }}
+      >
+        <span style={{ color: selected.length ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+          {selected.length ? selected.join('、') : '選填，可多選'}
+        </span>
+        <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 200,
+          background: 'var(--bg-card)', border: '1px solid var(--border-medium)',
+          borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
+          maxHeight: 220, overflowY: 'auto', padding: '4px 0',
+        }}>
+          {stores.length === 0
+            ? <div style={{ padding: '8px 12px', fontSize: 12, color: 'var(--text-muted)' }}>無門市資料</div>
+            : stores.map(s => (
+              <label key={s.id} style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '6px 12px', cursor: 'pointer', fontSize: 13,
+                background: selected.includes(s.name) ? 'var(--accent-cyan-dim)' : 'transparent',
+              }}>
+                <input type="checkbox" checked={selected.includes(s.name)} onChange={() => toggle(s.name)} style={{ accentColor: 'var(--accent-cyan)' }} />
+                <span style={{ color: selected.includes(s.name) ? 'var(--accent-cyan)' : 'var(--text-primary)' }}>{s.name}</span>
+              </label>
+            ))
+          }
+        </div>
+      )}
+      {selected.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
+          {selected.map(name => (
+            <span key={name} style={{
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+              padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600,
+              background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)',
+            }}>
+              {name}
+              <button type="button" onClick={() => toggle(name)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--accent-cyan)', padding: 0, lineHeight: 1, fontSize: 13 }}>×</button>
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -345,6 +415,15 @@ export default function ExpenseFormModal({
                 />
               )}
             </div>
+          )}
+
+          {/* 驗收單位 — expense only，多選門市 */}
+          {isExpense && (stores || []).length > 0 && (
+            <AcceptanceUnitsField
+              stores={stores || []}
+              selected={form.acceptance_units || []}
+              onChange={(v) => set('acceptance_units', v)}
+            />
           )}
 
           {/* Line items — expense only.

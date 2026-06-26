@@ -1036,15 +1036,23 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
               { label: '主旨', value: showDetail.title || '—' },
               ...(showDetail.description ? [{ label: '說明', value: showDetail.description, multiline: true }] : []),
             ]
-          : [
-              { label: '部門', value: showDetail.department || '—' },
-              { label: '科目', value: `${showDetail.account_code || ''} ${showDetail.account_name || ''}`.trim() || '—' },
-              { label: '門市', value: showDetail.store || '—' },
-              { label: '供應商', value: showDetail.supplier || '—' },
-              { label: '項目', value: showDetail.title || '—' },
-              ...(showDetail.acceptance_units?.length ? [{ label: '驗收單位', value: showDetail.acceptance_units.join('、') }] : []),
-              ...(showDetail.description ? [{ label: '說明', value: showDetail.description, multiline: true }] : []),
-            ]
+          : (() => {
+              const settleDept = departments.find(d => d.id === showDetail.settle_department_id)
+              const settleStore = stores.find(s => s.id === showDetail.settle_store_id)
+              const settleUnitLabel = settleDept
+                ? (settleStore ? `${settleDept.name}／${settleStore.name}` : settleDept.name)
+                : null
+              return [
+                { label: '部門', value: showDetail.department || '—' },
+                { label: '科目', value: `${showDetail.account_code || ''} ${showDetail.account_name || ''}`.trim() || '—' },
+                { label: '門市', value: showDetail.store || '—' },
+                { label: '供應商', value: showDetail.supplier || '—' },
+                { label: '項目', value: showDetail.title || '—' },
+                ...(settleUnitLabel ? [{ label: verb('核銷(驗收)單位', DOC), value: settleUnitLabel }] : []),
+                ...(showDetail.acceptance_units?.length ? [{ label: '驗收單位（多選）', value: showDetail.acceptance_units.join('、') }] : []),
+                ...(showDetail.description ? [{ label: '說明', value: showDetail.description, multiline: true }] : []),
+              ]
+            })()
 
         // 明細表格 — 始終顯示，無品項時顯示空白提示（非費用整段隱藏）
         if (!isNonExpense) fields.push({
@@ -1139,6 +1147,11 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
             )
             const approverMap = {}
             detailChainSteps.forEach(s => { if (s.target_emp_id && s.name) approverMap[s.target_emp_id] = s.name })
+            const _settleDept = departments.find(d => d.id === showDetail.settle_department_id)
+            const _settleStore = stores.find(s => s.id === showDetail.settle_store_id)
+            const _settleUnitLabel = _settleDept
+              ? (_settleStore ? `${_settleDept.name}／${_settleStore.name}` : _settleDept.name)
+              : null
             exportExpenseRequestPdf(showDetail, {
               companyName: organization?.name,
               logoUrl: organization?.logo_url,
@@ -1146,6 +1159,7 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
               signatures,
               chainSteps: detailChainSteps.filter(s => s.kind !== 'settle_divider' && !(s.isSettle && s.isApplicant)),
               approverMap,
+              settleUnitLabel: _settleUnitLabel,
               _win: win,
             })
           } catch (e) {

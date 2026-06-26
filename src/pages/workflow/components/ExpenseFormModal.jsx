@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect, useCallback } from 'react'
+﻿import { useRef, useState, useEffect, useCallback } from 'react'
 import { X, Plus, Upload, FileText, Image, Download } from 'lucide-react'
 import { ModalOverlay } from '../../../components/Modal'
 import SearchableSelect, { empOptions } from '../../../components/SearchableSelect'
@@ -59,7 +59,7 @@ function StoreSelect({ value, onChange, stores, error }) {
   )
 }
 
-// 核銷(驗收)單位 — 級聯:選部門→部門主管;選營運部→再選門市→店長。
+// 驗收單位 — 級聯:選部門→部門主管;選營運部→再選門市→店長。
 // 解析出的核銷人即時預覽(實際核銷人由 DB trigger 在「已核准」時依 dept/store 重算寫入)。
 function SettleUnitField({ departments, stores, employees, deptId, storeId, onDept, onStore, errorDept, errorStore }) {
   const dept = departments.find(d => String(d.id) === String(deptId))
@@ -74,7 +74,7 @@ function SettleUnitField({ departments, stores, employees, deptId, storeId, onDe
   return (
     <div className={(errorDept || errorStore) ? 'field-error' : undefined}>
       <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>
-        核銷(驗收)單位 <span style={{ color: 'var(--accent-red)' }}>*</span>
+        驗收單位 <span style={{ color: 'var(--accent-red)' }}>*</span>
       </label>
       <select
         value={deptId || ''}
@@ -101,7 +101,7 @@ function SettleUnitField({ departments, stores, employees, deptId, storeId, onDe
           ? <div style={{ fontSize: 12, color: 'var(--accent-cyan)', marginTop: 6 }}>→ 核銷人:{managerName}</div>
           : <div style={{ fontSize: 12, color: 'var(--accent-orange)', marginTop: 6 }}>⚠ 此單位尚未設定主管，將無人收到核銷通知</div>
       )}
-      {(errorDept || errorStore) && <div className="field-error-msg">⚠ 請選擇核銷(驗收)單位{isOps ? '的門市' : ''}</div>}
+      {(errorDept || errorStore) && <div className="field-error-msg">⚠ 請選擇驗收單位{isOps ? '的門市' : ''}</div>}
     </div>
   )
 }
@@ -388,7 +388,7 @@ export default function ExpenseFormModal({
             </div>
           )}
 
-          {/* Currency + 核銷(驗收)單位 — expense only.
+          {/* Currency + 驗收單位 — expense only.
               auto-fit minmax：寬夠兩欄(幣別 | 核銷單位)、窄則降一欄 */}
           {isExpense && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, alignItems: 'start' }}>

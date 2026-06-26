@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 共用簽核明細 modal
  *
  * 左側：表單內容（申請人卡 + 動態欄位 + 附件 + 表單編號 / 申請時間）
@@ -18,7 +18,7 @@ const STATUS_BADGE = {
   '申請中': { bg: 'rgba(99,102,241,0.12)', color: '#6366f1', text: '簽核中' },
   '待審核': { bg: 'rgba(99,102,241,0.12)', color: '#6366f1', text: '簽核中' },
   '已核准': { bg: 'rgba(34,197,94,0.12)', color: '#0a6b2e', text: '已核准' },
-  '已核銷': { bg: 'rgba(34,197,94,0.12)', color: '#0a6b2e', text: '已核銷(驗收)' },
+  '已核銷': { bg: 'rgba(34,197,94,0.12)', color: '#0a6b2e', text: '已驗收' },
   '已駁回': { bg: 'rgba(239,68,68,0.12)', color: '#9c1f1f', text: '已駁回' },
   '已拒絕': { bg: 'rgba(239,68,68,0.12)', color: '#9c1f1f', text: '已拒絕' },
   '已退回': { bg: 'rgba(239,68,68,0.12)', color: '#9c1f1f', text: '已退回' },
@@ -351,7 +351,7 @@ function ChainTimeline({ steps }) {
                 background: 'rgba(249,115,22,0.10)',
                 borderRadius: 20,
                 border: '1px solid rgba(249,115,22,0.25)',
-              }}>核銷(驗收)流程</div>
+              }}>驗收流程</div>
             </div>
           )
         }

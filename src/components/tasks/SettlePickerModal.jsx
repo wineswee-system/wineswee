@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+﻿import { useState, useEffect } from 'react'
 import { ModalOverlay } from '../Modal'
 import LoadingSpinner from '../LoadingSpinner'
 import { supabase } from '../../lib/supabase'
@@ -9,7 +9,7 @@ const CUR_SYM = { TWD: 'NT$', USD: 'US$', JPY: '¥', CNY: '¥', EUR: '€', NZD:
 const fmt = (n, c) => `${CUR_SYM[c] || (c ?? 'NT$')} ${Number(n || 0).toLocaleString()}`
 
 /**
- * SettlePickerModal — 核銷(驗收)段尚未綁單時，挑一張「待驗收」的費用申請單。
+ * SettlePickerModal — 驗收段尚未綁單時，挑一張「待驗收」的費用申請單。
  *
  * 多組申請/驗收拆在不同步驟時，無法自動配對 → 由人挑要驗收哪張。
  * 範圍：同流程(workflow_instance)優先；任務不在流程則退回全公司待驗收。
@@ -84,7 +84,7 @@ export default function SettlePickerModal({ binding, task, onClose, onPicked }) 
     <ModalOverlay onClose={onClose}>
       <div className="modal-shell modal-md" style={{ animation: 'fadeIn 0.15s ease', display: 'flex', flexDirection: 'column' }}>
         <div className="modal-shell-header">
-          <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>選擇要核銷(驗收)的費用申請單</h3>
+          <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>選擇要驗收的費用申請單</h3>
           <button onClick={onClose} aria-label="Close"
             style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 4, flexShrink: 0, fontSize: 18, lineHeight: 1 }}>✕</button>
         </div>

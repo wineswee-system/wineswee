@@ -1,4 +1,4 @@
-/**
+﻿/**
  * ExpenseRequestsTable — 費用申請主清單表格
  * Props: filtered, canApprove, profile, onOpenDetail, onApprove, onReject,
  *        onOpenSettle, onConfirmSettle, onRejectSettle, onEditResubmit
@@ -91,7 +91,7 @@ export default function ExpenseRequestsTable({
                     )}
                     {r.is_expense !== false && r.status === '已核准' && r.employee_id === profile?.id && (
                       <button className="btn btn-primary" style={{ padding: '4px 8px', fontSize: 11 }} onClick={() => onOpenSettle(r)}>
-                        <Send size={12} /> 核銷(驗收)
+                        <Send size={12} /> 驗收
                       </button>
                     )}
                     {r.status === '待核銷' && canApprove('expense_settles', r.id) && (
@@ -106,7 +106,7 @@ export default function ExpenseRequestsTable({
                     )}
                     {r.status === '核銷已退回' && r.employee === profile?.name && (
                       <button className="btn btn-primary" style={{ padding: '4px 8px', fontSize: 11, background: 'var(--accent-orange)' }} onClick={() => onOpenSettle(r)}>
-                        ✏️ 重新核銷(驗收)
+                        ✏️ 重新驗收
                       </button>
                     )}
                     {['申請中', '待審', '已駁回', '已退回'].includes(r.status) && r.employee === profile?.name && (

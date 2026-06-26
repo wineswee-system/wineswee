@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react'
+﻿import { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { ChevronDown, X, Check, Search } from 'lucide-react'
 import { supabase } from '../lib/supabase'
@@ -41,7 +41,7 @@ export default function FormBindingsPicker({ value = [], onChange, readonly = fa
         setOptions([
           { form_type: 'expense_request', form_template_id: null, icon: '🧾', label: '申請費用（整單）', group: '費用' },
           { form_type: 'expense_apply',   form_template_id: null, icon: '📝', label: '費用-申請步驟', group: '費用' },
-          { form_type: 'expense_settle',  form_template_id: null, icon: '✅', label: '費用-核銷(驗收)步驟', group: '費用' },
+          { form_type: 'expense_settle',  form_template_id: null, icon: '✅', label: '費用-驗收步驟', group: '費用' },
           { form_type: 'expense',         form_template_id: null, icon: '💸', label: '經常性費用申請', group: '費用' },
           { form_type: 'order_request',   form_template_id: null, icon: '🛒', label: '叫貨申請（整單）', group: '叫貨' },
           { form_type: 'order_apply',     form_template_id: null, icon: '📝', label: '叫貨-申請步驟', group: '叫貨' },

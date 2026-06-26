@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+﻿import { useState, useEffect, useMemo } from 'react'
 import { Search, Shield, ShieldOff, CheckCircle2, XCircle, AlertCircle, RotateCcw, Plus, Minus, LogOut } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -73,7 +73,7 @@ const FEATURES = [
   // 行政庶務
   { module: '行政庶務', label: '費用申請審核', view: 'expense.view',         edit: 'expense.approve' },
   { module: '行政庶務', label: '費用申請-檢視全部人', view: 'expense.view_all', edit: null },
-  { module: '行政庶務', label: '費用核銷(驗收)', view: 'expense.settle_view',  edit: 'expense.settle' },
+  { module: '行政庶務', label: '費用驗收', view: 'expense.settle_view',  edit: 'expense.settle' },
   { module: '行政庶務', label: '會計科目',     view: 'expense.account_view', edit: 'expense.account_edit' },
   { module: '行政庶務', label: '文件',         view: 'doc.view',             edit: 'doc.delete' },
   // 專案流程

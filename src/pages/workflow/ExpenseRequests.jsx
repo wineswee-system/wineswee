@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+﻿import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useReturnNav } from '../../lib/useReturnNav'
 import { useAuth } from '../../contexts/AuthContext'
@@ -49,13 +49,13 @@ const emptyItem = () => ({ name: '', qty: '', unit_price: '', subtotal: 0 })
 // docType: 'expense' = 非經常性費用申請(預設) / 'order' = 叫貨申請單(同表同引擎,靠 doc_type 區分)
 // settleVerb：第二階段動詞 — 費用叫「核銷」，叫貨叫「驗收」（DB 狀態欄位不變,只改顯示）
 const DOC_CFG = {
-  expense: { label: '非經常性費用申請', icon: '📝', subtitle: '事項 / 採購 / 預算申請：先申請核准，發生費用後再核銷(驗收)入帳',
+  expense: { label: '非經常性費用申請', icon: '📝', subtitle: '事項 / 採購 / 預算申請：先申請核准，發生費用後再驗收入帳',
              chainFormType: 'expense_request', chainLabel: '費用申請', settleFormType: 'expense_settle', settleLabel: '費用核銷', settleVerb: '核銷' },
   order:   { label: '叫貨申請單',       icon: '🛒', subtitle: '叫貨申請：先申請核准，到貨後再入庫驗收',
              chainFormType: 'order_request', chainLabel: '叫貨申請', settleFormType: 'order_settle', settleLabel: '叫貨驗收', settleVerb: '驗收' },
 }
 // 把含「核銷」的顯示字串，依 docType 換成「驗收」（叫貨用）。
-// 先收掉雙標「核銷(驗收)」→「驗收」，再把單獨「核銷」→「驗收」，避免「驗收(驗收)」。
+// 先收掉雙標「驗收」→「驗收」，再把單獨「核銷」→「驗收」，避免「驗收(驗收)」。
 const verb = (s, doc) => doc?.settleVerb === '驗收'
   ? String(s).replace(/核銷\(驗收\)/g, '驗收').replace(/核銷/g, '驗收')
   : s
@@ -71,7 +71,7 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
   const [currencies, setCurrencies] = useState([])
   const [employees, setEmployees] = useState([])
   const [stores, setStores] = useState([])
-  const [departments, setDepartments] = useState([])  // 核銷(驗收)單位下拉用（含 manager_id）
+  const [departments, setDepartments] = useState([])  // 驗收單位下拉用（含 manager_id）
   const [organization, setOrganization] = useState(null)  // { name, logo_url } — 印簽呈用
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -120,7 +120,7 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
       // 門市清單給費用表單下拉用（manager_id 給「核銷單位→營運部→門市」解析店長）
       supabase.from('stores').select('id, name, manager_id').order('name'),
       getCurrencies(),
-      // 部門清單給「核銷(驗收)單位」下拉用（manager_id 給解析部門主管）
+      // 部門清單給「驗收單位」下拉用（manager_id 給解析部門主管）
       (orgId
         ? supabase.from('departments').select('id, name, manager_id').eq('organization_id', orgId).order('name')
         : supabase.from('departments').select('id, name, manager_id').order('name')),
@@ -148,7 +148,7 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
     if (!focus || !requests.length) return
     const row = requests.find(r => r.id === Number(focus))
     if (row) {
-      // 任務「核銷(驗收)步驟」帶 ?settle=1 → 可核銷狀態直接開核銷 modal，否則開明細
+      // 任務「驗收步驟」帶 ?settle=1 → 可核銷狀態直接開核銷 modal，否則開明細
       const wantSettle = searchParams.get('settle') === '1'
       if (wantSettle && (row.status === '已核准' || row.status === '核銷已退回')) {
         openSettle(row)
@@ -287,7 +287,7 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
     if (isExpense) {
       const validateForm = { ...form, _total: total }
       if (!validateRequired(validateForm, ['employee', 'account_code', 'title', '_total', 'store', 'settle_department_id'], setErrors, { zeroInvalid: true })) return
-      // 核銷(驗收)單位選「營運部」時，門市也必填
+      // 驗收單位選「營運部」時，門市也必填
       const selDept = departments.find(d => String(d.id) === String(form.settle_department_id))
       if (selDept?.name === '營運部' && !form.settle_store_id) {
         setErrors(prev => ({ ...prev, settle_store_id: true }))
@@ -320,7 +320,7 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
       store: isExpense ? (form.store || null) : null,
       currency: isExpense ? (form.currency || 'TWD') : 'TWD',
       acceptance_units: isExpense ? (form.acceptance_units || []) : [],
-      // 核銷(驗收)單位 — 申請時指定，通過後 trigger 解析核銷人
+      // 驗收單位 — 申請時指定，通過後 trigger 解析核銷人
       settle_department_id: isExpense && form.settle_department_id ? Number(form.settle_department_id) : null,
       // 營運部選「總部」(__HQ__) → 門市存 null，部門維持營運部 → trigger 解析成營運部經理
       settle_store_id: isExpense && form.settle_store_id && form.settle_store_id !== '__HQ__' ? Number(form.settle_store_id) : null,
@@ -667,9 +667,9 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
         let settleIntervalText = null
         if (settleStartAt && req.approved_at) {
           const diffSec = Math.floor((new Date(settleStartAt) - new Date(req.approved_at)) / 1000)
-          if (diffSec < 3600)       settleIntervalText = `核准後 ${Math.floor(diffSec / 60)} 分鐘送核銷(驗收)`
-          else if (diffSec < 86400) settleIntervalText = `核准後 ${Math.floor(diffSec / 3600)} 小時送核銷(驗收)`
-          else                      settleIntervalText = `核准後 ${Math.floor(diffSec / 86400)} 天送核銷(驗收)`
+          if (diffSec < 3600)       settleIntervalText = `核准後 ${Math.floor(diffSec / 60)} 分鐘送驗收`
+          else if (diffSec < 86400) settleIntervalText = `核准後 ${Math.floor(diffSec / 3600)} 小時送驗收`
+          else                      settleIntervalText = `核准後 ${Math.floor(diffSec / 86400)} 天送驗收`
         }
         const settleApplicantStep = {
           label: '申請人（送核銷/驗收）',
@@ -751,15 +751,15 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
         NOT_AUTHENTICATED: '尚未登入',
         EMPLOYEE_NOT_FOUND: '找不到對應員工',
         NOT_FOUND: '找不到此申請單',
-        NOT_PENDING_SETTLE: `狀態不是待核銷(驗收)（${data?.current_status}）`,
+        NOT_PENDING_SETTLE: `狀態不是待驗收（${data?.current_status}）`,
         NOT_AUTHORIZED_FOR_STEP: '此關不是你負責',
         STEP_NOT_FOUND: 'chain step 設定異常',
         PENDING_EXTRA_STEP: '此關有加簽待處理，請等加簽完成後再核准',
       }
-      toast.error(verb(map[data?.error] || data?.error || '核銷(驗收)失敗', DOC))
+      toast.error(verb(map[data?.error] || data?.error || '驗收失敗', DOC))
       return
     }
-    toast.success(data.fully_settled ? verb('核銷(驗收)完成', DOC) : `推進到下一關（第 ${data.advanced_to_step + 1} 關）`)
+    toast.success(data.fully_settled ? verb('驗收完成', DOC) : `推進到下一關（第 ${data.advanced_to_step + 1} 關）`)
     load()
     setShowDetail(null)
     returnNav()  // 從「我的待簽」點來的，簽完自動回待簽
@@ -945,15 +945,15 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
                       })()}
                       {r.is_expense !== false && (r.status === '已核准' || r.status === '核銷已退回') && (r.settle_assignee_id === profile?.id || (!r.settle_assignee_id && r.employee_id === profile?.id)) && (
                         <button className="btn btn-primary" style={{ padding: '4px 8px', fontSize: 11 }} onClick={() => openSettle(r)}>
-                          <Send size={12} /> {verb('核銷(驗收)', DOC)}
+                          <Send size={12} /> {verb('驗收', DOC)}
                         </button>
                       )}
                       {r.status === '待核銷' && canApprove('expense_settles', r.id) && (
-                        <span style={{ fontSize: 11, color: 'var(--accent-cyan)', fontWeight: 600 }}>{verb('點明細核銷(驗收)', DOC)}</span>
+                        <span style={{ fontSize: 11, color: 'var(--accent-cyan)', fontWeight: 600 }}>{verb('點明細驗收', DOC)}</span>
                       )}
                       {r.status === '核銷已退回' && r.employee === profile?.name && (
                         <button className="btn btn-primary" style={{ padding: '4px 8px', fontSize: 11, background: 'var(--accent-orange)' }} onClick={() => openSettle(r)}>
-                          ✏️ {verb('重新核銷(驗收)', DOC)}
+                          ✏️ {verb('重新驗收', DOC)}
                         </button>
                       )}
                       {['申請中','待審','已駁回','已退回'].includes(r.status) && r.employee === profile?.name && (
@@ -1048,7 +1048,7 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
                 { label: '門市', value: showDetail.store || '—' },
                 { label: '供應商', value: showDetail.supplier || '—' },
                 { label: '項目', value: showDetail.title || '—' },
-                ...(settleUnitLabel ? [{ label: verb('核銷(驗收)單位', DOC), value: settleUnitLabel }] : []),
+                ...(settleUnitLabel ? [{ label: verb('驗收單位', DOC), value: settleUnitLabel }] : []),
                 ...(showDetail.acceptance_units?.length ? [{ label: '驗收單位（多選）', value: showDetail.acceptance_units.join('、') }] : []),
                 ...(showDetail.description ? [{ label: '說明', value: showDetail.description, multiline: true }] : []),
               ]
@@ -1120,11 +1120,11 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
         })
 
         if (showDetail.reject_reason) fields.push({ label: '駁回原因', value: showDetail.reject_reason, multiline: true })
-        if (showDetail.notes) fields.push({ label: '核銷(驗收)備註', value: showDetail.notes, multiline: true })
+        if (showDetail.notes) fields.push({ label: '驗收備註', value: showDetail.notes, multiline: true })
 
         const atts = (attachments[showDetail.id] || []).map(a => ({
           url: supabase.storage.from('attachments').getPublicUrl(a.storage_path).data?.publicUrl,
-          name: `${a.file_name}${a.stage === 'settlement' ? '（核銷(驗收)）' : '（申請）'}`,
+          name: `${a.file_name}${a.stage === 'settlement' ? '（驗收）' : '（申請）'}`,
           type: a.file_type,
         }))
 
@@ -1231,8 +1231,8 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
                     if (!data?.ok) { toast.error('退回失敗：' + (data?.error || 'unknown')); return }
                   },
                   onChanged: refreshDetail,
-                  approveLabel: verb('核准核銷(驗收)', DOC),
-                  rejectLabel: verb('核銷(驗收)退回', DOC),
+                  approveLabel: verb('核准驗收', DOC),
+                  rejectLabel: verb('驗收退回', DOC),
                 }
               }
               return null

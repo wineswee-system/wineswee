@@ -1,4 +1,4 @@
-import { supabase } from '../../../lib/supabase'
+﻿import { supabase } from '../../../lib/supabase'
 import { exportExpenseRequestPdf } from '../../../lib/exportPdf'
 import ApprovalDetailModal from '../../../components/ApprovalDetailModal'
 import { toast } from '../../../lib/toast'
@@ -107,11 +107,11 @@ export default function ExpenseDetailModal({
   })
 
   if (showDetail.reject_reason) fields.push({ label: '駁回原因', value: showDetail.reject_reason, multiline: true })
-  if (showDetail.notes) fields.push({ label: '核銷(驗收)備註', value: showDetail.notes, multiline: true })
+  if (showDetail.notes) fields.push({ label: '驗收備註', value: showDetail.notes, multiline: true })
 
   const atts = (attachments[showDetail.id] || []).map(a => ({
     url: supabase.storage.from('attachments').getPublicUrl(a.storage_path).data?.publicUrl,
-    name: `${a.file_name}${a.stage === 'settlement' ? '（核銷(驗收)）' : '（申請）'}`,
+    name: `${a.file_name}${a.stage === 'settlement' ? '（驗收）' : '（申請）'}`,
     type: a.file_type,
   }))
 

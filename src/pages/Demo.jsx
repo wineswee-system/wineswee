@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+﻿import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 
@@ -26,7 +26,7 @@ const MODULES = [
     title: '人資管理',
     color: 'var(--accent-cyan)',
     dim: 'var(--accent-cyan-dim)',
-    features: ['打卡追蹤', '請假 / 加班審核', '薪資計算與獎金', '績效考核', '招募管理', '差旅費核銷(驗收)'],
+    features: ['打卡追蹤', '請假 / 加班審核', '薪資計算與獎金', '績效考核', '招募管理', '差旅費驗收'],
     tag: 'HR',
   },
   {
@@ -82,7 +82,7 @@ const MODULES = [
     title: '員工 Portal',
     color: '#34d399',
     dim: 'rgba(52,211,153,0.12)',
-    features: ['自助打卡', '我的假單', '申請與核銷(驗收)', '差旅申報', '績效自評', '個人行事曆'],
+    features: ['自助打卡', '我的假單', '申請與驗收', '差旅申報', '績效自評', '個人行事曆'],
     tag: 'PORTAL',
   },
 ]

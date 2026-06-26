@@ -1,4 +1,4 @@
-import { supabase } from '../../supabase.js'
+﻿import { supabase } from '../../supabase.js'
 
 /**
  * Finance event handlers.
@@ -130,12 +130,12 @@ export function registerFinanceHandlers(bus) {
 
     const { data: entry, error: entryError } = await supabase.rpc('secure_create_journal_entry', {
       p_entry_date: date || new Date().toISOString().slice(0, 10),
-      p_description: `費用核銷(驗收) - ${employee} (${category}: ${description || ''})`,
+      p_description: `費用驗收 - ${employee} (${category}: ${description || ''})`,
       p_lines: [
         { account_code: account.code, account_name: account.name, debit: amount, credit: 0, memo: `${employee} - ${category}` },
         { account_code: '1100', account_name: '現金', debit: 0, credit: amount, memo: `${employee} - ${category}` },
       ],
-      p_source: '費用核銷(驗收)',
+      p_source: '費用驗收',
       p_source_id: expense_id,
       p_created_by: '系統',
     })

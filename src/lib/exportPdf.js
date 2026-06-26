@@ -1,4 +1,4 @@
-import jsPDF from 'jspdf'
+﻿import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { printSignOff } from './printSignOff'
 import { formatCurrency, fmtNT as fmt } from './currency'
@@ -246,7 +246,7 @@ export function exportExpenseRequestPdf(req, opts = {}) {
             ['供應商', req.supplier || ''],
             ['會計科目', req.account_code ? `${req.account_code}　${req.account_name || ''}` : ''],
             ['門市', req.store || ''],
-            ...(opts.settleUnitLabel ? [[isOrder ? '驗收單位' : '核銷(驗收)單位', opts.settleUnitLabel]] : []),
+            ...(opts.settleUnitLabel ? [[isOrder ? '驗收單位' : '驗收單位', opts.settleUnitLabel]] : []),
             ...(req.acceptance_units?.length ? [['驗收單位（多選）', req.acceptance_units.join('、')]] : []),
           ],
         },
@@ -283,7 +283,7 @@ export function exportExpenseRequestPdf(req, opts = {}) {
   }
 
   if (!isNonExpense && req.notes) {
-    sections.push({ title: isOrder ? '驗收備註' : '核銷(驗收)備註', text: req.notes })
+    sections.push({ title: isOrder ? '驗收備註' : '驗收備註', text: req.notes })
   }
 
   printSignOff({

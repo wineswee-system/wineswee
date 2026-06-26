@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+﻿import { useRef } from 'react'
 import { X, Upload, FileText, Image } from 'lucide-react'
 import { ModalOverlay } from '../../../components/Modal'
 import { clearError } from '../../../lib/formValidation'
@@ -33,12 +33,12 @@ export default function SettleModal({
   settleForm, setSettleForm,
   settleFiles, setSettleFiles,
   onSubmit, saving, errors, setErrors,
-  settleVerb = '核銷',   // 費用='核銷(驗收)'；叫貨='驗收'
+  settleVerb = '驗收',
 }) {
   if (!open || !request) return null
 
   const settleFileRef = useRef(null)
-  const vb = settleVerb === '驗收' ? '驗收' : '核銷(驗收)'
+  const vb = '驗收'
 
   return (
     <ModalOverlay onClose={onClose}>

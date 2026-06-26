@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Wallet, Receipt, FileText, ClipboardList, Package, ShoppingCart } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
@@ -88,8 +88,8 @@ export default function BusinessApplications() {
         </div>
       </div>
 
-      <FormGroup title="💰 費用組" desc="會產生費用支出，需核銷(驗收)" items={expenseGroup} navigate={navigate} />
-      <FormGroup title="📋 非費用組" desc="純流程申請，不涉及核銷(驗收)" items={nonExpenseGroup} navigate={navigate} />
+      <FormGroup title="💰 費用組" desc="會產生費用支出，需驗收" items={expenseGroup} navigate={navigate} />
+      <FormGroup title="📋 非費用組" desc="純流程申請，不涉及驗收" items={nonExpenseGroup} navigate={navigate} />
 
       {expenseGroup.length === 0 && nonExpenseGroup.length === 0 && (
         <div className="card" style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>

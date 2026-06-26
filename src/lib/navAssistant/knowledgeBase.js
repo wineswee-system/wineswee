@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Navigation Assistant Knowledge Base
  *
  * Task-oriented map of HR and Workflow (process) features.
@@ -342,7 +342,7 @@ export const KNOWLEDGE_BASE = [
     steps: [
       '進入「行政庶務 → 公出差旅」',
       '建立差旅單（地點、交通、住宿、預算）',
-      '回來後補上實際費用送核銷(驗收)',
+      '回來後補上實際費用送驗收',
     ],
   },
   {
@@ -527,7 +527,7 @@ export const KNOWLEDGE_BASE = [
       '進入「HR 表單中心」找到要設定的表單（請假/加班/出差/離職/異動/留停/補打卡/費用報銷）',
       '進入該表單頁面，admin 會看到右上「⚙ 簽核設定」按鈕',
       '點下去會進入專屬設定頁（/process/settings/chains/edit）；可加關卡，每關可選：固定員工/角色/部門 或 申請人主管/部門主管/門市店長/課別督導 等動態目標',
-      '申請費用 (兩階段) 為例外：在 /hr/expense-requests 頁兩個按鈕分別設定「申請」「核銷(驗收)」金額分組',
+      '申請費用 (兩階段) 為例外：在 /hr/expense-requests 頁兩個按鈕分別設定「申請」「驗收」金額分組',
       '也可從「專案流程 → 設定 → 簽核鏈」中央 library 直接管理所有 chain',
       '自訂表單 (FormBuilder) 編輯模板時內建設定按鈕（仍為 modal，因為已在模板編輯 modal 內）',
     ],
@@ -620,7 +620,7 @@ export const QUICK_PROMPTS = [
   { icon: '🌙', label: '如何申請加班', query: '怎麼申請加班？' },
   { icon: '💰', label: '查薪資單', query: '我要下載薪資單' },
   { icon: '📅', label: '排班給員工', query: '主管怎麼幫員工排班？' },
-  { icon: '🧾', label: '報銷費用', query: '如何核銷(驗收)費用？' },
+  { icon: '🧾', label: '報銷費用', query: '如何驗收費用？' },
   { icon: '🧩', label: '建立新流程', query: '我想建立一個自訂工作流程' },
   { icon: '✅', label: '新增任務', query: '怎麼新增任務並指派給同事？' },
   { icon: '🪜', label: '設定簽核鏈', query: '如何設定簽核鏈？' },

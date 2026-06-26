@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+﻿import { useState, useEffect } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { getAccounts, getCurrencies } from '../../../lib/db'
 import { validateRequired } from '../../../lib/formValidation'
@@ -27,7 +27,7 @@ export default function ExpenseFormDraft({ initialDraft, onCapture, onClose, bus
   const [currencies, setCurrencies] = useState([])
   const [employees, setEmployees] = useState([])
   const [stores, setStores] = useState([])
-  const [departments, setDepartments] = useState([])  // 核銷(驗收)單位下拉
+  const [departments, setDepartments] = useState([])  // 驗收單位下拉
   const [form, setForm] = useState(() => initialDraft?._formState?.form || { ...emptyForm, employee: profile?.name || '' })
   const [lineItems, setLineItems] = useState(() => initialDraft?._formState?.lineItems || [emptyItem()])
   const [files, setFiles] = useState(() => initialDraft?.files || [])
@@ -87,7 +87,7 @@ export default function ExpenseFormDraft({ initialDraft, onCapture, onClose, bus
       items: isExpense ? validItems : null,
       store: isExpense ? (form.store || null) : null,
       currency: isExpense ? (form.currency || 'TWD') : 'TWD',
-      // 核銷(驗收)單位:營運部選總部(__HQ__)→門市存 null、部門維持營運部
+      // 驗收單位:營運部選總部(__HQ__)→門市存 null、部門維持營運部
       settle_department_id: isExpense && form.settle_department_id ? Number(form.settle_department_id) : null,
       settle_store_id: isExpense && form.settle_store_id && form.settle_store_id !== '__HQ__' ? Number(form.settle_store_id) : null,
       organization_id: orgId,

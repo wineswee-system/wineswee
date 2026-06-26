@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+﻿import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../contexts/AuthContext'
@@ -29,7 +29,7 @@ const SIGNED_TYPE_LABEL = {
   resignation: '離職', loa: '留停', transfer: '異動', headcount: '人力需求',
   form_submission: '表單申請',
   off_request: '希望休', shift_swap: '換班',
-  task_confirmation: '任務確認', expense_settle: '費用核銷(驗收)',
+  task_confirmation: '任務確認', expense_settle: '費用驗收',
   workflow: '流程簽核',
 }
 
@@ -59,7 +59,7 @@ const GROUPS = [
     tabs: [
       // docType:'expense' → 同表 expense_requests 但只收費用單（叫貨單 doc_type='order' 切到下面「叫貨」群組）
       { key: 'expense_request', label: '申請', table: 'expense_requests', route: '/hr/expense-requests', pendingStatus: '申請中', docType: 'expense' },
-      { key: 'expense_settle',  label: '核銷(驗收)', table: 'expense_requests', route: '/hr/expense-requests', pendingStatus: '待核銷', docType: 'expense' },
+      { key: 'expense_settle',  label: '驗收', table: 'expense_requests', route: '/hr/expense-requests', pendingStatus: '待核銷', docType: 'expense' },
     ],
   },
   {
@@ -380,7 +380,7 @@ function getRowDisplay(row, tabKey) {
       }
     case 'expense_settle':
       return {
-        title: `${row.employee} · 核銷(驗收) ${row.title || ''}`,
+        title: `${row.employee} · 驗收 ${row.title || ''}`,
         subtitle: `實際 NT$ ${Number(row.actual_amount || row.estimated_amount || 0).toLocaleString()}`,
       }
     case 'order_request':

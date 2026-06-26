@@ -786,7 +786,7 @@ function buildApprovalDelegatedNotification(details: {
   effective_to?: string;
   rt?: string;               // expense_request | expense_settle | ...
   request_id?: number;
-  doc_label?: string;        // 費用申請 / 費用核銷(驗收)
+  doc_label?: string;        // 費用申請 / 費用驗收
   title?: string;
   applicant_name?: string;
   applicant_dept?: string;
@@ -857,7 +857,7 @@ function buildApprovalDelegatedNotification(details: {
   };
 }
 
-// ── expense_settle_todo：非經常性費用申請「已核准」→ 提醒核銷(驗收)單位的人去送核銷單 ──
+// ── expense_settle_todo：非經常性費用申請「已核准」→ 提醒驗收單位的人去送驗收單 ──
 function buildExpenseSettleTodoNotification(details: {
   request_id?: number;
   applicant_name?: string;
@@ -877,16 +877,16 @@ function buildExpenseSettleTodoNotification(details: {
     ],
   });
   const body: any[] = [
-    { type: 'text', text: '申請已核准 · 等你送核銷(驗收)單', weight: 'bold', size: 'sm', wrap: true, color: C.brand },
+    { type: 'text', text: '申請已核准 · 等你送驗收單', weight: 'bold', size: 'sm', wrap: true, color: C.brand },
     { type: 'separator', margin: 'sm' },
     row('單號', `#${details.request_id ?? ''}`),
     ...(details.applicant_name ? [row('申請人', details.applicant_name)] : []),
     ...(details.title ? [row('項目', details.title)] : []),
     ...(details.amount != null ? [row('預估金額', `${sym} ${Number(details.amount).toLocaleString()}`)] : []),
     ...(details.store ? [row('門市', details.store)] : []),
-    ...(details.settle_unit_label ? [row('核銷單位', details.settle_unit_label)] : []),
+    ...(details.settle_unit_label ? [row('驗收單位', details.settle_unit_label)] : []),
     { type: 'separator', margin: 'sm' },
-    { type: 'text', text: '此申請已通過簽核，請前往填寫實際金額、上傳收據並送出核銷(驗收)單。', size: 'xs', color: C.muted, wrap: true, margin: 'sm' },
+    { type: 'text', text: '此申請已通過簽核，請前往填寫實際金額、上傳收據並送出驗收單。', size: 'xs', color: C.muted, wrap: true, margin: 'sm' },
   ];
   const id = details.request_id;
   const liffUrl = details.liff_id
@@ -895,15 +895,15 @@ function buildExpenseSettleTodoNotification(details: {
   const footer = liffUrl ? {
     type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '14px',
     contents: [{ type: 'button', style: 'primary', height: 'sm', color: C.brand,
-      action: { type: 'uri', label: '去送核銷(驗收)單', uri: liffUrl } }],
+      action: { type: 'uri', label: '去送驗收單', uri: liffUrl } }],
   } : undefined;
   return {
     type: 'flex',
-    altText: `🧾 待你送核銷(驗收)單：${details.title || ''} #${details.request_id ?? ''}`,
+    altText: `🧾 待你送驗收單：${details.title || ''} #${details.request_id ?? ''}`,
     contents: {
       type: 'bubble', size: 'kilo',
       header: { type: 'box', layout: 'vertical', backgroundColor: C.brand, paddingAll: '14px',
-        contents: [{ type: 'text', text: '🧾 待你送核銷(驗收)單', color: '#FFFFFF', weight: 'bold', size: 'md' }] },
+        contents: [{ type: 'text', text: '🧾 待你送驗收單', color: '#FFFFFF', weight: 'bold', size: 'md' }] },
       body: { type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '14px', contents: body },
       ...(footer ? { footer } : {}),
     },

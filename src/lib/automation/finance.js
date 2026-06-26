@@ -1,4 +1,4 @@
-import { supabase } from '../supabase'
+﻿import { supabase } from '../supabase'
 import { workflow, step, fanOut, fanIn, registerStep } from '../workflow/index.js'
 
 // ── Monthly Close Workflow ──
@@ -216,12 +216,12 @@ export async function createJEFromExpense(expense) {
 
   const { data: entry, error: entryError } = await supabase.rpc('secure_create_journal_entry', {
     p_entry_date: expense.date || new Date().toISOString().slice(0, 10),
-    p_description: `費用核銷(驗收) - ${expense.employee} (${expense.category}: ${expense.description || ''})`,
+    p_description: `費用驗收 - ${expense.employee} (${expense.category}: ${expense.description || ''})`,
     p_lines: [
       { account_code: account.code, account_name: account.name, debit: amount, credit: 0, memo: `${expense.employee} - ${expense.category}` },
       { account_code: '1100', account_name: '現金', debit: 0, credit: amount, memo: `${expense.employee} - ${expense.category}` },
     ],
-    p_source: '費用核銷(驗收)',
+    p_source: '費用驗收',
     p_source_id: expense.id,
     p_created_by: '系統',
   })

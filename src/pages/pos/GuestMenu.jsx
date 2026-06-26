@@ -165,17 +165,17 @@ const S = {
     display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 48,
   },
   welLine:  { width: 44, height: 1.5, background: C.gold, margin: '0 auto 22px', opacity: .8 },
-  welName:  { fontSize: 28, fontWeight: 800, color: C.white, letterSpacing: '1px', marginBottom: 10 },
+  welName:  { fontSize: 32, fontWeight: 800, color: C.white, letterSpacing: '1px', marginBottom: 12 },
   welTable: {
-    display: 'inline-block', padding: '5px 20px', borderRadius: 20,
+    display: 'inline-block', padding: '6px 22px', borderRadius: 20,
     border: '1px solid rgba(201,164,85,.5)', color: C.gold,
-    fontSize: 15, fontWeight: 600, marginBottom: 22,
+    fontSize: 17, fontWeight: 600, marginBottom: 24,
   },
-  welGreet: { fontSize: 16, color: 'rgba(255,255,255,.85)', lineHeight: 2.0, maxWidth: 300, marginBottom: 36, whiteSpace: 'pre-line' },
+  welGreet: { fontSize: 18, color: 'rgba(255,255,255,.85)', lineHeight: 2.1, maxWidth: 320, marginBottom: 36, whiteSpace: 'pre-line' },
   welBtn: {
     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
     background: C.gold, color: C.wineDark, border: 'none', borderRadius: 14,
-    width: '100%', maxWidth: 300, height: 58, fontSize: 18, fontWeight: 800,
+    width: '100%', maxWidth: 320, height: 62, fontSize: 20, fontWeight: 800,
     cursor: 'pointer', boxShadow: '0 4px 20px rgba(201,164,85,.5)',
   },
 
@@ -189,15 +189,15 @@ const S = {
     width: 40, height: 40, borderRadius: 10, overflow: 'hidden', flexShrink: 0,
     background: C.wine, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20,
   },
-  storeName: { margin: 0, fontSize: 16, fontWeight: 800, color: C.wine, letterSpacing: '-0.3px', lineHeight: 1.2 },
+  storeName: { margin: 0, fontSize: 18, fontWeight: 800, color: C.wine, letterSpacing: '-0.3px', lineHeight: 1.2 },
   tableTag: {
     display: 'inline-block', marginTop: 3,
-    padding: '2px 12px', borderRadius: 20,
-    background: C.goldDim, color: C.gold, fontSize: 12, fontWeight: 700,
+    padding: '3px 14px', borderRadius: 20,
+    background: C.goldDim, color: C.gold, fontSize: 14, fontWeight: 700,
   },
   cartChip: {
     flexShrink: 0, background: C.wine, color: C.white, borderRadius: 20,
-    padding: '7px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+    padding: '8px 18px', fontSize: 14, fontWeight: 700, cursor: 'pointer',
     border: 'none', whiteSpace: 'nowrap',
   },
 
@@ -209,17 +209,17 @@ const S = {
     position: 'sticky', top: 104, zIndex: 19,   // header ~104px now (row1 + lang bar)
   },
   catPill: (a) => ({
-    flexShrink: 0, padding: '9px 18px', borderRadius: 20,
+    flexShrink: 0, padding: '10px 20px', borderRadius: 20,
     border: `1.5px solid ${a ? C.wine : C.border}`,
     background: a ? C.wine : 'transparent',
     color: a ? C.white : C.sub,
-    fontSize: 14, fontWeight: a ? 700 : 500,
+    fontSize: 16, fontWeight: a ? 700 : 500,
     cursor: 'pointer', whiteSpace: 'nowrap',
   }),
 
   // ── Section header ──
   sectionHead: {
-    padding: '18px 16px 8px', fontSize: 12, fontWeight: 800, color: C.gold,
+    padding: '20px 16px 8px', fontSize: 14, fontWeight: 800, color: C.gold,
     letterSpacing: '1.5px', textTransform: 'uppercase',
     display: 'flex', alignItems: 'center', gap: 8,
   },
@@ -228,24 +228,24 @@ const S = {
   // ── Item row ──
   itemRow: (inCart) => ({
     background: C.card, borderBottom: `1px solid ${C.border}`,
-    display: 'flex', alignItems: 'center', gap: 14, padding: '16px 16px',
+    display: 'flex', alignItems: 'center', gap: 14, padding: '18px 16px',
     borderLeft: `3px solid ${inCart ? C.wine : 'transparent'}`,
-    transition: 'border-left-color .15s', minHeight: 90,
+    transition: 'border-left-color .15s', minHeight: 100,
   }),
-  thumb:   { width: 76, height: 76, borderRadius: 12, objectFit: 'cover', flexShrink: 0, background: C.border },
+  thumb:   { width: 82, height: 82, borderRadius: 12, objectFit: 'cover', flexShrink: 0, background: C.border },
   thumbPH: {
-    width: 76, height: 76, borderRadius: 12,
+    width: 82, height: 82, borderRadius: 12,
     background: `linear-gradient(135deg, ${C.goldDim}, ${C.wineDim})`,
     display: 'flex', alignItems: 'center', justifyContent: 'center',
-    fontSize: 28, flexShrink: 0,
+    fontSize: 32, flexShrink: 0,
   },
   itemBody:  { flex: 1, minWidth: 0 },
-  itemName:  { fontSize: 16, fontWeight: 700, lineHeight: 1.4, color: C.text, marginBottom: 3 },
+  itemName:  { fontSize: 18, fontWeight: 700, lineHeight: 1.4, color: C.text, marginBottom: 4 },
   itemDesc:  {
-    fontSize: 13, color: C.muted, lineHeight: 1.5, marginBottom: 6,
+    fontSize: 14, color: C.muted, lineHeight: 1.5, marginBottom: 6,
     overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
   },
-  itemPrice: { fontSize: 17, fontWeight: 800, color: C.wine },
+  itemPrice: { fontSize: 19, fontWeight: 800, color: C.wine },
 
   // ── Qty controls ──
   addBtn: {
@@ -279,8 +279,8 @@ const S = {
     background: C.gold, color: C.wineDark, borderRadius: 20,
     padding: '3px 12px', fontSize: 13, fontWeight: 800, flexShrink: 0,
   },
-  cartLabel:     { flex: 1, fontSize: 16, fontWeight: 800, textAlign: 'center' },
-  cartTotalText: { fontSize: 15, fontWeight: 700, flexShrink: 0 },
+  cartLabel:     { flex: 1, fontSize: 18, fontWeight: 800, textAlign: 'center' },
+  cartTotalText: { fontSize: 17, fontWeight: 700, flexShrink: 0 },
 
   // ── Bottom sheet ──
   sheet:       { position: 'fixed', inset: 0, zIndex: 40, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' },
@@ -294,7 +294,7 @@ const S = {
   sheetNote:   { padding: '12px 20px 4px', flexShrink: 0 },
   noteInput:   { width: '100%', background: C.cream, border: `1.5px solid ${C.border}`, borderRadius: 12, padding: '10px 14px', fontSize: 14, outline: 'none', resize: 'none', fontFamily: 'inherit', color: C.text, boxSizing: 'border-box' },
   sheetFoot:   { padding: '14px 20px', display: 'flex', gap: 12, alignItems: 'center', borderTop: `1px solid ${C.border}`, flexShrink: 0 },
-  submitBtn:   { padding: '0 28px', height: 52, borderRadius: 14, border: 'none', background: C.wine, color: C.white, fontSize: 16, fontWeight: 800, cursor: 'pointer', flexShrink: 0, boxShadow: '0 4px 12px rgba(123,33,54,.3)' },
+  submitBtn:   { padding: '0 32px', height: 56, borderRadius: 14, border: 'none', background: C.wine, color: C.white, fontSize: 18, fontWeight: 800, cursor: 'pointer', flexShrink: 0, boxShadow: '0 4px 12px rgba(123,33,54,.3)' },
 
   // ── State screens ──
   center: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100dvh', padding: 32, gap: 14, textAlign: 'center', background: C.cream },

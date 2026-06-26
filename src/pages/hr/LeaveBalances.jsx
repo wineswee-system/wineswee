@@ -19,6 +19,7 @@ const TYPE_CODE = Object.fromEntries(Object.entries(TYPE_LABEL).map(([k, v]) => 
 const LEGAL_LIMITS = {
   sick: 30, personal: 14, menstrual: 12,
   marriage: 8, bereavement: 8, mental_health: 3, family_care: 7,
+  paternity: 7,
 }
 
 const DISPLAY_TYPES = [
@@ -164,6 +165,14 @@ export default function LeaveBalances() {
       const dbTotal = Number(dbBal?.total_days || 0)
       let computedTotal = 0, statutory = null
       if (type === 'annual') { statutory = calcStatutoryLeave(emp); computedTotal = statutory ?? 0 }
+      else if (type === 'maternity') {
+        // 滿 6 個月 → 56 天（8週），未滿 6 個月 → 28 天（4週）
+        if (emp.join_date) {
+          const now = new Date(), join = new Date(emp.join_date)
+          const months = (now.getFullYear() - join.getFullYear()) * 12 + (now.getMonth() - join.getMonth())
+          computedTotal = months >= 6 ? 56 : 28
+        } else computedTotal = 56
+      }
       else computedTotal = LEGAL_LIMITS[type] ?? 0
       const effectiveTotal = dbTotal > 0 ? Math.max(dbTotal, computedTotal) : computedTotal
       const usedFromLr = usedByType[type] || 0

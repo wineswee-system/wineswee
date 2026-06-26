@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Calculator, Users, Download, Search } from 'lucide-react'
+import { Calculator, Users, Search, Edit2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -18,8 +18,11 @@ const TYPE_CODE = Object.fromEntries(Object.entries(TYPE_LABEL).map(([k, v]) => 
 // legal limits in DAYS (per year, except menstrual which is per month)
 const LEGAL_LIMITS = {
   sick: 30, personal: 14, menstrual: 1,  // 1 day/month × 12 months
-  marriage: 8, bereavement: 8, mental_health: 3, family_care: 7, paternity: 7,
+  marriage: 8, bereavement: 8, mental_health: 3, family_care: 7,
+  paternity: 7, prenatal: 5,
 }
+// 這些假別沒有固定年度天數，只在有資料時才顯示
+const EVENT_BASED = new Set(['official', 'maternity', 'parental', 'occupational', 'unpaid', 'parental'])
 
 const ANNUAL_TYPES = [
   'annual', 'sick', 'personal', 'menstrual',
@@ -61,6 +64,13 @@ export default function LeaveBalances() {
   const [bulkDays, setBulkDays]             = useState('')
   const [bulkYear, setBulkYear]             = useState(currentYear)
   const [bulkSaving, setBulkSaving]         = useState(false)
+
+  // single-employee edit modal
+  const [editRow, setEditRow]       = useState(null)  // { type, label, dbId, totalDays, carryOverDays, expiresAt }
+  const [editTotalDays, setEditTotalDays]   = useState('')
+  const [editCarryOver, setEditCarryOver]   = useState('')
+  const [editExpiresAt, setEditExpiresAt]   = useState('')
+  const [editSaving, setEditSaving] = useState(false)
 
   // cashout modal
   const [showCashoutModal, setShowCashoutModal] = useState(false)
@@ -233,6 +243,9 @@ export default function LeaveBalances() {
       const remH     = totalHours - usedH
       const canApply = Math.max(0, remH - pendH)
 
+      // 事件制假別（無固定天數）：沒有 DB 記錄且沒有用過就不顯示
+      if (EVENT_BASED.has(type) && !dbBal && usedH === 0) continue
+
       rows.push({
         _key: type, type, isMonthly: false,
         label: TYPE_LABEL[type] || type,
@@ -248,6 +261,44 @@ export default function LeaveBalances() {
   }
 
   // ── bulk submit ───────────────────────────────────────────────────────────
+  const openEditRow = (r) => {
+    const dbBal = dbBalances.find(b => b.id === r.dbId)
+    setEditRow(r)
+    setEditTotalDays(dbBal ? String(dbBal.total_days ?? '') : '')
+    setEditCarryOver(dbBal ? String(dbBal.carry_over_days ?? '') : '')
+    setEditExpiresAt(dbBal?.expires_at || '')
+  }
+
+  const handleEditSubmit = async () => {
+    if (editTotalDays === '') { toast.warning('請輸入總天數'); return }
+    try {
+      setEditSaving(true)
+      const payload = {
+        employee_id: selectedEmpId, year: yearFilter,
+        leave_type: editRow.type,
+        total_days: Number(editTotalDays),
+        carry_over_days: Number(editCarryOver) || 0,
+        expires_at: editExpiresAt || null,
+        organization_id: profile?.organization_id,
+      }
+      if (editRow.dbId) {
+        const { error } = await supabase.from('leave_balances').update(payload).eq('id', editRow.dbId)
+        if (error) throw error
+      } else {
+        const { error } = await supabase.from('leave_balances').insert({ ...payload, used_days: 0 })
+        if (error) throw error
+      }
+      toast.success('已儲存')
+      setEditRow(null)
+      const id = selectedEmpId
+      setSelectedEmpId(null); setTimeout(() => setSelectedEmpId(id), 0)
+    } catch (err) {
+      toast.error('儲存失敗：' + (err.message || '未知錯誤'))
+    } finally {
+      setEditSaving(false)
+    }
+  }
+
   const handleBulkSubmit = async () => {
     if (!bulkSelectedIds.length) { toast.warning('請選擇員工'); return }
     if (bulkDays === '' || isNaN(Number(bulkDays))) { toast.warning('請輸入天數'); return }

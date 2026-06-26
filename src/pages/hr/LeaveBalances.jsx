@@ -1,14 +1,13 @@
 import { useState, useEffect } from 'react'
-import { Plus, Edit2, Calculator, User, Users } from 'lucide-react'
+import { Calculator, Users, Download, Search } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
-import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { toast } from '../../lib/toast'
 
 const TYPE_LABEL = {
-  annual: '特休', sick: '病假', personal: '事假', comp: '補休',
+  annual: '特休假', sick: '病假', personal: '事假', comp: '補休',
   menstrual: '生理假', marriage: '婚假', bereavement: '喪假',
   official: '公假', maternity: '產假', paternity: '陪產假',
   parental: '育嬰假', family_care: '家庭照顧假', mental_health: '心理假',
@@ -16,25 +15,22 @@ const TYPE_LABEL = {
 }
 const TYPE_CODE = Object.fromEntries(Object.entries(TYPE_LABEL).map(([k, v]) => [v, k]))
 
+// legal limits in DAYS (per year, except menstrual which is per month)
 const LEGAL_LIMITS = {
-  sick: 30, personal: 14, menstrual: 12,
-  marriage: 8, bereavement: 8, mental_health: 3, family_care: 7,
-  paternity: 7,
+  sick: 30, personal: 14, menstrual: 1,  // 1 day/month × 12 months
+  marriage: 8, bereavement: 8, mental_health: 3, family_care: 7, paternity: 7,
 }
 
-const DISPLAY_TYPES = [
-  'annual', 'sick', 'personal', 'comp', 'menstrual',
+const ANNUAL_TYPES = [
+  'annual', 'sick', 'personal', 'menstrual',
   'marriage', 'bereavement', 'official', 'maternity', 'paternity', 'unpaid',
+  'family_care', 'mental_health', 'occupational', 'prenatal', 'parental',
 ]
-const ALL_TYPES = [...DISPLAY_TYPES, 'family_care', 'mental_health', 'occupational', 'prenatal', 'parental']
 
-const TYPE_ICON = {
-  annual: '🌴', sick: '🏥', personal: '🙋', comp: '🔄',
-  menstrual: '💊', marriage: '💒', bereavement: '🕯️',
-  official: '🏛️', maternity: '🤱', paternity: '👨‍👶',
-  parental: '👶', family_care: '🏠', mental_health: '🧠',
-  occupational: '🦺', prenatal: '🩺', unpaid: '📋',
-}
+const MONTHS_TW = ['01月','02月','03月','04月','05月','06月','07月','08月','09月','10月','11月','12月']
+
+const daysToHours = (d) => Math.round(Number(d || 0) * 8)
+const hoursToHours = (h) => Math.round(Number(h || 0))
 
 export default function LeaveBalances() {
   const { profile, role } = useAuth()
@@ -42,44 +38,42 @@ export default function LeaveBalances() {
   const isStaff = userRole === 'store_staff'
   const currentYear = new Date().getFullYear()
 
-  const [employees, setEmployees] = useState([])
+  const [employees, setEmployees]     = useState([])
   const [selectedEmpId, setSelectedEmpId] = useState(null)
-  const [yearFilter, setYearFilter] = useState(currentYear)
+  const [yearFilter, setYearFilter]   = useState(currentYear)
+  const [statusFilter, setStatusFilter] = useState('在職')
+  const [nameSearch, setNameSearch]   = useState('')
+  const [activeTab, setActiveTab]     = useState('annual')
 
-  const [dbBalances, setDbBalances] = useState([])
+  const [dbBalances, setDbBalances]     = useState([])
   const [leaveRequests, setLeaveRequests] = useState([])
-  const [empRows, setEmpRows] = useState([])      // computed rows for selected employee
+  const [pendingRequests, setPendingRequests] = useState([])
+  const [tableRows, setTableRows]       = useState([])
 
-  const [loading, setLoading] = useState(false)
-  const [empLoading, setEmpLoading] = useState(true)
+  const [empLoading, setEmpLoading]   = useState(true)
+  const [dataLoading, setDataLoading] = useState(false)
 
-  const [showModal, setShowModal] = useState(false)
-  const [editingId, setEditingId] = useState(null)
+  // bulk adjust modal
+  const [showBulkModal, setShowBulkModal]   = useState(false)
+  const [bulkSelectedIds, setBulkSelectedIds] = useState([])
+  const [bulkSearch, setBulkSearch]         = useState('')
+  const [bulkLeaveType, setBulkLeaveType]   = useState('annual')
+  const [bulkDays, setBulkDays]             = useState('')
+  const [bulkYear, setBulkYear]             = useState(currentYear)
+  const [bulkSaving, setBulkSaving]         = useState(false)
+
+  // cashout modal
   const [showCashoutModal, setShowCashoutModal] = useState(false)
-  const [cashoutItems, setCashoutItems] = useState([])
+  const [cashoutItems, setCashoutItems]   = useState([])
   const [cashoutLoading, setCashoutLoading] = useState(false)
   const [cashoutSaving, setCashoutSaving] = useState(false)
-
-  const [showBulkModal, setShowBulkModal] = useState(false)
-  const [bulkSelectedIds, setBulkSelectedIds] = useState([])
-  const [bulkSearch, setBulkSearch] = useState('')
-  const [bulkLeaveType, setBulkLeaveType] = useState('annual')
-  const [bulkDays, setBulkDays] = useState('')
-  const [bulkYear, setBulkYear] = useState(currentYear)
-  const [bulkSaving, setBulkSaving] = useState(false)
-
-  const [form, setForm] = useState({
-    employee_id: '', year: currentYear, leave_type: 'annual',
-    total_days: '', used_days: 0, carry_over_days: '', expires_at: '',
-  })
 
   const normalizeType = (t) => TYPE_CODE[t] || t
 
   const calcStatutoryLeave = (emp) => {
     if (!emp?.join_date) return null
     if (emp.employment_type === '兼職' && Number(emp.weekly_hours || 40) < 20) return null
-    const now = new Date()
-    const join = new Date(emp.join_date)
+    const now = new Date(), join = new Date(emp.join_date)
     const months = (now.getFullYear() - join.getFullYear()) * 12 + (now.getMonth() - join.getMonth())
     const years = Math.floor(months / 12)
     if (months < 6)  return 0
@@ -91,166 +85,169 @@ export default function LeaveBalances() {
     return Math.min(15 + (years - 10), 30)
   }
 
-  const seniority = (emp) => {
-    if (!emp?.join_date) return null
-    const now = new Date()
-    const join = new Date(emp.join_date)
+  const calcMaternityDays = (emp) => {
+    if (!emp?.join_date) return 56
+    const now = new Date(), join = new Date(emp.join_date)
     const months = (now.getFullYear() - join.getFullYear()) * 12 + (now.getMonth() - join.getMonth())
-    const years = Math.floor(months / 12)
-    const rem = months % 12
-    return years > 0 ? `${years} 年 ${rem} 個月` : `${rem} 個月`
+    return months >= 6 ? 56 : 28
   }
 
-  // load employee list once
+  // ── load employee list ────────────────────────────────────────────────────
   useEffect(() => {
     const load = async () => {
       setEmpLoading(true)
       const orgId = profile?.organization_id
-      const { data, error } = await supabase.from('employees')
-        .select('id, name, dept, store, status, employment_type, join_date, weekly_hours, gender')
-        .eq('status', '在職').eq('organization_id', orgId).order('name')
-      if (!error) {
-        if (isStaff && profile?.id) {
-          setEmployees(data.filter(e => e.id === profile.id))
-          setSelectedEmpId(profile.id)
-        } else {
-          setEmployees(data || [])
-        }
+      const { data } = await supabase.from('employees')
+        .select('id, name, employee_number, dept, store, status, employment_type, join_date, weekly_hours, gender')
+        .eq('organization_id', orgId).order('name')
+      let emps = data || []
+      if (isStaff && profile?.id) {
+        emps = emps.filter(e => e.id === profile.id)
+        setSelectedEmpId(profile.id)
       }
+      setEmployees(emps)
       setEmpLoading(false)
     }
     if (profile?.organization_id) load()
   }, [profile?.organization_id])
 
-  // load data when employee or year changes
+  // ── load data when employee or year changes ───────────────────────────────
   useEffect(() => {
-    if (!selectedEmpId) { setEmpRows([]); return }
+    if (!selectedEmpId) { setTableRows([]); return }
     const load = async () => {
-      setLoading(true)
+      setDataLoading(true)
       const orgId = profile?.organization_id
       const yearStart = `${yearFilter}-01-01`
       const yearEnd   = `${yearFilter + 1}-01-01`
-      const [balRes, lrRes] = await Promise.all([
-        supabase.from('leave_balances')
-          .select('*').eq('year', yearFilter).eq('organization_id', orgId).eq('employee_id', selectedEmpId),
-        supabase.from('leave_requests')
-          .select('employee_id, type, days, hours, start_date, status')
+      const [balRes, lrRes, pendRes] = await Promise.all([
+        supabase.from('leave_balances').select('*')
+          .eq('year', yearFilter).eq('organization_id', orgId).eq('employee_id', selectedEmpId),
+        supabase.from('leave_requests').select('employee_id,type,days,hours,start_date,status')
           .eq('organization_id', orgId).eq('employee_id', selectedEmpId)
-          .in('status', ['已核准'])
-          .gte('start_date', yearStart).lt('start_date', yearEnd),
+          .in('status', ['已核准']).gte('start_date', yearStart).lt('start_date', yearEnd),
+        supabase.from('leave_requests').select('employee_id,type,days,hours,start_date,status')
+          .eq('organization_id', orgId).eq('employee_id', selectedEmpId)
+          .eq('status', '申請中').gte('start_date', yearStart).lt('start_date', yearEnd),
       ])
-      const bals = balRes.data || []
-      const lrs  = lrRes.data  || []
+      const bals    = balRes.data  || []
+      const lrs     = lrRes.data   || []
+      const pending = pendRes.data || []
       setDbBalances(bals)
       setLeaveRequests(lrs)
+      setPendingRequests(pending)
       const emp = employees.find(e => e.id === selectedEmpId)
-      setEmpRows(buildRows(emp, bals, lrs))
-      setLoading(false)
+      setTableRows(buildRows(emp, bals, lrs, pending))
+      setDataLoading(false)
     }
     load()
   }, [selectedEmpId, yearFilter, employees])
 
-  const buildRows = (emp, bals, lrs) => {
+  // ── build table rows ──────────────────────────────────────────────────────
+  const buildRows = (emp, bals, lrs, pending) => {
     if (!emp) return []
     const balByType = {}
     for (const b of bals) balByType[normalizeType(b.leave_type)] = b
-    const usedByType = {}
+
+    const usedByType   = {}    // type → hours used
+    const pendByType   = {}    // type → hours pending
+    const usedByTypeMonth = {} // 'menstrual-MM' → hours used
+
     for (const lr of lrs) {
       const code = normalizeType(lr.type)
-      usedByType[code] = (usedByType[code] || 0) + (Number(lr.days) || 0)
+      const h = lr.hours ? hoursToHours(lr.hours) : daysToHours(lr.days)
+      usedByType[code] = (usedByType[code] || 0) + h
+      if (code === 'menstrual' && lr.start_date) {
+        const mm = lr.start_date.slice(5, 7)
+        const key = `menstrual-${mm}`
+        usedByTypeMonth[key] = (usedByTypeMonth[key] || 0) + h
+      }
+    }
+    for (const lr of pending) {
+      const code = normalizeType(lr.type)
+      const h = lr.hours ? hoursToHours(lr.hours) : daysToHours(lr.days)
+      pendByType[code] = (pendByType[code] || 0) + h
     }
 
-    const gender = emp.gender  // '男' | '女' | null
-    const visibleTypes = DISPLAY_TYPES.filter(t => {
-      if (t === 'menstrual' && gender === '男') return false
-      if (t === 'maternity' && gender === '男') return false
-      if (t === 'paternity' && gender === '女') return false
-      return true
-    })
+    const gender = emp.gender
+    const rows = []
 
-    return visibleTypes.map(type => {
-      const dbBal = balByType[type]
+    for (const type of ANNUAL_TYPES) {
+      if (type === 'menstrual' && gender === '男') continue
+      if (type === 'maternity' && gender === '男') continue
+      if (type === 'paternity' && gender === '女') continue
+
+      const dbBal  = balByType[type]
       const dbTotal = Number(dbBal?.total_days || 0)
-      let computedTotal = 0, statutory = null
-      if (type === 'annual') { statutory = calcStatutoryLeave(emp); computedTotal = statutory ?? 0 }
-      else if (type === 'maternity') {
-        // 滿 6 個月 → 56 天（8週），未滿 6 個月 → 28 天（4週）
+      let computedDays = 0
+
+      if (type === 'annual') computedDays = calcStatutoryLeave(emp) ?? 0
+      else if (type === 'maternity') computedDays = calcMaternityDays(emp)
+      else if (type === 'menstrual') computedDays = 12  // annual total (12 × 1 day)
+      else computedDays = LEGAL_LIMITS[type] ?? 0
+
+      const effectiveDays  = dbTotal > 0 ? Math.max(dbTotal, computedDays) : computedDays
+      const carryOverDays  = Number(dbBal?.carry_over_days || 0)
+      const totalHours     = daysToHours(effectiveDays + carryOverDays)
+
+      // annual period
+      let rangeStr = `${yearFilter}/01/01 ～ ${yearFilter}/12/31`
+      let periodLabel = `${yearFilter} 年`
+
+      if (type === 'annual') {
         if (emp.join_date) {
-          const now = new Date(), join = new Date(emp.join_date)
-          const months = (now.getFullYear() - join.getFullYear()) * 12 + (now.getMonth() - join.getMonth())
-          computedTotal = months >= 6 ? 56 : 28
-        } else computedTotal = 56
+          const join = new Date(emp.join_date)
+          const startYear = new Date(yearFilter, join.getMonth(), join.getDate())
+          const endYear   = new Date(yearFilter + 1, join.getMonth(), join.getDate() - 1)
+          const fmt = (d) => `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`
+          rangeStr = `${fmt(startYear)} ～ ${fmt(endYear)}`
+        }
+        periodLabel = `${yearFilter} 年`
       }
-      else computedTotal = LEGAL_LIMITS[type] ?? 0
-      const effectiveTotal = dbTotal > 0 ? Math.max(dbTotal, computedTotal) : computedTotal
-      const usedFromLr = usedByType[type] || 0
-      const usedDays = Math.max(usedFromLr, Number(dbBal?.used_days || 0))
-      const carryOver = Number(dbBal?.carry_over_days || 0)
-      const total = effectiveTotal + carryOver
-      const remaining = total - usedDays
-      return {
-        _key: type, _dbId: dbBal?.id, _statutory: statutory, _isManual: dbTotal > 0,
-        leave_type: type, total_days: effectiveTotal, used_days: usedDays,
-        carry_over_days: carryOver, expires_at: dbBal?.expires_at || null,
-        total, remaining,
-      }
-    })
-  }
 
-  const openAdd = () => {
-    setEditingId(null)
-    setForm({ employee_id: selectedEmpId || '', year: yearFilter, leave_type: 'annual', total_days: '', used_days: 0, carry_over_days: '', expires_at: '' })
-    setShowModal(true)
-  }
-
-  const openEdit = (r) => {
-    setEditingId(r._dbId || null)
-    const b = r._dbId ? dbBalances.find(b => b.id === r._dbId) || {} : {}
-    setForm({
-      employee_id: selectedEmpId,
-      year: b.year || yearFilter,
-      leave_type: r.leave_type,
-      total_days: r._dbId ? (b.total_days ?? '') : r.total_days,
-      used_days: b.used_days ?? r.used_days,
-      carry_over_days: b.carry_over_days || '',
-      expires_at: b.expires_at || '',
-    })
-    setShowModal(true)
-  }
-
-  const handleSubmit = async () => {
-    if (!form.employee_id || form.total_days === '') { toast.warning('請填寫員工與總天數'); return }
-    try {
-      const payload = {
-        employee_id: Number(form.employee_id), year: Number(form.year),
-        leave_type: form.leave_type, total_days: Number(form.total_days),
-        used_days: Number(form.used_days) || 0, carry_over_days: Number(form.carry_over_days) || 0,
-        expires_at: form.expires_at || null, organization_id: profile?.organization_id,
+      if (type === 'menstrual') {
+        // expand into 12 monthly rows
+        for (let m = 1; m <= 12; m++) {
+          const mm  = String(m).padStart(2, '0')
+          const key = `menstrual-${mm}`
+          const daysInMonth = new Date(yearFilter, m, 0).getDate()
+          const usedH   = usedByTypeMonth[key]   || 0
+          const pendH   = 0  // per-month pending would need date range filter; simplify to 0
+          const totalH  = 8  // 1 day per month = 8 hours
+          const remH    = totalH - usedH
+          const canApply = Math.max(0, remH - pendH)
+          rows.push({
+            _key: key, type, isMonthly: true,
+            label: '生理假',
+            period: `${yearFilter}年${mm}月`,
+            range: `${yearFilter}/${mm}/01 ～ ${yearFilter}/${mm}/${String(daysInMonth).padStart(2,'0')}`,
+            totalHours: totalH, usedHours: usedH, remainingHours: remH,
+            pendingHours: pendH, canApplyHours: canApply,
+            dbId: dbBal?.id, isManual: dbTotal > 0,
+          })
+        }
+        continue
       }
-      if (editingId) {
-        const { error } = await supabase.from('leave_balances').update(payload).eq('id', editingId)
-        if (error) throw error
-      } else {
-        const { error } = await supabase.from('leave_balances').insert(payload)
-        if (error) throw error
-      }
-      setShowModal(false)
-      // re-trigger load
-      setSelectedEmpId(v => { setTimeout(() => setSelectedEmpId(v), 0); return null })
-    } catch (err) {
-      toast.error('儲存失敗：' + (err.message || '未知錯誤'))
+
+      const usedH    = usedByType[type]  || 0
+      const pendH    = pendByType[type]  || 0
+      const remH     = totalHours - usedH
+      const canApply = Math.max(0, remH - pendH)
+
+      rows.push({
+        _key: type, type, isMonthly: false,
+        label: TYPE_LABEL[type] || type,
+        period: periodLabel,
+        range: rangeStr,
+        totalHours, usedHours: usedH, remainingHours: remH,
+        pendingHours: pendH, canApplyHours: canApply,
+        dbId: dbBal?.id, isManual: dbTotal > 0,
+      })
     }
+
+    return rows
   }
 
-  const openBulk = () => {
-    setBulkSelectedIds([])
-    setBulkSearch('')
-    setBulkLeaveType('annual')
-    setBulkDays('')
-    setBulkYear(currentYear)
-    setShowBulkModal(true)
-  }
-
+  // ── bulk submit ───────────────────────────────────────────────────────────
   const handleBulkSubmit = async () => {
     if (!bulkSelectedIds.length) { toast.warning('請選擇員工'); return }
     if (bulkDays === '' || isNaN(Number(bulkDays))) { toast.warning('請輸入天數'); return }
@@ -258,7 +255,6 @@ export default function LeaveBalances() {
     const orgId = profile?.organization_id
     try {
       setBulkSaving(true)
-      // fetch existing records for selected employees
       const { data: existing } = await supabase.from('leave_balances')
         .select('id, employee_id, total_days')
         .eq('year', bulkYear).eq('leave_type', bulkLeaveType).eq('organization_id', orgId)
@@ -274,7 +270,6 @@ export default function LeaveBalances() {
           toInsert.push({ employee_id: empId, year: bulkYear, leave_type: bulkLeaveType, total_days: Math.max(0, days), used_days: 0, organization_id: orgId })
         }
       }
-
       for (const r of toUpdate) {
         const { error } = await supabase.from('leave_balances').update({ total_days: r.total_days }).eq('id', r.id)
         if (error) throw error
@@ -283,10 +278,12 @@ export default function LeaveBalances() {
         const { error } = await supabase.from('leave_balances').insert(toInsert)
         if (error) throw error
       }
-
       toast.success(`已更新 ${bulkSelectedIds.length} 人的 ${TYPE_LABEL[bulkLeaveType]} (${days > 0 ? '+' : ''}${days} 天)`)
       setShowBulkModal(false)
-      reloadEmpData()
+      // reload
+      const id = selectedEmpId
+      setSelectedEmpId(null)
+      setTimeout(() => setSelectedEmpId(id), 0)
     } catch (err) {
       toast.error('儲存失敗：' + (err.message || '未知錯誤'))
     } finally {
@@ -294,251 +291,305 @@ export default function LeaveBalances() {
     }
   }
 
+  // ── cashout ───────────────────────────────────────────────────────────────
   const openCashout = async () => {
-    setCashoutLoading(true)
-    setShowCashoutModal(true)
+    setCashoutLoading(true); setShowCashoutModal(true)
     try {
-      const { data, error } = await supabase.rpc('cashout_annual_leave', {
-        p_org: profile?.organization_id, p_year: yearFilter, p_dry_run: true,
-      })
+      const { data, error } = await supabase.rpc('cashout_annual_leave', { p_org: profile?.organization_id, p_year: yearFilter, p_dry_run: true })
       if (error) throw error
       setCashoutItems((data?.items || []).map(it => ({
         bal: { id: it.balance_id, employee_id: it.employee_id },
         unused: Number(it.unused_days), dailyRate: Number(it.daily_rate),
         cashoutAmount: Number(it.amount), empName: it.name,
       })))
-    } catch (err) {
-      toast.error('結算資料載入失敗')
-      setShowCashoutModal(false)
-    } finally {
-      setCashoutLoading(false)
-    }
+    } catch { toast.error('結算資料載入失敗'); setShowCashoutModal(false) }
+    finally { setCashoutLoading(false) }
   }
 
   const handleCashoutConfirm = async () => {
-    if (!cashoutItems.length) return
     try {
       setCashoutSaving(true)
-      const { data, error } = await supabase.rpc('cashout_annual_leave', {
-        p_org: profile?.organization_id, p_year: yearFilter, p_dry_run: false,
-      })
+      const { data, error } = await supabase.rpc('cashout_annual_leave', { p_org: profile?.organization_id, p_year: yearFilter, p_dry_run: false })
       if (error) throw error
       toast.success(`已結清 ${data?.processed_count ?? 0} 人，共 NT$ ${Number(data?.total_amount || 0).toLocaleString()}`)
-      setShowCashoutModal(false)
-      setCashoutItems([])
-    } catch (err) {
-      toast.error('結算失敗：' + (err.message || '未知錯誤'))
-    } finally {
-      setCashoutSaving(false)
-    }
+      setShowCashoutModal(false); setCashoutItems([])
+    } catch (err) { toast.error('結算失敗：' + (err.message || '未知錯誤')) }
+    finally { setCashoutSaving(false) }
   }
 
+  // ── derived ───────────────────────────────────────────────────────────────
   const yearOptions = []
   for (let y = currentYear - 2; y <= currentYear + 1; y++) yearOptions.push(y)
 
-  const selectedEmp = employees.find(e => e.id === selectedEmpId)
+  const selectedEmp   = employees.find(e => e.id === selectedEmpId)
+  const displayTypeList = ANNUAL_TYPES.filter(t => t !== 'comp')  // comp is in 2nd tab
 
-  // reload helper: toggle selectedEmpId to re-trigger useEffect
-  const reloadEmpData = () => {
-    const id = selectedEmpId
-    setSelectedEmpId(null)
-    setTimeout(() => setSelectedEmpId(id), 0)
-  }
+  const filteredEmployees = employees.filter(e => {
+    if (statusFilter && e.status !== statusFilter) return false
+    if (nameSearch) {
+      const q = nameSearch.toLowerCase()
+      return e.name?.toLowerCase().includes(q) || (e.employee_number || '').toLowerCase().includes(q)
+    }
+    return true
+  })
 
-  const getRemainingColor = (remaining, total) => {
-    if (total <= 0) return 'var(--text-muted)'
-    const ratio = remaining / total
-    if (ratio > 0.5)  return 'var(--accent-green)'
-    if (ratio >= 0.2) return 'var(--accent-orange)'
-    return 'var(--accent-red)'
-  }
+  const annualRows = tableRows.filter(r => r.type !== 'comp')
+  const compRows   = tableRows.filter(r => r.type === 'comp')
 
   if (empLoading) return <LoadingSpinner />
 
+  const cellStyle = { padding: '9px 12px', fontSize: 13, borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }
+  const numCell   = (h, color) => (
+    <td style={{ ...cellStyle, textAlign: 'center', fontWeight: 600, color: color || 'var(--text-primary)' }}>
+      {h > 0 ? `${h}小時` : <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>0小時</span>}
+    </td>
+  )
+
   return (
-    <div className="fade-in">
+    <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Header */}
-      <div className="page-header">
+      <div className="page-header" style={{ marginBottom: 12 }}>
         <div className="page-header-row">
           <div>
-            <h2><span className="header-icon">📊</span> 假別餘額</h2>
-            <p>選擇員工查看剩餘假別天數</p>
+            <h2><span className="header-icon">📊</span> 假勤明細</h2>
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {!isStaff && (
-              <>
-                <button className="btn btn-ghost" onClick={openBulk} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <Users size={14} /> 批次調整天數
-                </button>
-                <button className="btn btn-ghost" onClick={openCashout} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <Calculator size={14} /> 特休結算
-                </button>
-              </>
-            )}
-          </div>
+          {!isStaff && (
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-ghost" onClick={() => {
+                setBulkSelectedIds([]); setBulkSearch(''); setBulkLeaveType('annual')
+                setBulkDays(''); setBulkYear(currentYear); setShowBulkModal(true)
+              }} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Users size={14} /> 批次調整天數
+              </button>
+              <button className="btn btn-ghost" onClick={openCashout} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Calculator size={14} /> 特休結算
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Picker row */}
+      {/* Filter bar */}
       <div style={{
-        display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap',
-        padding: '14px 16px', marginBottom: 20,
-        background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 12,
+        display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap',
+        padding: '10px 14px', marginBottom: 12,
+        background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 10,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: '1 1 260px', minWidth: 220 }}>
-          <User size={16} style={{ color: 'var(--accent-cyan)', flexShrink: 0 }} />
-          {isStaff ? (
-            <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{selectedEmp?.name}</span>
-          ) : (
-            <SearchableSelect
-              value={selectedEmpId}
-              onChange={v => setSelectedEmpId(v || null)}
-              options={empOptions(employees, { keyBy: 'id' })}
-              placeholder="選擇員工..."
-              style={{ flex: 1 }}
-            />
-          )}
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>年度</span>
-          <select className="form-input" style={{ fontSize: 13, width: 90 }}
-            value={yearFilter} onChange={e => setYearFilter(Number(e.target.value))}>
-            {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
-          </select>
-        </div>
-        {!isStaff && selectedEmpId && (
-          <button className="btn btn-primary btn-sm" onClick={openAdd} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Plus size={13} /> 新增假別
-          </button>
+        <select className="form-input" style={{ fontSize: 13, width: 90 }}
+          value={yearFilter} onChange={e => setYearFilter(Number(e.target.value))}>
+          {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
+        </select>
+        {!isStaff && (
+          <>
+            <select className="form-input" style={{ fontSize: 13, width: 100 }}
+              value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+              <option value="在職">在職</option>
+              <option value="離職">離職</option>
+              <option value="">全部</option>
+            </select>
+            <div style={{ position: 'relative', flex: '1 1 180px', maxWidth: 260 }}>
+              <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+              <input className="form-input" placeholder="姓名或員編" style={{ paddingLeft: 32, fontSize: 13, width: '100%' }}
+                value={nameSearch} onChange={e => setNameSearch(e.target.value)} />
+            </div>
+          </>
         )}
       </div>
 
-      {/* Empty state */}
-      {!selectedEmpId && (
-        <div style={{
-          textAlign: 'center', padding: '64px 24px',
-          color: 'var(--text-muted)', fontSize: 15,
-        }}>
-          <div style={{ fontSize: 48, marginBottom: 16 }}>👆</div>
-          請先選擇一位員工
-        </div>
-      )}
+      {/* Main split panel */}
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden', border: '1px solid var(--border-medium)', borderRadius: 12, background: 'var(--bg-card)', minHeight: 0 }}>
 
-      {/* Employee info + balances */}
-      {selectedEmpId && selectedEmp && (
-        <>
-          {/* Employee card */}
-          <div style={{
-            padding: '14px 20px', marginBottom: 20,
-            background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 12,
-            display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'center',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{
-                width: 44, height: 44, borderRadius: '50%',
-                background: 'var(--accent-cyan-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 18, fontWeight: 700, color: 'var(--accent-cyan)',
-              }}>
-                {selectedEmp.name?.[0] || '?'}
-              </div>
-              <div>
-                <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--text-primary)' }}>{selectedEmp.name}</div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
-                  {selectedEmp.dept || '—'} · {selectedEmp.store || '—'} · {selectedEmp.employment_type || '全職'}
+        {/* Left: employee list */}
+        {!isStaff && (
+          <div style={{ width: 176, flexShrink: 0, borderRight: '1px solid var(--border-medium)', overflowY: 'auto' }}>
+            {filteredEmployees.length === 0 && (
+              <div style={{ padding: 16, fontSize: 12, color: 'var(--text-muted)', textAlign: 'center' }}>無員工</div>
+            )}
+            {filteredEmployees.map(emp => {
+              const selected = emp.id === selectedEmpId
+              return (
+                <div key={emp.id}
+                  onClick={() => setSelectedEmpId(emp.id)}
+                  style={{
+                    padding: '11px 14px', cursor: 'pointer',
+                    borderBottom: '1px solid var(--border-subtle)',
+                    borderLeft: selected ? '3px solid var(--accent-cyan)' : '3px solid transparent',
+                    background: selected ? 'var(--accent-cyan-dim)' : 'transparent',
+                    transition: 'background .15s',
+                  }}>
+                  <div style={{ fontWeight: selected ? 700 : 500, fontSize: 13, color: selected ? 'var(--accent-cyan)' : 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {emp.name}
+                    {emp.employee_number && <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 4 }}>({emp.employee_number})</span>}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{emp.dept || emp.store || '—'}</div>
                 </div>
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
-              <div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>到職日</div>
-                <div style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 500 }}>
-                  {selectedEmp.join_date || '—'}
-                </div>
-              </div>
-              <div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>年資</div>
-                <div style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 500 }}>
-                  {seniority(selectedEmp) || '—'}
-                </div>
-              </div>
-              <div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>法定特休</div>
-                <div style={{ fontSize: 13, color: 'var(--accent-cyan)', fontWeight: 600 }}>
-                  {calcStatutoryLeave(selectedEmp) !== null ? `${calcStatutoryLeave(selectedEmp)} 天` : '兼職'}
-                </div>
-              </div>
-            </div>
+              )
+            })}
           </div>
+        )}
 
-          {/* Balance cards */}
-          {loading ? (
-            <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>載入中...</div>
-          ) : empRows.length === 0 ? (
-            <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>
-              <div style={{ fontSize: 32, marginBottom: 12 }}>📭</div>
-              尚無假別記錄
+        {/* Right: tabs + table */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
+          {!selectedEmpId ? (
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12, color: 'var(--text-muted)' }}>
+              <div style={{ fontSize: 36 }}>👈</div>
+              <div style={{ fontSize: 14 }}>請從左側選擇員工</div>
             </div>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 14 }}>
-              {empRows.map(r => {
-                const label = TYPE_LABEL[r.leave_type] || r.leave_type
-                const icon  = TYPE_ICON[r.leave_type] || '📋'
-                const color = getRemainingColor(r.remaining, r.total)
-                const pct   = r.total > 0 ? Math.max(0, Math.min(100, (r.remaining / r.total) * 100)) : 0
-                const statutory = r._statutory
-                const belowLegal = r.leave_type === 'annual' && statutory !== null && r.total_days < statutory
-                return (
-                  <div key={r._key} style={{
-                    padding: '16px 18px',
-                    background: 'var(--bg-card)',
-                    border: `1px solid ${belowLegal ? 'var(--accent-red)' : 'var(--border-subtle)'}`,
-                    borderRadius: 12,
-                    display: 'flex', flexDirection: 'column', gap: 10,
-                  }}>
-                    {/* top row */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                        <span style={{ fontSize: 18 }}>{icon}</span>
-                        <span style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>{label}</span>
-                        {!r._dbId && (
-                          <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 4, background: 'var(--bg-secondary)', color: 'var(--text-muted)' }}>估算</span>
+            <>
+              {/* Tabs */}
+              <div style={{ display: 'flex', borderBottom: '1px solid var(--border-medium)', padding: '0 20px', flexShrink: 0 }}>
+                {[['annual', '年度假勤'], ['comp', '補休管理']].map(([key, label]) => (
+                  <button key={key} onClick={() => setActiveTab(key)} style={{
+                    padding: '12px 20px', fontSize: 14, fontWeight: activeTab === key ? 700 : 400,
+                    color: activeTab === key ? 'var(--accent-cyan)' : 'var(--text-muted)',
+                    borderBottom: activeTab === key ? '2px solid var(--accent-cyan)' : '2px solid transparent',
+                    background: 'none', border: 'none', borderRadius: 0, cursor: 'pointer',
+                    marginBottom: -1,
+                  }}>{label}</button>
+                ))}
+              </div>
+
+              {/* Table */}
+              {dataLoading ? (
+                <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>載入中...</div>
+              ) : (
+                <div style={{ flex: 1, overflowY: 'auto' }}>
+                  {activeTab === 'annual' && (
+                    <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'auto' }}>
+                      <thead>
+                        <tr style={{ background: 'var(--bg-secondary)', position: 'sticky', top: 0, zIndex: 1 }}>
+                          {['假勤項目','假勤年/月/日','可休區間','可休','已休','剩餘','簽核中','可申請'].map(h => (
+                            <th key={h} style={{ padding: '10px 12px', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textAlign: h === '假勤項目' ? 'left' : 'center', whiteSpace: 'nowrap', borderBottom: '1px solid var(--border-medium)' }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {annualRows.length === 0 && (
+                          <tr><td colSpan={8} style={{ ...cellStyle, textAlign: 'center', padding: 32, color: 'var(--text-muted)' }}>尚無假勤記錄</td></tr>
                         )}
-                        {belowLegal && (
-                          <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 4, background: 'var(--accent-red-dim)', color: 'var(--accent-red)' }}>低於法定</span>
-                        )}
-                      </div>
-                      {!isStaff && (
-                        <button className="btn btn-sm btn-ghost" style={{ padding: '2px 8px', fontSize: 11 }} onClick={() => openEdit(r)}>
-                          <Edit2 size={11} /> {r._dbId ? '調整' : '設定'}
-                        </button>
+                        {annualRows.map((r, idx) => {
+                          const remColor = r.remainingHours > 0 ? 'var(--accent-green)' : r.remainingHours < 0 ? 'var(--accent-red)' : 'var(--text-muted)'
+                          return (
+                            <tr key={r._key} style={{ background: idx % 2 === 0 ? 'transparent' : 'var(--bg-secondary)' }}>
+                              <td style={{ ...cellStyle, fontWeight: 600, color: 'var(--text-primary)' }}>{r.label}</td>
+                              <td style={{ ...cellStyle, textAlign: 'center' }}>{r.period}</td>
+                              <td style={{ ...cellStyle, textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>{r.range}</td>
+                              {numCell(r.totalHours)}
+                              {numCell(r.usedHours, r.usedHours > 0 ? 'var(--accent-orange)' : null)}
+                              <td style={{ ...cellStyle, textAlign: 'center', fontWeight: 700, color: remColor }}>
+                                {r.remainingHours > 0 ? `${r.remainingHours}小時` : r.remainingHours < 0 ? `${r.remainingHours}小時` : <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>0小時</span>}
+                              </td>
+                              {numCell(r.pendingHours, r.pendingHours > 0 ? 'var(--accent-purple)' : null)}
+                              {numCell(r.canApplyHours, 'var(--accent-cyan)')}
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  )}
+
+                  {activeTab === 'comp' && (
+                    <div style={{ padding: 24 }}>
+                      {compRows.length === 0 ? (
+                        <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 40 }}>
+                          <div style={{ fontSize: 32, marginBottom: 12 }}>📭</div>
+                          尚無補休記錄
+                        </div>
+                      ) : (
+                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                          <thead>
+                            <tr style={{ background: 'var(--bg-secondary)' }}>
+                              {['假勤項目','可休區間','可休','已休','剩餘','簽核中','可申請'].map(h => (
+                                <th key={h} style={{ padding: '10px 12px', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textAlign: h === '假勤項目' ? 'left' : 'center', whiteSpace: 'nowrap', borderBottom: '1px solid var(--border-medium)' }}>{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {compRows.map(r => (
+                              <tr key={r._key}>
+                                <td style={{ ...cellStyle, fontWeight: 600, color: 'var(--text-primary)' }}>{r.label}</td>
+                                <td style={{ ...cellStyle, textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>{r.range}</td>
+                                {numCell(r.totalHours)}
+                                {numCell(r.usedHours, r.usedHours > 0 ? 'var(--accent-orange)' : null)}
+                                <td style={{ ...cellStyle, textAlign: 'center', fontWeight: 700, color: r.remainingHours > 0 ? 'var(--accent-green)' : 'var(--accent-red)' }}>
+                                  {r.remainingHours}小時
+                                </td>
+                                {numCell(r.pendingHours, r.pendingHours > 0 ? 'var(--accent-purple)' : null)}
+                                {numCell(r.canApplyHours, 'var(--accent-cyan)')}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       )}
                     </div>
-
-                    {/* remaining big number */}
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
-                      <span style={{ fontSize: 32, fontWeight: 700, color, lineHeight: 1 }}>{r.remaining}</span>
-                      <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>天剩餘</span>
-                    </div>
-
-                    {/* progress bar */}
-                    <div style={{ height: 5, background: 'var(--bg-secondary)', borderRadius: 3, overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 3, transition: 'width .3s' }} />
-                    </div>
-
-                    {/* stats row */}
-                    <div style={{ display: 'flex', gap: 16, fontSize: 12, color: 'var(--text-muted)' }}>
-                      <span>已用 <strong style={{ color: 'var(--text-secondary)' }}>{r.used_days}</strong></span>
-                      <span>共 <strong style={{ color: 'var(--text-secondary)' }}>{r.total}</strong></span>
-                      {r.carry_over_days > 0 && <span>遞延 <strong style={{ color: 'var(--accent-purple)' }}>{r.carry_over_days}</strong></span>}
-                      {r.expires_at && <span>到期 <strong>{r.expires_at}</strong></span>}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
+                  )}
+                </div>
+              )}
+            </>
           )}
-        </>
-      )}
+        </div>
+      </div>
+
+      {/* Bulk Modal */}
+      {showBulkModal && (() => {
+        const filtEmps = employees.filter(e =>
+          !bulkSearch || e.name.includes(bulkSearch) || (e.dept || '').includes(bulkSearch)
+        )
+        const allSel = filtEmps.length > 0 && filtEmps.every(e => bulkSelectedIds.includes(e.id))
+        const toggleAll = () => allSel
+          ? setBulkSelectedIds(ids => ids.filter(id => !filtEmps.find(e => e.id === id)))
+          : setBulkSelectedIds(ids => [...new Set([...ids, ...filtEmps.map(e => e.id)])])
+        const toggleOne = (id) => setBulkSelectedIds(ids => ids.includes(id) ? ids.filter(i => i !== id) : [...ids, id])
+        return (
+          <Modal title="批次調整假別天數" onClose={() => setShowBulkModal(false)}
+            onSubmit={handleBulkSubmit}
+            submitLabel={bulkSaving ? '儲存中...' : `確認套用（${bulkSelectedIds.length} 人）`}
+            submitDisabled={bulkSaving || !bulkSelectedIds.length || bulkDays === ''}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 16 }}>
+              <Field label="年度" required>
+                <select className="form-input" style={{ width: '100%' }} value={bulkYear} onChange={e => setBulkYear(Number(e.target.value))}>
+                  {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
+                </select>
+              </Field>
+              <Field label="假別" required>
+                <select className="form-input" style={{ width: '100%' }} value={bulkLeaveType} onChange={e => setBulkLeaveType(e.target.value)}>
+                  {ANNUAL_TYPES.map(t => <option key={t} value={t}>{TYPE_LABEL[t] || t}</option>)}
+                </select>
+              </Field>
+              <Field label="調整天數" required>
+                <input className="form-input" type="number" step="0.5" style={{ width: '100%' }} placeholder="正數加、負數扣"
+                  value={bulkDays} onChange={e => setBulkDays(e.target.value)} />
+              </Field>
+            </div>
+            <Field label={`選擇員工（已選 ${bulkSelectedIds.length} / ${employees.length}）`}>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                <input className="form-input" placeholder="搜尋員工或部門..." value={bulkSearch}
+                  onChange={e => setBulkSearch(e.target.value)} style={{ flex: 1, fontSize: 13 }} />
+                <button className="btn btn-sm btn-ghost" onClick={toggleAll} style={{ whiteSpace: 'nowrap' }}>
+                  {allSel ? '取消全選' : '全選'}
+                </button>
+              </div>
+              <div style={{ maxHeight: 260, overflowY: 'auto', border: '1px solid var(--border-subtle)', borderRadius: 8 }}>
+                {filtEmps.length === 0 && <div style={{ padding: 16, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>查無員工</div>}
+                {filtEmps.map(e => (
+                  <label key={e.id} style={{
+                    display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', cursor: 'pointer',
+                    borderBottom: '1px solid var(--border-subtle)',
+                    background: bulkSelectedIds.includes(e.id) ? 'var(--accent-cyan-dim)' : 'transparent',
+                  }}>
+                    <input type="checkbox" checked={bulkSelectedIds.includes(e.id)} onChange={() => toggleOne(e.id)} />
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{e.name}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{e.dept || '—'} · {e.store || '—'}</div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </Field>
+          </Modal>
+        )
+      })()}
 
       {/* Cashout Modal */}
       {showCashoutModal && (
@@ -579,103 +630,6 @@ export default function LeaveBalances() {
               </div>
             </>
           )}
-        </Modal>
-      )}
-
-      {/* Bulk Modal */}
-      {showBulkModal && (() => {
-        const filteredEmps = employees.filter(e =>
-          !bulkSearch || e.name.includes(bulkSearch) || (e.dept || '').includes(bulkSearch)
-        )
-        const allSelected = filteredEmps.length > 0 && filteredEmps.every(e => bulkSelectedIds.includes(e.id))
-        const toggleAll = () => {
-          if (allSelected) setBulkSelectedIds(ids => ids.filter(id => !filteredEmps.find(e => e.id === id)))
-          else setBulkSelectedIds(ids => [...new Set([...ids, ...filteredEmps.map(e => e.id)])])
-        }
-        const toggleOne = (id) => setBulkSelectedIds(ids => ids.includes(id) ? ids.filter(i => i !== id) : [...ids, id])
-        return (
-          <Modal title="批次調整假別天數" onClose={() => setShowBulkModal(false)}
-            onSubmit={handleBulkSubmit}
-            submitLabel={bulkSaving ? '儲存中...' : `確認套用（${bulkSelectedIds.length} 人）`}
-            submitDisabled={bulkSaving || !bulkSelectedIds.length || bulkDays === ''}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 16 }}>
-              <Field label="年度" required>
-                <select className="form-input" style={{ width: '100%' }} value={bulkYear} onChange={e => setBulkYear(Number(e.target.value))}>
-                  {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
-                </select>
-              </Field>
-              <Field label="假別" required>
-                <select className="form-input" style={{ width: '100%' }} value={bulkLeaveType} onChange={e => setBulkLeaveType(e.target.value)}>
-                  {DISPLAY_TYPES.map(t => <option key={t} value={t}>{TYPE_LABEL[t] || t}</option>)}
-                </select>
-              </Field>
-              <Field label="新增天數" required>
-                <input className="form-input" type="number" step="0.5" style={{ width: '100%' }} placeholder="正數加、負數扣"
-                  value={bulkDays} onChange={e => setBulkDays(e.target.value)} />
-              </Field>
-            </div>
-            <Field label={`選擇員工（已選 ${bulkSelectedIds.length} / ${employees.length}）`}>
-              <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                <input className="form-input" placeholder="搜尋員工或部門..." value={bulkSearch}
-                  onChange={e => setBulkSearch(e.target.value)} style={{ flex: 1, fontSize: 13 }} />
-                <button className="btn btn-sm btn-ghost" onClick={toggleAll} style={{ whiteSpace: 'nowrap' }}>
-                  {allSelected ? '取消全選' : '全選'}
-                </button>
-              </div>
-              <div style={{ maxHeight: 260, overflowY: 'auto', border: '1px solid var(--border-subtle)', borderRadius: 8 }}>
-                {filteredEmps.length === 0 && (
-                  <div style={{ padding: 16, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>查無員工</div>
-                )}
-                {filteredEmps.map(e => (
-                  <label key={e.id} style={{
-                    display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', cursor: 'pointer',
-                    borderBottom: '1px solid var(--border-subtle)',
-                    background: bulkSelectedIds.includes(e.id) ? 'var(--accent-cyan-dim)' : 'transparent',
-                  }}>
-                    <input type="checkbox" checked={bulkSelectedIds.includes(e.id)} onChange={() => toggleOne(e.id)} />
-                    <div>
-                      <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{e.name}</div>
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{e.dept || '—'} · {e.store || '—'}</div>
-                    </div>
-                  </label>
-                ))}
-              </div>
-            </Field>
-          </Modal>
-        )
-      })()}
-
-      {/* Add/Edit Modal */}
-      {showModal && (
-        <Modal title={editingId ? '調整假別天數' : '設定假別天數'} onClose={() => setShowModal(false)} onSubmit={handleSubmit}>
-          <Field label="員工">
-            <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{selectedEmp?.name}</span>
-          </Field>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="年度" required>
-              <select className="form-input" style={{ width: '100%' }} value={form.year} onChange={e => setForm(f => ({ ...f, year: e.target.value }))}>
-                {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
-              </select>
-            </Field>
-            <Field label="假別" required>
-              <select className="form-input" style={{ width: '100%' }} value={form.leave_type} onChange={e => setForm(f => ({ ...f, leave_type: e.target.value }))}>
-                {DISPLAY_TYPES.map(t => <option key={t} value={t}>{TYPE_LABEL[t] || t}</option>)}
-              </select>
-            </Field>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="總天數（手動覆蓋）" required>
-              <input className="form-input" type="number" min="0" step="0.5" style={{ width: '100%' }} placeholder="例：7"
-                value={form.total_days} onChange={e => setForm(f => ({ ...f, total_days: e.target.value }))} />
-            </Field>
-            <Field label="遞延天數">
-              <input className="form-input" type="number" min="0" step="0.5" style={{ width: '100%' }} placeholder="0"
-                value={form.carry_over_days} onChange={e => setForm(f => ({ ...f, carry_over_days: e.target.value }))} />
-            </Field>
-          </div>
-          <Field label="到期日">
-            <input className="form-input" type="date" style={{ width: '100%' }} value={form.expires_at} onChange={e => setForm(f => ({ ...f, expires_at: e.target.value }))} />
-          </Field>
         </Modal>
       )}
     </div>

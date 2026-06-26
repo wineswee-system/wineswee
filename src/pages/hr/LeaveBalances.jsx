@@ -6,63 +6,114 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import { empLabel } from '../../lib/empLabel'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
-
 import { toast } from '../../lib/toast'
-const LEAVE_TYPES = ['特休', '病假', '事假', '喪假', '婚假', '產假', '陪產假', '無薪假']
+
+// DB 存英文 code，顯示用中文
+const TYPE_LABEL = {
+  annual: '特休', sick: '病假', personal: '事假', comp: '補休',
+  menstrual: '生理假', marriage: '婚假', bereavement: '喪假',
+  official: '公假', maternity: '產假', paternity: '陪產假',
+  parental: '育嬰假', family_care: '家庭照顧假', mental_health: '心理假',
+  occupational: '公傷病假', prenatal: '產檢假', unpaid: '無薪假',
+}
+// 中文 → code（歷史資料用）
+const TYPE_CODE = Object.fromEntries(Object.entries(TYPE_LABEL).map(([k, v]) => [v, k]))
+
+// 法定上限（calendar year，非年資制）
+const LEGAL_LIMITS = {
+  sick: 30, personal: 14, menstrual: 12,
+  marriage: 8, bereavement: 8, mental_health: 3, family_care: 7,
+}
+
+const DISPLAY_TYPES = ['annual', 'sick', 'personal', 'comp', 'menstrual',
+  'marriage', 'bereavement', 'official', 'maternity', 'paternity', 'unpaid']
+
+const ALL_TYPES = [...DISPLAY_TYPES, 'family_care', 'mental_health', 'occupational', 'prenatal', 'parental']
 
 export default function LeaveBalances() {
   const { profile, role } = useAuth()
   const userRole = role?.name || profile?.role || 'store_staff'
   const isStaff = userRole === 'store_staff'
   const currentYear = new Date().getFullYear()
-  const [balances, setBalances] = useState([])
+
   const [employees, setEmployees] = useState([])
+  const [dbBalances, setDbBalances] = useState([])      // leave_balances table (carry_over, expires_at, comp total, manual override)
+  const [leaveRequests, setLeaveRequests] = useState([]) // approved leave_requests for computing used
+  const [rows, setRows] = useState([])                   // computed display rows
+
   const [yearFilter, setYearFilter] = useState(currentYear)
   const [typeFilter, setTypeFilter] = useState('')
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+
   const [showModal, setShowModal] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [showCashoutModal, setShowCashoutModal] = useState(false)
   const [cashoutItems, setCashoutItems] = useState([])
   const [cashoutLoading, setCashoutLoading] = useState(false)
   const [cashoutSaving, setCashoutSaving] = useState(false)
+
   const [form, setForm] = useState({
-    employee_id: '',
-    year: currentYear,
-    leave_type: '特休',
-    total_days: '',
-    used_days: 0,
-    carry_over_days: '',
-    expires_at: '',
+    employee_id: '', year: currentYear, leave_type: 'annual',
+    total_days: '', used_days: 0, carry_over_days: '', expires_at: '',
   })
+
+  // 勞基法 §38 依到職日計算（週工時<20 的兼職返回 null）
+  const calcStatutoryLeave = (emp) => {
+    if (!emp?.join_date) return null
+    if (emp.employment_type === '兼職' && Number(emp.weekly_hours || 40) < 20) return null
+    const months = (new Date().getFullYear() - new Date(emp.join_date).getFullYear()) * 12
+      + (new Date().getMonth() - new Date(emp.join_date).getMonth())
+    const years = Math.floor(months / 12)
+    if (months < 6)  return 0
+    if (months < 12) return 3
+    if (years < 2)   return 7
+    if (years < 3)   return 10
+    if (years < 5)   return 14
+    if (years < 10)  return 15
+    return Math.min(15 + (years - 10), 30)
+  }
+
+  // 正規化 leave_request.type → code
+  const normalizeType = (t) => TYPE_CODE[t] || t
 
   const fetchData = async () => {
     try {
       setLoading(true)
       const orgId = profile?.organization_id
-      const [balRes, empRes] = await Promise.all([
-        supabase
-          .from('leave_balances')
-          .select('*')
-          .eq('year', yearFilter)
-          .eq('organization_id', orgId)
-          .order('id', { ascending: false }),
-        supabase
-          .from('employees')
+      const yearStart = `${yearFilter}-01-01`
+      const yearEnd   = `${yearFilter + 1}-01-01`
+
+      const [empRes, balRes, lrRes] = await Promise.all([
+        supabase.from('employees')
           .select('id, name, dept, store, status, employment_type, join_date, weekly_hours')
-          .eq('status', '在職')
+          .eq('status', '在職').eq('organization_id', orgId).order('name'),
+        supabase.from('leave_balances')
+          .select('*').eq('year', yearFilter).eq('organization_id', orgId),
+        supabase.from('leave_requests')
+          .select('employee_id, type, days, hours, start_date, status')
           .eq('organization_id', orgId)
-          .order('name'),
+          .in('status', ['已核准'])
+          .gte('start_date', yearStart).lt('start_date', yearEnd),
       ])
-      if (balRes.error) throw balRes.error
       if (empRes.error) throw empRes.error
+      if (balRes.error) throw balRes.error
+
+      let emps = empRes.data || []
       let bals = balRes.data || []
-      // store_staff: 只看自己的假別餘額
-      if (isStaff && profile?.id) bals = bals.filter(b => b.employee_id === profile.id)
-      setBalances(bals)
-      setEmployees(empRes.data || [])
+      let lrs  = lrRes.data  || []
+
+      if (isStaff && profile?.id) {
+        emps = emps.filter(e => e.id === profile.id)
+        bals = bals.filter(b => b.employee_id === profile.id)
+        lrs  = lrs.filter(r => r.employee_id === profile.id)
+      }
+
+      setEmployees(emps)
+      setDbBalances(bals)
+      setLeaveRequests(lrs)
+      setRows(buildRows(emps, bals, lrs))
     } catch (err) {
       console.error('Failed to load leave balances:', err)
       setError('資料載入失敗，請重新整理頁面')
@@ -71,127 +122,117 @@ export default function LeaveBalances() {
     }
   }
 
-  useEffect(() => {
-    fetchData()
-  }, [yearFilter])
+  const buildRows = (emps, bals, lrs) => {
+    const balByEmpType = {}
+    for (const b of bals) {
+      const code = normalizeType(b.leave_type)
+      balByEmpType[`${b.employee_id}-${code}`] = b
+    }
+    const usedByEmpType = {}
+    for (const lr of lrs) {
+      const code = normalizeType(lr.type)
+      const key = `${lr.employee_id}-${code}`
+      usedByEmpType[key] = (usedByEmpType[key] || 0) + (Number(lr.days) || 0)
+    }
 
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+    const result = []
+    for (const emp of emps) {
+      // 確認這個員工有哪些假別（DB 有記錄 OR leave_requests 有用假）
+      const empTypes = new Set(['annual'])
+      for (const b of bals.filter(b => b.employee_id === emp.id))
+        empTypes.add(normalizeType(b.leave_type))
+      for (const lr of lrs.filter(r => r.employee_id === emp.id))
+        empTypes.add(normalizeType(lr.type))
 
-  const getEmpName = (empId) => employees.find(e => e.id === empId)?.name || `#${empId}`
-  const getEmpDept = (empId) => employees.find(e => e.id === empId)?.dept || ''
-  const getEmp     = (empId) => employees.find(e => e.id === empId)
+      for (const type of ALL_TYPES) {
+        if (!empTypes.has(type)) continue
+        const dbBal = balByEmpType[`${emp.id}-${type}`]
+        const dbTotal = Number(dbBal?.total_days || 0)
 
-  // 勞基法 §38 特休天數計算（依到職日 vs 今日）
-  // 兼職 <20hr/週不適用本法，返回 null
-  const calcStatutoryLeave = (emp) => {
-    if (!emp?.join_date) return null
-    const type = emp.employment_type || '正職'
-    const weekly = Number(emp.weekly_hours || 40)
-    if (type === '兼職' && weekly < 20) return null  // 不適用
-    const join = new Date(emp.join_date)
-    const now  = new Date()
-    const months = (now.getFullYear() - join.getFullYear()) * 12 + (now.getMonth() - join.getMonth())
-    const years  = Math.floor(months / 12)
-    if (months <  6) return 0
-    if (months < 12) return 3
-    if (years  <  2) return 7
-    if (years  <  3) return 10
-    if (years  <  5) return 14
-    if (years  < 10) return 15
-    return Math.min(15 + (years - 10), 30)
+        // effective total：DB 手動覆蓋 > 0 時優先；否則用計算值
+        let computedTotal = 0
+        let statutory = null
+        if (type === 'annual') {
+          statutory = calcStatutoryLeave(emp)
+          computedTotal = statutory ?? 0
+        } else {
+          computedTotal = LEGAL_LIMITS[type] ?? 0
+        }
+        const effectiveTotal = dbTotal > 0 ? Math.max(dbTotal, computedTotal) : computedTotal
+
+        // used：從 leave_requests 算（準確），若 DB 更高則取 DB（手動調整情況）
+        const usedFromLr = usedByEmpType[`${emp.id}-${type}`] || 0
+        const usedDays = Math.max(usedFromLr, Number(dbBal?.used_days || 0))
+
+        const carryOver = Number(dbBal?.carry_over_days || 0)
+        const total = effectiveTotal + carryOver
+        const remaining = total - usedDays
+
+        // 無資料（沒 DB 記錄、沒用過、又是非固定限額假別）就跳過
+        if (!dbBal && usedDays === 0 && computedTotal === 0) continue
+
+        result.push({
+          _key:       `${emp.id}-${type}`,
+          _dbId:      dbBal?.id,           // 有 DB 記錄才有 id，供 edit 用
+          _statutory: statutory,
+          _isManual:  dbTotal > 0,
+          employee_id: emp.id,
+          leave_type:  type,
+          total_days:  effectiveTotal,
+          used_days:   usedDays,
+          carry_over_days: carryOver,
+          expires_at:  dbBal?.expires_at || null,
+          total,
+          remaining,
+        })
+      }
+    }
+    return result
   }
 
-  const filtered = balances.filter(b =>
-    (typeFilter === '' || b.leave_type === typeFilter) &&
-    (search === '' || getEmpName(b.employee_id).includes(search))
-  )
+  useEffect(() => { fetchData() }, [yearFilter, profile?.organization_id])
 
-  // Summary stats
-  const uniqueEmployees = new Set(filtered.map(b => b.employee_id)).size
-  const avgUsageRate = filtered.length > 0
-    ? Math.round(
-        filtered.reduce((sum, b) => {
-          const total = Number(b.total_days) + Number(b.carry_over_days || 0)
-          return sum + (total > 0 ? (Number(b.used_days) / total) * 100 : 0)
-        }, 0) / filtered.length
-      )
-    : 0
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+  const getEmpName = (id) => employees.find(e => e.id === id)?.name || `#${id}`
+  const getEmpDept = (id) => employees.find(e => e.id === id)?.dept || ''
+  const getEmp     = (id) => employees.find(e => e.id === id)
 
   const getRemainingColor = (remaining, total) => {
     if (total <= 0) return 'var(--text-muted)'
     const ratio = remaining / total
-    if (ratio > 0.5) return 'var(--accent-green)'
+    if (ratio > 0.5)  return 'var(--accent-green)'
     if (ratio >= 0.2) return 'var(--accent-orange)'
     return 'var(--accent-red)'
   }
 
-  // 治本：特休結清改走後端聚合 RPC cashout_annual_leave（單一 transaction，杜絕半套寫入）。
-  // 算法與範圍 1:1 對齊舊前端（year+org+特休+remaining>0、日薪=base/30），逐筆比對一致才信。
-  // 出問題把 USE_DB_CASHOUT 改 false 即整段回退舊前端路徑。
-  const USE_DB_CASHOUT = true
+  const filtered = rows.filter(r =>
+    (typeFilter === '' || r.leave_type === typeFilter || TYPE_LABEL[r.leave_type] === typeFilter) &&
+    (search === '' || getEmpName(r.employee_id).includes(search))
+  )
 
-  // 舊前端算法：對目前 balances 算結清明細。同時當 (1) RPC 的 fallback (2) 逐筆比對基準。
-  const computeCashoutLocal = async () => {
-    const annualBals = balances.filter(b =>
-      b.leave_type === '特休' &&
-      (Number(b.total_days) + Number(b.carry_over_days || 0) - Number(b.used_days)) > 0
-    )
-    const uniqueEmpIds = [...new Set(annualBals.map(b => b.employee_id))]
-    const empSalaryMap = {}
-    if (uniqueEmpIds.length > 0) {
-      const { data: empData } = await supabase
-        .from('employees').select('id, name, base_salary').in('id', uniqueEmpIds)
-      if (empData) empData.forEach(e => { empSalaryMap[e.id] = e })
-    }
-    return annualBals.map(b => {
-      const unused = Number(b.total_days) + Number(b.carry_over_days || 0) - Number(b.used_days)
-      const emp = empSalaryMap[b.employee_id] || {}
-      const baseSalary = Number(emp.base_salary) || 0
-      const dailyRate = baseSalary > 0 ? baseSalary / 30 : 0
-      const cashoutAmount = Math.round(unused * dailyRate)
-      return { bal: b, unused, dailyRate, cashoutAmount, empName: emp.name || getEmpName(b.employee_id) }
-    })
-  }
+  const uniqueEmployees = new Set(filtered.map(r => r.employee_id)).size
+  const avgUsageRate = filtered.length > 0
+    ? Math.round(filtered.reduce((s, r) => s + (r.total > 0 ? (r.used_days / r.total) * 100 : 0), 0) / filtered.length)
+    : 0
 
+  // ── 特休結清（仍走 DB cashout RPC，讀 dbBalances）──────────────────────────
   const openCashout = async () => {
     setCashoutLoading(true)
     setShowCashoutModal(true)
     try {
-      if (USE_DB_CASHOUT) {
-        const { data, error } = await supabase.rpc('cashout_annual_leave', {
-          p_org: profile?.organization_id, p_year: yearFilter, p_dry_run: true,
-        })
-        if (error) throw error
-        const items = (data?.items || []).map(it => ({
-          bal: { id: it.balance_id, employee_id: it.employee_id },
-          unused: Number(it.unused_days),
-          dailyRate: Number(it.daily_rate),
-          cashoutAmount: Number(it.amount),
-          empName: it.name,
-        }))
-        // 驗證期：與舊前端逐筆比對金額（不一致只 console.warn，不影響顯示）
-        try {
-          const local = await computeCashoutLocal()
-          const lmap = Object.fromEntries(local.map(x => [x.bal.id, x.cashoutAmount]))
-          const diffs = items.filter(x => lmap[x.bal.id] !== x.cashoutAmount)
-          if (diffs.length || local.length !== items.length) {
-            console.warn('[cashout] DB vs 前端不一致：', { db: items.length, local: local.length, diffs })
-          }
-          // 無 warn 即逐筆一致
-        } catch { /* 比對失敗不影響主流程 */ }
-        setCashoutItems(items)
-      } else {
-        setCashoutItems(await computeCashoutLocal())
-      }
+      const { data, error } = await supabase.rpc('cashout_annual_leave', {
+        p_org: profile?.organization_id, p_year: yearFilter, p_dry_run: true,
+      })
+      if (error) throw error
+      setCashoutItems((data?.items || []).map(it => ({
+        bal: { id: it.balance_id, employee_id: it.employee_id },
+        unused: Number(it.unused_days), dailyRate: Number(it.daily_rate),
+        cashoutAmount: Number(it.amount), empName: it.name,
+      })))
     } catch (err) {
-      console.warn('[openCashout] cashout_annual_leave 失敗，fallback 前端:', err)
-      try {
-        setCashoutItems(await computeCashoutLocal())
-      } catch (e2) {
-        console.error('Failed to prepare cashout:', e2)
-        toast.error('結算資料載入失敗：' + (e2.message || '未知錯誤'))
-        setShowCashoutModal(false)
-      }
+      console.error('[cashout] RPC failed:', err)
+      toast.error('結算資料載入失敗')
+      setShowCashoutModal(false)
     } finally {
       setCashoutLoading(false)
     }
@@ -201,34 +242,15 @@ export default function LeaveBalances() {
     if (!cashoutItems.length) return
     try {
       setCashoutSaving(true)
-      if (USE_DB_CASHOUT) {
-        // 單一 RPC = 單一 transaction：全部結清或全部不動，杜絕半套
-        const { data, error } = await supabase.rpc('cashout_annual_leave', {
-          p_org: profile?.organization_id, p_year: yearFilter, p_dry_run: false,
-        })
-        if (error) throw error
-        toast.success(`已結清 ${data?.processed_count ?? 0} 人，共 NT$ ${Number(data?.total_amount || 0).toLocaleString()}`)
-      } else {
-        // 舊路徑（無 transaction，僅 USE_DB_CASHOUT=false 完全回退時用）
-        const today = new Date().toISOString().split('T')[0]
-        const currentYear = new Date().getFullYear()
-        await Promise.all(
-          cashoutItems.map(async ({ bal, unused, cashoutAmount }) => {
-            const { error: bonusErr } = await supabase.from('bonus_records').insert({
-              employee_id: bal.employee_id, category: '特休結清', amount: cashoutAmount,
-              note: `特休結清 ${currentYear}`, date: today, organization_id: profile?.organization_id,
-            })
-            if (bonusErr) throw bonusErr
-            const newUsed = Number(bal.total_days) + Number(bal.carry_over_days || 0)
-            await supabase.from('leave_balances').update({ used_days: newUsed }).eq('id', bal.id)
-          })
-        )
-      }
+      const { data, error } = await supabase.rpc('cashout_annual_leave', {
+        p_org: profile?.organization_id, p_year: yearFilter, p_dry_run: false,
+      })
+      if (error) throw error
+      toast.success(`已結清 ${data?.processed_count ?? 0} 人，共 NT$ ${Number(data?.total_amount || 0).toLocaleString()}`)
       setShowCashoutModal(false)
       setCashoutItems([])
       fetchData()
     } catch (err) {
-      // RPC 失敗「不」自動 fallback 舊寫入——寧可沒結清，也不要半套。要回退請改 USE_DB_CASHOUT=false。
       console.error('Cashout failed:', err)
       toast.error('結算失敗：' + (err.message || '未知錯誤'))
     } finally {
@@ -238,63 +260,44 @@ export default function LeaveBalances() {
 
   const openAdd = () => {
     setEditingId(null)
-    setForm({
-      employee_id: '',
-      year: yearFilter,
-      leave_type: '特休',
-      total_days: '',
-      used_days: 0,
-      carry_over_days: '',
-      expires_at: '',
-    })
+    setForm({ employee_id: '', year: yearFilter, leave_type: 'annual', total_days: '', used_days: 0, carry_over_days: '', expires_at: '' })
     setShowModal(true)
   }
 
-  const openEdit = (b) => {
-    setEditingId(b.id)
-    setForm({
-      employee_id: b.employee_id,
-      year: b.year,
-      leave_type: b.leave_type,
-      total_days: b.total_days,
-      used_days: b.used_days,
-      carry_over_days: b.carry_over_days || '',
-      expires_at: b.expires_at || '',
-    })
+  const openEdit = (r) => {
+    if (!r._dbId) {
+      // 無 DB 記錄：先新增
+      setEditingId(null)
+      setForm({ employee_id: r.employee_id, year: yearFilter, leave_type: r.leave_type,
+        total_days: r.total_days, used_days: r.used_days, carry_over_days: r.carry_over_days || '', expires_at: r.expires_at || '' })
+    } else {
+      setEditingId(r._dbId)
+      const b = dbBalances.find(b => b.id === r._dbId) || {}
+      setForm({ employee_id: b.employee_id, year: b.year || yearFilter, leave_type: normalizeType(b.leave_type),
+        total_days: b.total_days, used_days: b.used_days, carry_over_days: b.carry_over_days || '', expires_at: b.expires_at || '' })
+    }
     setShowModal(true)
   }
 
   const handleSubmit = async () => {
+    if (!form.employee_id || form.total_days === '') { toast.warning('請填寫員工與總天數'); return }
     try {
-      if (!form.employee_id || !form.total_days) {
-        toast.warning('請填寫員工與總天數')
-        return
-      }
       const payload = {
-        employee_id: Number(form.employee_id),
-        year: Number(form.year),
-        leave_type: form.leave_type,
-        total_days: Number(form.total_days),
-        used_days: Number(form.used_days) || 0,
-        carry_over_days: Number(form.carry_over_days) || 0,
-        expires_at: form.expires_at || null,
+        employee_id: Number(form.employee_id), year: Number(form.year),
+        leave_type: form.leave_type, total_days: Number(form.total_days),
+        used_days: Number(form.used_days) || 0, carry_over_days: Number(form.carry_over_days) || 0,
+        expires_at: form.expires_at || null, organization_id: profile?.organization_id,
       }
       if (editingId) {
-        const { error } = await supabase
-          .from('leave_balances')
-          .update(payload)
-          .eq('id', editingId)
+        const { error } = await supabase.from('leave_balances').update(payload).eq('id', editingId)
         if (error) throw error
       } else {
-        const { error } = await supabase
-          .from('leave_balances')
-          .insert(payload)
+        const { error } = await supabase.from('leave_balances').insert(payload)
         if (error) throw error
       }
       setShowModal(false)
       fetchData()
     } catch (err) {
-      console.error('Save failed:', err)
       toast.error('儲存失敗：' + (err.message || '未知錯誤'))
     }
   }
@@ -307,7 +310,6 @@ export default function LeaveBalances() {
     </div>
   )
 
-  // Year options: current year +/- 2
   const yearOptions = []
   for (let y = currentYear - 2; y <= currentYear + 1; y++) yearOptions.push(y)
 
@@ -331,11 +333,9 @@ export default function LeaveBalances() {
       </div>
 
       {/* Filters */}
-      <div style={{
-        display: 'flex', gap: 16, marginBottom: 16, padding: '12px 16px',
+      <div style={{ display: 'flex', gap: 16, marginBottom: 16, padding: '12px 16px',
         background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 10,
-        alignItems: 'center', flexWrap: 'wrap',
-      }}>
+        alignItems: 'center', flexWrap: 'wrap' }}>
         <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>📅 年度</span>
         <select className="form-input" style={{ fontSize: 13, minWidth: 100 }} value={yearFilter} onChange={e => setYearFilter(Number(e.target.value))}>
           {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
@@ -343,14 +343,14 @@ export default function LeaveBalances() {
         <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>🏷️ 假別</span>
         <select className="form-input" style={{ fontSize: 13, minWidth: 120 }} value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
           <option value="">全部假別</option>
-          {LEAVE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+          {DISPLAY_TYPES.map(t => <option key={t} value={t}>{TYPE_LABEL[t] || t}</option>)}
         </select>
       </div>
 
-      {/* Summary Cards */}
+      {/* Summary */}
       <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
         <div className="stat-card" style={{ '--card-accent': 'var(--accent-cyan)', '--card-accent-dim': 'var(--accent-cyan-dim)' }}>
-          <div className="stat-card-label">有餘額員工數</div>
+          <div className="stat-card-label">員工人數</div>
           <div className="stat-card-value">{uniqueEmployees}</div>
         </div>
         <div className="stat-card" style={{ '--card-accent': 'var(--accent-orange)', '--card-accent-dim': 'var(--accent-orange-dim)' }}>
@@ -369,7 +369,8 @@ export default function LeaveBalances() {
           <div className="card-title"><span className="card-title-icon">📋</span> 假別餘額列表</div>
           <div className="search-bar">
             <Search className="search-icon" />
-            <input type="text" placeholder="搜尋員工..." className="form-input" style={{ paddingLeft: 38 }} value={search} onChange={e => setSearch(e.target.value)} />
+            <input type="text" placeholder="搜尋員工..." className="form-input" style={{ paddingLeft: 38 }}
+              value={search} onChange={e => setSearch(e.target.value)} />
           </div>
         </div>
         <div className="data-table-wrapper">
@@ -383,7 +384,7 @@ export default function LeaveBalances() {
                 <th>已用天數</th>
                 <th>遞延天數</th>
                 <th>剩餘天數</th>
-                <th>法定最低 §38</th>
+                <th>法定 §38</th>
                 <th>到期日</th>
                 <th>操作</th>
               </tr>
@@ -392,39 +393,40 @@ export default function LeaveBalances() {
               {filtered.length === 0 && (
                 <tr><td colSpan={10} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>尚無餘額資料</td></tr>
               )}
-              {filtered.map(b => {
-                const total = Number(b.total_days) + Number(b.carry_over_days || 0)
-                const remaining = total - Number(b.used_days)
-                const color = getRemainingColor(remaining, total)
-                const emp = getEmp(b.employee_id)
-                const statutory = b.leave_type === '特休' ? calcStatutoryLeave(emp) : null
-                const belowLegal = statutory !== null && Number(b.total_days) < statutory
+              {filtered.map(r => {
+                const color = getRemainingColor(r.remaining, r.total)
+                const statutory = r._statutory
+                const belowLegal = statutory !== null && r.total_days < statutory
                 return (
-                  <tr key={b.id}>
-                    <td style={{ fontWeight: 600 }}>{getEmpName(b.employee_id)}</td>
-                    <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{getEmpDept(b.employee_id)}</td>
+                  <tr key={r._key}>
+                    <td style={{ fontWeight: 600 }}>{getEmpName(r.employee_id)}</td>
+                    <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{getEmpDept(r.employee_id)}</td>
                     <td>
-                      <span className="badge badge-info"><span className="badge-dot"></span>{b.leave_type}</span>
+                      <span className="badge badge-info">
+                        <span className="badge-dot"></span>
+                        {TYPE_LABEL[r.leave_type] || r.leave_type}
+                        {!r._dbId && <span style={{ fontSize: 10, marginLeft: 4, opacity: 0.6 }}>計算</span>}
+                      </span>
                     </td>
-                    <td>{b.total_days}</td>
-                    <td>{b.used_days}</td>
-                    <td>{b.carry_over_days || 0}</td>
+                    <td>{r.total_days}</td>
+                    <td>{r.used_days}</td>
+                    <td>{r.carry_over_days || 0}</td>
                     <td>
-                      <span style={{ fontWeight: 700, color }}>{remaining}</span>
+                      <span style={{ fontWeight: 700, color }}>{r.remaining}</span>
                     </td>
                     <td style={{ fontSize: 12 }}>
                       {statutory === null
                         ? <span style={{ color: 'var(--text-muted)' }}>另議</span>
                         : <span style={{ color: belowLegal ? 'var(--accent-red)' : 'var(--text-muted)', fontWeight: belowLegal ? 700 : 400 }}
-                            title={belowLegal ? `帳上天數 ${b.total_days} 天低於勞基法應給 ${statutory} 天` : `符合勞基法§38`}>
+                            title={belowLegal ? `帳上 ${r.total_days} 天低於法定 ${statutory} 天` : '符合§38'}>
                             {statutory} 天{belowLegal ? ' ⚠️' : ''}
                           </span>
                       }
                     </td>
-                    <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{b.expires_at || '—'}</td>
+                    <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{r.expires_at || '—'}</td>
                     <td>
-                      <button className="btn btn-sm btn-secondary" onClick={() => openEdit(b)}>
-                        <Edit2 size={12} /> 編輯
+                      <button className="btn btn-sm btn-secondary" onClick={() => openEdit(r)}>
+                        <Edit2 size={12} /> {r._dbId ? '編輯' : '設定'}
                       </button>
                     </td>
                   </tr>
@@ -437,13 +439,10 @@ export default function LeaveBalances() {
 
       {/* 特休結算 Modal */}
       {showCashoutModal && (
-        <Modal
-          title="特休結算 — 未休年假結清"
-          onClose={() => setShowCashoutModal(false)}
+        <Modal title="特休結算 — 未休年假結清" onClose={() => setShowCashoutModal(false)}
           onSubmit={handleCashoutConfirm}
           submitLabel={cashoutSaving ? '結算中...' : '確認結算'}
-          submitDisabled={cashoutSaving || cashoutLoading || cashoutItems.length === 0}
-        >
+          submitDisabled={cashoutSaving || cashoutLoading || cashoutItems.length === 0}>
           {cashoutLoading ? (
             <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)' }}>載入結算資料中...</div>
           ) : cashoutItems.length === 0 ? (
@@ -455,42 +454,24 @@ export default function LeaveBalances() {
               </p>
               <div className="data-table-wrapper">
                 <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>員工</th>
-                      <th>未休天數</th>
-                      <th>日薪</th>
-                      <th>應結清金額</th>
-                    </tr>
-                  </thead>
+                  <thead><tr><th>員工</th><th>未休天數</th><th>日薪</th><th>應結清金額</th></tr></thead>
                   <tbody>
                     {cashoutItems.map(({ bal, unused, dailyRate, cashoutAmount, empName }) => (
                       <tr key={bal.id}>
                         <td style={{ fontWeight: 600 }}>{empName}</td>
-                        <td>
-                          <span style={{ color: 'var(--accent-orange)', fontWeight: 600 }}>{unused} 天</span>
-                        </td>
+                        <td><span style={{ color: 'var(--accent-orange)', fontWeight: 600 }}>{unused} 天</span></td>
                         <td style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
                           {dailyRate > 0 ? `NT$ ${Math.round(dailyRate).toLocaleString()}` : '—'}
                         </td>
-                        <td>
-                          <span style={{ color: 'var(--accent-green)', fontWeight: 700 }}>
-                            {cashoutAmount > 0 ? `NT$ ${cashoutAmount.toLocaleString()}` : '—'}
-                          </span>
-                        </td>
+                        <td><span style={{ color: 'var(--accent-green)', fontWeight: 700 }}>
+                          {cashoutAmount > 0 ? `NT$ ${cashoutAmount.toLocaleString()}` : '—'}
+                        </span></td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-              <div style={{
-                marginTop: 12,
-                padding: '10px 14px',
-                background: 'var(--accent-orange-dim)',
-                borderRadius: 8,
-                fontSize: 12,
-                color: 'var(--text-secondary)',
-              }}>
+              <div style={{ marginTop: 12, padding: '10px 14px', background: 'var(--accent-orange-dim)', borderRadius: 8, fontSize: 12, color: 'var(--text-secondary)' }}>
                 結算後各員工特休餘額將設為 0，此操作無法復原，請確認後再送出。
               </div>
             </>
@@ -500,15 +481,10 @@ export default function LeaveBalances() {
 
       {/* Add/Edit Modal */}
       {showModal && (
-        <Modal title={editingId ? '編輯假別餘額' : '新增假別餘額'} onClose={() => setShowModal(false)} onSubmit={handleSubmit}>
+        <Modal title={editingId ? '編輯假別餘額' : '設定假別餘額'} onClose={() => setShowModal(false)} onSubmit={handleSubmit}>
           <Field label="員工" required>
-            <SearchableSelect
-              value={form.employee_id || null}
-              onChange={(v) => set('employee_id', v || '')}
-              options={empOptions(employees, { keyBy: 'id' })}
-              placeholder="搜尋員工姓名/職稱..."
-              disabled={!!editingId}
-            />
+            <SearchableSelect value={form.employee_id || null} onChange={v => set('employee_id', v || '')}
+              options={empOptions(employees, { keyBy: 'id' })} placeholder="搜尋員工姓名/職稱..." disabled={!!editingId} />
           </Field>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Field label="年度" required>
@@ -518,16 +494,18 @@ export default function LeaveBalances() {
             </Field>
             <Field label="假別" required>
               <select className="form-input" style={{ width: '100%' }} value={form.leave_type} onChange={e => set('leave_type', e.target.value)}>
-                {LEAVE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                {DISPLAY_TYPES.map(t => <option key={t} value={t}>{TYPE_LABEL[t] || t}</option>)}
               </select>
             </Field>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="總天數" required>
-              <input className="form-input" type="number" min="0" step="0.5" style={{ width: '100%' }} placeholder="例：7" value={form.total_days} onChange={e => set('total_days', e.target.value)} />
+            <Field label="總天數（手動覆蓋）" required>
+              <input className="form-input" type="number" min="0" step="0.5" style={{ width: '100%' }} placeholder="例：7"
+                value={form.total_days} onChange={e => set('total_days', e.target.value)} />
             </Field>
             <Field label="遞延天數">
-              <input className="form-input" type="number" min="0" step="0.5" style={{ width: '100%' }} placeholder="0" value={form.carry_over_days} onChange={e => set('carry_over_days', e.target.value)} />
+              <input className="form-input" type="number" min="0" step="0.5" style={{ width: '100%' }} placeholder="0"
+                value={form.carry_over_days} onChange={e => set('carry_over_days', e.target.value)} />
             </Field>
           </div>
           <Field label="到期日">

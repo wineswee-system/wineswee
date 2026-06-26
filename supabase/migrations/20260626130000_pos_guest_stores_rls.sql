@@ -9,7 +9,8 @@ DO $$ BEGIN
       USING (id IN (SELECT store_id FROM pos_store_settings WHERE qr_ordering_enabled = true));
   END IF;
 
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'res_tables' AND policyname = 'guest_qr_read') THEN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'res_tables')
+     AND NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'res_tables' AND policyname = 'guest_qr_read') THEN
     CREATE POLICY "guest_qr_read" ON res_tables
       FOR SELECT TO anon
       USING (store_id IN (SELECT store_id FROM pos_store_settings WHERE qr_ordering_enabled = true));

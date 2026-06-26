@@ -143,9 +143,10 @@ export default function ExpenseFormModal({
   docType = 'expense',  // 'order' = 叫貨/採購 → 一律費用，不顯示「非費用」切換
 }) {
   const isOrder = docType === 'order'
-  if (!open) return null
-
   const csvRef = useRef(null)
+
+  // 早退放在所有 hook 之後，避免條件式 hook（open 切換時 hook 數量改變會炸）
+  if (!open) return null
   // 幣別符號:優先用 currencies 表(資料驅動),fallback 靜態/代碼
   const curSym = Object.fromEntries((currencies || []).map(c => [c.code, c.symbol]))
 

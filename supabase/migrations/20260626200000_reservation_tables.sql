@@ -6,8 +6,8 @@
 -- ── reservation_rules ───────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS reservation_rules (
   id                    UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
-  organization_id       UUID         NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-  store_id              UUID         NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
+  organization_id       INT          NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  store_id              INT          NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
   day_of_week           SMALLINT     CHECK (day_of_week BETWEEN 0 AND 6),
   date_override         DATE,
   open_time             TIME         NOT NULL DEFAULT '10:00',
@@ -31,8 +31,8 @@ CREATE INDEX IF NOT EXISTS idx_reservation_rules_org   ON reservation_rules(orga
 -- ── res_tables ───────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS res_tables (
   id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-  organization_id UUID        NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-  store_id        UUID        NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
+  organization_id INT         NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  store_id        INT         NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
   table_number    TEXT        NOT NULL,
   capacity        INT         NOT NULL DEFAULT 4,
   shape           TEXT        NOT NULL DEFAULT 'rect' CHECK (shape IN ('rect','round','booth')),
@@ -48,8 +48,8 @@ CREATE INDEX IF NOT EXISTS idx_res_tables_org   ON res_tables(organization_id);
 -- ── table_combinations ───────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS table_combinations (
   id                UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-  organization_id   UUID        NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-  store_id          UUID        NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
+  organization_id   INT         NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  store_id          INT         NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
   name              TEXT        NOT NULL,
   table_ids         JSONB       NOT NULL DEFAULT '[]',
   combined_capacity INT         NOT NULL,
@@ -60,8 +60,8 @@ CREATE INDEX IF NOT EXISTS idx_table_combinations_store ON table_combinations(st
 -- ── reservations ─────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS reservations (
   id                UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-  organization_id   UUID        NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-  store_id          UUID        NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
+  organization_id   INT         NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  store_id          INT         NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
   guest_name        TEXT        NOT NULL,
   guest_phone       TEXT        NOT NULL,
   guest_email       TEXT,

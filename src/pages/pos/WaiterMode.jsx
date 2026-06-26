@@ -5,6 +5,7 @@ import QRCode from 'qrcode'
 import { supabase } from '../../lib/supabase'
 import { useAuth, useOrgId } from '../../contexts/AuthContext'
 import { toast } from '../../lib/toast'
+import POSVariantModal from './components/POSVariantModal'
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 const S = {
@@ -511,6 +512,8 @@ export default function WaiterMode() {
   const [qrUrl,         setQrUrl]         = useState('')
   const [genQr,         setGenQr]         = useState(false)
   const [wide,          setWide]          = useState(typeof window !== 'undefined' && window.innerWidth >= 900)
+  const [variantMap,    setVariantMap]    = useState({}) // itemId → variantGroups[]
+  const [variantTarget, setVariantTarget] = useState(null) // item being configured
   const qrCanvasRef = useRef(null)
 
   const effectiveStoreId = storeIdSel ?? storeId
@@ -557,15 +560,35 @@ export default function WaiterMode() {
   useEffect(() => {
     if (phase !== 'order' || !effectiveStoreId) return
     async function loadMenu() {
-      const [{ data: cats }, { data: menuItems }] = await Promise.all([
+      const [{ data: cats }, { data: menuItems }, { data: variantRows }] = await Promise.all([
         supabase.from('pos_menu_categories').select('id, name').eq('store_id', effectiveStoreId).eq('is_active', true).order('display_order'),
         supabase.from('pos_menu_items').select('id, name, unit_price, description, image_url, category_id').eq('store_id', effectiveStoreId).eq('is_available', true).order('display_order'),
+        supabase.from('pos_menu_item_variants').select('id, menu_item_id, group_name, options, is_required, sort_order').order('sort_order'),
       ])
       setCategories(cats ?? [])
       setItems(menuItems ?? [])
       if (cats?.length) setSelCat(cats[0].id)
+      // Build variantMap: itemId → sorted variantGroups[]
+      const vmap = {}
+      ;(variantRows ?? []).forEach(r => {
+        if (!vmap[r.menu_item_id]) vmap[r.menu_item_id] = []
+        vmap[r.menu_item_id].push({ id: r.id, group_name: r.group_name, options: r.options, is_required: r.is_required })
+      })
+      setVariantMap(vmap)
     }
     loadMenu().catch(e => setErrMsg(e?.message ?? '菜單載入失敗'))
+  }, [phase, effectiveStoreId])
+
+  // ── Poll active orders every 30s while on table-select screen ────────────
+  useEffect(() => {
+    if (phase !== 'select_table' || !effectiveStoreId) return
+    const id = setInterval(async () => {
+      const { data: ords } = await supabase
+        .from('pos_orders').select('id, table_id, status')
+        .in('status', ['open', 'submitted']).eq('store_id', effectiveStoreId)
+      if (ords) setActiveOrders(ords)
+    }, 30000)
+    return () => clearInterval(id)
   }, [phase, effectiveStoreId])
 
   // ── QR canvas ─────────────────────────────────────────────────────────────
@@ -585,11 +608,24 @@ export default function WaiterMode() {
   const tableStatus  = (tableId) => activeOrders.find(o => o.table_id === tableId) ? 'busy' : 'empty'
 
   // ── Cart mutations ────────────────────────────────────────────────────────
-  const addItem = useCallback((itemId) => {
-    setCart(prev => prev[itemId]
-      ? { ...prev, [itemId]: { ...prev[itemId], qty: prev[itemId].qty + 1 } }
-      : { ...prev, [itemId]: { qty: 1, note: '' } }
+  const addItem = useCallback((item) => {
+    const groups = variantMap[item.id]
+    if (groups?.length) {
+      setVariantTarget(item)
+      return
+    }
+    setCart(prev => prev[item.id]
+      ? { ...prev, [item.id]: { ...prev[item.id], qty: prev[item.id].qty + 1 } }
+      : { ...prev, [item.id]: { qty: 1, note: '' } }
     )
+  }, [variantMap])
+
+  const addVariantItem = useCallback(({ id: cartKey, name, price, qty, _baseItemId }) => {
+    setCart(prev => prev[cartKey]
+      ? { ...prev, [cartKey]: { ...prev[cartKey], qty: prev[cartKey].qty + qty } }
+      : { ...prev, [cartKey]: { qty, note: '', name, unit_price: price, menu_item_id: _baseItemId } }
+    )
+    setVariantTarget(null)
   }, [])
 
   const adjustQty = useCallback((itemId, delta) => {
@@ -675,13 +711,14 @@ export default function WaiterMode() {
         setActiveOrders(prev => [...prev, { id: currentOrderId, table_id: selTable.id, status: 'open' }])
       }
       const rows = cartEntries.map(([id, v]) => {
-        const item = items.find(i => i.id === id)
+        // Variant entries store name/unit_price/menu_item_id directly; plain entries resolve from items[]
+        const base = v.menu_item_id ? null : items.find(i => i.id === id)
         return {
           order_id:        currentOrderId,
           item_type:       'menu',
-          menu_item_id:    id,
-          name:            item?.name ?? '',
-          unit_price:      item?.unit_price ?? 0,
+          menu_item_id:    v.menu_item_id ?? id,
+          name:            v.name ?? base?.name ?? '',
+          unit_price:      v.unit_price ?? base?.unit_price ?? 0,
           quantity:        v.qty,
           note:            v.note || null,
           source:          'staff',
@@ -867,28 +904,32 @@ export default function WaiterMode() {
               <div style={{ gridColumn: '1/-1', textAlign: 'center', paddingTop: 40, color: 'var(--text-muted)', fontSize: 14 }}>此分類暫無品項</div>
             )}
             {visibleItems.map(item => {
+              const hasVariants = variantMap[item.id]?.length > 0
               const entry  = cart[item.id]
               const qty    = entry?.qty ?? 0
               const inCart = qty > 0
               return (
-                <div key={item.id} style={S.itemCard(inCart)} onClick={() => addItem(item.id)}>
+                <div key={item.id} style={S.itemCard(inCart)} onClick={() => addItem(item)}>
                   {qty > 0 && <span style={S.cartBadge}>×{qty}</span>}
+                  {hasVariants && qty === 0 && (
+                    <span style={{ position: 'absolute', top: 6, left: 8, fontSize: 10, color: 'var(--text-muted)' }}>選項</span>
+                  )}
                   {item.image_url && <img src={item.image_url} alt={item.name} style={S.itemImg} />}
                   <div style={S.cardBody}>
                     <div style={S.itemName}>{item.name}</div>
                     <div style={S.itemPriceRow}>
                       <span style={S.itemPrice}>NT${Number(item.unit_price).toLocaleString()}</span>
-                      {inCart ? (
+                      {inCart && !hasVariants ? (
                         <div style={S.qtyRow} onClick={e => e.stopPropagation()}>
                           <button style={S.qtyBtn(true)}  onClick={() => adjustQty(item.id, -1)}>−</button>
                           <span style={S.qtyNum}>{qty}</span>
                           <button style={S.qtyBtn(false)} onClick={() => adjustQty(item.id, 1)}>+</button>
                         </div>
                       ) : (
-                        <button style={S.addBtn} onClick={e => { e.stopPropagation(); addItem(item.id) }}>+</button>
+                        <button style={S.addBtn} onClick={e => { e.stopPropagation(); addItem(item) }}>+</button>
                       )}
                     </div>
-                    {inCart && (
+                    {inCart && !hasVariants && (
                       <button
                         style={{ ...S.noteBtn, color: entry?.note ? 'var(--accent-cyan)' : 'var(--text-muted)' }}
                         onClick={e => openNotePopup(e, item.id)}
@@ -964,6 +1005,16 @@ export default function WaiterMode() {
           </div>
         </div>,
         document.body
+      )}
+
+      {/* Variant selection modal */}
+      {variantTarget && (
+        <POSVariantModal
+          item={variantTarget}
+          variantGroups={variantMap[variantTarget.id] ?? []}
+          onAdd={addVariantItem}
+          onClose={() => setVariantTarget(null)}
+        />
       )}
 
       {/* Checkout modal */}

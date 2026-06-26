@@ -15,7 +15,7 @@ import {
   FolderTree, UserMinus, PauseCircle, RefreshCcw, GraduationCap, PlayCircle,
   Globe, Trash2, Upload,
   ConciergeBell, TableProperties, Timer, Map, ClipboardEdit,
-  QrCode,
+  QrCode, ChefHat,
 } from 'lucide-react'
 
 // ── Major Groups for top bar ──
@@ -91,6 +91,7 @@ export const groupNav = {
         { icon: BookText,     label: '菜單管理', path: '/pos/menu' },
         { icon: ShoppingBag, label: '商品目錄', path: '/pos/products' },
         { icon: ClipboardList, label: '服務員點餐', path: '/pos/waiter' },
+        { icon: ChefHat,      label: '廚房顯示',   path: '/pos/kitchen' },
         { icon: QrCode,       label: 'QR 點餐設定', path: '/pos/qr-settings' },
         { icon: QrCode,       label: 'QR 桌台管理', path: '/pos/qr-tables' },
         { icon: Award,        label: '員工業績',    path: '/pos/staff-performance' },

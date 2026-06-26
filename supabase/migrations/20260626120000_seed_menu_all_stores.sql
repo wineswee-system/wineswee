@@ -37,13 +37,13 @@ BEGIN
 
     -- ── 新品上市 ──────────────────────────────────────────────────────────
     INSERT INTO pos_menu_items(organization_id, store_id, category_id, name, description, unit_price, display_order, is_available)
-    SELECT v_org_id, v_store.id, c_new, t.name, t.desc, t.price, t.ord, true
+    SELECT v_org_id, v_store.id, c_new, t.name, t.descr, t.price, t.ord, true
     FROM (VALUES
       (1, '鮭魚炊飯',        'Salmon Takikomi Rice',        228),
       (2, '鱸魚炊飯',        'Sea Bass Takikomi Rice',      228),
       (3, 'XO 鮑魚爆炒義大利麵', 'XO Abalone Stir-Fried Pasta', 368),
       (4, '爽爆混合海鮮',    'Ultimate Mixed Seafood',       628)
-    ) AS t(ord, name, desc, price)
+    ) AS t(ord, name, descr, price)
     WHERE NOT EXISTS (
       SELECT 1 FROM pos_menu_items
       WHERE store_id = v_store.id AND name = t.name
@@ -51,13 +51,13 @@ BEGIN
 
     -- ── 義大利麵 & 燉飯 ──────────────────────────────────────────────────
     INSERT INTO pos_menu_items(organization_id, store_id, category_id, name, description, unit_price, display_order, is_available)
-    SELECT v_org_id, v_store.id, c_pasta, t.name, t.desc, t.price, t.ord, true
+    SELECT v_org_id, v_store.id, c_pasta, t.name, t.descr, t.price, t.ord, true
     FROM (VALUES
       (1, '南義風味鮭魚白醬義大利麵', 'Creamy Southern Italian Salmon Pasta',        168),
       (2, '蒜香雞腿排青醬燉飯',       'Garlic-Roasted Chicken Leg Pesto Risotto',    168),
       (3, '舒肥牛肉紅醬燉飯',         'Tomato Risotto with Sous Vide Beef',           288),
       (4, '松露菌菇醬燉飯',           'Truffle Mushroom Cream Risotto',               328)
-    ) AS t(ord, name, desc, price)
+    ) AS t(ord, name, descr, price)
     WHERE NOT EXISTS (
       SELECT 1 FROM pos_menu_items
       WHERE store_id = v_store.id AND name = t.name
@@ -65,7 +65,7 @@ BEGIN
 
     -- ── 精選肉食 ──────────────────────────────────────────────────────────
     INSERT INTO pos_menu_items(organization_id, store_id, category_id, name, description, unit_price, display_order, is_available)
-    SELECT v_org_id, v_store.id, c_meat, t.name, t.desc, t.price, t.ord, true
+    SELECT v_org_id, v_store.id, c_meat, t.name, t.descr, t.price, t.ord, true
     FROM (VALUES
       (1, '秘制豬肋排 400-450g',   'Roasted Pork Ribs 400-450g',                   498),
       (2, '蔗香剖半豬腳 400-450g', 'Sugarcane-Scented Halved Pork Knuckle 400-450g',368),
@@ -73,7 +73,7 @@ BEGIN
       (4, '酸黃瓜片 30g',          '醬料配菜加購',                                    30),
       (5, '芥末醬 20g',            '醬料配菜加購',                                    20),
       (6, '酸菜 20g',              '醬料配菜加購',                                    20)
-    ) AS t(ord, name, desc, price)
+    ) AS t(ord, name, descr, price)
     WHERE NOT EXISTS (
       SELECT 1 FROM pos_menu_items
       WHERE store_id = v_store.id AND name = t.name
@@ -81,12 +81,12 @@ BEGIN
 
     -- ── 精選牛排 ──────────────────────────────────────────────────────────
     INSERT INTO pos_menu_items(organization_id, store_id, category_id, name, description, unit_price, display_order, is_available)
-    SELECT v_org_id, v_store.id, c_steak, t.name, t.desc, t.price, t.ord, true
+    SELECT v_org_id, v_store.id, c_steak, t.name, t.descr, t.price, t.ord, true
     FROM (VALUES
       (1, '美國 Choice 肋眼牛排 10盎司', 'American Choice Rib Eye Steak / 10oz，搭配薯條', 788),
       (2, '美國帶骨牛小排 10盎司',       'US Bone-in Beef Short Ribs / 10oz，搭配薯條',    599),
       (3, '紐西蘭菲力牛排 6盎司',        'New Zealand Fillet Steak / 6oz，搭配薯條',        499)
-    ) AS t(ord, name, desc, price)
+    ) AS t(ord, name, descr, price)
     WHERE NOT EXISTS (
       SELECT 1 FROM pos_menu_items
       WHERE store_id = v_store.id AND name = t.name
@@ -94,7 +94,7 @@ BEGIN
 
     -- ── 披薩 ──────────────────────────────────────────────────────────────
     INSERT INTO pos_menu_items(organization_id, store_id, category_id, name, description, unit_price, display_order, is_available)
-    SELECT v_org_id, v_store.id, c_pizza, t.name, t.desc, t.price, t.ord, true
+    SELECT v_org_id, v_store.id, c_pizza, t.name, t.descr, t.price, t.ord, true
     FROM (VALUES
       (1, '11吋金牌法國廚師燻鮭魚風味比薩', '正統風味，披薩之王', 358),
       (2, '11吋金牌法國廚師特製烤蔬菜比薩', '正統風味，披薩之王', 288),
@@ -103,7 +103,7 @@ BEGIN
       (5, '11吋金牌法國廚師海鮮比薩',       '正統風味，披薩之王', 258),
       (6, '11吋金牌法國廚師菠菜蘑菇比薩',   '正統風味，披薩之王', 199),
       (7, '8吋辣味墨西哥披薩',              '正統風味，披薩之王', 288)
-    ) AS t(ord, name, desc, price)
+    ) AS t(ord, name, descr, price)
     WHERE NOT EXISTS (
       SELECT 1 FROM pos_menu_items
       WHERE store_id = v_store.id AND name = t.name
@@ -111,7 +111,7 @@ BEGIN
 
     -- ── 精選餐點 - 炸物與烤物 ─────────────────────────────────────────────
     INSERT INTO pos_menu_items(organization_id, store_id, category_id, name, description, unit_price, display_order, is_available)
-    SELECT v_org_id, v_store.id, c_fried, t.name, t.desc, t.price, t.ord, true
+    SELECT v_org_id, v_store.id, c_fried, t.name, t.descr, t.price, t.ord, true
     FROM (VALUES
       ( 1, '海鮮香炸拼盤',       '卡達菲蝦+軟殼蟹+鰺魚排',               428),
       ( 2, '綜合炸物拼盤',       '薯條150g+洋蔥圈3入+檸檬雞柳條3入',     159),
@@ -125,7 +125,7 @@ BEGIN
       (10, '檸檬雞柳條',         '6入',                                  129),
       (11, 'LEDUC 洋蔥圈',       '8入',                                  129),
       (12, '美式薯條',           '200g',                                 129)
-    ) AS t(ord, name, desc, price)
+    ) AS t(ord, name, descr, price)
     WHERE NOT EXISTS (
       SELECT 1 FROM pos_menu_items
       WHERE store_id = v_store.id AND name = t.name
@@ -133,7 +133,7 @@ BEGIN
 
     -- ── 精選餐點 - 海鮮、肉類與小點 ──────────────────────────────────────
     INSERT INTO pos_menu_items(organization_id, store_id, category_id, name, description, unit_price, display_order, is_available)
-    SELECT v_org_id, v_store.id, c_sea, t.name, t.desc, t.price, t.ord, true
+    SELECT v_org_id, v_store.id, c_sea, t.name, t.descr, t.price, t.ord, true
     FROM (VALUES
       (1, '鮮烤大白蝦',       '8隻',                         338),
       (2, '南義風味鮭魚片',   '2片',                         258),
@@ -144,7 +144,7 @@ BEGIN
       (7, '鰻魚爆卵香腸',     '120g',                        198),
       (8, '烤櫛瓜',           '150g',                         88),
       (9, '黑胡椒蒜味毛豆',   '100g',                         50)
-    ) AS t(ord, name, desc, price)
+    ) AS t(ord, name, descr, price)
     WHERE NOT EXISTS (
       SELECT 1 FROM pos_menu_items
       WHERE store_id = v_store.id AND name = t.name

@@ -151,12 +151,7 @@ export default function LeaveBalances() {
       usedByType[code] = (usedByType[code] || 0) + (Number(lr.days) || 0)
     }
 
-    // types to show: always annual + types with any record
-    const typesToShow = new Set(['annual'])
-    for (const b of bals) typesToShow.add(normalizeType(b.leave_type))
-    for (const lr of lrs) typesToShow.add(normalizeType(lr.type))
-
-    return ALL_TYPES.filter(t => typesToShow.has(t)).map(type => {
+    return DISPLAY_TYPES.map(type => {
       const dbBal = balByType[type]
       const dbTotal = Number(dbBal?.total_days || 0)
       let computedTotal = 0, statutory = null
@@ -168,14 +163,13 @@ export default function LeaveBalances() {
       const carryOver = Number(dbBal?.carry_over_days || 0)
       const total = effectiveTotal + carryOver
       const remaining = total - usedDays
-      if (!dbBal && usedDays === 0 && computedTotal === 0) return null
       return {
         _key: type, _dbId: dbBal?.id, _statutory: statutory, _isManual: dbTotal > 0,
         leave_type: type, total_days: effectiveTotal, used_days: usedDays,
         carry_over_days: carryOver, expires_at: dbBal?.expires_at || null,
         total, remaining,
       }
-    }).filter(Boolean)
+    })
   }
 
   const openAdd = () => {

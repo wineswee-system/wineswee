@@ -1,14 +1,12 @@
 import { useState, useEffect } from 'react'
-import { Plus, Edit2, Search, Calculator } from 'lucide-react'
+import { Plus, Edit2, Calculator, User } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
-import { empLabel } from '../../lib/empLabel'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { toast } from '../../lib/toast'
 
-// DB 存英文 code，顯示用中文
 const TYPE_LABEL = {
   annual: '特休', sick: '病假', personal: '事假', comp: '補休',
   menstrual: '生理假', marriage: '婚假', bereavement: '喪假',
@@ -16,19 +14,26 @@ const TYPE_LABEL = {
   parental: '育嬰假', family_care: '家庭照顧假', mental_health: '心理假',
   occupational: '公傷病假', prenatal: '產檢假', unpaid: '無薪假',
 }
-// 中文 → code（歷史資料用）
 const TYPE_CODE = Object.fromEntries(Object.entries(TYPE_LABEL).map(([k, v]) => [v, k]))
 
-// 法定上限（calendar year，非年資制）
 const LEGAL_LIMITS = {
   sick: 30, personal: 14, menstrual: 12,
   marriage: 8, bereavement: 8, mental_health: 3, family_care: 7,
 }
 
-const DISPLAY_TYPES = ['annual', 'sick', 'personal', 'comp', 'menstrual',
-  'marriage', 'bereavement', 'official', 'maternity', 'paternity', 'unpaid']
-
+const DISPLAY_TYPES = [
+  'annual', 'sick', 'personal', 'comp', 'menstrual',
+  'marriage', 'bereavement', 'official', 'maternity', 'paternity', 'unpaid',
+]
 const ALL_TYPES = [...DISPLAY_TYPES, 'family_care', 'mental_health', 'occupational', 'prenatal', 'parental']
+
+const TYPE_ICON = {
+  annual: '🌴', sick: '🏥', personal: '🙋', comp: '🔄',
+  menstrual: '💊', marriage: '💒', bereavement: '🕯️',
+  official: '🏛️', maternity: '🤱', paternity: '👨‍👶',
+  parental: '👶', family_care: '🏠', mental_health: '🧠',
+  occupational: '🦺', prenatal: '🩺', unpaid: '📋',
+}
 
 export default function LeaveBalances() {
   const { profile, role } = useAuth()
@@ -37,15 +42,15 @@ export default function LeaveBalances() {
   const currentYear = new Date().getFullYear()
 
   const [employees, setEmployees] = useState([])
-  const [dbBalances, setDbBalances] = useState([])      // leave_balances table (carry_over, expires_at, comp total, manual override)
-  const [leaveRequests, setLeaveRequests] = useState([]) // approved leave_requests for computing used
-  const [rows, setRows] = useState([])                   // computed display rows
-
+  const [selectedEmpId, setSelectedEmpId] = useState(null)
   const [yearFilter, setYearFilter] = useState(currentYear)
-  const [typeFilter, setTypeFilter] = useState('')
-  const [search, setSearch] = useState('')
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
+
+  const [dbBalances, setDbBalances] = useState([])
+  const [leaveRequests, setLeaveRequests] = useState([])
+  const [empRows, setEmpRows] = useState([])      // computed rows for selected employee
+
+  const [loading, setLoading] = useState(false)
+  const [empLoading, setEmpLoading] = useState(true)
 
   const [showModal, setShowModal] = useState(false)
   const [editingId, setEditingId] = useState(null)
@@ -59,12 +64,14 @@ export default function LeaveBalances() {
     total_days: '', used_days: 0, carry_over_days: '', expires_at: '',
   })
 
-  // 勞基法 §38 依到職日計算（週工時<20 的兼職返回 null）
+  const normalizeType = (t) => TYPE_CODE[t] || t
+
   const calcStatutoryLeave = (emp) => {
     if (!emp?.join_date) return null
     if (emp.employment_type === '兼職' && Number(emp.weekly_hours || 40) < 20) return null
-    const months = (new Date().getFullYear() - new Date(emp.join_date).getFullYear()) * 12
-      + (new Date().getMonth() - new Date(emp.join_date).getMonth())
+    const now = new Date()
+    const join = new Date(emp.join_date)
+    const months = (now.getFullYear() - join.getFullYear()) * 12 + (now.getMonth() - join.getMonth())
     const years = Math.floor(months / 12)
     if (months < 6)  return 0
     if (months < 12) return 3
@@ -75,207 +82,120 @@ export default function LeaveBalances() {
     return Math.min(15 + (years - 10), 30)
   }
 
-  // 正規化 leave_request.type → code
-  const normalizeType = (t) => TYPE_CODE[t] || t
+  const seniority = (emp) => {
+    if (!emp?.join_date) return null
+    const now = new Date()
+    const join = new Date(emp.join_date)
+    const months = (now.getFullYear() - join.getFullYear()) * 12 + (now.getMonth() - join.getMonth())
+    const years = Math.floor(months / 12)
+    const rem = months % 12
+    return years > 0 ? `${years} 年 ${rem} 個月` : `${rem} 個月`
+  }
 
-  const fetchData = async () => {
-    try {
+  // load employee list once
+  useEffect(() => {
+    const load = async () => {
+      setEmpLoading(true)
+      const orgId = profile?.organization_id
+      const { data, error } = await supabase.from('employees')
+        .select('id, name, dept, store, status, employment_type, join_date, weekly_hours')
+        .eq('status', '在職').eq('organization_id', orgId).order('name')
+      if (!error) {
+        if (isStaff && profile?.id) {
+          setEmployees(data.filter(e => e.id === profile.id))
+          setSelectedEmpId(profile.id)
+        } else {
+          setEmployees(data || [])
+        }
+      }
+      setEmpLoading(false)
+    }
+    if (profile?.organization_id) load()
+  }, [profile?.organization_id])
+
+  // load data when employee or year changes
+  useEffect(() => {
+    if (!selectedEmpId) { setEmpRows([]); return }
+    const load = async () => {
       setLoading(true)
       const orgId = profile?.organization_id
       const yearStart = `${yearFilter}-01-01`
       const yearEnd   = `${yearFilter + 1}-01-01`
-
-      const [empRes, balRes, lrRes] = await Promise.all([
-        supabase.from('employees')
-          .select('id, name, dept, store, status, employment_type, join_date, weekly_hours')
-          .eq('status', '在職').eq('organization_id', orgId).order('name'),
+      const [balRes, lrRes] = await Promise.all([
         supabase.from('leave_balances')
-          .select('*').eq('year', yearFilter).eq('organization_id', orgId),
+          .select('*').eq('year', yearFilter).eq('organization_id', orgId).eq('employee_id', selectedEmpId),
         supabase.from('leave_requests')
           .select('employee_id, type, days, hours, start_date, status')
-          .eq('organization_id', orgId)
+          .eq('organization_id', orgId).eq('employee_id', selectedEmpId)
           .in('status', ['已核准'])
           .gte('start_date', yearStart).lt('start_date', yearEnd),
       ])
-      if (empRes.error) throw empRes.error
-      if (balRes.error) throw balRes.error
-
-      let emps = empRes.data || []
-      let bals = balRes.data || []
-      let lrs  = lrRes.data  || []
-
-      if (isStaff && profile?.id) {
-        emps = emps.filter(e => e.id === profile.id)
-        bals = bals.filter(b => b.employee_id === profile.id)
-        lrs  = lrs.filter(r => r.employee_id === profile.id)
-      }
-
-      setEmployees(emps)
+      const bals = balRes.data || []
+      const lrs  = lrRes.data  || []
       setDbBalances(bals)
       setLeaveRequests(lrs)
-      setRows(buildRows(emps, bals, lrs))
-    } catch (err) {
-      console.error('Failed to load leave balances:', err)
-      setError('資料載入失敗，請重新整理頁面')
-    } finally {
+      const emp = employees.find(e => e.id === selectedEmpId)
+      setEmpRows(buildRows(emp, bals, lrs))
       setLoading(false)
     }
-  }
+    load()
+  }, [selectedEmpId, yearFilter, employees])
 
-  const buildRows = (emps, bals, lrs) => {
-    const balByEmpType = {}
-    for (const b of bals) {
-      const code = normalizeType(b.leave_type)
-      balByEmpType[`${b.employee_id}-${code}`] = b
-    }
-    const usedByEmpType = {}
+  const buildRows = (emp, bals, lrs) => {
+    if (!emp) return []
+    const balByType = {}
+    for (const b of bals) balByType[normalizeType(b.leave_type)] = b
+    const usedByType = {}
     for (const lr of lrs) {
       const code = normalizeType(lr.type)
-      const key = `${lr.employee_id}-${code}`
-      usedByEmpType[key] = (usedByEmpType[key] || 0) + (Number(lr.days) || 0)
+      usedByType[code] = (usedByType[code] || 0) + (Number(lr.days) || 0)
     }
 
-    const result = []
-    for (const emp of emps) {
-      // 確認這個員工有哪些假別（DB 有記錄 OR leave_requests 有用假）
-      const empTypes = new Set(['annual'])
-      for (const b of bals.filter(b => b.employee_id === emp.id))
-        empTypes.add(normalizeType(b.leave_type))
-      for (const lr of lrs.filter(r => r.employee_id === emp.id))
-        empTypes.add(normalizeType(lr.type))
+    // types to show: always annual + types with any record
+    const typesToShow = new Set(['annual'])
+    for (const b of bals) typesToShow.add(normalizeType(b.leave_type))
+    for (const lr of lrs) typesToShow.add(normalizeType(lr.type))
 
-      for (const type of ALL_TYPES) {
-        if (!empTypes.has(type)) continue
-        const dbBal = balByEmpType[`${emp.id}-${type}`]
-        const dbTotal = Number(dbBal?.total_days || 0)
-
-        // effective total：DB 手動覆蓋 > 0 時優先；否則用計算值
-        let computedTotal = 0
-        let statutory = null
-        if (type === 'annual') {
-          statutory = calcStatutoryLeave(emp)
-          computedTotal = statutory ?? 0
-        } else {
-          computedTotal = LEGAL_LIMITS[type] ?? 0
-        }
-        const effectiveTotal = dbTotal > 0 ? Math.max(dbTotal, computedTotal) : computedTotal
-
-        // used：從 leave_requests 算（準確），若 DB 更高則取 DB（手動調整情況）
-        const usedFromLr = usedByEmpType[`${emp.id}-${type}`] || 0
-        const usedDays = Math.max(usedFromLr, Number(dbBal?.used_days || 0))
-
-        const carryOver = Number(dbBal?.carry_over_days || 0)
-        const total = effectiveTotal + carryOver
-        const remaining = total - usedDays
-
-        // 無資料（沒 DB 記錄、沒用過、又是非固定限額假別）就跳過
-        if (!dbBal && usedDays === 0 && computedTotal === 0) continue
-
-        result.push({
-          _key:       `${emp.id}-${type}`,
-          _dbId:      dbBal?.id,           // 有 DB 記錄才有 id，供 edit 用
-          _statutory: statutory,
-          _isManual:  dbTotal > 0,
-          employee_id: emp.id,
-          leave_type:  type,
-          total_days:  effectiveTotal,
-          used_days:   usedDays,
-          carry_over_days: carryOver,
-          expires_at:  dbBal?.expires_at || null,
-          total,
-          remaining,
-        })
+    return ALL_TYPES.filter(t => typesToShow.has(t)).map(type => {
+      const dbBal = balByType[type]
+      const dbTotal = Number(dbBal?.total_days || 0)
+      let computedTotal = 0, statutory = null
+      if (type === 'annual') { statutory = calcStatutoryLeave(emp); computedTotal = statutory ?? 0 }
+      else computedTotal = LEGAL_LIMITS[type] ?? 0
+      const effectiveTotal = dbTotal > 0 ? Math.max(dbTotal, computedTotal) : computedTotal
+      const usedFromLr = usedByType[type] || 0
+      const usedDays = Math.max(usedFromLr, Number(dbBal?.used_days || 0))
+      const carryOver = Number(dbBal?.carry_over_days || 0)
+      const total = effectiveTotal + carryOver
+      const remaining = total - usedDays
+      if (!dbBal && usedDays === 0 && computedTotal === 0) return null
+      return {
+        _key: type, _dbId: dbBal?.id, _statutory: statutory, _isManual: dbTotal > 0,
+        leave_type: type, total_days: effectiveTotal, used_days: usedDays,
+        carry_over_days: carryOver, expires_at: dbBal?.expires_at || null,
+        total, remaining,
       }
-    }
-    return result
-  }
-
-  useEffect(() => { fetchData() }, [yearFilter, profile?.organization_id])
-
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
-  const getEmpName = (id) => employees.find(e => e.id === id)?.name || `#${id}`
-  const getEmpDept = (id) => employees.find(e => e.id === id)?.dept || ''
-  const getEmp     = (id) => employees.find(e => e.id === id)
-
-  const getRemainingColor = (remaining, total) => {
-    if (total <= 0) return 'var(--text-muted)'
-    const ratio = remaining / total
-    if (ratio > 0.5)  return 'var(--accent-green)'
-    if (ratio >= 0.2) return 'var(--accent-orange)'
-    return 'var(--accent-red)'
-  }
-
-  const filtered = rows.filter(r =>
-    (typeFilter === '' || r.leave_type === typeFilter || TYPE_LABEL[r.leave_type] === typeFilter) &&
-    (search === '' || getEmpName(r.employee_id).includes(search))
-  )
-
-  const uniqueEmployees = new Set(filtered.map(r => r.employee_id)).size
-  const avgUsageRate = filtered.length > 0
-    ? Math.round(filtered.reduce((s, r) => s + (r.total > 0 ? (r.used_days / r.total) * 100 : 0), 0) / filtered.length)
-    : 0
-
-  // ── 特休結清（仍走 DB cashout RPC，讀 dbBalances）──────────────────────────
-  const openCashout = async () => {
-    setCashoutLoading(true)
-    setShowCashoutModal(true)
-    try {
-      const { data, error } = await supabase.rpc('cashout_annual_leave', {
-        p_org: profile?.organization_id, p_year: yearFilter, p_dry_run: true,
-      })
-      if (error) throw error
-      setCashoutItems((data?.items || []).map(it => ({
-        bal: { id: it.balance_id, employee_id: it.employee_id },
-        unused: Number(it.unused_days), dailyRate: Number(it.daily_rate),
-        cashoutAmount: Number(it.amount), empName: it.name,
-      })))
-    } catch (err) {
-      console.error('[cashout] RPC failed:', err)
-      toast.error('結算資料載入失敗')
-      setShowCashoutModal(false)
-    } finally {
-      setCashoutLoading(false)
-    }
-  }
-
-  const handleCashoutConfirm = async () => {
-    if (!cashoutItems.length) return
-    try {
-      setCashoutSaving(true)
-      const { data, error } = await supabase.rpc('cashout_annual_leave', {
-        p_org: profile?.organization_id, p_year: yearFilter, p_dry_run: false,
-      })
-      if (error) throw error
-      toast.success(`已結清 ${data?.processed_count ?? 0} 人，共 NT$ ${Number(data?.total_amount || 0).toLocaleString()}`)
-      setShowCashoutModal(false)
-      setCashoutItems([])
-      fetchData()
-    } catch (err) {
-      console.error('Cashout failed:', err)
-      toast.error('結算失敗：' + (err.message || '未知錯誤'))
-    } finally {
-      setCashoutSaving(false)
-    }
+    }).filter(Boolean)
   }
 
   const openAdd = () => {
     setEditingId(null)
-    setForm({ employee_id: '', year: yearFilter, leave_type: 'annual', total_days: '', used_days: 0, carry_over_days: '', expires_at: '' })
+    setForm({ employee_id: selectedEmpId || '', year: yearFilter, leave_type: 'annual', total_days: '', used_days: 0, carry_over_days: '', expires_at: '' })
     setShowModal(true)
   }
 
   const openEdit = (r) => {
-    if (!r._dbId) {
-      // 無 DB 記錄：先新增
-      setEditingId(null)
-      setForm({ employee_id: r.employee_id, year: yearFilter, leave_type: r.leave_type,
-        total_days: r.total_days, used_days: r.used_days, carry_over_days: r.carry_over_days || '', expires_at: r.expires_at || '' })
-    } else {
-      setEditingId(r._dbId)
-      const b = dbBalances.find(b => b.id === r._dbId) || {}
-      setForm({ employee_id: b.employee_id, year: b.year || yearFilter, leave_type: normalizeType(b.leave_type),
-        total_days: b.total_days, used_days: b.used_days, carry_over_days: b.carry_over_days || '', expires_at: b.expires_at || '' })
-    }
+    setEditingId(r._dbId || null)
+    const b = r._dbId ? dbBalances.find(b => b.id === r._dbId) || {} : {}
+    setForm({
+      employee_id: selectedEmpId,
+      year: b.year || yearFilter,
+      leave_type: r.leave_type,
+      total_days: r._dbId ? (b.total_days ?? '') : r.total_days,
+      used_days: b.used_days ?? r.used_days,
+      carry_over_days: b.carry_over_days || '',
+      expires_at: b.expires_at || '',
+    })
     setShowModal(true)
   }
 
@@ -296,30 +216,82 @@ export default function LeaveBalances() {
         if (error) throw error
       }
       setShowModal(false)
-      fetchData()
+      // re-trigger load
+      setSelectedEmpId(v => { setTimeout(() => setSelectedEmpId(v), 0); return null })
     } catch (err) {
       toast.error('儲存失敗：' + (err.message || '未知錯誤'))
     }
   }
 
-  if (loading) return <LoadingSpinner />
-  if (error) return (
-    <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}>
-      <h3>{error}</h3>
-      <button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button>
-    </div>
-  )
+  const openCashout = async () => {
+    setCashoutLoading(true)
+    setShowCashoutModal(true)
+    try {
+      const { data, error } = await supabase.rpc('cashout_annual_leave', {
+        p_org: profile?.organization_id, p_year: yearFilter, p_dry_run: true,
+      })
+      if (error) throw error
+      setCashoutItems((data?.items || []).map(it => ({
+        bal: { id: it.balance_id, employee_id: it.employee_id },
+        unused: Number(it.unused_days), dailyRate: Number(it.daily_rate),
+        cashoutAmount: Number(it.amount), empName: it.name,
+      })))
+    } catch (err) {
+      toast.error('結算資料載入失敗')
+      setShowCashoutModal(false)
+    } finally {
+      setCashoutLoading(false)
+    }
+  }
+
+  const handleCashoutConfirm = async () => {
+    if (!cashoutItems.length) return
+    try {
+      setCashoutSaving(true)
+      const { data, error } = await supabase.rpc('cashout_annual_leave', {
+        p_org: profile?.organization_id, p_year: yearFilter, p_dry_run: false,
+      })
+      if (error) throw error
+      toast.success(`已結清 ${data?.processed_count ?? 0} 人，共 NT$ ${Number(data?.total_amount || 0).toLocaleString()}`)
+      setShowCashoutModal(false)
+      setCashoutItems([])
+    } catch (err) {
+      toast.error('結算失敗：' + (err.message || '未知錯誤'))
+    } finally {
+      setCashoutSaving(false)
+    }
+  }
 
   const yearOptions = []
   for (let y = currentYear - 2; y <= currentYear + 1; y++) yearOptions.push(y)
 
+  const selectedEmp = employees.find(e => e.id === selectedEmpId)
+
+  // reload helper: toggle selectedEmpId to re-trigger useEffect
+  const reloadEmpData = () => {
+    const id = selectedEmpId
+    setSelectedEmpId(null)
+    setTimeout(() => setSelectedEmpId(id), 0)
+  }
+
+  const getRemainingColor = (remaining, total) => {
+    if (total <= 0) return 'var(--text-muted)'
+    const ratio = remaining / total
+    if (ratio > 0.5)  return 'var(--accent-green)'
+    if (ratio >= 0.2) return 'var(--accent-orange)'
+    return 'var(--accent-red)'
+  }
+
+  if (empLoading) return <LoadingSpinner />
+
   return (
     <div className="fade-in">
+      {/* Header */}
       <div className="page-header">
         <div className="page-header-row">
           <div>
-            <h2><span className="header-icon">📊</span> 假別餘額管理</h2>
-            <p>查看與管理員工各類假別剩餘天數</p>
+            <h2><span className="header-icon">📊</span> 假別餘額</h2>
+            <p>選擇員工查看剩餘假別天數</p>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             {!isStaff && (
@@ -327,117 +299,172 @@ export default function LeaveBalances() {
                 <Calculator size={14} /> 特休結算
               </button>
             )}
-            {!isStaff && <button className="btn btn-primary" onClick={openAdd}><Plus size={14} /> 新增餘額</button>}
           </div>
         </div>
       </div>
 
-      {/* Filters */}
-      <div style={{ display: 'flex', gap: 16, marginBottom: 16, padding: '12px 16px',
-        background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 10,
-        alignItems: 'center', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>📅 年度</span>
-        <select className="form-input" style={{ fontSize: 13, minWidth: 100 }} value={yearFilter} onChange={e => setYearFilter(Number(e.target.value))}>
-          {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
-        </select>
-        <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>🏷️ 假別</span>
-        <select className="form-input" style={{ fontSize: 13, minWidth: 120 }} value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
-          <option value="">全部假別</option>
-          {DISPLAY_TYPES.map(t => <option key={t} value={t}>{TYPE_LABEL[t] || t}</option>)}
-        </select>
+      {/* Picker row */}
+      <div style={{
+        display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap',
+        padding: '14px 16px', marginBottom: 20,
+        background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 12,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: '1 1 260px', minWidth: 220 }}>
+          <User size={16} style={{ color: 'var(--accent-cyan)', flexShrink: 0 }} />
+          {isStaff ? (
+            <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{selectedEmp?.name}</span>
+          ) : (
+            <SearchableSelect
+              value={selectedEmpId}
+              onChange={v => setSelectedEmpId(v || null)}
+              options={empOptions(employees, { keyBy: 'id' })}
+              placeholder="選擇員工..."
+              style={{ flex: 1 }}
+            />
+          )}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>年度</span>
+          <select className="form-input" style={{ fontSize: 13, width: 90 }}
+            value={yearFilter} onChange={e => setYearFilter(Number(e.target.value))}>
+            {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
+        </div>
+        {!isStaff && selectedEmpId && (
+          <button className="btn btn-primary btn-sm" onClick={openAdd} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Plus size={13} /> 新增假別
+          </button>
+        )}
       </div>
 
-      {/* Summary */}
-      <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
-        <div className="stat-card" style={{ '--card-accent': 'var(--accent-cyan)', '--card-accent-dim': 'var(--accent-cyan-dim)' }}>
-          <div className="stat-card-label">員工人數</div>
-          <div className="stat-card-value">{uniqueEmployees}</div>
+      {/* Empty state */}
+      {!selectedEmpId && (
+        <div style={{
+          textAlign: 'center', padding: '64px 24px',
+          color: 'var(--text-muted)', fontSize: 15,
+        }}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>👆</div>
+          請先選擇一位員工
         </div>
-        <div className="stat-card" style={{ '--card-accent': 'var(--accent-orange)', '--card-accent-dim': 'var(--accent-orange-dim)' }}>
-          <div className="stat-card-label">平均使用率</div>
-          <div className="stat-card-value">{avgUsageRate}%</div>
-        </div>
-        <div className="stat-card" style={{ '--card-accent': 'var(--accent-purple)', '--card-accent-dim': 'var(--accent-purple-dim)' }}>
-          <div className="stat-card-label">餘額筆數</div>
-          <div className="stat-card-value">{filtered.length}</div>
-        </div>
-      </div>
+      )}
 
-      {/* Table */}
-      <div className="card">
-        <div className="card-header">
-          <div className="card-title"><span className="card-title-icon">📋</span> 假別餘額列表</div>
-          <div className="search-bar">
-            <Search className="search-icon" />
-            <input type="text" placeholder="搜尋員工..." className="form-input" style={{ paddingLeft: 38 }}
-              value={search} onChange={e => setSearch(e.target.value)} />
+      {/* Employee info + balances */}
+      {selectedEmpId && selectedEmp && (
+        <>
+          {/* Employee card */}
+          <div style={{
+            padding: '14px 20px', marginBottom: 20,
+            background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 12,
+            display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'center',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{
+                width: 44, height: 44, borderRadius: '50%',
+                background: 'var(--accent-cyan-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 18, fontWeight: 700, color: 'var(--accent-cyan)',
+              }}>
+                {selectedEmp.name?.[0] || '?'}
+              </div>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--text-primary)' }}>{selectedEmp.name}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                  {selectedEmp.dept || '—'} · {selectedEmp.store || '—'} · {selectedEmp.employment_type || '全職'}
+                </div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+              <div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>到職日</div>
+                <div style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 500 }}>
+                  {selectedEmp.join_date || '—'}
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>年資</div>
+                <div style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 500 }}>
+                  {seniority(selectedEmp) || '—'}
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>法定特休</div>
+                <div style={{ fontSize: 13, color: 'var(--accent-cyan)', fontWeight: 600 }}>
+                  {calcStatutoryLeave(selectedEmp) !== null ? `${calcStatutoryLeave(selectedEmp)} 天` : '兼職'}
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
-        <div className="data-table-wrapper">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>員工</th>
-                <th>部門</th>
-                <th>假別</th>
-                <th>總天數</th>
-                <th>已用天數</th>
-                <th>遞延天數</th>
-                <th>剩餘天數</th>
-                <th>法定 §38</th>
-                <th>到期日</th>
-                <th>操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.length === 0 && (
-                <tr><td colSpan={10} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>尚無餘額資料</td></tr>
-              )}
-              {filtered.map(r => {
+
+          {/* Balance cards */}
+          {loading ? (
+            <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>載入中...</div>
+          ) : empRows.length === 0 ? (
+            <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>
+              <div style={{ fontSize: 32, marginBottom: 12 }}>📭</div>
+              尚無假別記錄
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 14 }}>
+              {empRows.map(r => {
+                const label = TYPE_LABEL[r.leave_type] || r.leave_type
+                const icon  = TYPE_ICON[r.leave_type] || '📋'
                 const color = getRemainingColor(r.remaining, r.total)
+                const pct   = r.total > 0 ? Math.max(0, Math.min(100, (r.remaining / r.total) * 100)) : 0
                 const statutory = r._statutory
-                const belowLegal = statutory !== null && r.total_days < statutory
+                const belowLegal = r.leave_type === 'annual' && statutory !== null && r.total_days < statutory
                 return (
-                  <tr key={r._key}>
-                    <td style={{ fontWeight: 600 }}>{getEmpName(r.employee_id)}</td>
-                    <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{getEmpDept(r.employee_id)}</td>
-                    <td>
-                      <span className="badge badge-info">
-                        <span className="badge-dot"></span>
-                        {TYPE_LABEL[r.leave_type] || r.leave_type}
-                        {!r._dbId && <span style={{ fontSize: 10, marginLeft: 4, opacity: 0.6 }}>計算</span>}
-                      </span>
-                    </td>
-                    <td>{r.total_days}</td>
-                    <td>{r.used_days}</td>
-                    <td>{r.carry_over_days || 0}</td>
-                    <td>
-                      <span style={{ fontWeight: 700, color }}>{r.remaining}</span>
-                    </td>
-                    <td style={{ fontSize: 12 }}>
-                      {statutory === null
-                        ? <span style={{ color: 'var(--text-muted)' }}>另議</span>
-                        : <span style={{ color: belowLegal ? 'var(--accent-red)' : 'var(--text-muted)', fontWeight: belowLegal ? 700 : 400 }}
-                            title={belowLegal ? `帳上 ${r.total_days} 天低於法定 ${statutory} 天` : '符合§38'}>
-                            {statutory} 天{belowLegal ? ' ⚠️' : ''}
-                          </span>
-                      }
-                    </td>
-                    <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{r.expires_at || '—'}</td>
-                    <td>
-                      <button className="btn btn-sm btn-secondary" onClick={() => openEdit(r)}>
-                        <Edit2 size={12} /> {r._dbId ? '編輯' : '設定'}
-                      </button>
-                    </td>
-                  </tr>
+                  <div key={r._key} style={{
+                    padding: '16px 18px',
+                    background: 'var(--bg-card)',
+                    border: `1px solid ${belowLegal ? 'var(--accent-red)' : 'var(--border-subtle)'}`,
+                    borderRadius: 12,
+                    display: 'flex', flexDirection: 'column', gap: 10,
+                  }}>
+                    {/* top row */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                        <span style={{ fontSize: 18 }}>{icon}</span>
+                        <span style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>{label}</span>
+                        {!r._dbId && (
+                          <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 4, background: 'var(--bg-secondary)', color: 'var(--text-muted)' }}>估算</span>
+                        )}
+                        {belowLegal && (
+                          <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 4, background: 'var(--accent-red-dim)', color: 'var(--accent-red)' }}>低於法定</span>
+                        )}
+                      </div>
+                      {!isStaff && (
+                        <button className="btn btn-sm btn-ghost" style={{ padding: '2px 8px', fontSize: 11 }} onClick={() => openEdit(r)}>
+                          <Edit2 size={11} /> {r._dbId ? '調整' : '設定'}
+                        </button>
+                      )}
+                    </div>
+
+                    {/* remaining big number */}
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                      <span style={{ fontSize: 32, fontWeight: 700, color, lineHeight: 1 }}>{r.remaining}</span>
+                      <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>天剩餘</span>
+                    </div>
+
+                    {/* progress bar */}
+                    <div style={{ height: 5, background: 'var(--bg-secondary)', borderRadius: 3, overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 3, transition: 'width .3s' }} />
+                    </div>
+
+                    {/* stats row */}
+                    <div style={{ display: 'flex', gap: 16, fontSize: 12, color: 'var(--text-muted)' }}>
+                      <span>已用 <strong style={{ color: 'var(--text-secondary)' }}>{r.used_days}</strong></span>
+                      <span>共 <strong style={{ color: 'var(--text-secondary)' }}>{r.total}</strong></span>
+                      {r.carry_over_days > 0 && <span>遞延 <strong style={{ color: 'var(--accent-purple)' }}>{r.carry_over_days}</strong></span>}
+                      {r.expires_at && <span>到期 <strong>{r.expires_at}</strong></span>}
+                    </div>
+                  </div>
                 )
               })}
-            </tbody>
-          </table>
-        </div>
-      </div>
+            </div>
+          )}
+        </>
+      )}
 
-      {/* 特休結算 Modal */}
+      {/* Cashout Modal */}
       {showCashoutModal && (
         <Modal title="特休結算 — 未休年假結清" onClose={() => setShowCashoutModal(false)}
           onSubmit={handleCashoutConfirm}
@@ -481,19 +508,18 @@ export default function LeaveBalances() {
 
       {/* Add/Edit Modal */}
       {showModal && (
-        <Modal title={editingId ? '編輯假別餘額' : '設定假別餘額'} onClose={() => setShowModal(false)} onSubmit={handleSubmit}>
-          <Field label="員工" required>
-            <SearchableSelect value={form.employee_id || null} onChange={v => set('employee_id', v || '')}
-              options={empOptions(employees, { keyBy: 'id' })} placeholder="搜尋員工姓名/職稱..." disabled={!!editingId} />
+        <Modal title={editingId ? '調整假別天數' : '設定假別天數'} onClose={() => setShowModal(false)} onSubmit={handleSubmit}>
+          <Field label="員工">
+            <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{selectedEmp?.name}</span>
           </Field>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Field label="年度" required>
-              <select className="form-input" style={{ width: '100%' }} value={form.year} onChange={e => set('year', e.target.value)}>
+              <select className="form-input" style={{ width: '100%' }} value={form.year} onChange={e => setForm(f => ({ ...f, year: e.target.value }))}>
                 {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
               </select>
             </Field>
             <Field label="假別" required>
-              <select className="form-input" style={{ width: '100%' }} value={form.leave_type} onChange={e => set('leave_type', e.target.value)}>
+              <select className="form-input" style={{ width: '100%' }} value={form.leave_type} onChange={e => setForm(f => ({ ...f, leave_type: e.target.value }))}>
                 {DISPLAY_TYPES.map(t => <option key={t} value={t}>{TYPE_LABEL[t] || t}</option>)}
               </select>
             </Field>
@@ -501,15 +527,15 @@ export default function LeaveBalances() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Field label="總天數（手動覆蓋）" required>
               <input className="form-input" type="number" min="0" step="0.5" style={{ width: '100%' }} placeholder="例：7"
-                value={form.total_days} onChange={e => set('total_days', e.target.value)} />
+                value={form.total_days} onChange={e => setForm(f => ({ ...f, total_days: e.target.value }))} />
             </Field>
             <Field label="遞延天數">
               <input className="form-input" type="number" min="0" step="0.5" style={{ width: '100%' }} placeholder="0"
-                value={form.carry_over_days} onChange={e => set('carry_over_days', e.target.value)} />
+                value={form.carry_over_days} onChange={e => setForm(f => ({ ...f, carry_over_days: e.target.value }))} />
             </Field>
           </div>
           <Field label="到期日">
-            <input className="form-input" type="date" style={{ width: '100%' }} value={form.expires_at} onChange={e => set('expires_at', e.target.value)} />
+            <input className="form-input" type="date" style={{ width: '100%' }} value={form.expires_at} onChange={e => setForm(f => ({ ...f, expires_at: e.target.value }))} />
           </Field>
         </Modal>
       )}

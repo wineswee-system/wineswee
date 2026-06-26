@@ -417,8 +417,8 @@ export default function ExpenseFormModal({
             </div>
           )}
 
-          {/* 驗收單位 — expense only，多選門市 */}
-          {isExpense && (stores || []).length > 0 && (
+          {/* 驗收單位 — 費用/叫貨皆顯示，可多選門市 */}
+          {isExpense && (
             <AcceptanceUnitsField
               stores={stores || []}
               selected={form.acceptance_units || []}

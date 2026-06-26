@@ -158,12 +158,17 @@ export function AuthProvider({ children }) {
       .subscribe()
 
     // Polling 備援：每 60 秒查一次，如果 force_logout_at 比本次登入晚就登出
+    // 連續失敗（Supabase 掛掉 521/522）最多退讓 4 個週期，避免 outage 期間打爆 API
+    let failCount = 0
     const timer = setInterval(async () => {
-      const { data } = await supabase
+      if (failCount >= 4) { failCount--; return }
+      const { data, error } = await supabase
         .from('employees')
         .select('force_logout_at')
         .eq('id', empId)
         .maybeSingle()
+      if (error) { failCount++; return }
+      failCount = 0
       if (data?.force_logout_at) {
         const flagTime = new Date(data.force_logout_at).getTime()
         if (flagTime > loginTime) supabase.auth.signOut()

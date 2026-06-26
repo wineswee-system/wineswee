@@ -49,12 +49,10 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // Skip non-GET requests for caching (POST/PUT/DELETE go to network)
+  // Non-GET mutations: try network, queue on failure (offline OR Supabase 5xx)
   if (event.request.method !== 'GET') {
-    // Queue offline mutations for POS
-    if (!navigator.onLine && url.pathname.includes('supabase')) {
-      event.respondWith(queueOfflineMutation(event.request))
-      return
+    if (url.pathname.includes('supabase')) {
+      event.respondWith(resilientMutation(event.request))
     }
     return
   }
@@ -146,6 +144,14 @@ async function networkFirst(request, cacheName) {
     if (response.ok) {
       const cache = await caches.open(cacheName)
       cache.put(request, response.clone())
+      return response
+    }
+    // 521/522 = Cloudflare can't reach origin (Supabase down).
+    // fetch() resolves instead of throwing, so we must check status explicitly.
+    // Serve stale cache rather than propagating the infrastructure error.
+    if (response.status >= 500) {
+      const cached = await caches.match(request)
+      if (cached) return cached
     }
     return response
   } catch {
@@ -171,6 +177,21 @@ async function networkFirstHTML(request) {
 }
 
 // ── Offline Queue (for POS mutations) ──
+
+// Try the mutation; queue it if the device is offline OR Supabase returns 5xx.
+// Must clone before fetch() — body stream can only be consumed once.
+async function resilientMutation(request) {
+  const backup = request.clone()
+  if (!navigator.onLine) return queueOfflineMutation(backup)
+  try {
+    const response = await fetch(request)
+    if (response.ok) return response
+    if (response.status >= 500) return queueOfflineMutation(backup)
+    return response
+  } catch {
+    return queueOfflineMutation(backup)
+  }
+}
 
 async function queueOfflineMutation(request) {
   const body = await request.clone().text()

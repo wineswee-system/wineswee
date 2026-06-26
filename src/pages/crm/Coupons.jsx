@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Plus, Tag, Copy, Check } from 'lucide-react'
 import { useOrgId } from '../../contexts/AuthContext'
-import { getCoupons, deleteCoupon, updateCoupon, getCouponAssignments } from '../../lib/db'
+import { getCoupons, deleteCoupon, updateCoupon, getCouponAssignments, getMemberGroups, getMemberGroupMembers, bulkAssignCoupon } from '../../lib/db'
+import { toast } from '../../lib/toast'
 import Badge from '../../components/ui/Badge'
 import CouponFormModal from './components/CouponFormModal'
 import CouponAssignModal from './components/CouponAssignModal'
@@ -39,6 +40,14 @@ export default function Coupons() {
   const [assignments,  setAssignments]  = useState([])
   const [asnLoading,   setAsnLoading]   = useState(false)
   const [copiedId,     setCopiedId]     = useState(null)
+
+  // Group send state
+  const [groupOpen,       setGroupOpen]       = useState(false)
+  const [groupTarget,     setGroupTarget]     = useState(null)
+  const [memberGroups,    setMemberGroups]    = useState([])
+  const [selectedGroupId, setSelectedGroupId] = useState(null)
+  const [groupMemberCount, setGroupMemberCount] = useState(null)
+  const [groupSending,    setGroupSending]    = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -79,6 +88,50 @@ export default function Coupons() {
     navigator.clipboard.writeText(code)
     setCopiedId(id)
     setTimeout(() => setCopiedId(null), 1500)
+  }
+
+  async function openGroupModal(coupon) {
+    setGroupTarget(coupon)
+    setSelectedGroupId(null)
+    setGroupMemberCount(null)
+    const { data } = await getMemberGroups(orgId)
+    setMemberGroups(data ?? [])
+    setGroupOpen(true)
+  }
+
+  async function handleGroupIdChange(groupId) {
+    setSelectedGroupId(groupId)
+    setGroupMemberCount(null)
+    if (!groupId) return
+    const { data } = await getMemberGroupMembers(groupId)
+    setGroupMemberCount((data ?? []).length)
+  }
+
+  async function handleGroupSend() {
+    if (!selectedGroupId || !groupTarget) return
+    setGroupSending(true)
+    const { data: members } = await getMemberGroupMembers(selectedGroupId)
+    const memberIds = (members ?? []).map(m => m.members?.id ?? m.member_id).filter(Boolean)
+    if (memberIds.length === 0) {
+      toast.error('群組目前沒有成員')
+      setGroupSending(false)
+      return
+    }
+    await bulkAssignCoupon(groupTarget.id, memberIds, orgId, 'segment')
+    setGroupSending(false)
+    setGroupOpen(false)
+    setGroupTarget(null)
+    setSelectedGroupId(null)
+    setGroupMemberCount(null)
+    toast.success(`已發送給 ${memberIds.length} 位會員`)
+    load()
+  }
+
+  function closeGroupModal() {
+    setGroupOpen(false)
+    setGroupTarget(null)
+    setSelectedGroupId(null)
+    setGroupMemberCount(null)
   }
 
   const stats = {
@@ -174,6 +227,7 @@ export default function Coupons() {
                     <td style={S.td} onClick={e => e.stopPropagation()}>
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                         <button onClick={() => { setAssignTarget(c); setAssignOpen(true) }} style={S.actBtn('var(--accent-cyan)')}>發放</button>
+                        <button onClick={() => openGroupModal(c)} style={S.actBtn('var(--accent-purple)')}>群組</button>
                         {c.status !== 'expired' && (
                           <button onClick={() => toggleStatus(c)} style={S.actBtn(c.status === 'active' ? 'var(--accent-orange)' : 'var(--accent-green)')}>
                             {c.status === 'active' ? '暫停' : '啟用'}
@@ -259,6 +313,65 @@ export default function Coupons() {
           onClose={() => { setAssignOpen(false); setAssignTarget(null) }}
           onAssigned={() => { setAssignOpen(false); setAssignTarget(null); load() }}
         />
+      )}
+
+      {/* Group Send Modal */}
+      {groupOpen && groupTarget && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: 'var(--bg-secondary)', borderRadius: 12, padding: 28, width: 440, maxWidth: '90vw', border: '1px solid var(--border-primary)' }}>
+            <h3 style={{ marginTop: 0, marginBottom: 6, fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>群組發送優惠券</h3>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 18 }}>
+              <code style={{ background: 'var(--bg-tertiary)', padding: '1px 6px', borderRadius: 4, color: 'var(--accent-purple)' }}>{groupTarget.code}</code>
+              {' '}{groupTarget.name}
+            </div>
+
+            {memberGroups.length === 0 ? (
+              <div style={{ color: 'var(--text-muted)', fontSize: 14, padding: '20px 0', textAlign: 'center' }}>尚無會員群組</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16, maxHeight: 280, overflowY: 'auto' }}>
+                {memberGroups.map(g => (
+                  <button
+                    key={g.id}
+                    onClick={() => handleGroupIdChange(g.id)}
+                    style={{
+                      textAlign: 'left', padding: '10px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 14,
+                      border: selectedGroupId === g.id ? '2px solid var(--accent-purple)' : '1px solid var(--border-primary)',
+                      background: selectedGroupId === g.id ? 'var(--accent-purple-dim)' : 'var(--bg-primary)',
+                      color: 'var(--text-primary)',
+                    }}
+                  >
+                    <div style={{ fontWeight: 600 }}>{g.name}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                      {g.type === 'dynamic' ? '動態群組' : '靜態群組'}
+                      {selectedGroupId === g.id && groupMemberCount !== null && ` · ${groupMemberCount} 位會員`}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {selectedGroupId && groupMemberCount !== null && (
+              <div style={{ padding: '8px 12px', background: 'var(--accent-purple-dim)', borderRadius: 8, marginBottom: 16, fontSize: 13, color: 'var(--accent-purple)' }}>
+                將發送給 <strong>{groupMemberCount}</strong> 位會員
+                {groupMemberCount === 0 && '（群組目前沒有成員）'}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button onClick={closeGroupModal} style={S.actBtn('var(--bg-tertiary)', 'var(--text-secondary)')}>取消</button>
+              <button
+                onClick={handleGroupSend}
+                disabled={!selectedGroupId || groupMemberCount === 0 || groupSending}
+                style={S.actBtn(
+                  selectedGroupId && groupMemberCount > 0 && !groupSending ? 'var(--accent-purple)' : 'var(--bg-tertiary)',
+                  selectedGroupId && groupMemberCount > 0 && !groupSending ? '#fff' : 'var(--text-muted)'
+                )}
+              >
+                {groupSending ? '發送中…' : '確認發送'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

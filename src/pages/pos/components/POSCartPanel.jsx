@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, Minus, Trash2, ShoppingCart, CreditCard, Search, User, X } from 'lucide-react'
+import { Plus, Minus, Trash2, ShoppingCart, CreditCard, Search, User, X, Tag } from 'lucide-react'
 
 export default function POSCartPanel({
   cart,
@@ -30,10 +30,22 @@ export default function POSCartPanel({
   selectedMember,
   onMemberSearch,
   onMemberClear,
+  availableCoupons = [],
+  selectedCoupon = null,
+  onCouponSelect,
+  couponsLoading = false,
+  couponDiscount = 0,
+  paymentSplits = [],
+  onPaymentSplitsChange = () => {},
+  onUpdateItemCourse = () => {},
 }) {
   const [memberQuery, setMemberQuery] = useState('')
   const [searching, setSearching] = useState(false)
   const [notFound, setNotFound] = useState(false)
+  const [splitMode, setSplitMode] = useState(false)
+
+  const roundedTotal = Math.round(total)
+  const roundingAdj = roundedTotal - total
 
   async function handleMemberSearch() {
     if (!memberQuery.trim()) return
@@ -66,6 +78,14 @@ export default function POSCartPanel({
                   <button onClick={() => updateQty(c.id, -1)} style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-primary)', borderRadius: 6, padding: '2px 6px', cursor: 'pointer', color: 'var(--text-primary)' }}><Minus size={12} /></button>
                   <span style={{ minWidth: 20, textAlign: 'center', fontWeight: 600 }}>{c.qty}</span>
                   <button onClick={() => updateQty(c.id, 1)} style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-primary)', borderRadius: 6, padding: '2px 6px', cursor: 'pointer', color: 'var(--text-primary)' }}><Plus size={12} /></button>
+                  <button
+                    onClick={() => onUpdateItemCourse(c.id, (c.course || 1) % 3 + 1)}
+                    title="切換上菜輪次"
+                    style={{ marginLeft: 6, fontSize: 11, padding: '2px 6px',
+                             background: 'var(--accent-purple-dim)', color: 'var(--accent-purple)',
+                             border: 'none', borderRadius: 4, cursor: 'pointer' }}>
+                    輪{c.course || 1}
+                  </button>
                   <button onClick={() => removeFromCart(c.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-red)', padding: '2px 4px' }}><Trash2 size={14} /></button>
                 </div>
                 <div style={{ minWidth: 80, textAlign: 'right', fontWeight: 600 }}>NT$ {(c.price * c.qty).toLocaleString()}</div>
@@ -142,6 +162,39 @@ export default function POSCartPanel({
                   )}
                 </div>
               )}
+            {/* Coupon picker */}
+            <div style={{ marginTop: 8, padding: '8px 10px', background: 'var(--bg-primary)', borderRadius: 8, border: '1px solid var(--border-primary)' }}>
+              <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                <Tag size={11} /> 可用優惠券 {couponsLoading ? '…' : `(${availableCoupons.length})`}
+              </div>
+              {availableCoupons.length === 0 && !couponsLoading && (
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>無可用優惠券</div>
+              )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {availableCoupons.map(ca => {
+                  const isSel = selectedCoupon?.id === ca.id
+                  const notQualified = (ca.coupons?.min_purchase || 0) > 0 && subtotal < (ca.coupons?.min_purchase || 0)
+                  return (
+                    <button
+                      key={ca.id}
+                      onClick={() => onCouponSelect(isSel ? null : ca)}
+                      style={{
+                        textAlign: 'left', padding: '5px 8px', borderRadius: 6, cursor: 'pointer', fontSize: 11,
+                        border: isSel ? '1px solid var(--accent-green)' : '1px solid var(--border-primary)',
+                        background: isSel ? 'var(--accent-green-dim)' : 'transparent',
+                        color: notQualified && !isSel ? 'var(--text-muted)' : isSel ? 'var(--accent-green)' : 'var(--text-secondary)',
+                        opacity: notQualified && !isSel ? 0.6 : 1,
+                      }}
+                    >
+                      <strong>{ca.coupons?.code}</strong> {ca.coupons?.name}
+                      {ca.coupons?.type === 'pct_off'   && ` — ${ca.coupons.value}% OFF`}
+                      {ca.coupons?.type === 'fixed_off' && ` — 折抵 NT$${Number(ca.coupons.value).toLocaleString()}`}
+                      {notQualified && ` (需滿 NT$${Number(ca.coupons?.min_purchase).toLocaleString()})`}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
             </>
           ) : (
             <div>
@@ -196,6 +249,12 @@ export default function POSCartPanel({
               style={{ width: 80, textAlign: 'right', background: 'var(--bg-primary)', border: '1px solid var(--border-primary)', borderRadius: 6, padding: '2px 8px', color: 'var(--text-primary)', fontSize: 13 }}
             />
           </div>
+          {selectedCoupon && couponDiscount > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 13, color: 'var(--accent-green)' }}>
+              <span>優惠券 ({selectedCoupon.coupons?.code})</span>
+              <span>- NT$ {couponDiscount.toLocaleString()}</span>
+            </div>
+          )}
           {pointsUsed > 0 && (
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 13, color: 'var(--accent-cyan)' }}>
               <span>點數折抵 ({pointsUsed.toLocaleString()}點)</span>
@@ -205,8 +264,15 @@ export default function POSCartPanel({
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 13 }}>
             <span>稅金 (5%)</span><span>NT$ {tax.toLocaleString()}</span>
           </div>
+          {Math.abs(roundingAdj) >= 0.01 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12,
+                          color: 'var(--text-muted)', marginBottom: 2 }}>
+              <span>四捨五入</span>
+              <span>{roundingAdj > 0 ? '+' : ''}{roundingAdj.toFixed(2)}</span>
+            </div>
+          )}
           <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: 18, margin: '12px 0', color: 'var(--accent-cyan)' }}>
-            <span>合計</span><span>NT$ {total.toLocaleString()}</span>
+            <span>合計</span><span>NT$ {roundedTotal.toLocaleString()}</span>
           </div>
 
           {/* Payment method selection */}
@@ -239,6 +305,82 @@ export default function POSCartPanel({
                 </button>
               ))}
             </div>
+            {selectedMember?.credit_balance > 0 && (
+              <button
+                onClick={() => setSelectedPayment('house_account')}
+                style={{
+                  marginTop: 6,
+                  padding: '8px 14px',
+                  background: selectedPayment === 'house_account' ? 'var(--accent-purple-dim)' : 'var(--bg-secondary)',
+                  color: selectedPayment === 'house_account' ? 'var(--accent-purple)' : 'var(--text-secondary)',
+                  border: `1px solid ${selectedPayment === 'house_account' ? 'var(--accent-purple)' : 'var(--border-primary)'}`,
+                  borderRadius: 8,
+                  cursor: selectedMember.credit_balance >= roundedTotal ? 'pointer' : 'not-allowed',
+                  opacity: selectedMember.credit_balance >= roundedTotal ? 1 : 0.5,
+                  fontSize: 13, width: '100%',
+                }}>
+                掛帳 (餘額 NT${selectedMember.credit_balance})
+              </button>
+            )}
+            {selectedPayment === 'house_account' && selectedMember?.credit_balance < roundedTotal && (
+              <div style={{ fontSize: 12, color: 'var(--accent-red)', marginTop: 4 }}>
+                餘額不足，差 NT${roundedTotal - selectedMember.credit_balance}
+              </div>
+            )}
+            {/* Split Payment Toggle */}
+            <button
+              onClick={() => { setSplitMode(v => !v); onPaymentSplitsChange([]) }}
+              style={{ marginTop: 8, fontSize: 12, padding: '4px 10px',
+                       background: splitMode ? 'var(--accent-cyan-dim)' : 'var(--bg-secondary)',
+                       color: splitMode ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+                       border: '1px solid var(--border-primary)', borderRadius: 6, cursor: 'pointer' }}>
+              分帳付款
+            </button>
+            {splitMode && (
+              <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {paymentSplits.map((split, i) => (
+                  <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <select value={split.method} onChange={e => {
+                      const next = [...paymentSplits]; next[i] = { ...split, method: e.target.value }
+                      onPaymentSplitsChange(next)
+                    }} style={{ flex: 1, padding: '4px 8px', background: 'var(--bg-secondary)',
+                                border: '1px solid var(--border-primary)', borderRadius: 6,
+                                color: 'var(--text-primary)' }}>
+                      {paymentMethodMap.map(m => (
+                        <option key={m.code} value={m.code}>{m.label}</option>
+                      ))}
+                    </select>
+                    <input type="number" value={split.amount} min={0}
+                      onChange={e => {
+                        const next = [...paymentSplits]; next[i] = { ...split, amount: Number(e.target.value) }
+                        onPaymentSplitsChange(next)
+                      }}
+                      style={{ width: 90, padding: '4px 8px', background: 'var(--bg-secondary)',
+                               border: '1px solid var(--border-primary)', borderRadius: 6,
+                               color: 'var(--text-primary)', textAlign: 'right' }}
+                    />
+                    <button onClick={() => onPaymentSplitsChange(paymentSplits.filter((_, j) => j !== i))}
+                      style={{ padding: '4px 8px', background: 'var(--accent-red-dim)', color: 'var(--accent-red)',
+                               border: 'none', borderRadius: 6, cursor: 'pointer' }}>✕</button>
+                  </div>
+                ))}
+                <button onClick={() => onPaymentSplitsChange([...paymentSplits, { method: paymentMethodMap[0]?.code || 'cash', amount: 0 }])}
+                  style={{ alignSelf: 'flex-start', fontSize: 12, padding: '4px 10px',
+                           background: 'var(--bg-hover)', border: '1px solid var(--border-primary)',
+                           borderRadius: 6, color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                  ＋ 新增付款方式
+                </button>
+                {(() => {
+                  const splitsTotal = paymentSplits.reduce((s, p) => s + p.amount, 0)
+                  const remaining = roundedTotal - splitsTotal
+                  return remaining !== 0 && (
+                    <div style={{ fontSize: 12, color: remaining > 0 ? 'var(--accent-orange)' : 'var(--accent-red)' }}>
+                      {remaining > 0 ? `尚差 NT$${remaining}` : `超出 NT$${Math.abs(remaining)}`}
+                    </div>
+                  )
+                })()}
+              </div>
+            )}
           </div>
 
           {/* Cash tendered input */}
@@ -319,7 +461,7 @@ export default function POSCartPanel({
             onClick={handleCheckout}
             disabled={cart.length === 0}
           >
-            結帳 — NT$ {total.toLocaleString()}
+            結帳 — NT$ {roundedTotal.toLocaleString()}
           </button>
         </div>
       </div>

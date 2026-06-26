@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { RotateCcw, Usb } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import { createPOSTransaction, updatePOSTransaction, createInvoice, searchMemberByQuery, getPOSTransactionByNumber } from '../../lib/db'
+import { createPOSTransaction, updatePOSTransaction, createInvoice, searchMemberByQuery, getPOSTransactionByNumber, getMemberCoupons, redeemCoupon } from '../../lib/db'
 import { useTenant } from '../../contexts/TenantContext'
 import { getEventBus } from '../../lib/events/index.js'
 import { createPaymentRequest, processRefund } from '../../lib/payment'
@@ -39,6 +39,9 @@ export default function POSTerminal() {
   const [cart, setCart] = useState([])
   const [discount, setDiscount] = useState(0)
   const [pointsUsed, setPointsUsed] = useState(0)
+  const [availableCoupons, setAvailableCoupons] = useState([])
+  const [selectedCoupon, setSelectedCoupon] = useState(null)
+  const [couponsLoading, setCouponsLoading] = useState(false)
   const [selectedPayment, setSelectedPayment] = useState('cash')
   const [barcodeInput, setBarcodeInput] = useState('')
 
@@ -108,8 +111,22 @@ export default function POSTerminal() {
 
   const handleMemberSearch = async (query) => {
     const found = await searchMemberByQuery(query)
-    if (found) { setSelectedMember(found); setPointsUsed(0) }
+    if (found) { setSelectedMember(found); setPointsUsed(0); loadMemberCoupons(found) }
     return found
+  }
+
+  const loadMemberCoupons = async (member) => {
+    setCouponsLoading(true)
+    const { data } = await getMemberCoupons(member.id)
+    const now = new Date()
+    const valid = (data ?? []).filter(ca =>
+      !ca.used_at &&
+      (!ca.expires_at || new Date(ca.expires_at) > now) &&
+      (!ca.coupons?.valid_until || new Date(ca.coupons.valid_until) > now)
+    )
+    setAvailableCoupons(valid)
+    setSelectedCoupon(null)
+    setCouponsLoading(false)
   }
 
   // Web Serial thermal printer port (cash drawer kick)
@@ -171,9 +188,16 @@ export default function POSTerminal() {
 
   const subtotal = cart.reduce((sum, c) => sum + c.price * c.qty, 0)
   const pointsDiscount = Math.floor((Number(pointsUsed) || 0) * 0.5)
+  const couponDiscount = (() => {
+    if (!selectedCoupon?.coupons) return 0
+    const c = selectedCoupon.coupons
+    if (c.type === 'pct_off')   return Math.floor(subtotal * ((Number(c.value) || 0) / 100))
+    if (c.type === 'fixed_off') return Math.min(subtotal, Number(c.value) || 0)
+    return 0
+  })()
 
   // ★ 折扣先攤掉，tax 才算在實付金額上（之前 tax 用原價算 → 客戶付了沒享受到折扣的稅）
-  const safeDiscount = Math.max(0, Math.min(subtotal, (Number(discount) || 0) + pointsDiscount))
+  const safeDiscount = Math.max(0, Math.min(subtotal, (Number(discount) || 0) + pointsDiscount + couponDiscount))
   const taxableAmount = Math.max(0, subtotal - safeDiscount)
   const taxCalc = calculateInvoiceTax(
     [{ description: '小計（折扣後）', qty: 1, unitPrice: taxableAmount }],
@@ -294,6 +318,13 @@ export default function POSTerminal() {
         console.warn('[POS] event publish failed:', e.message)
       }
 
+      // Mark coupon assignment as redeemed (fire-and-forget — checkout already succeeded)
+      if (selectedCoupon?.id) {
+        redeemCoupon(selectedCoupon.id, txnRecord).catch(e =>
+          console.warn('[POS] coupon redemption failed:', e.message)
+        )
+      }
+
       // 4. Create e-invoice
       await createInvoice({
         invoice_number: invoiceNum,
@@ -392,6 +423,8 @@ export default function POSTerminal() {
     setGatewayConfirmed(false)
     setConfirmingPayment(false)
     setSelectedMember(null)
+    setAvailableCoupons([])
+    setSelectedCoupon(null)
   }
 
   // Gateway confirm handler (simulates callback from payment gateway)
@@ -611,7 +644,12 @@ export default function POSTerminal() {
           paymentMethodMap={PAYMENT_METHOD_MAP}
           selectedMember={selectedMember}
           onMemberSearch={handleMemberSearch}
-          onMemberClear={() => { setSelectedMember(null); setPointsUsed(0) }}
+          onMemberClear={() => { setSelectedMember(null); setPointsUsed(0); setAvailableCoupons([]); setSelectedCoupon(null) }}
+          availableCoupons={availableCoupons}
+          selectedCoupon={selectedCoupon}
+          onCouponSelect={setSelectedCoupon}
+          couponsLoading={couponsLoading}
+          couponDiscount={couponDiscount}
         />
       </div>
 

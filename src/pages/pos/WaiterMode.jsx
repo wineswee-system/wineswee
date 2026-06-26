@@ -3,9 +3,7 @@ import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import QRCode from 'qrcode'
 import { supabase } from '../../lib/supabase'
-import { kitchenPrinter } from '../../lib/kitchenPrinter'
 import { useAuth, useOrgId } from '../../contexts/AuthContext'
-import { useTenant } from '../../contexts/TenantContext'
 import { toast } from '../../lib/toast'
 
 // ── Styles ────────────────────────────────────────────────────────────────────
@@ -52,7 +50,7 @@ const S = {
     flex: 1, gap: 16, padding: 32, textAlign: 'center',
   },
 
-  // ── Table select ─────────────────────────────────────────────────────────────
+  // ── Table select ──────────────────────────────────────────────────────────
   tableGrid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
@@ -61,31 +59,43 @@ const S = {
   tableCard: (status) => ({
     background: 'var(--bg-card)',
     border: `2px solid ${
-      status === 'empty' ? 'var(--accent-green)' :
-      status === 'busy'  ? 'var(--accent-orange)' :
-                           'var(--accent-red)'
+      status === 'empty' ? 'var(--accent-green)' : 'var(--accent-orange)'
     }`,
     borderRadius: 14, padding: '18px 12px',
     cursor: 'pointer',
     display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
-    transition: 'all 0.15s',
+    transition: 'transform 0.1s',
   }),
-  tableNum: { fontSize: 26, fontWeight: 800, color: 'var(--text-primary)' },
+  tableNum:  { fontSize: 26, fontWeight: 800, color: 'var(--text-primary)' },
   tableBadge: (status) => ({
     fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 20,
-    background:
-      status === 'empty' ? 'var(--accent-green-dim)' :
-      status === 'busy'  ? 'var(--accent-orange-dim)' :
-                           'var(--accent-red-dim)',
-    color:
-      status === 'empty' ? 'var(--accent-green)' :
-      status === 'busy'  ? 'var(--accent-orange)' :
-                           'var(--accent-red)',
+    background: status === 'empty' ? 'var(--accent-green-dim)' : 'var(--accent-orange-dim)',
+    color:      status === 'empty' ? 'var(--accent-green)'     : 'var(--accent-orange)',
   }),
-  tableCap: { fontSize: 12, color: 'var(--text-muted)' },
+  tableCap:  { fontSize: 12, color: 'var(--text-muted)' },
 
-  // ── Order phase ───────────────────────────────────────────────────────────────
+  // ── Order body ────────────────────────────────────────────────────────────
   orderBody: { display: 'flex', flex: 1, overflow: 'hidden' },
+
+  // ── Category sidebar (wide) ───────────────────────────────────────────────
+  catSidebar: {
+    width: 190, flexShrink: 0,
+    borderRight: '1px solid var(--border-primary)',
+    background: 'var(--bg-secondary)',
+    overflowY: 'auto', padding: '10px 8px',
+    display: 'flex', flexDirection: 'column', gap: 2,
+  },
+  catSideBtn: (active) => ({
+    width: '100%', textAlign: 'left',
+    padding: '10px 14px', borderRadius: 8, border: 'none',
+    cursor: 'pointer', fontSize: 14,
+    fontWeight: active ? 700 : 400,
+    background: active ? 'var(--accent-cyan)' : 'transparent',
+    color: active ? '#fff' : 'var(--text-secondary)',
+    transition: 'all 0.12s',
+  }),
+
+  // ── Category bar (mobile) ─────────────────────────────────────────────────
   catBar: {
     display: 'flex', gap: 8, padding: '10px 14px',
     overflowX: 'auto', background: 'var(--bg-secondary)',
@@ -98,73 +108,108 @@ const S = {
     fontWeight: active ? 700 : 500,
     background: active ? 'var(--accent-cyan)' : 'var(--bg-card)',
     color: active ? '#fff' : 'var(--text-secondary)',
-    transition: 'all 0.15s',
+    transition: 'all 0.12s',
   }),
+
+  // ── Menu area ─────────────────────────────────────────────────────────────
+  menuArea: { flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' },
+
+  // ── Item grid ─────────────────────────────────────────────────────────────
   itemGrid: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))',
-    gap: 10, padding: '14px 14px 140px',
-    overflowY: 'auto', flex: 1,
+    gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))',
+    gap: 10, padding: '14px',
+    alignContent: 'start',
   },
+
+  // ── Item card (clean, no emoji placeholder) ───────────────────────────────
   itemCard: (inCart) => ({
     background: 'var(--bg-card)',
     border: `2px solid ${inCart ? 'var(--accent-cyan)' : 'var(--border-primary)'}`,
-    borderRadius: 12, overflow: 'hidden', cursor: 'pointer',
-    position: 'relative', transition: 'border-color 0.15s',
+    borderRadius: 12,
+    cursor: 'pointer',
+    position: 'relative',
+    transition: 'border-color 0.12s',
+    overflow: 'hidden',
   }),
-  img: { width: '100%', height: 90, objectFit: 'cover', display: 'block' },
-  imgPH: {
-    width: '100%', height: 75,
-    background: 'var(--bg-secondary)',
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    fontSize: 24, color: 'var(--text-muted)',
+  itemImg:  { width: '100%', height: 90, objectFit: 'cover', display: 'block' },
+  cardBody: { padding: '12px 14px 13px' },
+  itemName: {
+    fontSize: 14, fontWeight: 600, color: 'var(--text-primary)',
+    lineHeight: 1.35, marginBottom: 6,
+    display: '-webkit-box', WebkitLineClamp: 2,
+    WebkitBoxOrient: 'vertical', overflow: 'hidden',
   },
-  cardBody: { padding: '8px 10px 10px' },
-  itemName:  { fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.3, marginBottom: 2 },
-  itemPrice: { fontSize: 14, fontWeight: 700, color: 'var(--accent-cyan)' },
-  badge: {
+  itemPriceRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 },
+  itemPrice: { fontSize: 15, fontWeight: 700, color: 'var(--accent-cyan)', flexShrink: 0 },
+  addBtn: {
+    width: 30, height: 30, borderRadius: 7, border: 'none', cursor: 'pointer',
+    background: 'var(--accent-cyan)', color: '#fff',
+    fontSize: 20, display: 'flex', alignItems: 'center', justifyContent: 'center',
+    lineHeight: 1, flexShrink: 0,
+  },
+  qtyRow: { display: 'flex', alignItems: 'center', gap: 4 },
+  qtyBtn: (rm) => ({
+    width: 26, height: 26, borderRadius: 6, border: 'none', cursor: 'pointer',
+    background: rm ? 'var(--accent-red)' : 'var(--accent-cyan)', color: '#fff',
+    fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center',
+    lineHeight: 1, flexShrink: 0,
+  }),
+  qtyNum: { fontSize: 13, fontWeight: 700, minWidth: 20, textAlign: 'center' },
+  cartBadge: {
     position: 'absolute', top: 6, right: 6,
     background: 'var(--accent-cyan)', color: '#fff',
-    borderRadius: 12, fontSize: 12, fontWeight: 700, padding: '2px 7px',
+    borderRadius: 12, fontSize: 11, fontWeight: 700, padding: '2px 7px',
   },
-  qtyRow: { display: 'flex', alignItems: 'center', gap: 5, marginTop: 5, justifyContent: 'flex-end' },
-  qtyBtn: (rm) => ({
-    width: 24, height: 24, borderRadius: 6, border: 'none', cursor: 'pointer',
-    background: rm ? 'var(--accent-red)' : 'var(--accent-cyan)', color: '#fff',
-    fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, flexShrink: 0,
-  }),
+  noteBtn: {
+    marginTop: 7, background: 'none', border: 'none', cursor: 'pointer',
+    fontSize: 12, padding: 0, display: 'block',
+  },
 
-  // ── Right panel ───────────────────────────────────────────────────────────────
+  // ── Right panel ───────────────────────────────────────────────────────────
   panel: {
     width: 300, borderLeft: '1px solid var(--border-primary)',
     background: 'var(--bg-secondary)',
     display: 'flex', flexDirection: 'column',
-    overflowY: 'auto', flexShrink: 0,
+    flexShrink: 0,
   },
+  panelScroll: { flex: 1, overflowY: 'auto' },
   panelHead: {
     padding: '12px 14px 8px',
-    fontSize: 13, fontWeight: 700, color: 'var(--text-muted)',
-    letterSpacing: '0.5px', textTransform: 'uppercase',
+    fontSize: 11, fontWeight: 700, color: 'var(--text-muted)',
+    letterSpacing: '0.6px', textTransform: 'uppercase',
     borderBottom: '1px solid var(--border-primary)',
   },
   panelRow: {
-    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+    display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
     padding: '8px 14px', gap: 8,
     borderBottom: '1px solid var(--border-primary)',
     fontSize: 13,
   },
   panelRowName: { flex: 1, color: 'var(--text-primary)', fontWeight: 500, lineHeight: 1.3 },
   panelRowAmt:  { color: 'var(--text-secondary)', fontWeight: 600, flexShrink: 0, fontSize: 12 },
-  panelEmpty: { padding: '16px 14px', fontSize: 13, color: 'var(--text-muted)', textAlign: 'center' },
+  panelEmpty:  { padding: '24px 14px', fontSize: 13, color: 'var(--text-muted)', textAlign: 'center' },
   panelFoot: {
-    marginTop: 'auto', borderTop: '1px solid var(--border-primary)',
-    padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8,
+    borderTop: '2px solid var(--border-primary)',
+    padding: '14px', display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0,
   },
-  panelTotal: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' },
+  panelTotal: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '0 0 8px' },
   panelTotalLabel: { fontSize: 13, color: 'var(--text-muted)' },
-  panelTotalAmt: { fontSize: 22, fontWeight: 800, color: 'var(--text-primary)' },
+  panelTotalAmt:   { fontSize: 24, fontWeight: 800, color: 'var(--text-primary)' },
+  panelBtn: (color) => ({
+    width: '100%', padding: '12px 0', borderRadius: 10, border: 'none',
+    cursor: 'pointer',
+    background: `var(--accent-${color})`,
+    color: '#fff', fontSize: 15, fontWeight: 700,
+  }),
+  panelBtnDisabled: {
+    width: '100%', padding: '12px 0', borderRadius: 10, border: 'none',
+    cursor: 'not-allowed',
+    background: 'var(--bg-card)',
+    color: 'var(--text-muted)', fontSize: 15, fontWeight: 700,
+  },
 
-  // ── Footer (mobile) ───────────────────────────────────────────────────────────
+  // ── Mobile footer ─────────────────────────────────────────────────────────
   footer: {
     position: 'fixed', bottom: 0, left: 0, right: 0,
     background: 'var(--bg-secondary)', borderTop: '1px solid var(--border-primary)',
@@ -178,31 +223,68 @@ const S = {
     background: disabled ? 'var(--bg-card)' :
                 primary  ? 'var(--accent-cyan)' : 'var(--accent-green)',
     color: disabled ? 'var(--text-muted)' : '#fff',
-    fontSize: 14, fontWeight: 700, transition: 'background 0.15s',
+    fontSize: 14, fontWeight: 700,
   }),
 
-  // ── Note popup ────────────────────────────────────────────────────────────────
-  overlay: { position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 },
-  noteBox: { background: 'var(--bg-card)', borderRadius: 14, padding: 20, width: '100%', maxWidth: 360, display: 'flex', flexDirection: 'column', gap: 12 },
+  // ── Modals ────────────────────────────────────────────────────────────────
+  overlay: {
+    position: 'fixed', inset: 0, zIndex: 60,
+    background: 'rgba(0,0,0,0.55)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+  },
+  noteBox: {
+    background: 'var(--bg-card)', borderRadius: 14, padding: 20,
+    width: '100%', maxWidth: 360,
+    display: 'flex', flexDirection: 'column', gap: 12,
+  },
   noteTitle: { fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', margin: 0 },
-  textarea: { width: '100%', background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)', borderRadius: 8, padding: '10px 12px', fontSize: 14, color: 'var(--text-primary)', outline: 'none', resize: 'none', boxSizing: 'border-box', fontFamily: 'inherit' },
+  textarea: {
+    width: '100%', background: 'var(--bg-secondary)',
+    border: '1px solid var(--border-primary)', borderRadius: 8,
+    padding: '10px 12px', fontSize: 14, color: 'var(--text-primary)',
+    outline: 'none', resize: 'none', boxSizing: 'border-box', fontFamily: 'inherit',
+  },
   rowBtn: { display: 'flex', gap: 8, justifyContent: 'flex-end' },
-  smallBtn: (p) => ({ padding: '7px 18px', borderRadius: 8, border: `1px solid ${p ? 'var(--accent-cyan)' : 'var(--border-primary)'}`, background: p ? 'var(--accent-cyan)' : 'var(--bg-card)', color: p ? '#fff' : 'var(--text-secondary)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }),
+  smallBtn: (p) => ({
+    padding: '7px 18px', borderRadius: 8,
+    border: `1px solid ${p ? 'var(--accent-cyan)' : 'var(--border-primary)'}`,
+    background: p ? 'var(--accent-cyan)' : 'var(--bg-card)',
+    color: p ? '#fff' : 'var(--text-secondary)',
+    fontSize: 13, fontWeight: 600, cursor: 'pointer',
+  }),
+  errBanner: {
+    margin: '8px 14px 0', padding: '10px 14px',
+    background: 'var(--accent-red-dim)', border: '1px solid var(--accent-red)',
+    borderRadius: 8, fontSize: 13, color: 'var(--accent-red)',
+    display: 'flex', alignItems: 'center', gap: 8,
+  },
 
-  // ── Error banner ──────────────────────────────────────────────────────────────
-  errBanner: { margin: '8px 14px 0', padding: '10px 14px', background: 'var(--accent-red-dim)', border: '1px solid var(--accent-red)', borderRadius: 8, fontSize: 13, color: 'var(--accent-red)', display: 'flex', alignItems: 'center', gap: 8 },
-
-  // ── Checkout modal ────────────────────────────────────────────────────────────
-  coBox: { position: 'relative', zIndex: 1, background: 'var(--bg-card)', borderRadius: 16, border: '1px solid var(--border-primary)', width: '100%', maxWidth: 420, maxHeight: '90dvh', display: 'flex', flexDirection: 'column' },
-  coHead: { padding: '16px 20px 12px', borderBottom: '1px solid var(--border-primary)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 },
-  coTitle: { fontSize: 17, fontWeight: 800, color: 'var(--text-primary)' },
-  coClose: { background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 22, lineHeight: 1, padding: 4 },
-  coBody: { overflowY: 'auto', flex: 1, padding: '0 20px' },
-  coSection: { fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.8px', textTransform: 'uppercase', padding: '12px 0 4px' },
-  coRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '6px 0', borderBottom: '1px solid var(--border-primary)', fontSize: 14, gap: 8 },
-  coTotal: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '14px 20px', background: 'var(--bg-secondary)', borderTop: '2px solid var(--border-primary)', flexShrink: 0 },
+  // ── Checkout modal ────────────────────────────────────────────────────────
+  coBox: {
+    position: 'relative', zIndex: 1,
+    background: 'var(--bg-card)', borderRadius: 16,
+    border: '1px solid var(--border-primary)',
+    width: '100%', maxWidth: 420, maxHeight: '90dvh',
+    display: 'flex', flexDirection: 'column',
+  },
+  coHead: {
+    padding: '16px 20px 12px', borderBottom: '1px solid var(--border-primary)',
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0,
+  },
+  coTitle:  { fontSize: 17, fontWeight: 800, color: 'var(--text-primary)' },
+  coClose:  { background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 22, lineHeight: 1, padding: 4 },
+  coBody:   { overflowY: 'auto', flex: 1, padding: '0 20px' },
+  coSection:{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.8px', textTransform: 'uppercase', padding: '12px 0 4px' },
+  coRow:    { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '7px 0', borderBottom: '1px solid var(--border-primary)', fontSize: 14, gap: 8 },
+  coTotal:  { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '14px 20px', background: 'var(--bg-secondary)', borderTop: '2px solid var(--border-primary)', flexShrink: 0 },
   coPayMethods: { display: 'flex', gap: 8, padding: '10px 20px', flexWrap: 'wrap', borderBottom: '1px solid var(--border-primary)', flexShrink: 0 },
-  coPayBtn: (active) => ({ padding: '8px 16px', borderRadius: 8, border: `1.5px solid ${active ? 'var(--accent-cyan)' : 'var(--border-primary)'}`, background: active ? 'var(--accent-cyan-dim)' : 'var(--bg-card)', color: active ? 'var(--accent-cyan)' : 'var(--text-secondary)', fontSize: 13, fontWeight: active ? 700 : 500, cursor: 'pointer' }),
+  coPayBtn: (active) => ({
+    padding: '8px 16px', borderRadius: 8,
+    border: `1.5px solid ${active ? 'var(--accent-cyan)' : 'var(--border-primary)'}`,
+    background: active ? 'var(--accent-cyan-dim)' : 'var(--bg-card)',
+    color: active ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+    fontSize: 13, fontWeight: active ? 700 : 500, cursor: 'pointer',
+  }),
   coFoot: { padding: '14px 20px', display: 'flex', gap: 10, flexShrink: 0 },
 }
 
@@ -224,26 +306,40 @@ const PAY_METHODS = [
   { key: 'other',   label: '其他' },
 ]
 
-function CheckoutModal({ tableNumber, allItems, orgId, storeId, orderId, onClose, onDone }) {
+function CheckoutModal({ tableNumber, orgId, storeId, orderId, onClose, onDone }) {
   const [payMethod, setPayMethod] = useState('cash')
-  const [busy, setBusy] = useState(false)
+  const [busy,      setBusy]      = useState(false)
+  const [dbItems,   setDbItems]   = useState([])
+  const [loading,   setLoading]   = useState(true)
 
-  const total = allItems.reduce((s, i) => s + Number(i.unit_price) * i.quantity, 0)
+  // Fetch fresh from DB on mount so we always see the latest items
+  useEffect(() => {
+    supabase.from('pos_order_items')
+      .select('id, name, unit_price, quantity')
+      .eq('order_id', orderId)
+      .order('created_at')
+      .then(({ data }) => { setDbItems(data ?? []); setLoading(false) })
+  }, [orderId])
+
+  const total = dbItems.reduce((s, i) => s + Number(i.unit_price) * i.quantity, 0)
 
   async function confirm() {
     setBusy(true)
     try {
-      await supabase.from('pos_payments').insert({
+      const { error: pErr } = await supabase.from('pos_payments').insert({
         organization_id: orgId,
         store_id: storeId,
         order_id: orderId,
         amount: total,
         payment_method: payMethod,
       })
-      await supabase.from('pos_orders').update({
+      if (pErr) throw pErr
+
+      const { error: uErr } = await supabase.from('pos_orders').update({
         status: 'paid',
         paid_at: new Date().toISOString(),
       }).eq('id', orderId)
+      if (uErr) throw uErr
 
       toast.success(`T${tableNumber} 結帳完成 NT$${total.toLocaleString()}`)
       onDone()
@@ -265,20 +361,25 @@ function CheckoutModal({ tableNumber, allItems, orgId, storeId, orderId, onClose
 
         <div style={S.coBody}>
           <div style={S.coSection}>品項明細</div>
-          {allItems.map((item, i) => (
-            <div key={item.id ?? i} style={S.coRow}>
-              <span style={{ flex: 1, color: 'var(--text-primary)' }}>{item.name} <span style={{ color: 'var(--text-muted)' }}>×{item.quantity}</span></span>
-              <span style={{ color: 'var(--text-secondary)', fontWeight: 600, flexShrink: 0 }}>NT${(Number(item.unit_price) * item.quantity).toLocaleString()}</span>
-            </div>
-          ))}
-          {allItems.length === 0 && (
+          {loading && <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 14 }}>載入中…</div>}
+          {!loading && dbItems.length === 0 && (
             <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 14 }}>無品項</div>
           )}
+          {dbItems.map((item) => (
+            <div key={item.id} style={S.coRow}>
+              <span style={{ flex: 1, color: 'var(--text-primary)' }}>
+                {item.name} <span style={{ color: 'var(--text-muted)' }}>×{item.quantity}</span>
+              </span>
+              <span style={{ color: 'var(--text-secondary)', fontWeight: 600, flexShrink: 0 }}>
+                NT${(Number(item.unit_price) * item.quantity).toLocaleString()}
+              </span>
+            </div>
+          ))}
         </div>
 
         <div style={S.coTotal}>
           <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-muted)' }}>應收合計</span>
-          <span style={{ fontSize: 26, fontWeight: 800, color: 'var(--text-primary)' }}>NT${total.toLocaleString()}</span>
+          <span style={{ fontSize: 28, fontWeight: 800, color: 'var(--text-primary)' }}>NT${total.toLocaleString()}</span>
         </div>
 
         <div style={{ padding: '10px 20px 4px', fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.5px' }}>付款方式</div>
@@ -291,8 +392,14 @@ function CheckoutModal({ tableNumber, allItems, orgId, storeId, orderId, onClose
         <div style={S.coFoot}>
           <button style={{ ...S.smallBtn(false), flex: 1 }} onClick={onClose} disabled={busy}>取消</button>
           <button
-            style={{ flex: 2, padding: '12px 0', borderRadius: 10, border: 'none', cursor: busy ? 'not-allowed' : 'pointer', background: busy ? 'var(--bg-card)' : 'var(--accent-green)', color: busy ? 'var(--text-muted)' : '#fff', fontSize: 15, fontWeight: 800, opacity: busy ? 0.7 : 1 }}
-            onClick={confirm} disabled={busy}
+            style={{
+              flex: 2, padding: '12px 0', borderRadius: 10, border: 'none',
+              cursor: busy || loading ? 'not-allowed' : 'pointer',
+              background: busy || loading ? 'var(--bg-card)' : 'var(--accent-green)',
+              color: busy || loading ? 'var(--text-muted)' : '#fff',
+              fontSize: 15, fontWeight: 800,
+            }}
+            onClick={confirm} disabled={busy || loading || dbItems.length === 0}
           >
             {busy ? '結帳中…' : '確認收款'}
           </button>
@@ -303,8 +410,8 @@ function CheckoutModal({ tableNumber, allItems, orgId, storeId, orderId, onClose
   )
 }
 
-// ── Right-side order panel ────────────────────────────────────────────────────
-function OrderPanel({ existingItems, cart, items, storeId, orgId, orderId, tableNumber, onSubmit, onCheckout, submitBusy }) {
+// ── Right-side order panel ─────────────────────────────────────────────────────
+function OrderPanel({ existingItems, cart, items, orgId, orderId, tableNumber, onSubmit, onCheckout, submitBusy }) {
   const cartEntries = Object.entries(cart).filter(([, v]) => v.qty > 0)
   const newTotal    = cartEntries.reduce((s, [id, v]) => {
     const item = items.find(i => i.id === id)
@@ -316,41 +423,42 @@ function OrderPanel({ existingItems, cart, items, storeId, orgId, orderId, table
 
   return (
     <div style={S.panel}>
-      {/* Existing items */}
-      {existingItems.length > 0 && (
-        <>
-          <div style={S.panelHead}>已點 · NT${existTotal.toLocaleString()}</div>
-          {existingItems.map((item, i) => (
-            <div key={item.id ?? i} style={S.panelRow}>
-              <span style={S.panelRowName}>{item.name}</span>
-              <span style={S.panelRowAmt}>×{item.quantity}　NT${(Number(item.unit_price) * item.quantity).toLocaleString()}</span>
-            </div>
-          ))}
-        </>
-      )}
+      <div style={S.panelScroll}>
+        {existingItems.length === 0 && cartEntries.length === 0 && (
+          <div style={S.panelEmpty}>尚未點餐</div>
+        )}
 
-      {/* Cart (new items) */}
-      {cartEntries.length > 0 && (
-        <>
-          <div style={{ ...S.panelHead, background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)' }}>新增 · NT${newTotal.toLocaleString()}</div>
-          {cartEntries.map(([id, v]) => {
-            const item = items.find(i => i.id === id)
-            if (!item) return null
-            return (
-              <div key={id} style={S.panelRow}>
+        {existingItems.length > 0 && (
+          <>
+            <div style={S.panelHead}>已點 · NT${existTotal.toLocaleString()}</div>
+            {existingItems.map((item, i) => (
+              <div key={item.id ?? i} style={S.panelRow}>
                 <span style={S.panelRowName}>{item.name}</span>
-                <span style={{ ...S.panelRowAmt, color: 'var(--accent-cyan)' }}>×{v.qty}　NT${(Number(item.unit_price) * v.qty).toLocaleString()}</span>
+                <span style={S.panelRowAmt}>×{item.quantity}　NT${(Number(item.unit_price) * item.quantity).toLocaleString()}</span>
               </div>
-            )
-          })}
-        </>
-      )}
+            ))}
+          </>
+        )}
 
-      {existingItems.length === 0 && cartEntries.length === 0 && (
-        <div style={S.panelEmpty}>尚未點餐</div>
-      )}
+        {cartEntries.length > 0 && (
+          <>
+            <div style={{ ...S.panelHead, background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)' }}>
+              未送廚房 · NT${newTotal.toLocaleString()}
+            </div>
+            {cartEntries.map(([id, v]) => {
+              const item = items.find(i => i.id === id)
+              if (!item) return null
+              return (
+                <div key={id} style={S.panelRow}>
+                  <span style={S.panelRowName}>{item.name}</span>
+                  <span style={{ ...S.panelRowAmt, color: 'var(--accent-cyan)' }}>×{v.qty}　NT${(Number(item.unit_price) * v.qty).toLocaleString()}</span>
+                </div>
+              )
+            })}
+          </>
+        )}
+      </div>
 
-      {/* Footer */}
       <div style={S.panelFoot}>
         <div style={S.panelTotal}>
           <span style={S.panelTotalLabel}>合計</span>
@@ -358,18 +466,15 @@ function OrderPanel({ existingItems, cart, items, storeId, orgId, orderId, table
         </div>
         {newCount > 0 && (
           <button
-            style={{ width: '100%', padding: '10px 0', borderRadius: 10, border: 'none', cursor: submitBusy ? 'not-allowed' : 'pointer', background: submitBusy ? 'var(--bg-card)' : 'var(--accent-cyan)', color: submitBusy ? 'var(--text-muted)' : '#fff', fontSize: 14, fontWeight: 700 }}
+            style={submitBusy ? S.panelBtnDisabled : S.panelBtn('cyan')}
             onClick={onSubmit} disabled={submitBusy}
           >
             {submitBusy ? '送出中…' : `送廚房（${newCount} 品）`}
           </button>
         )}
-        {orderId && (
-          <button
-            style={{ width: '100%', padding: '10px 0', borderRadius: 10, border: 'none', cursor: 'pointer', background: 'var(--accent-green)', color: '#fff', fontSize: 14, fontWeight: 700 }}
-            onClick={onCheckout}
-          >
-            結帳 NT${grandTotal.toLocaleString()}
+        {(orderId || existingItems.length > 0 || newCount > 0) && (
+          <button style={S.panelBtn('green')} onClick={onCheckout}>
+            結帳
           </button>
         )}
       </div>
@@ -379,16 +484,15 @@ function OrderPanel({ existingItems, cart, items, storeId, orgId, orderId, table
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function WaiterMode() {
-  const navigate  = useNavigate()
-  const { user, profile } = useAuth()
-  const orgId     = useOrgId()
-  const { tenant } = useTenant()
-  const storeId   = profile?.store_id ?? null
+  const navigate           = useNavigate()
+  const { user, profile }  = useAuth()
+  const orgId              = useOrgId()
+  const storeId            = profile?.store_id ?? null
 
   const [phase,         setPhase]         = useState('loading')
   const [errMsg,        setErrMsg]        = useState('')
   const [stores,        setStores]        = useState([])
-  const [storeIdSel,    setStoreIdSel]    = useState(null) // selected store (overrides profile)
+  const [storeIdSel,    setStoreIdSel]    = useState(null)
   const [tables,        setTables]        = useState([])
   const [activeOrders,  setActiveOrders]  = useState([])
   const [selTable,      setSelTable]      = useState(null)
@@ -409,7 +513,6 @@ export default function WaiterMode() {
   const [wide,          setWide]          = useState(typeof window !== 'undefined' && window.innerWidth >= 900)
   const qrCanvasRef = useRef(null)
 
-  // Effective store: selected from dropdown (admin) or from profile (staff)
   const effectiveStoreId = storeIdSel ?? storeId
   const storeName = stores.find(s => s.id === effectiveStoreId)?.name ?? profile?.store ?? ''
 
@@ -421,20 +524,18 @@ export default function WaiterMode() {
 
   // ── Boot: load stores list ────────────────────────────────────────────────
   useEffect(() => {
-    if (!user)  { setErrMsg('auth'); setPhase('error'); return }
+    if (!user)  { setErrMsg('auth');     setPhase('error'); return }
     if (!orgId) { setErrMsg('no_store'); setPhase('error'); return }
-
     supabase.from('stores').select('id, name').eq('organization_id', orgId).order('name')
       .then(({ data }) => {
         const list = data ?? []
         setStores(list)
-        // Default: use profile store_id if valid, else first store
         const defaultId = (storeId && list.some(s => s.id === storeId)) ? storeId : list[0]?.id ?? null
         setStoreIdSel(defaultId)
       })
   }, [user, orgId, storeId])
 
-  // ── Load tables when effective store changes ───────────────────────────────
+  // ── Load tables when store changes ────────────────────────────────────────
   useEffect(() => {
     if (!effectiveStoreId) return
     setPhase('loading')
@@ -446,10 +547,7 @@ export default function WaiterMode() {
       if (tErr || oErr) throw tErr ?? oErr
       setTables(tbl ?? [])
       setActiveOrders(ords ?? [])
-      setSelTable(null)
-      setOrderId(null)
-      setExistingItems([])
-      setCart({})
+      setSelTable(null); setOrderId(null); setExistingItems([]); setCart({})
       setPhase('select_table')
     }
     loadTables().catch(e => { setErrMsg(e?.message ?? '載入失敗'); setPhase('error') })
@@ -477,31 +575,26 @@ export default function WaiterMode() {
   }, [showQr, qrUrl])
 
   // ── Derived ───────────────────────────────────────────────────────────────
-  const cartEntries = Object.entries(cart).filter(([, v]) => v.qty > 0)
-  const cartCount   = cartEntries.reduce((s, [, v]) => s + v.qty, 0)
-  const cartTotal   = cartEntries.reduce((s, [id, v]) => {
+  const cartEntries  = Object.entries(cart).filter(([, v]) => v.qty > 0)
+  const cartCount    = cartEntries.reduce((s, [, v]) => s + v.qty, 0)
+  const cartTotal    = cartEntries.reduce((s, [id, v]) => {
     const item = items.find(i => i.id === id)
     return s + (item ? Number(item.unit_price) * v.qty : 0)
   }, 0)
   const visibleItems = selCat ? items.filter(i => i.category_id === selCat) : items
-
-  const tableStatus = (tableId) => {
-    const order = activeOrders.find(o => o.table_id === tableId)
-    if (!order) return 'empty'
-    return 'busy'
-  }
+  const tableStatus  = (tableId) => activeOrders.find(o => o.table_id === tableId) ? 'busy' : 'empty'
 
   // ── Cart mutations ────────────────────────────────────────────────────────
   const addItem = useCallback((itemId) => {
-    setCart(prev => {
-      if (prev[itemId]) return { ...prev, [itemId]: { ...prev[itemId], qty: prev[itemId].qty + 1 } }
-      return { ...prev, [itemId]: { qty: 1, note: '' } }
-    })
+    setCart(prev => prev[itemId]
+      ? { ...prev, [itemId]: { ...prev[itemId], qty: prev[itemId].qty + 1 } }
+      : { ...prev, [itemId]: { qty: 1, note: '' } }
+    )
   }, [])
 
   const adjustQty = useCallback((itemId, delta) => {
     setCart(prev => {
-      const cur = prev[itemId]
+      const cur  = prev[itemId]
       if (!cur) return prev
       const next = Math.max(0, cur.qty + delta)
       if (next === 0) { const { [itemId]: _r, ...rest } = prev; return rest }
@@ -528,17 +621,12 @@ export default function WaiterMode() {
   // ── Select table ──────────────────────────────────────────────────────────
   async function selectTable(table) {
     const activeOrder = activeOrders.find(o => o.table_id === table.id)
-    setSelTable(table)
-    setCart({})
-    setErrMsg('')
-
+    setSelTable(table); setCart({}); setErrMsg('')
     if (activeOrder) {
       setOrderId(activeOrder.id)
       const { data: existing } = await supabase
-        .from('pos_order_items')
-        .select('id, name, unit_price, quantity, note')
-        .eq('order_id', activeOrder.id)
-        .order('created_at')
+        .from('pos_order_items').select('id, name, unit_price, quantity, note')
+        .eq('order_id', activeOrder.id).order('created_at')
       setExistingItems(existing ?? [])
     } else {
       setOrderId(null)
@@ -549,7 +637,7 @@ export default function WaiterMode() {
 
   // ── Generate QR ───────────────────────────────────────────────────────────
   async function generateQR() {
-    if (!selTable || !storeId) return
+    if (!selTable || !effectiveStoreId) return
     setGenQr(true)
     try {
       const { data: session, error } = await supabase.from('qr_order_sessions').insert({
@@ -569,14 +657,13 @@ export default function WaiterMode() {
     }
   }
 
-  // ── Submit cart to kitchen ────────────────────────────────────────────────
+  // ── Submit cart to kitchen — returns orderId on success ───────────────────
   async function handleSubmit() {
-    if (cartCount === 0 || !selTable) return
+    if (cartCount === 0 || !selTable) return null
     setSubmitBusy(true)
     setErrMsg('')
     try {
       let currentOrderId = orderId
-
       if (!currentOrderId) {
         const { data: newOrder, error: oErr } = await supabase
           .from('pos_orders')
@@ -587,7 +674,6 @@ export default function WaiterMode() {
         setOrderId(currentOrderId)
         setActiveOrders(prev => [...prev, { id: currentOrderId, table_id: selTable.id, status: 'open' }])
       }
-
       const rows = cartEntries.map(([id, v]) => {
         const item = items.find(i => i.id === id)
         return {
@@ -602,41 +688,49 @@ export default function WaiterMode() {
           sent_to_kitchen: true,
         }
       })
-
       const { error: iErr } = await supabase.from('pos_order_items').insert(rows)
       if (iErr) throw iErr
-
-      // Append to local existing items for display
       setExistingItems(prev => [...prev, ...rows.map(r => ({ ...r, id: r.menu_item_id + Date.now() }))])
       setCart({})
       toast.success('已送廚房')
+      return currentOrderId
     } catch (e) {
       setErrMsg(e?.message ?? '送出失敗')
+      return null
     } finally {
       setSubmitBusy(false)
     }
   }
 
-  // ── Back to table list ─────────────────────────────────────────────────────
-  function backToTables() {
-    setPhase('select_table')
-    setSelTable(null)
-    setOrderId(null)
-    setExistingItems([])
-    setCart({})
-    setErrMsg('')
+  // ── Open checkout: auto-submit pending cart first ─────────────────────────
+  async function openCheckout() {
+    let finalOrderId = orderId
+    if (cartCount > 0) {
+      finalOrderId = await handleSubmit()
+      if (!finalOrderId) return // submit failed, don't open checkout
+    }
+    if (!finalOrderId && existingItems.length === 0) {
+      toast.error('請先點餐')
+      return
+    }
+    setShowCheckout(true)
   }
 
-  // ── After checkout ─────────────────────────────────────────────────────────
+  // ── Back to table list ────────────────────────────────────────────────────
+  function backToTables() {
+    setPhase('select_table')
+    setSelTable(null); setOrderId(null); setExistingItems([]); setCart({}); setErrMsg('')
+  }
+
   function afterCheckout() {
     setActiveOrders(prev => prev.filter(o => o.table_id !== selTable?.id))
     setShowCheckout(false)
     backToTables()
   }
 
-  // ────────────────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────
   // RENDERS
-  // ────────────────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────
 
   if (phase === 'loading') return (
     <div style={S.page}><div style={S.center}><Spinner /><span style={{ fontSize: 14, color: 'var(--text-muted)' }}>載入中…</span></div></div>
@@ -680,15 +774,13 @@ export default function WaiterMode() {
 
       {tables.length === 0 ? (
         <div style={S.center}>
-          <div style={{ fontSize: 40 }}>🪑</div>
           <div style={{ fontSize: 15, color: 'var(--text-muted)' }}>尚未設定桌位</div>
           <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>請先至「訂位管理 → 桌台設定」新增桌台</div>
           <button style={S.smallBtn(false)} onClick={() => navigate('/pos')}>返回 POS</button>
         </div>
       ) : (
         <>
-          {/* Legend */}
-          <div style={{ display: 'flex', gap: 16, padding: '12px 20px 0', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 16, padding: '14px 20px 4px', flexWrap: 'wrap' }}>
             {[{ status: 'empty', label: '空桌' }, { status: 'busy', label: '用餐中' }].map(({ status, label }) => (
               <div key={status} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <div style={{ width: 10, height: 10, borderRadius: '50%', background: status === 'empty' ? 'var(--accent-green)' : 'var(--accent-orange)' }} />
@@ -714,8 +806,6 @@ export default function WaiterMode() {
   )
 
   // ── ORDER ─────────────────────────────────────────────────────────────────
-  const allCheckoutItems = existingItems
-
   return (
     <div style={S.page}>
       {/* Header */}
@@ -725,30 +815,32 @@ export default function WaiterMode() {
           {storeName && <p style={S.sub}>{storeName}</p>}
         </div>
         <div style={S.headerRight}>
-          <button style={S.iconBtn(false)} onClick={backToTables}>← 返回</button>
+          <button style={S.iconBtn(false)} onClick={backToTables}>← 換桌</button>
           <button style={S.iconBtn(false)} onClick={generateQR} disabled={genQr} title="產生 QR 點餐連結">
-            {genQr ? '…' : '📱 QR'}
+            {genQr ? '…' : 'QR'}
           </button>
-          {orderId && (
-            <button style={S.iconBtn(true)} onClick={() => setShowCheckout(true)}>💳 結帳</button>
-          )}
           {!wide && cartCount > 0 && (
-            <button style={S.iconBtn(true)} disabled={submitBusy} onClick={handleSubmit}>
-              {submitBusy ? '送出中…' : `送廚房 (${cartCount})`}
+            <button style={S.iconBtn(false)} disabled={submitBusy} onClick={handleSubmit}>
+              {submitBusy ? '送出…' : `送廚房(${cartCount})`}
             </button>
+          )}
+          {!wide && (
+            <button style={S.iconBtn(true)} onClick={openCheckout}>結帳</button>
           )}
         </div>
       </div>
 
-      {/* Category bar */}
-      <div style={S.catBar}>
-        <button style={S.catBtn(!selCat)} onClick={() => setSelCat(null)}>全部</button>
-        {categories.map(c => (
-          <button key={c.id} style={S.catBtn(selCat === c.id)} onClick={() => setSelCat(c.id)}>{c.name}</button>
-        ))}
-      </div>
+      {/* Mobile category bar */}
+      {!wide && (
+        <div style={S.catBar}>
+          <button style={S.catBtn(!selCat)} onClick={() => setSelCat(null)}>全部</button>
+          {categories.map(c => (
+            <button key={c.id} style={S.catBtn(selCat === c.id)} onClick={() => setSelCat(c.id)}>{c.name}</button>
+          ))}
+        </div>
+      )}
 
-      {/* Error */}
+      {/* Error banner */}
       {errMsg && (
         <div style={S.errBanner}>
           <span style={{ flex: 1 }}>{errMsg}</span>
@@ -756,64 +848,72 @@ export default function WaiterMode() {
         </div>
       )}
 
-      {/* Body: items + optional right panel */}
+      {/* Body */}
       <div style={S.orderBody}>
-        {/* Item grid */}
-        <div style={{ ...S.itemGrid, paddingBottom: wide ? 32 : 140 }}>
-          {visibleItems.length === 0 && (
-            <div style={{ gridColumn: '1/-1', textAlign: 'center', paddingTop: 40, color: 'var(--text-muted)', fontSize: 14 }}>此分類暫無品項</div>
-          )}
-          {visibleItems.map(item => {
-            const entry = cart[item.id]
-            const qty   = entry?.qty ?? 0
-            const inCart = qty > 0
-            return (
-              <div key={item.id} style={S.itemCard(inCart)} onClick={() => addItem(item.id)}>
-                {inCart && <span style={S.badge}>×{qty}</span>}
-                {item.image_url
-                  ? <img src={item.image_url} alt={item.name} style={S.img} />
-                  : <div style={S.imgPH}>🍽️</div>
-                }
-                <div style={S.cardBody}>
-                  <div style={S.itemName}>{item.name}</div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 3 }}>
-                    <span style={S.itemPrice}>NT${Number(item.unit_price).toLocaleString()}</span>
+        {/* Left category sidebar (wide only) */}
+        {wide && (
+          <div style={S.catSidebar}>
+            <button style={S.catSideBtn(!selCat)} onClick={() => setSelCat(null)}>全部</button>
+            {categories.map(c => (
+              <button key={c.id} style={S.catSideBtn(selCat === c.id)} onClick={() => setSelCat(c.id)}>{c.name}</button>
+            ))}
+          </div>
+        )}
+
+        {/* Menu area */}
+        <div style={S.menuArea}>
+          <div style={{ ...S.itemGrid, paddingBottom: wide ? 32 : 140 }}>
+            {visibleItems.length === 0 && (
+              <div style={{ gridColumn: '1/-1', textAlign: 'center', paddingTop: 40, color: 'var(--text-muted)', fontSize: 14 }}>此分類暫無品項</div>
+            )}
+            {visibleItems.map(item => {
+              const entry  = cart[item.id]
+              const qty    = entry?.qty ?? 0
+              const inCart = qty > 0
+              return (
+                <div key={item.id} style={S.itemCard(inCart)} onClick={() => addItem(item.id)}>
+                  {qty > 0 && <span style={S.cartBadge}>×{qty}</span>}
+                  {item.image_url && <img src={item.image_url} alt={item.name} style={S.itemImg} />}
+                  <div style={S.cardBody}>
+                    <div style={S.itemName}>{item.name}</div>
+                    <div style={S.itemPriceRow}>
+                      <span style={S.itemPrice}>NT${Number(item.unit_price).toLocaleString()}</span>
+                      {inCart ? (
+                        <div style={S.qtyRow} onClick={e => e.stopPropagation()}>
+                          <button style={S.qtyBtn(true)}  onClick={() => adjustQty(item.id, -1)}>−</button>
+                          <span style={S.qtyNum}>{qty}</span>
+                          <button style={S.qtyBtn(false)} onClick={() => adjustQty(item.id, 1)}>+</button>
+                        </div>
+                      ) : (
+                        <button style={S.addBtn} onClick={e => { e.stopPropagation(); addItem(item.id) }}>+</button>
+                      )}
+                    </div>
                     {inCart && (
-                      <div style={S.qtyRow} onClick={e => e.stopPropagation()}>
-                        <button style={S.qtyBtn(true)}  onClick={() => adjustQty(item.id, -1)}>−</button>
-                        <span style={{ fontSize: 13, fontWeight: 700, minWidth: 18, textAlign: 'center' }}>{qty}</span>
-                        <button style={S.qtyBtn(false)} onClick={() => adjustQty(item.id, 1)}>+</button>
-                      </div>
+                      <button
+                        style={{ ...S.noteBtn, color: entry?.note ? 'var(--accent-cyan)' : 'var(--text-muted)' }}
+                        onClick={e => openNotePopup(e, item.id)}
+                      >
+                        {entry?.note ? `備註：${entry.note}` : '+ 備註'}
+                      </button>
                     )}
                   </div>
-                  {inCart && (
-                    <div style={{ marginTop: 4, display: 'flex', justifyContent: 'flex-end' }} onClick={e => e.stopPropagation()}>
-                      <button
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: entry?.note ? 'var(--accent-cyan)' : 'var(--text-muted)', padding: '2px 0' }}
-                        onClick={(e) => openNotePopup(e, item.id)}
-                      >
-                        {entry?.note ? '📝 已備註' : '+ 備註'}
-                      </button>
-                    </div>
-                  )}
                 </div>
-              </div>
-            )
-          })}
+              )
+            })}
+          </div>
         </div>
 
-        {/* Right panel (wide only) */}
+        {/* Right order panel (wide only) */}
         {wide && (
           <OrderPanel
             existingItems={existingItems}
             cart={cart}
             items={items}
-            storeId={storeId}
             orgId={orgId}
             orderId={orderId}
             tableNumber={selTable?.table_number}
             onSubmit={handleSubmit}
-            onCheckout={() => setShowCheckout(true)}
+            onCheckout={openCheckout}
             submitBusy={submitBusy}
           />
         )}
@@ -830,9 +930,7 @@ export default function WaiterMode() {
               {submitBusy ? '送出…' : `送廚房 NT$${cartTotal.toLocaleString()}`}
             </button>
           )}
-          {orderId && (
-            <button style={S.footBtn(true, false)} onClick={() => setShowCheckout(true)}>結帳</button>
-          )}
+          <button style={S.footBtn(true, false)} onClick={openCheckout}>結帳</button>
         </div>
       )}
 
@@ -845,7 +943,7 @@ export default function WaiterMode() {
             <textarea rows={3} style={S.textarea} value={noteDraft} onChange={e => setNoteDraft(e.target.value)} placeholder="例：不要蔥、少辣、分開裝…" autoFocus />
             <div style={S.rowBtn}>
               <button style={S.smallBtn(false)} onClick={() => setNoteTarget(null)}>取消</button>
-              <button style={S.smallBtn(true)} onClick={saveItemNote}>確認</button>
+              <button style={S.smallBtn(true)}  onClick={saveItemNote}>確認</button>
             </div>
           </div>
         </div>,
@@ -872,9 +970,8 @@ export default function WaiterMode() {
       {showCheckout && orderId && (
         <CheckoutModal
           tableNumber={selTable?.table_number}
-          allItems={allCheckoutItems}
           orgId={orgId}
-          storeId={storeId}
+          storeId={effectiveStoreId}
           orderId={orderId}
           onClose={() => setShowCheckout(false)}
           onDone={afterCheckout}

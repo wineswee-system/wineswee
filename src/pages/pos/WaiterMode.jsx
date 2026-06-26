@@ -387,6 +387,8 @@ export default function WaiterMode() {
 
   const [phase,         setPhase]         = useState('loading')
   const [errMsg,        setErrMsg]        = useState('')
+  const [stores,        setStores]        = useState([])
+  const [storeIdSel,    setStoreIdSel]    = useState(null) // selected store (overrides profile)
   const [tables,        setTables]        = useState([])
   const [activeOrders,  setActiveOrders]  = useState([])
   const [selTable,      setSelTable]      = useState(null)
@@ -406,7 +408,10 @@ export default function WaiterMode() {
   const [genQr,         setGenQr]         = useState(false)
   const [wide,          setWide]          = useState(typeof window !== 'undefined' && window.innerWidth >= 900)
   const qrCanvasRef = useRef(null)
-  const storeName   = profile?.store ?? ''
+
+  // Effective store: selected from dropdown (admin) or from profile (staff)
+  const effectiveStoreId = storeIdSel ?? storeId
+  const storeName = stores.find(s => s.id === effectiveStoreId)?.name ?? profile?.store ?? ''
 
   useEffect(() => {
     const fn = () => setWide(window.innerWidth >= 900)
@@ -414,38 +419,56 @@ export default function WaiterMode() {
     return () => window.removeEventListener('resize', fn)
   }, [])
 
-  // ── Boot: load tables + active orders ─────────────────────────────────────
+  // ── Boot: load stores list ────────────────────────────────────────────────
   useEffect(() => {
-    if (!user)    { setErrMsg('auth');     setPhase('error'); return }
-    if (!storeId) { setErrMsg('no_store'); setPhase('error'); return }
+    if (!user)  { setErrMsg('auth'); setPhase('error'); return }
+    if (!orgId) { setErrMsg('no_store'); setPhase('error'); return }
 
-    async function boot() {
+    supabase.from('stores').select('id, name').eq('organization_id', orgId).order('name')
+      .then(({ data }) => {
+        const list = data ?? []
+        setStores(list)
+        // Default: use profile store_id if valid, else first store
+        const defaultId = (storeId && list.some(s => s.id === storeId)) ? storeId : list[0]?.id ?? null
+        setStoreIdSel(defaultId)
+      })
+  }, [user, orgId, storeId])
+
+  // ── Load tables when effective store changes ───────────────────────────────
+  useEffect(() => {
+    if (!effectiveStoreId) return
+    setPhase('loading')
+    async function loadTables() {
       const [{ data: tbl, error: tErr }, { data: ords, error: oErr }] = await Promise.all([
-        supabase.from('res_tables').select('id, table_number, capacity').eq('store_id', storeId).eq('is_active', true).order('table_number'),
-        supabase.from('pos_orders').select('id, table_id, status').in('status', ['open', 'submitted']).eq('store_id', storeId),
+        supabase.from('res_tables').select('id, table_number, capacity').eq('store_id', effectiveStoreId).eq('is_active', true).order('table_number'),
+        supabase.from('pos_orders').select('id, table_id, status').in('status', ['open', 'submitted']).eq('store_id', effectiveStoreId),
       ])
       if (tErr || oErr) throw tErr ?? oErr
       setTables(tbl ?? [])
       setActiveOrders(ords ?? [])
+      setSelTable(null)
+      setOrderId(null)
+      setExistingItems([])
+      setCart({})
       setPhase('select_table')
     }
-    boot().catch(e => { setErrMsg(e?.message ?? '載入失敗'); setPhase('error') })
-  }, [user, storeId])
+    loadTables().catch(e => { setErrMsg(e?.message ?? '載入失敗'); setPhase('error') })
+  }, [effectiveStoreId])
 
   // ── Load menu when entering order phase ───────────────────────────────────
   useEffect(() => {
-    if (phase !== 'order' || !storeId) return
+    if (phase !== 'order' || !effectiveStoreId) return
     async function loadMenu() {
       const [{ data: cats }, { data: menuItems }] = await Promise.all([
-        supabase.from('pos_menu_categories').select('id, name').eq('store_id', storeId).eq('is_active', true).order('display_order'),
-        supabase.from('pos_menu_items').select('id, name, unit_price, description, image_url, category_id').eq('store_id', storeId).eq('is_available', true).order('display_order'),
+        supabase.from('pos_menu_categories').select('id, name').eq('store_id', effectiveStoreId).eq('is_active', true).order('display_order'),
+        supabase.from('pos_menu_items').select('id, name, unit_price, description, image_url, category_id').eq('store_id', effectiveStoreId).eq('is_available', true).order('display_order'),
       ])
       setCategories(cats ?? [])
       setItems(menuItems ?? [])
       if (cats?.length) setSelCat(cats[0].id)
     }
     loadMenu().catch(e => setErrMsg(e?.message ?? '菜單載入失敗'))
-  }, [phase, storeId])
+  }, [phase, effectiveStoreId])
 
   // ── QR canvas ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -531,13 +554,13 @@ export default function WaiterMode() {
     try {
       const { data: session, error } = await supabase.from('qr_order_sessions').insert({
         organization_id: orgId,
-        store_id: storeId,
+        store_id: effectiveStoreId,
         table_id: selTable.id,
         token: crypto.randomUUID(),
         expires_at: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
       }).select('token').single()
       if (error) throw error
-      setQrUrl(`${window.location.origin}/menu/${storeId}/${selTable.id}?token=${session.token}`)
+      setQrUrl(`${window.location.origin}/menu/${effectiveStoreId}/${selTable.id}?token=${session.token}`)
       setShowQr(true)
     } catch (e) {
       toast.error('QR 產生失敗：' + (e.message || ''))
@@ -557,7 +580,7 @@ export default function WaiterMode() {
       if (!currentOrderId) {
         const { data: newOrder, error: oErr } = await supabase
           .from('pos_orders')
-          .insert({ organization_id: orgId, store_id: storeId, table_id: selTable.id, status: 'open', opened_by: user.id })
+          .insert({ organization_id: orgId, store_id: effectiveStoreId, table_id: selTable.id, status: 'open', opened_by: user.id })
           .select('id').single()
         if (oErr) throw oErr
         currentOrderId = newOrder.id
@@ -641,7 +664,18 @@ export default function WaiterMode() {
           <h1 style={S.h1}>服務員點餐</h1>
           {storeName && <p style={S.sub}>{storeName}</p>}
         </div>
-        <button style={S.iconBtn(false)} onClick={() => navigate('/pos')}>← 返回</button>
+        <div style={S.headerRight}>
+          {stores.length > 1 && (
+            <select
+              value={effectiveStoreId ?? ''}
+              onChange={e => setStoreIdSel(Number(e.target.value))}
+              style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border-primary)', background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: 13, cursor: 'pointer' }}
+            >
+              {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          )}
+          <button style={S.iconBtn(false)} onClick={() => navigate('/pos')}>← 返回</button>
+        </div>
       </div>
 
       {tables.length === 0 ? (

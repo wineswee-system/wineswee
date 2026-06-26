@@ -121,7 +121,7 @@ const S = {
   // ── 歡迎頁 ──
   welcome: {
     minHeight: '100dvh', display: 'flex', flexDirection: 'column',
-    alignItems: 'center', justifyContent: 'center', padding: '40px 32px',
+    alignItems: 'center', justifyContent: 'center', padding: '100px 32px 48px',
     background: `linear-gradient(160deg, ${C.wineDark} 0%, ${C.wine} 100%)`,
     position: 'relative', overflow: 'hidden', textAlign: 'center',
   },
@@ -133,66 +133,71 @@ const S = {
     position: 'absolute', bottom: -80, left: -50, width: 260, height: 260,
     borderRadius: '50%', border: '1px solid rgba(201,164,85,.12)', pointerEvents: 'none',
   },
-  // 語言切換（歡迎頁右上角）
+  // 語言切換：歡迎頁全寬頂部列
   langBarWelcome: {
-    position: 'absolute', top: 18, right: 18, display: 'flex', gap: 4,
+    position: 'absolute', top: 0, left: 0, right: 0,
+    display: 'flex', background: 'rgba(0,0,0,.25)',
+    borderBottom: '1px solid rgba(201,164,85,.25)',
   },
-  // 語言切換（Menu header 內）
-  langBarHeader: { display: 'flex', gap: 4, flexShrink: 0 },
   langBtn: (active) => ({
-    padding: '4px 10px', borderRadius: 20, border: `1px solid ${active ? C.gold : 'rgba(255,255,255,.3)'}`,
-    background: active ? C.gold : 'transparent',
+    flex: 1, padding: '13px 0', border: 'none',
+    borderRight: '1px solid rgba(201,164,85,.2)',
+    background: active ? 'rgba(201,164,85,.9)' : 'transparent',
     color: active ? C.wineDark : 'rgba(255,255,255,.75)',
-    fontSize: 12, fontWeight: 700, cursor: 'pointer', lineHeight: 1.4,
+    fontSize: 15, fontWeight: 800, cursor: 'pointer', lineHeight: 1,
   }),
+  // 語言切換：Menu header 第二行
+  langBarHeader: {
+    display: 'flex', borderTop: `1px solid ${C.border}`, marginTop: 10,
+  },
   langBtnMenu: (active) => ({
-    padding: '4px 10px', borderRadius: 20,
-    border: `1px solid ${active ? C.wine : C.border}`,
+    flex: 1, padding: '9px 0', border: 'none',
+    borderRight: `1px solid ${C.border}`,
     background: active ? C.wine : 'transparent',
     color: active ? C.white : C.sub,
-    fontSize: 12, fontWeight: 700, cursor: 'pointer', lineHeight: 1.4,
+    fontSize: 14, fontWeight: active ? 800 : 500, cursor: 'pointer',
   }),
   logoWrap: {
-    width: 100, height: 100, borderRadius: 22,
+    width: 108, height: 108, borderRadius: 24,
     background: 'rgba(255,255,255,.12)',
     border: '1.5px solid rgba(201,164,85,.4)',
     overflow: 'hidden', marginBottom: 24, flexShrink: 0,
-    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 44,
+    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 48,
   },
-  welLine:  { width: 40, height: 1.5, background: C.gold, margin: '0 auto 20px', opacity: .8 },
-  welName:  { fontSize: 26, fontWeight: 800, color: C.white, letterSpacing: '1px', marginBottom: 8 },
+  welLine:  { width: 44, height: 1.5, background: C.gold, margin: '0 auto 22px', opacity: .8 },
+  welName:  { fontSize: 28, fontWeight: 800, color: C.white, letterSpacing: '1px', marginBottom: 10 },
   welTable: {
-    display: 'inline-block', padding: '4px 18px', borderRadius: 20,
+    display: 'inline-block', padding: '5px 20px', borderRadius: 20,
     border: '1px solid rgba(201,164,85,.5)', color: C.gold,
-    fontSize: 13, fontWeight: 600, marginBottom: 20,
+    fontSize: 15, fontWeight: 600, marginBottom: 22,
   },
-  welGreet: { fontSize: 15, color: 'rgba(255,255,255,.8)', lineHeight: 1.9, maxWidth: 280, marginBottom: 36, whiteSpace: 'pre-line' },
+  welGreet: { fontSize: 16, color: 'rgba(255,255,255,.85)', lineHeight: 2.0, maxWidth: 300, marginBottom: 36, whiteSpace: 'pre-line' },
   welBtn: {
-    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
     background: C.gold, color: C.wineDark, border: 'none', borderRadius: 14,
-    width: '100%', maxWidth: 280, height: 54, fontSize: 17, fontWeight: 800,
+    width: '100%', maxWidth: 300, height: 58, fontSize: 18, fontWeight: 800,
     cursor: 'pointer', boxShadow: '0 4px 20px rgba(201,164,85,.5)',
   },
 
   // ── Header ──
   header: {
     background: C.card, borderBottom: `1px solid ${C.border}`,
-    padding: '13px 16px', position: 'sticky', top: 0, zIndex: 20,
-    display: 'flex', alignItems: 'center', gap: 10,
+    padding: '13px 16px 0', position: 'sticky', top: 0, zIndex: 20,
   },
+  headerRow1: { display: 'flex', alignItems: 'center', gap: 10, paddingBottom: 0 },
   headerLogoBox: {
-    width: 38, height: 38, borderRadius: 9, overflow: 'hidden', flexShrink: 0,
-    background: C.wine, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18,
+    width: 40, height: 40, borderRadius: 10, overflow: 'hidden', flexShrink: 0,
+    background: C.wine, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20,
   },
-  storeName: { margin: 0, fontSize: 15, fontWeight: 800, color: C.wine, letterSpacing: '-0.3px', lineHeight: 1.2 },
+  storeName: { margin: 0, fontSize: 16, fontWeight: 800, color: C.wine, letterSpacing: '-0.3px', lineHeight: 1.2 },
   tableTag: {
-    display: 'inline-block', marginTop: 2,
-    padding: '1px 10px', borderRadius: 20,
-    background: C.goldDim, color: C.gold, fontSize: 11, fontWeight: 700,
+    display: 'inline-block', marginTop: 3,
+    padding: '2px 12px', borderRadius: 20,
+    background: C.goldDim, color: C.gold, fontSize: 12, fontWeight: 700,
   },
   cartChip: {
     flexShrink: 0, background: C.wine, color: C.white, borderRadius: 20,
-    padding: '6px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+    padding: '7px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer',
     border: 'none', whiteSpace: 'nowrap',
   },
 
@@ -201,20 +206,20 @@ const S = {
     background: C.card, borderBottom: `1px solid ${C.border}`,
     display: 'flex', gap: 6, padding: '10px 14px',
     overflowX: 'auto', scrollbarWidth: 'none',
-    position: 'sticky', top: 66, zIndex: 19,
+    position: 'sticky', top: 104, zIndex: 19,   // header ~104px now (row1 + lang bar)
   },
   catPill: (a) => ({
-    flexShrink: 0, padding: '7px 16px', borderRadius: 20,
+    flexShrink: 0, padding: '9px 18px', borderRadius: 20,
     border: `1.5px solid ${a ? C.wine : C.border}`,
     background: a ? C.wine : 'transparent',
     color: a ? C.white : C.sub,
-    fontSize: 13, fontWeight: a ? 700 : 500,
+    fontSize: 14, fontWeight: a ? 700 : 500,
     cursor: 'pointer', whiteSpace: 'nowrap',
   }),
 
   // ── Section header ──
   sectionHead: {
-    padding: '16px 16px 6px', fontSize: 11, fontWeight: 800, color: C.gold,
+    padding: '18px 16px 8px', fontSize: 12, fontWeight: 800, color: C.gold,
     letterSpacing: '1.5px', textTransform: 'uppercase',
     display: 'flex', alignItems: 'center', gap: 8,
   },
@@ -223,24 +228,24 @@ const S = {
   // ── Item row ──
   itemRow: (inCart) => ({
     background: C.card, borderBottom: `1px solid ${C.border}`,
-    display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px',
+    display: 'flex', alignItems: 'center', gap: 14, padding: '16px 16px',
     borderLeft: `3px solid ${inCart ? C.wine : 'transparent'}`,
-    transition: 'border-left-color .15s', minHeight: 80,
+    transition: 'border-left-color .15s', minHeight: 90,
   }),
-  thumb:   { width: 68, height: 68, borderRadius: 10, objectFit: 'cover', flexShrink: 0, background: C.border },
+  thumb:   { width: 76, height: 76, borderRadius: 12, objectFit: 'cover', flexShrink: 0, background: C.border },
   thumbPH: {
-    width: 68, height: 68, borderRadius: 10,
+    width: 76, height: 76, borderRadius: 12,
     background: `linear-gradient(135deg, ${C.goldDim}, ${C.wineDim})`,
     display: 'flex', alignItems: 'center', justifyContent: 'center',
-    fontSize: 24, flexShrink: 0,
+    fontSize: 28, flexShrink: 0,
   },
   itemBody:  { flex: 1, minWidth: 0 },
-  itemName:  { fontSize: 14, fontWeight: 700, lineHeight: 1.4, color: C.text, marginBottom: 2 },
+  itemName:  { fontSize: 16, fontWeight: 700, lineHeight: 1.4, color: C.text, marginBottom: 3 },
   itemDesc:  {
-    fontSize: 12, color: C.muted, lineHeight: 1.45, marginBottom: 5,
+    fontSize: 13, color: C.muted, lineHeight: 1.5, marginBottom: 6,
     overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
   },
-  itemPrice: { fontSize: 15, fontWeight: 800, color: C.wine },
+  itemPrice: { fontSize: 17, fontWeight: 800, color: C.wine },
 
   // ── Qty controls ──
   addBtn: {
@@ -332,13 +337,16 @@ function Spinner() {
   )
 }
 
+const LANG_FULL = { zh: '中文', en: 'English', ja: '日本語', ko: '한국어' }
+
 function LangToggle({ lang, setLang, variant = 'welcome' }) {
+  const barStyle = variant === 'welcome' ? S.langBarWelcome : S.langBarHeader
   const btnStyle = variant === 'welcome' ? S.langBtn : S.langBtnMenu
   return (
-    <div style={variant === 'welcome' ? S.langBarWelcome : S.langBarHeader}>
+    <div style={barStyle}>
       {['zh', 'en', 'ja', 'ko'].map(l => (
         <button key={l} style={btnStyle(lang === l)} onClick={() => setLang(l)}>
-          {T[l].langLabel}
+          {LANG_FULL[l]}
         </button>
       ))}
     </div>
@@ -546,20 +554,23 @@ export default function GuestMenu() {
 
       {/* Header */}
       <div style={S.header}>
-        <div style={S.headerLogoBox}>
-          <LogoImg logoUrl={logoUrl} storeName={storeName} size={38} radius={9} fontSize={18} />
+        {/* 第一行：logo + 店名 + 購物車 */}
+        <div style={S.headerRow1}>
+          <div style={S.headerLogoBox}>
+            <LogoImg logoUrl={logoUrl} storeName={storeName} size={40} radius={10} fontSize={20} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={S.storeName}>{storeName || '自助點餐'}</div>
+            {tableNo && <span style={S.tableTag}>{t.tableNo} {tableNo}</span>}
+          </div>
+          {cartCount > 0 && (
+            <button style={S.cartChip} onClick={() => setShowCart(true)}>
+              {cartCount} · NT${cartTotal.toLocaleString()}
+            </button>
+          )}
         </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={S.storeName}>{storeName || '自助點餐'}</div>
-          {tableNo && <span style={S.tableTag}>{t.tableNo} {tableNo}</span>}
-        </div>
-        {/* 語言切換 */}
+        {/* 第二行：語言切換 */}
         <LangToggle lang={lang} setLang={setLang} variant="menu" />
-        {cartCount > 0 && (
-          <button style={S.cartChip} onClick={() => setShowCart(true)}>
-            {cartCount} · NT${cartTotal.toLocaleString()}
-          </button>
-        )}
       </div>
 
       {/* Category tabs */}

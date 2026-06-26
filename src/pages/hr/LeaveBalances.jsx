@@ -98,7 +98,7 @@ export default function LeaveBalances() {
       setEmpLoading(true)
       const orgId = profile?.organization_id
       const { data, error } = await supabase.from('employees')
-        .select('id, name, dept, store, status, employment_type, join_date, weekly_hours')
+        .select('id, name, dept, store, status, employment_type, join_date, weekly_hours, gender')
         .eq('status', '在職').eq('organization_id', orgId).order('name')
       if (!error) {
         if (isStaff && profile?.id) {
@@ -151,7 +151,15 @@ export default function LeaveBalances() {
       usedByType[code] = (usedByType[code] || 0) + (Number(lr.days) || 0)
     }
 
-    return DISPLAY_TYPES.map(type => {
+    const gender = emp.gender  // '男' | '女' | null
+    const visibleTypes = DISPLAY_TYPES.filter(t => {
+      if (t === 'menstrual' && gender === '男') return false
+      if (t === 'maternity' && gender === '男') return false
+      if (t === 'paternity' && gender === '女') return false
+      return true
+    })
+
+    return visibleTypes.map(type => {
       const dbBal = balByType[type]
       const dbTotal = Number(dbBal?.total_days || 0)
       let computedTotal = 0, statutory = null

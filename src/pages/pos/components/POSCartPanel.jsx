@@ -4,7 +4,10 @@ import { Plus, Minus, Trash2, ShoppingCart, CreditCard, Search, User, X } from '
 export default function POSCartPanel({
   cart,
   updateQty,
+  updateItemType,
   removeFromCart,
+  orderNote,
+  setOrderNote,
   subtotal,
   discount,
   setDiscount,
@@ -53,18 +56,38 @@ export default function POSCartPanel({
             <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 40 }}>購物車是空的</div>
           )}
           {cart.map(c => (
-            <div key={c.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid var(--border-primary)' }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 600, fontSize: 13 }}>{c.name}</div>
-                <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>NT$ {c.price} x {c.qty}</div>
+            <div key={c.id} style={{ padding: '10px 0', borderBottom: '1px solid var(--border-primary)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 600, fontSize: 13 }}>{c.name}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>NT$ {c.price} x {c.qty}</div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <button onClick={() => updateQty(c.id, -1)} style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-primary)', borderRadius: 6, padding: '2px 6px', cursor: 'pointer', color: 'var(--text-primary)' }}><Minus size={12} /></button>
+                  <span style={{ minWidth: 20, textAlign: 'center', fontWeight: 600 }}>{c.qty}</span>
+                  <button onClick={() => updateQty(c.id, 1)} style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-primary)', borderRadius: 6, padding: '2px 6px', cursor: 'pointer', color: 'var(--text-primary)' }}><Plus size={12} /></button>
+                  <button onClick={() => removeFromCart(c.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-red)', padding: '2px 4px' }}><Trash2 size={14} /></button>
+                </div>
+                <div style={{ minWidth: 80, textAlign: 'right', fontWeight: 600 }}>NT$ {(c.price * c.qty).toLocaleString()}</div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <button onClick={() => updateQty(c.id, -1)} style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-primary)', borderRadius: 6, padding: '2px 6px', cursor: 'pointer', color: 'var(--text-primary)' }}><Minus size={12} /></button>
-                <span style={{ minWidth: 20, textAlign: 'center', fontWeight: 600 }}>{c.qty}</span>
-                <button onClick={() => updateQty(c.id, 1)} style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-primary)', borderRadius: 6, padding: '2px 6px', cursor: 'pointer', color: 'var(--text-primary)' }}><Plus size={12} /></button>
-                <button onClick={() => removeFromCart(c.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-red)', padding: '2px 4px' }}><Trash2 size={14} /></button>
+              {/* Per-item dine-in / takeout toggle */}
+              <div style={{ display: 'flex', gap: 4, marginTop: 5 }}>
+                {[{ key: 'dine_in', label: '內用' }, { key: 'takeout', label: '外帶' }].map(opt => (
+                  <button
+                    key={opt.key}
+                    onClick={() => updateItemType(c.id, opt.key)}
+                    style={{
+                      padding: '2px 10px', borderRadius: 20, fontSize: 11, cursor: 'pointer',
+                      border: c.order_type === opt.key ? '1px solid var(--accent-cyan)' : '1px solid var(--border-primary)',
+                      background: c.order_type === opt.key ? 'var(--accent-cyan-dim)' : 'transparent',
+                      color: c.order_type === opt.key ? 'var(--accent-cyan)' : 'var(--text-muted)',
+                      fontWeight: c.order_type === opt.key ? 700 : 400,
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
               </div>
-              <div style={{ minWidth: 80, textAlign: 'right', fontWeight: 600 }}>NT$ {(c.price * c.qty).toLocaleString()}</div>
             </div>
           ))}
         </div>
@@ -142,6 +165,22 @@ export default function POSCartPanel({
               {notFound && <div style={{ fontSize: 11, color: 'var(--accent-red)', marginTop: 4 }}>找不到會員，以一般顧客結帳</div>}
             </div>
           )}
+        </div>
+
+        {/* Order note */}
+        <div style={{ padding: '8px 16px', borderTop: '1px solid var(--border-primary)' }}>
+          <textarea
+            rows={2}
+            placeholder="備註（例：不加冰、少糖）"
+            value={orderNote}
+            onChange={e => setOrderNote(e.target.value)}
+            style={{
+              width: '100%', resize: 'none', boxSizing: 'border-box',
+              background: 'var(--bg-primary)', border: '1px solid var(--border-primary)',
+              borderRadius: 6, padding: '6px 10px', color: 'var(--text-primary)',
+              fontSize: 12, lineHeight: 1.5,
+            }}
+          />
         </div>
 
         {/* Totals & Payment */}

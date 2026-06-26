@@ -91,6 +91,7 @@ export const groupNav = {
         { icon: BookText,     label: '菜單管理', path: '/pos/menu' },
         { icon: ShoppingBag, label: '商品目錄', path: '/pos/products' },
         { icon: QrCode,       label: 'QR 點餐設定', path: '/pos/qr-settings' },
+        { icon: QrCode,       label: 'QR 桌台管理', path: '/pos/qr-tables' },
         { icon: Award,        label: '員工業績',    path: '/pos/staff-performance' },
         { icon: ClipboardList, label: '訂單記錄',   path: '/pos/orders' },
         { icon: Receipt,      label: '發票查詢',    path: '/pos/invoices' },

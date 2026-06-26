@@ -88,6 +88,11 @@ export default function POSPaymentOverlay({
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
               <span>發票號碼</span><span style={{ fontWeight: 600 }}>{receiptData?.invoiceNum}</span>
             </div>
+            {receiptData?.note && (
+              <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--border-primary)', fontSize: 12, color: 'var(--text-secondary)' }}>
+                <span style={{ fontWeight: 600 }}>備註：</span>{receiptData.note}
+              </div>
+            )}
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
               <span>狀態</span>
               <span style={{

@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
 import { RotateCcw, Usb } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import { createPOSTransaction, createInvoice, searchMemberByQuery, getPOSTransactionByNumber } from '../../lib/db'
+import { createPOSTransaction, updatePOSTransaction, createInvoice, searchMemberByQuery, getPOSTransactionByNumber } from '../../lib/db'
+import { useTenant } from '../../contexts/TenantContext'
 import { getEventBus } from '../../lib/events/index.js'
 import { createPaymentRequest, processRefund } from '../../lib/payment'
 import { processPayment, confirmPayment, refundPayment, getPaymentMethods } from '../../lib/paymentGateway'
@@ -12,18 +13,9 @@ import POSProductGrid from './components/POSProductGrid'
 import POSCartPanel from './components/POSCartPanel'
 import POSReceiptModal from './components/POSReceiptModal'
 import POSRefundModal from './components/POSRefundModal'
+import POSQROrderQueue from './components/POSQROrderQueue'
 
 import { toast } from '../../lib/toast'
-const MOCK_PRODUCTS = [
-  { id: 1, name: '美式咖啡', price: 60, category: '飲品', barcode: '4710001001' },
-  { id: 2, name: '拿鐵咖啡', price: 80, category: '飲品', barcode: '4710001002' },
-  { id: 3, name: '巧克力蛋糕', price: 120, category: '甜點', barcode: '4710001003' },
-  { id: 4, name: '起司三明治', price: 90, category: '輕食', barcode: '4710001004' },
-  { id: 5, name: '鮮果汁', price: 75, category: '飲品', barcode: '4710001005' },
-  { id: 6, name: '提拉米蘇', price: 150, category: '甜點', barcode: '4710001006' },
-  { id: 7, name: '總匯沙拉', price: 130, category: '輕食', barcode: '4710001007' },
-  { id: 8, name: '紅茶', price: 40, category: '飲品', barcode: '4710001008' },
-]
 
 // Get payment methods from both old payment lib and new gateway abstraction
 const GATEWAY_METHODS = getPaymentMethods()
@@ -39,6 +31,10 @@ const PAYMENT_METHOD_MAP = GATEWAY_METHODS.map(m => ({
 let invoiceSeq = Math.floor(Math.random() * 90000000) + 10000000
 
 export default function POSTerminal() {
+  const { tenant } = useTenant()
+  const [products, setProducts] = useState([])
+  const [productsLoading, setProductsLoading] = useState(true)
+
   const [search, setSearch] = useState('')
   const [cart, setCart] = useState([])
   const [discount, setDiscount] = useState(0)
@@ -72,6 +68,8 @@ export default function POSTerminal() {
   const [refundResult, setRefundResult] = useState(null)
   const [refundLoading, setRefundLoading] = useState(false)
 
+  const [orderNote, setOrderNote] = useState('')
+
   // Auto-print preference (persisted in localStorage)
   const [autoPrint, setAutoPrint] = useState(() => {
     try { return localStorage.getItem('pos_auto_print') === 'true' } catch { return false }
@@ -80,6 +78,30 @@ export default function POSTerminal() {
   useEffect(() => {
     try { localStorage.setItem('pos_auto_print', String(autoPrint)) } catch {}
   }, [autoPrint])
+
+  useEffect(() => {
+    const orgId = tenant?.organization_id
+    if (!orgId) { setProductsLoading(false); return }
+    setProductsLoading(true)
+    supabase
+      .from('pos_products')
+      .select('id, name, barcode, retail_price, category, sku_id')
+      .eq('organization_id', orgId)
+      .eq('is_available', true)
+      .order('category')
+      .then(({ data, error }) => {
+        if (error) { toast.error('商品載入失敗'); return }
+        setProducts((data || []).map(p => ({
+          id: p.id,
+          name: p.name,
+          barcode: p.barcode,
+          price: Number(p.retail_price),
+          category: p.category || '其他',
+          sku_id: p.sku_id,
+        })))
+      })
+      .finally(() => setProductsLoading(false))
+  }, [tenant?.organization_id])
 
   // Member lookup — identifies customer for loyalty/CRM downstream handlers
   const [selectedMember, setSelectedMember] = useState(null)
@@ -110,7 +132,7 @@ export default function POSTerminal() {
 
   const receiptRef = useRef(null)
 
-  const filtered = MOCK_PRODUCTS.filter(p =>
+  const filtered = products.filter(p =>
     search === '' || p.name.includes(search) || p.category.includes(search) || p.barcode?.includes(search)
   )
 
@@ -118,17 +140,24 @@ export default function POSTerminal() {
     setCart(prev => {
       const existing = prev.find(c => c.id === product.id)
       if (existing) return prev.map(c => c.id === product.id ? { ...c, qty: c.qty + 1 } : c)
-      return [...prev, { ...product, qty: 1 }]
+      return [...prev, { ...product, qty: 1, order_type: 'dine_in' }]
     })
+  }
+
+  const updateItemType = (id, type) => {
+    setCart(prev => prev.map(c => c.id === id ? { ...c, order_type: type } : c))
   }
 
   const handleBarcodeSubmit = (e) => {
     e.preventDefault()
     if (!barcodeInput.trim()) return
-    const product = MOCK_PRODUCTS.find(p => p.barcode === barcodeInput.trim() || p.name.includes(barcodeInput.trim()))
+    const q = barcodeInput.trim()
+    const product = products.find(p => p.barcode === q || p.name.includes(q))
     if (product) {
       addToCart(product)
       setBarcodeInput('')
+    } else {
+      toast.error('找不到商品')
     }
   }
 
@@ -230,7 +259,7 @@ export default function POSTerminal() {
         transaction_number: txnNum,
         store: '威士威企業總部',
         cashier: '系統',
-        items: cart.map(c => ({ name: c.name, qty: c.qty, price: c.price })),
+        items: cart.map(c => ({ name: c.name, qty: c.qty, price: c.price, order_type: c.order_type })),
         subtotal, discount: safeDiscount, tax, total,
         payment_method: currentPaymentLabel,
         payment_id: payResult.paymentId,
@@ -239,6 +268,11 @@ export default function POSTerminal() {
         points_used: pointsUsed,
         status: '完成',
       })
+
+      // Patch note onto transaction record (RPC doesn't accept it directly)
+      if (orderNote.trim() && txnRecord) {
+        updatePOSTransaction(txnRecord, { note: orderNote.trim() }).catch(() => {})
+      }
 
       // Publish event → Finance AR, WMS stock deduction, CRM loyalty/purchase/survey
       try {
@@ -250,10 +284,11 @@ export default function POSTerminal() {
           cashier: '系統',
           total,
           payment_method: currentPaymentLabel,
-          items: cart.map(c => ({ name: c.name, qty: c.qty, price: c.price })),
+          items: cart.map(c => ({ name: c.name, qty: c.qty, price: c.price, order_type: c.order_type })),
           customer_id: selectedMember?.id ?? null,
           points_used: pointsUsed,
           store_id: null,
+          note: orderNote.trim() || null,
         })
       } catch (e) {
         console.warn('[POS] event publish failed:', e.message)
@@ -304,6 +339,7 @@ export default function POSTerminal() {
         change: selectedPayment === 'cash' ? changeAmount : null,
         carrierType: carrierType !== 'none' ? (carrierType === 'phone_barcode' ? '手機條碼' : '自然人憑證') : null,
         carrierValue: carrierType !== 'none' ? carrierValue : null,
+        note: orderNote.trim() || null,
       }
 
       setReceiptData(receipt)
@@ -345,6 +381,7 @@ export default function POSTerminal() {
     setDiscount(0)
     setPointsUsed(0)
     setCashTendered('')
+    setOrderNote('')
     setPaymentStage('cart')
     setPaymentResult(null)
     setReceiptData(null)
@@ -508,6 +545,7 @@ export default function POSTerminal() {
                 {thermalPort ? '收據機已連接' : '連接收據機'}
               </button>
             )}
+            <POSQROrderQueue />
             <button className="btn" style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-primary)' }} onClick={() => setShowRefund(true)}>
               <RotateCcw size={14} /> 退貨/退款
             </button>
@@ -542,12 +580,16 @@ export default function POSTerminal() {
           handleBarcodeSubmit={handleBarcodeSubmit}
           filtered={filtered}
           addToCart={addToCart}
+          loading={productsLoading}
         />
 
         <POSCartPanel
           cart={cart}
           updateQty={updateQty}
+          updateItemType={updateItemType}
           removeFromCart={removeFromCart}
+          orderNote={orderNote}
+          setOrderNote={setOrderNote}
           subtotal={subtotal}
           discount={discount}
           setDiscount={setDiscount}

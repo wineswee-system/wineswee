@@ -8,6 +8,7 @@ export default function POSProductGrid({
   handleBarcodeSubmit,
   filtered,
   addToCart,
+  loading,
 }) {
   return (
     <div style={{ flex: '1 1 55%', display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -37,7 +38,13 @@ export default function POSProductGrid({
           </div>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 12, padding: 16 }}>
-          {filtered.map(p => (
+          {loading && (
+            <div style={{ gridColumn: '1 / -1', textAlign: 'center', color: 'var(--text-muted)', padding: 32 }}>載入商品中…</div>
+          )}
+          {!loading && filtered.length === 0 && (
+            <div style={{ gridColumn: '1 / -1', textAlign: 'center', color: 'var(--text-muted)', padding: 32 }}>尚無商品</div>
+          )}
+          {!loading && filtered.map(p => (
             <div
               key={p.id}
               onClick={() => addToCart(p)}

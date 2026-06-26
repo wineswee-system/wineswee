@@ -60,13 +60,14 @@ export default function TaskFormsTab({ task, formBindings, setFormBindings }) {
     return { label: '', clickable: false }
   }
 
-  // 點動作：核銷段未綁單 → 先挑要核銷的費用申請單；其餘以任務內 overlay 開啟
+  // 點動作：核銷段未綁單 → 先挑要核銷的費用申請單；已綁 → 直接導；其餘以任務內 overlay 開啟
   const onAction = (b) => {
-    if (b.form_type === 'expense_settle' && !b.form_id) {
-      setSettlePicker(b)
-    } else {
-      setFillBinding(b)
+    if (b.form_type === 'expense_settle') {
+      if (!b.form_id) return setSettlePicker(b)
+      window.open(`/process/expense-requests?focus=${b.form_id}&settle=1`, '_blank')
+      return
     }
+    setFillBinding(b)
   }
 
   // 切「自己填」：清掉指派

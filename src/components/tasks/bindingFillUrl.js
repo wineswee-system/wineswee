@@ -7,14 +7,9 @@ export const applyTypeFor = (ft) =>
   : ft === 'order_settle' ? 'order_apply'
   : null
 
-// 回傳路徑字串；若是「驗收/核銷段」但其申請段尚未完成則回 null（鎖定）。
+// 回傳路徑字串；若是「驗收/核銷段」且尚未綁申請單，且申請段未完成則回 null（鎖定）。
 export function bindingFillPath(b, bindings = []) {
-  const at = applyTypeFor(b.form_type)
-  if (at) {
-    const sibDone = bindings.find(x => x.form_type === at)?.status === '已完成'
-    if (!sibDone) return null
-  }
-
+  // 已綁單的驗收段：直接導去對應申請單，跳過 sibling 鎖定判斷
   if (b.form_type === 'expense_settle') {
     return b.form_id ? `/process/expense-requests?focus=${b.form_id}&settle=1` : null
   }

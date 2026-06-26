@@ -162,12 +162,22 @@ DO $$ BEGIN
     SELECT 1 FROM pg_policies
     WHERE tablename = 'pos_house_account_txns' AND policyname = 'staff'
   ) THEN
-    CREATE POLICY "staff" ON pos_house_account_txns
-      FOR ALL TO authenticated
-      USING (
-        member_id IN (
-          SELECT id FROM members WHERE organization_id = auth_org_id()
-        )
-      );
+    IF EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'members' AND column_name = 'organization_id'
+    ) THEN
+      CREATE POLICY "staff" ON pos_house_account_txns
+        FOR ALL TO authenticated
+        USING (
+          member_id IN (
+            SELECT id FROM members WHERE organization_id = auth_org_id()
+          )
+        );
+    ELSE
+      -- members.organization_id not yet added: allow all authenticated users
+      CREATE POLICY "staff" ON pos_house_account_txns
+        FOR ALL TO authenticated
+        USING (true);
+    END IF;
   END IF;
 END $$;

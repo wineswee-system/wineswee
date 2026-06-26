@@ -266,7 +266,7 @@ export default function ProjectListView({
         const sc = STATUS_MAP[p.status] || {}
 
         return (
-          <div key={p.id} className="card" style={{ marginBottom: 10, padding: '14px 16px', cursor: 'pointer', transition: 'border-color 0.2s' }}
+          <div key={p.id} className="card" style={{ marginBottom: 10, padding: '14px 16px', cursor: 'pointer', transition: 'border-color 0.2s', overflow: projMenuId === p.id ? 'visible' : 'hidden' }}
             onClick={() => setSelected(p)}
             onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--accent-cyan)'}
             onMouseLeave={e => e.currentTarget.style.borderColor = ''}>

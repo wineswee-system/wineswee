@@ -312,17 +312,26 @@ function CheckoutModal({ tableNumber, orgId, storeId, orderId, onClose, onDone }
   const [busy,      setBusy]      = useState(false)
   const [dbItems,   setDbItems]   = useState([])
   const [loading,   setLoading]   = useState(true)
+  const [discType,  setDiscType]  = useState('percent')
+  const [discVal,   setDiscVal]   = useState('')
 
-  // Fetch fresh from DB on mount so we always see the latest items
+  // Fetch fresh from DB on mount; exclude voided items
   useEffect(() => {
     supabase.from('pos_order_items')
       .select('id, name, unit_price, quantity')
       .eq('order_id', orderId)
+      .is('voided_at', null)
       .order('created_at')
       .then(({ data }) => { setDbItems(data ?? []); setLoading(false) })
   }, [orderId])
 
-  const total = dbItems.reduce((s, i) => s + Number(i.unit_price) * i.quantity, 0)
+  const subtotal    = dbItems.reduce((s, i) => s + Number(i.unit_price) * i.quantity, 0)
+  const discAmount  = discVal
+    ? discType === 'percent'
+      ? Math.round(subtotal * Math.min(parseFloat(discVal) || 0, 100) / 100)
+      : Math.min(parseFloat(discVal) || 0, subtotal)
+    : 0
+  const total = subtotal - discAmount
 
   async function confirm() {
     setBusy(true)
@@ -336,10 +345,16 @@ function CheckoutModal({ tableNumber, orgId, storeId, orderId, onClose, onDone }
       })
       if (pErr) throw pErr
 
-      const { error: uErr } = await supabase.from('pos_orders').update({
+      const orderUpdate = {
         status: 'paid',
         paid_at: new Date().toISOString(),
-      }).eq('id', orderId)
+        ...(discAmount > 0 && {
+          discount_type: discType,
+          discount_value: parseFloat(discVal) || 0,
+          discount_amount: discAmount,
+        }),
+      }
+      const { error: uErr } = await supabase.from('pos_orders').update(orderUpdate).eq('id', orderId)
       if (uErr) throw uErr
 
       toast.success(`T${tableNumber} 結帳完成 NT$${total.toLocaleString()}`)
@@ -378,7 +393,36 @@ function CheckoutModal({ tableNumber, orgId, storeId, orderId, onClose, onDone }
           ))}
         </div>
 
+        {/* Discount row */}
+        <div style={{ padding: '8px 20px', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>折扣</span>
+          <div style={{ display: 'flex', gap: 2 }}>
+            {[['percent', '%'], ['fixed', 'NT$']].map(([v, l]) => (
+              <button key={v} onClick={() => { setDiscType(v); setDiscVal('') }}
+                style={{ padding: '2px 8px', borderRadius: 6, border: '1px solid', fontSize: 11, cursor: 'pointer',
+                  borderColor: discType === v ? 'var(--accent-orange)' : 'var(--border-default)',
+                  background: discType === v ? 'var(--accent-orange-dim)' : 'var(--bg-secondary)',
+                  color: discType === v ? 'var(--accent-orange)' : 'var(--text-muted)' }}>{l}</button>
+            ))}
+          </div>
+          <input
+            type="number" min="0" max={discType === 'percent' ? 100 : undefined}
+            placeholder={discType === 'percent' ? '0' : '0'}
+            value={discVal}
+            onChange={e => setDiscVal(e.target.value)}
+            style={{ width: 72, padding: '4px 8px', borderRadius: 6, border: '1px solid var(--border-default)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: 13, outline: 'none' }}
+          />
+          {discAmount > 0 && (
+            <span style={{ fontSize: 12, color: 'var(--accent-orange)', marginLeft: 4 }}>- NT${discAmount.toLocaleString()}</span>
+          )}
+        </div>
+
         <div style={S.coTotal}>
+          {discAmount > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', fontSize: 13, color: 'var(--text-muted)', marginBottom: 4 }}>
+              <span>小計</span><span>NT${subtotal.toLocaleString()}</span>
+            </div>
+          )}
           <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-muted)' }}>應收合計</span>
           <span style={{ fontSize: 28, fontWeight: 800, color: 'var(--text-primary)' }}>NT${total.toLocaleString()}</span>
         </div>
@@ -412,7 +456,7 @@ function CheckoutModal({ tableNumber, orgId, storeId, orderId, onClose, onDone }
 }
 
 // ── Right-side order panel ─────────────────────────────────────────────────────
-function OrderPanel({ existingItems, cart, items, orgId, orderId, tableNumber, onSubmit, onCheckout, submitBusy }) {
+function OrderPanel({ existingItems, cart, items, orgId, orderId, tableNumber, onSubmit, onCheckout, onVoidItem, submitBusy }) {
   const cartEntries = Object.entries(cart).filter(([, v]) => v.qty > 0)
   const newTotal    = cartEntries.reduce((s, [id, v]) => {
     const item = items.find(i => i.id === id)
@@ -433,9 +477,13 @@ function OrderPanel({ existingItems, cart, items, orgId, orderId, tableNumber, o
           <>
             <div style={S.panelHead}>已點 · NT${existTotal.toLocaleString()}</div>
             {existingItems.map((item, i) => (
-              <div key={item.id ?? i} style={S.panelRow}>
-                <span style={S.panelRowName}>{item.name}</span>
+              <div key={item.id ?? i} style={{ ...S.panelRow, alignItems: 'center' }}>
+                <span style={{ ...S.panelRowName, flex: 1 }}>{item.name}</span>
                 <span style={S.panelRowAmt}>×{item.quantity}　NT${(Number(item.unit_price) * item.quantity).toLocaleString()}</span>
+                {onVoidItem && (
+                  <button onClick={() => onVoidItem(item.id)} title="作廢"
+                    style={{ marginLeft: 6, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-red)', fontSize: 15, lineHeight: 1, padding: '0 2px', flexShrink: 0 }}>×</button>
+                )}
               </div>
             ))}
           </>
@@ -499,6 +547,7 @@ export default function WaiterMode() {
   const [selTable,      setSelTable]      = useState(null)
   const [orderId,       setOrderId]       = useState(null)
   const [existingItems, setExistingItems] = useState([])
+  const [orderType,     setOrderType]     = useState('dine_in')
   const [categories,    setCategories]    = useState([])
   const [items,         setItems]         = useState([])
   const [selCat,        setSelCat]        = useState(null)
@@ -657,7 +706,7 @@ export default function WaiterMode() {
   // ── Select table ──────────────────────────────────────────────────────────
   async function selectTable(table) {
     const activeOrder = activeOrders.find(o => o.table_id === table.id)
-    setSelTable(table); setCart({}); setErrMsg('')
+    setSelTable(table); setCart({}); setErrMsg(''); setOrderType('dine_in')
     if (activeOrder) {
       setOrderId(activeOrder.id)
       const { data: existing } = await supabase
@@ -703,7 +752,7 @@ export default function WaiterMode() {
       if (!currentOrderId) {
         const { data: newOrder, error: oErr } = await supabase
           .from('pos_orders')
-          .insert({ organization_id: orgId, store_id: effectiveStoreId, table_id: selTable.id, status: 'open', opened_by: user.id })
+          .insert({ organization_id: orgId, store_id: effectiveStoreId, table_id: selTable.id, status: 'open', opened_by: user.id, order_type: orderType })
           .select('id').single()
         if (oErr) throw oErr
         currentOrderId = newOrder.id
@@ -737,6 +786,14 @@ export default function WaiterMode() {
     } finally {
       setSubmitBusy(false)
     }
+  }
+
+  // ── Void a submitted item ─────────────────────────────────────────────────
+  async function handleVoidItem(itemId) {
+    const { error } = await supabase.rpc('pos_void_item', { p_item_id: itemId })
+    if (error) { toast.error('作廢失敗：' + error.message); return }
+    setExistingItems(prev => prev.filter(i => i.id !== itemId))
+    toast.success('品項已作廢')
   }
 
   // ── Open checkout: auto-submit pending cart first ─────────────────────────
@@ -849,6 +906,16 @@ export default function WaiterMode() {
       <div style={S.header}>
         <div style={S.headerLeft}>
           <h1 style={S.h1}>桌號 T{selTable?.table_number}</h1>
+          <div style={{ display: 'flex', gap: 4, marginTop: 4, marginBottom: 2 }}>
+            {[['dine_in', '🍽 內用'], ['takeout', '📦 外帶']].map(([v, l]) => (
+              <button key={v} onClick={() => setOrderType(v)} style={{
+                padding: '2px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer', border: '1px solid',
+                borderColor: orderType === v ? 'var(--accent-cyan)' : 'var(--border-default)',
+                background:  orderType === v ? 'var(--accent-cyan-dim)' : 'transparent',
+                color:       orderType === v ? 'var(--accent-cyan)' : 'var(--text-muted)',
+              }}>{l}</button>
+            ))}
+          </div>
           {storeName && <p style={S.sub}>{storeName}</p>}
         </div>
         <div style={S.headerRight}>
@@ -955,6 +1022,7 @@ export default function WaiterMode() {
             tableNumber={selTable?.table_number}
             onSubmit={handleSubmit}
             onCheckout={openCheckout}
+            onVoidItem={handleVoidItem}
             submitBusy={submitBusy}
           />
         )}

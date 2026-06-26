@@ -57,7 +57,7 @@ export default function OrderHistory() {
     if (!itemMap[orderId]) {
       const { data } = await supabase
         .from('pos_order_items')
-        .select('id, name, unit_price, quantity, note')
+        .select('id, name, unit_price, quantity, note, voided_at')
         .eq('order_id', orderId)
         .order('created_at')
       setItemMap(p => ({ ...p, [orderId]: data ?? [] }))
@@ -87,12 +87,10 @@ export default function OrderHistory() {
     if (selItems.length === 0) { toast.error('請選擇要退貨的品項'); return }
     setReturning(true)
     try {
-      const { error } = await supabase.functions.invoke('process-return', {
-        body: {
-          orderId: returnModal.order.id,
-          items:   selItems.map(i => ({ id: i.id, quantity: i.quantity })),
-          reason:  '客戶退貨',
-        },
+      const { error } = await supabase.rpc('pos_refund_order', {
+        p_order_id: returnModal.order.id,
+        p_item_ids: selItems.map(i => i.id),
+        p_reason:   '客戶退貨',
       })
       if (error) throw error
       toast.success('退貨已處理')
@@ -194,12 +192,21 @@ ${lines}
                   <tr key={`${o.id}-items`} style={{ background: 'var(--bg-tertiary)' }}>
                     <td colSpan={7} style={{ padding: '10px 28px 16px' }}>
                       {(itemMap[o.id] ?? []).map(i => (
-                        <div key={i.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', fontSize: 13, color: 'var(--text-secondary)' }}>
-                          <span>{i.name}{i.note ? ` (${i.note})` : ''} ×{i.quantity}</span>
+                        <div key={i.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', fontSize: 13,
+                          color: i.voided_at ? 'var(--text-muted)' : 'var(--text-secondary)',
+                          textDecoration: i.voided_at ? 'line-through' : 'none' }}>
+                          <span>{i.name}{i.note ? ` (${i.note})` : ''} ×{i.quantity}{i.voided_at ? ' 已退' : ''}</span>
                           <span>${(i.unit_price * i.quantity).toLocaleString()}</span>
                         </div>
                       ))}
                       {(itemMap[o.id] ?? []).length === 0 && <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>無品項</div>}
+                      {(itemMap[o.id] ?? []).length > 0 && (() => {
+                        const activeItems = (itemMap[o.id] ?? []).filter(i => !i.voided_at)
+                        const total = activeItems.reduce((s, i) => s + Number(i.unit_price) * i.quantity, 0)
+                        return <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, paddingTop: 6, borderTop: '1px solid var(--border-default)', fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
+                          <span>合計</span><span>NT${total.toLocaleString()}</span>
+                        </div>
+                      })()}
                       <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
                         <button
                           onClick={e => { e.stopPropagation(); printOrderReceipt(o, itemMap[o.id] ?? []) }}

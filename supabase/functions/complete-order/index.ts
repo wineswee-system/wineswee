@@ -153,6 +153,28 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ── 7. Mark order as paid + revoke QR session ────────────────────────────
+    const paidAt = now.toISOString()
+
+    // Only finalize on the last split payment (or if no split)
+    const isFinalSplit = !payment.split_total || payment.split_index === payment.split_total
+    if (isFinalSplit && order) {
+      await supabase
+        .from('pos_orders')
+        .update({ status: 'paid', paid_at: paidAt })
+        .eq('id', order.id)
+        .in('status', ['open', 'submitted', 'confirmed'])
+
+      // Revoke active QR sessions for the same table so the token can't be reused
+      if (order.table_id) {
+        await supabase
+          .from('qr_order_sessions')
+          .update({ revoked_at: paidAt })
+          .eq('table_id', order.table_id)
+          .is('revoked_at', null)
+      }
+    }
+
     return json({ ok: true, invoiceNumber, invoiceId: invoice.id })
 
   } catch (e) {

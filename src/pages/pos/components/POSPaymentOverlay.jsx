@@ -3,6 +3,14 @@ import { createPortal } from 'react-dom'
 import { ModalOverlay } from '../../../components/Modal'
 import { Loader2, CheckCircle, XCircle, Receipt, Printer, RotateCcw } from 'lucide-react'
 
+const paymentMethodLabels = {
+  cash: '現金', CASH: '現金',
+  credit_card: '信用卡', CREDIT: '信用卡',
+  ecpay: 'ECPay 綠界', ECPAY: 'ECPay 綠界',
+  line_pay: 'LINE Pay', LINEPAY: 'LINE Pay',
+  bank_transfer: '銀行轉帳', TRANSFER: '銀行轉帳',
+}
+
 export default function POSPaymentOverlay({
   paymentStage,
   processingMsg,
@@ -19,6 +27,7 @@ export default function POSPaymentOverlay({
   handleQuickRefund,
   resetTerminal,
   setPaymentStage,
+  paymentSplits = [],
 }) {
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -39,6 +48,17 @@ export default function POSPaymentOverlay({
           <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8, color: 'var(--text-primary)' }}>付款處理中</div>
           <div style={{ color: 'var(--text-secondary)', fontSize: 14 }}>{processingMsg}</div>
           <div style={{ marginTop: 16, color: 'var(--text-muted)', fontSize: 12 }}>請勿關閉此頁面</div>
+          {paymentSplits.length > 0 && (
+            <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {paymentSplits.map((split, i) => (
+                <div key={i} style={{ fontSize: 13, color: 'var(--text-muted)',
+                                      display: 'flex', justifyContent: 'space-between', gap: 16 }}>
+                  <span>{paymentMethodLabels[split.method] || split.method}</span>
+                  <span>NT${split.amount}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     )
@@ -74,9 +94,22 @@ export default function POSPaymentOverlay({
           )}
 
           <div style={{ background: 'var(--bg-secondary)', borderRadius: 10, padding: 16, marginBottom: 16, textAlign: 'left', fontSize: 13 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-              <span>付款方式</span><span style={{ fontWeight: 600 }}>{receiptData?.paymentMethod}</span>
-            </div>
+            {paymentSplits.length > 0 ? (
+              <div style={{ marginBottom: 6 }}>
+                <div style={{ color: 'var(--text-muted)', fontSize: 12, marginBottom: 4 }}>付款方式</div>
+                {paymentSplits.map((split, i) => (
+                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between',
+                                        fontSize: 13, color: 'var(--text-secondary)' }}>
+                    <span>{paymentMethodLabels[split.method] || split.method}</span>
+                    <span>NT${split.amount}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                <span>付款方式</span><span style={{ fontWeight: 600 }}>{receiptData?.paymentMethod}</span>
+              </div>
+            )}
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
               <span>付款編號</span><span style={{ fontWeight: 600, fontSize: 11 }}>{paymentResult?.paymentId}</span>
             </div>

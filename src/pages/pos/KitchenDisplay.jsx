@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { ChefHat, CheckCircle2, Clock, RefreshCw } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { toast } from '../../lib/toast'
+import { kitchenPrinter } from '../../lib/kitchenPrinter'
 
 const ITEM_STATUS = {
   confirmed: { label: '待製作', color: 'var(--accent-orange)', bg: 'var(--accent-orange-dim)' },
@@ -38,12 +39,14 @@ export default function KitchenDisplay() {
   const [orders,  setOrders]  = useState([])
   const [loading, setLoading] = useState(true)
   const [tick,    setTick]    = useState(0)
+  const [kitchenPrinterConnected, setKitchenPrinterConnected] = useState(false)
+  const [activeCourse, setActiveCourse] = useState({}) // { orderId: currentMaxCourseVisible }
 
   const fetchOrders = useCallback(async () => {
     // Step 1 — items sent to kitchen that are not yet done
     const { data: items, error } = await supabase
       .from('pos_order_items')
-      .select('id, order_id, name, quantity, note, item_status, created_at, source')
+      .select('id, order_id, name, quantity, note, item_status, created_at, source, course')
       .eq('sent_to_kitchen', true)
       .in('item_status', ['confirmed', 'preparing', 'ready'])
       .order('created_at', { ascending: true })
@@ -119,7 +122,25 @@ export default function KitchenDisplay() {
       }, (payload) => {
         if (payload.eventType === 'INSERT') {
           const id = payload.new?.id
-          if (id && !knownIds.has(id)) { knownIds.add(id); beep() }
+          if (id && !knownIds.has(id)) {
+            knownIds.add(id)
+            beep()
+            // auto-print on new kitchen item if printer is connected
+            if (kitchenPrinter.isConnected()) {
+              setOrders(prev => {
+                const order = prev.find(o => o.orderId === payload.new?.order_id)
+                if (order) {
+                  kitchenPrinter.printKitchenTicket({
+                    orderNumber: order.orderNumber,
+                    tableNumber: order.tableNumber,
+                    items: order.items,
+                    note: order.note || '',
+                  }).catch(console.error)
+                }
+                return prev
+              })
+            }
+          }
         }
         fetchOrders()
       })
@@ -176,13 +197,31 @@ export default function KitchenDisplay() {
             <h2><span className="header-icon">🍳</span> 廚房顯示器</h2>
             <p>即時顯示待製作訂單 — 點擊品項切換狀態</p>
           </div>
-          <button
-            className="btn"
-            style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-primary)', display: 'flex', alignItems: 'center', gap: 6 }}
-            onClick={fetchOrders}
-          >
-            <RefreshCw size={14} /> 重新整理
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button
+              onClick={async () => {
+                if (kitchenPrinterConnected) {
+                  await kitchenPrinter.disconnect()
+                  setKitchenPrinterConnected(false)
+                } else {
+                  try { await kitchenPrinter.connect(); setKitchenPrinterConnected(true) }
+                  catch (e) { console.error(e) }
+                }
+              }}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px',
+                       background: kitchenPrinterConnected ? 'var(--accent-green-dim)' : 'var(--bg-secondary)',
+                       color: kitchenPrinterConnected ? 'var(--accent-green)' : 'var(--text-muted)',
+                       border: '1px solid var(--border-primary)', borderRadius: 8, cursor: 'pointer', fontSize: 13 }}>
+              🖨️ {kitchenPrinterConnected ? '廚房列印機已連線' : '廚房列印機未連線'}
+            </button>
+            <button
+              className="btn"
+              style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-primary)', display: 'flex', alignItems: 'center', gap: 6 }}
+              onClick={fetchOrders}
+            >
+              <RefreshCw size={14} /> 重新整理
+            </button>
+          </div>
         </div>
       </div>
 
@@ -206,6 +245,9 @@ export default function KitchenDisplay() {
                     tick={tick}
                     onMarkItem={markItem}
                     onMarkAllReady={markOrderAllReady}
+                    kitchenPrinterConnected={kitchenPrinterConnected}
+                    activeCourse={activeCourse}
+                    onSetActiveCourse={setActiveCourse}
                   />
                 ))}
               </div>
@@ -237,13 +279,26 @@ export default function KitchenDisplay() {
   )
 }
 
-function OrderCard({ order, tick, onMarkItem, onMarkAllReady, dimmed }) {
+function OrderCard({ order, tick, onMarkItem, onMarkAllReady, dimmed, kitchenPrinterConnected, activeCourse, onSetActiveCourse }) {
   void tick  // causes re-render each second for elapsed time
 
   const allReady    = order.items.every(i => i.item_status === 'ready')
   const nonReadyIds = order.items.filter(i => i.item_status !== 'ready').map(i => i.id)
   const minutes     = (Date.now() - new Date(order.firstAt).getTime()) / 60000
   const urgency     = minutes > 15 ? 'var(--accent-red)' : minutes > 8 ? 'var(--accent-orange)' : 'var(--text-muted)'
+
+  // Course grouping
+  const courseGroups = {}
+  order.items.forEach(item => {
+    const c = item.course || 1
+    if (!courseGroups[c]) courseGroups[c] = []
+    courseGroups[c].push(item)
+  })
+  const maxCourse = Math.max(...Object.keys(courseGroups).map(Number))
+  const currentCourse = (activeCourse && activeCourse[order.orderId]) || 1
+  const hasMultipleCourses = Object.keys(courseGroups).length > 1
+
+  const COURSE_LABEL = { 1: '一', 2: '二', 3: '三' }
 
   return (
     <div style={{
@@ -265,58 +320,62 @@ function OrderCard({ order, tick, onMarkItem, onMarkAllReady, dimmed }) {
           </div>
           <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>#{order.orderNumber}</div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: urgency, fontSize: 12, fontWeight: 600 }}>
-          <Clock size={12} />
-          {elapsedLabel(order.firstAt)}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {onSetActiveCourse && (
+            <button
+              onClick={() => kitchenPrinter.isConnected() && kitchenPrinter.printKitchenTicket({
+                orderNumber: order.orderNumber,
+                tableNumber: order.tableNumber,
+                items: order.items,
+                note: order.note || '',
+              })}
+              disabled={!kitchenPrinterConnected}
+              style={{ fontSize: 11, padding: '3px 8px',
+                       background: 'var(--bg-hover)', color: 'var(--text-muted)',
+                       border: '1px solid var(--border-primary)', borderRadius: 6,
+                       cursor: kitchenPrinterConnected ? 'pointer' : 'not-allowed',
+                       opacity: kitchenPrinterConnected ? 1 : 0.4 }}>
+              重新列印
+            </button>
+          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: urgency, fontSize: 12, fontWeight: 600 }}>
+            <Clock size={12} />
+            {elapsedLabel(order.firstAt)}
+          </div>
         </div>
       </div>
 
       <div style={{ padding: '10px 14px' }}>
-        {order.items.map(item => {
-          const s    = ITEM_STATUS[item.item_status] ?? ITEM_STATUS.confirmed
-          const next = NEXT_STATUS[item.item_status]
-          return (
-            <div
-              key={item.id}
-              onClick={() => next && onMarkItem(item.id, order.orderId, next)}
-              title={next ? `點擊 → ${ITEM_STATUS[next]?.label}` : undefined}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 10,
-                padding: '7px 10px', borderRadius: 8, marginBottom: 6,
-                background: s.bg,
-                cursor: next ? 'pointer' : 'default',
-                userSelect: 'none',
-              }}
-            >
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
-                  {item.name} × {item.quantity}
-                </div>
-                {item.note && (
-                  <div style={{ fontSize: 11, color: 'var(--accent-orange)', marginTop: 1 }}>
-                    備註：{item.note}
+        {hasMultipleCourses
+          ? Object.entries(courseGroups)
+              .filter(([c]) => Number(c) <= currentCourse)
+              .sort(([a], [b]) => Number(a) - Number(b))
+              .map(([c, items]) => (
+                <div key={c}>
+                  <div style={{ fontSize: 11, color: 'var(--accent-purple)',
+                                fontWeight: 600, marginTop: 6, marginBottom: 2 }}>
+                    第{COURSE_LABEL[c] || c}輪
                   </div>
-                )}
-              </div>
-              {item.item_status === 'ready'
-                ? <CheckCircle2 size={16} style={{ color: 'var(--accent-green)', flexShrink: 0 }} />
-                : (
-                  <span style={{
-                    fontSize: 11, fontWeight: 700, color: s.color,
-                    background: 'rgba(0,0,0,0.12)', padding: '2px 8px', borderRadius: 10,
-                    whiteSpace: 'nowrap', flexShrink: 0,
-                  }}>
-                    {s.label}
-                  </span>
-                )
-              }
-            </div>
-          )
-        })}
+                  {items.map(item => <KitchenItem key={item.id} item={item} order={order} onMarkItem={onMarkItem} />)}
+                </div>
+              ))
+          : order.items.map(item => <KitchenItem key={item.id} item={item} order={order} onMarkItem={onMarkItem} />)
+        }
       </div>
 
-      {!allReady && (
-        <div style={{ padding: '0 14px 14px' }}>
+      <div style={{ padding: '0 14px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {/* 送下一輪 — only shown when order has unrevealed courses */}
+        {!allReady && hasMultipleCourses && currentCourse < maxCourse && (
+          <button
+            onClick={() => onSetActiveCourse(prev => ({ ...prev, [order.orderId]: currentCourse + 1 }))}
+            style={{ width: '100%', padding: '6px 0',
+                     background: 'var(--accent-purple-dim)', color: 'var(--accent-purple)',
+                     border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 500 }}>
+            送第{COURSE_LABEL[currentCourse + 1] || (currentCourse + 1)}輪
+            　({courseGroups[currentCourse + 1]?.length || 0} 項)
+          </button>
+        )}
+        {!allReady && (
           <button
             onClick={() => onMarkAllReady(order.orderId, nonReadyIds)}
             style={{
@@ -328,8 +387,49 @@ function OrderCard({ order, tick, onMarkItem, onMarkAllReady, dimmed }) {
           >
             <CheckCircle2 size={14} /> 全部完成
           </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function KitchenItem({ item, order, onMarkItem }) {
+  const s    = ITEM_STATUS[item.item_status] ?? ITEM_STATUS.confirmed
+  const next = NEXT_STATUS[item.item_status]
+  return (
+    <div
+      onClick={() => next && onMarkItem(item.id, order.orderId, next)}
+      title={next ? `點擊 → ${ITEM_STATUS[next]?.label}` : undefined}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 10,
+        padding: '7px 10px', borderRadius: 8, marginBottom: 6,
+        background: s.bg,
+        cursor: next ? 'pointer' : 'default',
+        userSelect: 'none',
+      }}
+    >
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
+          {item.name} × {item.quantity}
         </div>
-      )}
+        {item.note && (
+          <div style={{ fontSize: 11, color: 'var(--accent-orange)', marginTop: 1 }}>
+            備註：{item.note}
+          </div>
+        )}
+      </div>
+      {item.item_status === 'ready'
+        ? <CheckCircle2 size={16} style={{ color: 'var(--accent-green)', flexShrink: 0 }} />
+        : (
+          <span style={{
+            fontSize: 11, fontWeight: 700, color: s.color,
+            background: 'rgba(0,0,0,0.12)', padding: '2px 8px', borderRadius: 10,
+            whiteSpace: 'nowrap', flexShrink: 0,
+          }}>
+            {s.label}
+          </span>
+        )
+      }
     </div>
   )
 }

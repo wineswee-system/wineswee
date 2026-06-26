@@ -78,6 +78,38 @@ export default function ZReport() {
   const expectedCash = floatAmt + cashRevenue
   const variance     = actualCash !== '' ? Number(actualCash) - expectedCash : null
 
+  function printZReport() {
+    const lines = Object.entries(byMethod)
+      .map(([m, amt]) => `${(METHOD_LABEL[m] ?? m).padEnd(10)}  $${Number(amt).toLocaleString()}`)
+      .join('\n')
+    const varLine = variance !== null
+      ? `差異金額: ${variance >= 0 ? '+' : ''}${variance.toLocaleString()} 元`
+      : ''
+    const win = window.open('', '_blank', 'width=400,height=600')
+    if (!win) return
+    win.document.write(`<pre style="font-family:monospace;font-size:13px;padding:20px;line-height:1.7">
+Z 報表 — ${fmtDate(selShift?.opened_at)}
+${'='.repeat(36)}
+${selShift?.status === 'open' ? '● 進行中' : '✓ 已結班'}
+${'─'.repeat(36)}
+收款明細
+${lines}
+${'─'.repeat(36)}
+合計          $${totalRevenue.toLocaleString()}
+結帳訂單：${orderCount} 筆
+${'─'.repeat(36)}
+開班備用金：$${floatAmt.toLocaleString()}
+現金收款：  $${cashRevenue.toLocaleString()}
+理論在抽屜：$${expectedCash.toLocaleString()}
+${actualCash !== '' ? `實際點鈔：  $${Number(actualCash).toLocaleString()}` : ''}
+${varLine}
+${'='.repeat(36)}
+列印時間：${new Date().toLocaleString('zh-TW')}
+</pre>`)
+    win.document.close()
+    win.print()
+  }
+
   async function closeShift() {
     if (!selShift || selShift.status === 'closed' || closing) return
     setClosing(true)
@@ -124,6 +156,14 @@ export default function ZReport() {
           <span style={{ fontSize: 12, fontWeight: 600, color: selShift.status === 'open' ? 'var(--accent-green)' : 'var(--text-muted)' }}>
             {selShift.status === 'open' ? '● 進行中' : '✓ 已結班'}
           </span>
+        )}
+        {selShift && (
+          <button
+            onClick={printZReport}
+            style={{ padding: '7px 14px', borderRadius: 8, border: 'none', background: 'var(--accent-cyan)', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', marginLeft: 'auto' }}
+          >
+            🖨 列印 Z 報表
+          </button>
         )}
       </div>
 

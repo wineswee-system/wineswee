@@ -14,6 +14,9 @@ import POSCartPanel from './components/POSCartPanel'
 import POSReceiptModal from './components/POSReceiptModal'
 import POSRefundModal from './components/POSRefundModal'
 import POSQROrderQueue from './components/POSQROrderQueue'
+import POSVariantModal from './components/POSVariantModal'
+import POSComboModal from './components/POSComboModal'
+import { cacheProducts, cacheMenuItems, getCachedProducts, getCachedMenuItems, isOnline } from '../../lib/posCache'
 
 import { toast } from '../../lib/toast'
 
@@ -72,11 +75,29 @@ export default function POSTerminal() {
   const [refundLoading, setRefundLoading] = useState(false)
 
   const [orderNote, setOrderNote] = useState('')
+  const [paymentSplits, setPaymentSplits] = useState([])
 
   // Auto-print preference (persisted in localStorage)
   const [autoPrint, setAutoPrint] = useState(() => {
     try { return localStorage.getItem('pos_auto_print') === 'true' } catch { return false }
   })
+
+  // Hold / Recall orders
+  const [savedOrders, setSavedOrders] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('pos_saved_orders') || '[]') } catch { return [] }
+  })
+  const [showRecallMenu, setShowRecallMenu] = useState(false)
+
+  // Split payment [{method: string, amount: number}]
+  const [paymentSplits, setPaymentSplits] = useState([])
+
+  // Offline mode
+  const [isOfflineMode, setIsOfflineMode] = useState(false)
+
+  // Variant / combo
+  const [variantModal, setVariantModal] = useState(null) // { item, variantGroups }
+  const [combos, setCombos] = useState([])
+  const [itemVariants, setItemVariants] = useState({}) // { menuItemId: variantGroups[] }
 
   useEffect(() => {
     try { localStorage.setItem('pos_auto_print', String(autoPrint)) } catch {}
@@ -86,24 +107,76 @@ export default function POSTerminal() {
     const orgId = tenant?.organization_id
     if (!orgId) { setProductsLoading(false); return }
     setProductsLoading(true)
-    supabase
-      .from('pos_products')
-      .select('id, name, barcode, retail_price, category, sku_id')
-      .eq('organization_id', orgId)
-      .eq('is_available', true)
-      .order('category')
-      .then(({ data, error }) => {
-        if (error) { toast.error('商品載入失敗'); return }
-        setProducts((data || []).map(p => ({
+
+    const loadProducts = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('pos_products')
+          .select('id, name, barcode, retail_price, category, sku_id')
+          .eq('organization_id', orgId)
+          .eq('is_available', true)
+          .order('category')
+
+        if (error) throw error
+
+        const mapped = (data || []).map(p => ({
           id: p.id,
           name: p.name,
           barcode: p.barcode,
           price: Number(p.retail_price),
           category: p.category || '其他',
           sku_id: p.sku_id,
-        })))
-      })
-      .finally(() => setProductsLoading(false))
+        }))
+        setProducts(mapped)
+        cacheProducts(orgId, mapped)
+      } catch (err) {
+        toast.error('商品載入失敗')
+        if (!isOnline()) {
+          const cached = getCachedProducts(orgId)
+          if (cached.length > 0) { setProducts(cached); setIsOfflineMode(true) }
+        }
+      } finally {
+        setProductsLoading(false)
+      }
+    }
+
+    const loadCombosAndVariants = async () => {
+      try {
+        const { data: comboData } = await supabase
+          .from('pos_menu_combos')
+          .select('*, items:pos_menu_combo_items(*, menu_item:pos_menu_items(name, unit_price))')
+          .eq('store_id', orgId)
+          .eq('is_active', true)
+          .order('display_order')
+        setCombos(comboData || [])
+
+        const { data: menuItems } = await supabase
+          .from('pos_menu_items')
+          .select('id')
+          .eq('store_id', orgId)
+          .eq('is_active', true)
+
+        if (menuItems?.length > 0) {
+          const itemIds = menuItems.map(i => i.id)
+          const { data: varData } = await supabase
+            .from('pos_menu_item_variants')
+            .select('*')
+            .in('menu_item_id', itemIds)
+            .order('sort_order')
+          const grouped = {}
+          ;(varData || []).forEach(v => {
+            if (!grouped[v.menu_item_id]) grouped[v.menu_item_id] = []
+            grouped[v.menu_item_id].push(v)
+          })
+          setItemVariants(grouped)
+        }
+      } catch {
+        // non-critical — combos/variants fail silently
+      }
+    }
+
+    loadProducts()
+    loadCombosAndVariants()
   }, [tenant?.organization_id])
 
   // Member lookup — identifies customer for loyalty/CRM downstream handlers
@@ -161,6 +234,16 @@ export default function POSTerminal() {
     })
   }
 
+  // Open variant modal if item has variants; otherwise add directly
+  const handleMenuItemClick = (item) => {
+    const variants = itemVariants[item.id]
+    if (variants?.length > 0) {
+      setVariantModal({ item, variantGroups: variants })
+    } else {
+      addToCart(item)
+    }
+  }
+
   const updateItemType = (id, type) => {
     setCart(prev => prev.map(c => c.id === id ? { ...c, order_type: type } : c))
   }
@@ -186,7 +269,43 @@ export default function POSTerminal() {
     setCart(prev => prev.filter(c => c.id !== id))
   }
 
-  const subtotal = cart.reduce((sum, c) => sum + c.price * c.qty, 0)
+  // Hold current cart as a saved order
+  function holdOrder() {
+    if (cart.length === 0) return
+    const held = {
+      id: Date.now().toString(),
+      savedAt: new Date().toISOString(),
+      cart,
+      selectedMember,
+      discount,
+      orderNote: orderNote ?? '',
+      pointsUsed: pointsUsed ?? 0,
+    }
+    const next = [...savedOrders, held]
+    setSavedOrders(next)
+    localStorage.setItem('pos_saved_orders', JSON.stringify(next))
+    setCart([])
+    setSelectedMember(null)
+    setDiscount(0)
+    setPointsUsed(0)
+    setOrderNote('')
+  }
+
+  // Recall a previously held order (hold current cart first if non-empty)
+  function recallOrder(held) {
+    if (cart.length > 0) holdOrder()
+    setCart(held.cart)
+    setSelectedMember(held.selectedMember)
+    setDiscount(held.discount || 0)
+    setPointsUsed(held.pointsUsed || 0)
+    setOrderNote(held.orderNote || '')
+    const next = savedOrders.filter(o => o.id !== held.id)
+    setSavedOrders(next)
+    localStorage.setItem('pos_saved_orders', JSON.stringify(next))
+    setShowRecallMenu(false)
+  }
+
+    const subtotal = cart.reduce((sum, c) => sum + c.price * c.qty, 0)
   const pointsDiscount = Math.floor((Number(pointsUsed) || 0) * 0.5)
   const couponDiscount = (() => {
     if (!selectedCoupon?.coupons) return 0
@@ -208,8 +327,9 @@ export default function POSTerminal() {
 
   const changeAmount = selectedPayment === 'cash' && cashTendered ? Math.max(0, Number(cashTendered) - total) : 0
 
-  // Get display label for current payment method
-  const currentPaymentLabel = PAYMENT_METHOD_MAP.find(m => m.code === selectedPayment)?.label || selectedPayment
+  // Use first split method if splits defined, else use selectedPayment
+  const effectivePaymentMethod = paymentSplits.length > 0 ? paymentSplits[0].method : selectedPayment
+  const currentPaymentLabel = PAYMENT_METHOD_MAP.find(m => m.code === effectivePaymentMethod)?.label || effectivePaymentMethod
 
   const receiptPrintOptions = {
     companyName: '威士威企業總部',
@@ -237,7 +357,7 @@ export default function POSTerminal() {
     }
 
     // For cash: validate tendered amount
-    if (selectedPayment === 'cash') {
+    if (effectivePaymentMethod === 'cash') {
       const tendered = Number(cashTendered)
       if (!tendered || tendered < total) {
         toast.error('現金金額不足')
@@ -251,21 +371,21 @@ export default function POSTerminal() {
     try {
       // 1. Process payment via gateway abstraction layer
       const orderId = `POS-${Date.now()}`
-      const gatewayResult = await processPayment(selectedPayment, total, orderId, {
-        cashTendered: selectedPayment === 'cash' ? Number(cashTendered) : undefined,
+      const gatewayResult = await processPayment(effectivePaymentMethod, total, orderId, {
+        cashTendered: effectivePaymentMethod === 'cash' ? Number(cashTendered) : undefined,
       })
 
       // Also create payment request via legacy payment lib for compatibility
       const payResult = createPaymentRequest(
         { orderId, amount: total, currency: 'TWD', description: 'POS 銷售' },
-        selectedPayment
+        effectivePaymentMethod
       )
 
       // Track gateway pending status
       const isPending = gatewayResult.status === 'pending_confirmation'
 
       // Simulate processing delay for card/digital payments
-      if (selectedPayment !== 'cash' && selectedPayment !== 'bank_transfer') {
+      if (effectivePaymentMethod !== 'cash' && effectivePaymentMethod !== 'bank_transfer') {
         setProcessingMsg(`正在連接 ${currentPaymentLabel} 付款閘道...`)
         await new Promise(r => setTimeout(r, 1500))
         setProcessingMsg('驗證付款資訊...')
@@ -293,16 +413,47 @@ export default function POSTerminal() {
         status: '完成',
       })
 
+      const newTransactionId = txnRecord ?? txnNum
+
       // Patch note onto transaction record (RPC doesn't accept it directly)
       if (orderNote.trim() && txnRecord) {
         updatePOSTransaction(txnRecord, { note: orderNote.trim() }).catch(() => {})
+      }
+
+      // Insert one pos_payments row per split; single payment uses default behavior
+      if (paymentSplits.length > 0) {
+        for (const split of paymentSplits) {
+          await supabase.from('pos_payments').insert({
+            order_id: newTransactionId,
+            method: split.method,
+            amount: split.amount,
+          })
+        }
+      }
+
+      // House account deduction
+      if (effectivePaymentMethod === 'house_account' && selectedMember) {
+        const roundedTotal = Math.round(total)
+        const { error: haErr } = await supabase.rpc('deduct_member_credit', {
+          p_member_id: selectedMember.id,
+          p_amount: roundedTotal,
+          p_reference_id: newTransactionId,
+        })
+        if (haErr) { setPaymentStage('failed'); return }
+        await supabase.from('pos_house_account_txns').insert({
+          member_id: selectedMember.id,
+          amount: -roundedTotal,
+          balance_after: (selectedMember.credit_balance - roundedTotal),
+          reference_type: 'pos_payment',
+          reference_id: newTransactionId,
+        })
       }
 
       // Publish event → Finance AR, WMS stock deduction, CRM loyalty/purchase/survey
       try {
         const bus = getEventBus()
         await bus.publish('pos.transaction.completed', {
-          transaction_id: String(txnRecord ?? txnNum),
+          transaction_id: String(newTransactionId),
           transaction_number: txnNum,
           store: '威士威企業總部',
           cashier: '系統',
@@ -337,8 +488,8 @@ export default function POSTerminal() {
       })
 
       // 5. Create journal entry (debit: cash/bank, credit: revenue)
-      const debitAccount = selectedPayment === 'cash' ? '1100' : '1200'
-      const debitName = selectedPayment === 'cash' ? '現金' : '銀行存款'
+      const debitAccount = effectivePaymentMethod === 'cash' ? '1100' : '1200'
+      const debitName = effectivePaymentMethod === 'cash' ? '現金' : '銀行存款'
       await supabase.rpc('secure_create_journal_entry', {
         p_entry_date: new Date().toISOString().slice(0, 10),
         p_description: `POS 銷售 ${txnNum}（${currentPaymentLabel}）`,
@@ -366,8 +517,8 @@ export default function POSTerminal() {
         tax,
         total,
         paymentMethod: currentPaymentLabel,
-        cashTendered: selectedPayment === 'cash' ? Number(cashTendered) : null,
-        change: selectedPayment === 'cash' ? changeAmount : null,
+        cashTendered: effectivePaymentMethod === 'cash' ? Number(cashTendered) : null,
+        change: effectivePaymentMethod === 'cash' ? changeAmount : null,
         carrierType: carrierType !== 'none' ? (carrierType === 'phone_barcode' ? '手機條碼' : '自然人憑證') : null,
         carrierValue: carrierType !== 'none' ? carrierValue : null,
         note: orderNote.trim() || null,
@@ -381,7 +532,7 @@ export default function POSTerminal() {
       setProcessingMsg('')
 
       // Kick cash drawer on cash payments
-      if (selectedPayment === 'cash' && thermalPort) {
+      if (effectivePaymentMethod === 'cash' && thermalPort) {
         kickCashDrawer(thermalPort).catch(() => {})
       }
 
@@ -393,7 +544,7 @@ export default function POSTerminal() {
           items: cart.map(c => ({ name: c.name, quantity: c.qty, price: c.price })),
           totalAmount: total,
           paymentMethod: currentPaymentLabel,
-          cashReceived: selectedPayment === 'cash' ? Number(cashTendered) : null,
+          cashReceived: effectivePaymentMethod === 'cash' ? Number(cashTendered) : null,
           invoiceNumber: invoiceNum,
         }
         // Delay slightly so the success overlay renders first
@@ -425,6 +576,7 @@ export default function POSTerminal() {
     setSelectedMember(null)
     setAvailableCoupons([])
     setSelectedCoupon(null)
+    setPaymentSplits([])
   }
 
   // Gateway confirm handler (simulates callback from payment gateway)
@@ -602,6 +754,7 @@ export default function POSTerminal() {
         handleQuickRefund={handleQuickRefund}
         resetTerminal={resetTerminal}
         setPaymentStage={setPaymentStage}
+        paymentSplits={paymentSplits}
       />
 
       <div style={{ display: 'flex', gap: 20, minHeight: 520 }}>
@@ -650,6 +803,9 @@ export default function POSTerminal() {
           onCouponSelect={setSelectedCoupon}
           couponsLoading={couponsLoading}
           couponDiscount={couponDiscount}
+          paymentSplits={paymentSplits}
+          onPaymentSplitsChange={setPaymentSplits}
+          onUpdateItemCourse={(id, course) => setCart(prev => prev.map(c => c.id === id ? { ...c, course } : c))}
         />
       </div>
 

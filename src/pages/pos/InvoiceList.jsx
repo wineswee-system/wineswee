@@ -53,6 +53,28 @@ export default function InvoiceList() {
     }
   }
 
+  function exportCSV() {
+    const headers = ['結帳時間', '訂單號', '桌號', '金額', '付款方式', '載具', '發票號碼', '狀態']
+    const body = rows.map(r => [
+      fmtTime(r.paid_at),
+      '#' + (r.pos_orders?.order_number ?? ''),
+      'T' + (r.pos_orders?.res_tables?.table_number ?? ''),
+      r.amount ?? '',
+      METHOD_LABEL[r.payment_method] ?? r.payment_method ?? '',
+      r.carrier_type ? (CARRIER_LABEL[r.carrier_type] ?? r.carrier_type) : '',
+      r.invoice_number ?? '',
+      INV_LABEL[r.invoice_status] ?? r.invoice_status ?? '',
+    ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
+    const csv = [headers.map(h => `"${h}"`).join(','), ...body].join('\n')
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement('a')
+    a.href     = url
+    a.download = `invoices-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   async function handleIssue(paymentId) {
     // Generate a placeholder invoice number — replace with real CERP/tax integration
     const num = `AB-${Date.now().toString().slice(-8)}`
@@ -80,6 +102,9 @@ export default function InvoiceList() {
           {Object.entries(INV_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
         </select>
         <button onClick={load} style={S.btn}>查詢</button>
+        <button onClick={exportCSV} disabled={rows.length === 0} style={{ ...S.btn, background: 'var(--accent-green)', marginLeft: 'auto' }}>
+          ↓ 匯出 CSV
+        </button>
       </div>
 
       {/* Summary */}

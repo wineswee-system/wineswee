@@ -24,6 +24,7 @@ export default function MenuManagement() {
   const [loading, setLoading] = useState(true)
   const [modal, setModal]     = useState(null)  // null | { kind: 'cat'|'item', row: null|{} }
   const [form, setForm]       = useState({})
+  const [dragIdx, setDragIdx] = useState(null)
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
@@ -93,6 +94,21 @@ export default function MenuManagement() {
     await supabase.from('pos_menu_categories').delete().eq('id', id)
     setCats(c => c.filter(x => x.id !== id))
     toast.success('已刪除分類')
+  }
+
+  // ── Category drag-to-reorder ──────────────────────────────────────────────────
+  async function handleCatDrop(dropIdx) {
+    if (dragIdx === null || dragIdx === dropIdx) { setDragIdx(null); return }
+    const reordered = [...cats]
+    const [moved] = reordered.splice(dragIdx, 1)
+    reordered.splice(dropIdx, 0, moved)
+    const withOrder = reordered.map((c, i) => ({ ...c, display_order: i }))
+    setCats(withOrder)
+    setDragIdx(null)
+    // Persist all updated display_orders
+    for (const c of withOrder) {
+      await supabase.from('pos_menu_categories').update({ display_order: c.display_order }).eq('id', c.id)
+    }
   }
 
   // ── Item CRUD ─────────────────────────────────────────────────────────────────
@@ -188,9 +204,20 @@ export default function MenuManagement() {
                 </tr>
               </thead>
               <tbody>
-                {cats.map(cat => (
-                  <tr key={cat.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                    <td style={{ padding: '12px 16px', color: 'var(--text-muted)', width: 60 }}>{cat.display_order}</td>
+                {cats.map((cat, idx) => (
+                  <tr
+                    key={cat.id}
+                    draggable
+                    onDragStart={() => setDragIdx(idx)}
+                    onDragOver={e => e.preventDefault()}
+                    onDrop={() => handleCatDrop(idx)}
+                    style={{
+                      borderBottom: '1px solid var(--border-subtle)',
+                      opacity: dragIdx === idx ? 0.45 : 1,
+                      cursor: 'grab',
+                    }}
+                  >
+                    <td style={{ padding: '12px 16px', color: 'var(--text-muted)', width: 60, userSelect: 'none', fontSize: 18 }}>⠿</td>
                     <td style={{ padding: '12px 16px', color: 'var(--text-primary)', fontWeight: 600 }}>{cat.name}</td>
                     <td style={{ padding: '12px 16px' }}>
                       <Badge color={cat.is_active ? 'green' : 'gray'} size="sm">{cat.is_active ? '啟用' : '停用'}</Badge>

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useTenant } from '../../contexts/TenantContext'
 import Badge from '../../components/ui/Badge'
+import { toast } from '../../lib/toast'
 
 const STATUS_LABEL   = { open: '進行中', submitted: '已送廚', paid: '已結帳', voided: '已作廢' }
 const STATUS_VARIANT = { open: 'info', submitted: 'warning', paid: 'success', voided: 'default' }
@@ -17,8 +18,11 @@ export default function OrderHistory() {
     return d.toISOString().slice(0, 10)
   })
   const [dateTo,   setDateTo]   = useState(() => new Date().toISOString().slice(0, 10))
-  const [expanded, setExpanded] = useState(null)
-  const [itemMap,  setItemMap]  = useState({})
+  const [expanded,   setExpanded]   = useState(null)
+  const [itemMap,    setItemMap]    = useState({})
+  const [returnModal, setReturnModal] = useState(null) // { order, items }
+  const [returnSel,   setReturnSel]   = useState({})   // { [itemId]: true }
+  const [returning,   setReturning]   = useState(false)
 
   async function load() {
     if (!storeId) return
@@ -59,6 +63,63 @@ export default function OrderHistory() {
       setItemMap(p => ({ ...p, [orderId]: data ?? [] }))
     }
     setExpanded(orderId)
+  }
+
+  async function openReturnModal(order) {
+    // Ensure items are loaded
+    if (!itemMap[order.id]) {
+      const { data } = await supabase
+        .from('pos_order_items')
+        .select('id, name, unit_price, quantity, note')
+        .eq('order_id', order.id)
+        .order('created_at')
+      setItemMap(p => ({ ...p, [order.id]: data ?? [] }))
+      setReturnModal({ order, items: data ?? [] })
+    } else {
+      setReturnModal({ order, items: itemMap[order.id] })
+    }
+    setReturnSel({})
+  }
+
+  async function submitReturn() {
+    if (!returnModal) return
+    const selItems = returnModal.items.filter(i => returnSel[i.id])
+    if (selItems.length === 0) { toast.error('請選擇要退貨的品項'); return }
+    setReturning(true)
+    try {
+      const { error } = await supabase.functions.invoke('process-return', {
+        body: {
+          orderId: returnModal.order.id,
+          items:   selItems.map(i => ({ id: i.id, quantity: i.quantity })),
+          reason:  '客戶退貨',
+        },
+      })
+      if (error) throw error
+      toast.success('退貨已處理')
+      setReturnModal(null)
+      load()
+    } catch (e) {
+      toast.error('退貨失敗：' + (e.message || ''))
+    } finally {
+      setReturning(false)
+    }
+  }
+
+  function printOrderReceipt(order, items) {
+    const lines = items.map(i => `${i.name} ×${i.quantity}  $${(i.unit_price * i.quantity).toLocaleString()}`).join('\n')
+    const win = window.open('', '_blank', 'width=400,height=600')
+    if (!win) { toast.error('請允許彈出視窗'); return }
+    win.document.write(`<pre style="font-family:monospace;font-size:13px;padding:16px">
+訂單 #${order.order_number}
+桌號：T${order.res_tables?.table_number ?? '—'}
+開單：${fmtTime(order.opened_at)}
+結帳：${fmtTime(order.paid_at)}
+────────────────────────
+${lines}
+────────────────────────
+</pre>`)
+    win.document.close()
+    win.print()
   }
 
   const paidCount = orders.filter(o => o.status === 'paid').length
@@ -139,6 +200,22 @@ export default function OrderHistory() {
                         </div>
                       ))}
                       {(itemMap[o.id] ?? []).length === 0 && <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>無品項</div>}
+                      <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                        <button
+                          onClick={e => { e.stopPropagation(); printOrderReceipt(o, itemMap[o.id] ?? []) }}
+                          style={S.actBtn}
+                        >
+                          🖨 列印
+                        </button>
+                        {o.status === 'paid' && (
+                          <button
+                            onClick={e => { e.stopPropagation(); openReturnModal(o) }}
+                            style={{ ...S.actBtn, color: 'var(--accent-red)', border: '1px solid var(--accent-red)', background: 'var(--accent-red-dim)' }}
+                          >
+                            退貨
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 )
@@ -148,6 +225,38 @@ export default function OrderHistory() {
           </tbody>
         </table>
       </div>
+      {/* Return modal */}
+      {returnModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: 'var(--bg-primary)', borderRadius: 14, padding: 28, maxWidth: 420, width: '90%' }}>
+            <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 14 }}>
+              退貨 — 訂單 #{returnModal.order.order_number}
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 12 }}>選擇要退貨的品項：</div>
+            {returnModal.items.map(i => (
+              <label key={i.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0', fontSize: 14, cursor: 'pointer', color: 'var(--text-primary)' }}>
+                <input
+                  type="checkbox"
+                  checked={!!returnSel[i.id]}
+                  onChange={() => setReturnSel(p => ({ ...p, [i.id]: !p[i.id] }))}
+                  style={{ accentColor: 'var(--accent-red)' }}
+                />
+                {i.name} ×{i.quantity} — ${(i.unit_price * i.quantity).toLocaleString()}
+              </label>
+            ))}
+            <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+              <button onClick={() => setReturnModal(null)} style={{ flex: 1, padding: '9px 0', borderRadius: 8, border: '1px solid var(--border-primary)', background: 'var(--bg-tertiary)', color: 'var(--text-secondary)', cursor: 'pointer', fontWeight: 600 }}>取消</button>
+              <button
+                onClick={submitReturn}
+                disabled={returning || Object.values(returnSel).every(v => !v)}
+                style={{ flex: 1, padding: '9px 0', borderRadius: 8, border: 'none', background: returning ? 'var(--bg-tertiary)' : 'var(--accent-red)', color: returning ? 'var(--text-muted)' : '#fff', cursor: returning ? 'not-allowed' : 'pointer', fontWeight: 700 }}
+              >
+                {returning ? '處理中…' : '確認退貨'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -159,6 +268,7 @@ function fmtTime(iso) {
 }
 
 const S = {
-  input: { padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border-primary)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: 14, outline: 'none' },
-  btn:   { padding: '8px 18px', borderRadius: 8, border: 'none', background: 'var(--accent-cyan)', color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer' },
+  input:  { padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border-primary)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: 14, outline: 'none' },
+  btn:    { padding: '8px 18px', borderRadius: 8, border: 'none', background: 'var(--accent-cyan)', color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer' },
+  actBtn: { padding: '5px 14px', borderRadius: 6, border: '1px solid var(--border-primary)', background: 'var(--bg-secondary)', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer' },
 }

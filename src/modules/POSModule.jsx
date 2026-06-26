@@ -11,12 +11,14 @@ import OrderHistory     from '../pages/pos/OrderHistory'
 import InvoiceList      from '../pages/pos/InvoiceList'
 import ZReport          from '../pages/pos/ZReport'
 import KitchenDisplay   from '../pages/pos/KitchenDisplay'
+import WaiterMode       from '../pages/pos/WaiterMode'
 
 export default function POSModule() {
   return (
     <Routes>
       <Route index                      element={<Overview />} />
       <Route path="terminal"            element={<POSTerminal />} />
+      <Route path="waiter"              element={<WaiterMode />} />
       <Route path="kitchen"             element={<KitchenDisplay />} />
       <Route path="shifts"              element={<POSShifts />} />
       <Route path="z-report"            element={<ZReport />} />

@@ -19,10 +19,19 @@ function beep(freq = 880, duration = 0.3) {
 }
 
 export default function POSQROrderQueue({ onCountChange }) {
-  const [open,    setOpen]    = useState(false)
-  const [groups,  setGroups]  = useState([])
-  const [loading, setLoading] = useState(false)
-  const knownIds              = useRef(new Set())
+  const [open,        setOpen]        = useState(false)
+  const [groups,      setGroups]      = useState([])
+  const [loading,     setLoading]     = useState(false)
+  const [autoConfirm, setAutoConfirm] = useState(() => {
+    try { return localStorage.getItem('qr_auto_confirm') === 'true' } catch { return false }
+  })
+  const knownIds      = useRef(new Set())
+  const autoConfirmRef = useRef(autoConfirm)
+
+  useEffect(() => {
+    autoConfirmRef.current = autoConfirm
+    try { localStorage.setItem('qr_auto_confirm', String(autoConfirm)) } catch {}
+  }, [autoConfirm])
 
   const fetchPending = useCallback(async () => {
     // Step 1 — pending guest items
@@ -93,9 +102,25 @@ export default function POSQROrderQueue({ onCountChange }) {
         table:  'pos_order_items',
         filter: 'source=eq.guest',
       }, (payload) => {
-        const id = payload.new?.id
-        if (id && !knownIds.current.has(id)) {
-          knownIds.current.add(id)
+        const id    = payload.new?.id
+        const order = payload.new?.order_id
+        if (!id || knownIds.current.has(id)) return
+        knownIds.current.add(id)
+        if (autoConfirmRef.current && id && order) {
+          // Auto-approve: mark item confirmed + send to kitchen silently
+          supabase
+            .from('pos_order_items')
+            .update({ item_status: 'confirmed', sent_to_kitchen: true })
+            .eq('id', id)
+            .then(() =>
+              supabase
+                .from('pos_orders')
+                .update({ status: 'confirmed' })
+                .eq('id', order)
+                .in('status', ['open', 'submitted'])
+            )
+          beep(440, 0.2)
+        } else {
           beep(880, 0.4)
           fetchPending()
         }
@@ -187,21 +212,43 @@ export default function POSQROrderQueue({ onCountChange }) {
             display: 'flex', flexDirection: 'column', overflow: 'hidden',
           }}>
             <div style={{
-              padding: '16px 20px', borderBottom: '1px solid var(--border-primary)',
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '14px 20px', borderBottom: '1px solid var(--border-primary)',
             }}>
-              <div>
-                <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)' }}>QR 自助點餐</div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
-                  {hasItems ? `${totalPending} 筆待確認` : '目前無待確認點餐'}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)' }}>QR 自助點餐</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                    {hasItems ? `${totalPending} 筆待確認` : '目前無待確認點餐'}
+                  </div>
                 </div>
+                <button
+                  onClick={() => setOpen(false)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}
+                >
+                  <X size={18} />
+                </button>
               </div>
-              <button
-                onClick={() => setOpen(false)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}
-              >
-                <X size={18} />
-              </button>
+              {/* Auto-confirm toggle */}
+              <label style={{
+                display: 'flex', alignItems: 'center', gap: 8, fontSize: 12,
+                cursor: 'pointer', color: 'var(--text-secondary)',
+                padding: '6px 10px', borderRadius: 8,
+                background: autoConfirm ? 'var(--accent-green-dim)' : 'var(--bg-primary)',
+                border: `1px solid ${autoConfirm ? 'var(--accent-green)' : 'var(--border-primary)'}`,
+              }}>
+                <input
+                  type="checkbox"
+                  checked={autoConfirm}
+                  onChange={e => setAutoConfirm(e.target.checked)}
+                  style={{ accentColor: 'var(--accent-green)' }}
+                />
+                <span style={{ fontWeight: 600, color: autoConfirm ? 'var(--accent-green)' : 'var(--text-secondary)' }}>
+                  {autoConfirm ? '自動確認模式 ON' : '手動確認模式'}
+                </span>
+                <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>
+                  {autoConfirm ? '(點餐自動送廚)' : '(需人工審核)'}
+                </span>
+              </label>
             </div>
 
             <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>

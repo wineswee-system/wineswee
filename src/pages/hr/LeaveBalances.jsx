@@ -22,15 +22,13 @@ const LEGAL_LIMITS = {
   paternity: 7, prenatal: 5,
 }
 // 這些假別沒有固定年度天數，只在有資料時才顯示
-const EVENT_BASED = new Set(['official', 'maternity', 'parental', 'occupational', 'unpaid', 'parental'])
+const EVENT_BASED = new Set(['official', 'maternity', 'parental', 'occupational', 'unpaid'])
 
 const ANNUAL_TYPES = [
   'annual', 'sick', 'personal', 'menstrual',
   'marriage', 'bereavement', 'official', 'maternity', 'paternity', 'unpaid',
   'family_care', 'mental_health', 'occupational', 'prenatal', 'parental',
 ]
-
-const MONTHS_TW = ['01月','02月','03月','04月','05月','06月','07月','08月','09月','10月','11月','12月']
 
 const daysToHours = (d) => Math.round(Number(d || 0) * 8)
 const hoursToHours = (h) => Math.round(Number(h || 0))
@@ -372,8 +370,7 @@ export default function LeaveBalances() {
   const yearOptions = []
   for (let y = currentYear - 2; y <= currentYear + 1; y++) yearOptions.push(y)
 
-  const selectedEmp   = employees.find(e => e.id === selectedEmpId)
-  const displayTypeList = ANNUAL_TYPES.filter(t => t !== 'comp')  // comp is in 2nd tab
+  const selectedEmp = employees.find(e => e.id === selectedEmpId)
 
   const filteredEmployees = employees.filter(e => {
     if (statusFilter && e.status !== statusFilter) return false
@@ -510,8 +507,8 @@ export default function LeaveBalances() {
                     <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'auto' }}>
                       <thead>
                         <tr style={{ background: 'var(--bg-secondary)', position: 'sticky', top: 0, zIndex: 1 }}>
-                          {['假勤項目','假勤年/月/日','可休區間','可休','已休','剩餘','簽核中','可申請'].map(h => (
-                            <th key={h} style={{ padding: '10px 12px', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textAlign: h === '假勤項目' ? 'left' : 'center', whiteSpace: 'nowrap', borderBottom: '1px solid var(--border-medium)' }}>{h}</th>
+                          {['假勤項目','假勤年/月/日','可休區間','可休','已休','剩餘','簽核中','可申請', ...(isStaff ? [] : [''])].map((h, i) => (
+                            <th key={i} style={{ padding: '10px 12px', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textAlign: h === '假勤項目' ? 'left' : 'center', whiteSpace: 'nowrap', borderBottom: '1px solid var(--border-medium)' }}>{h}</th>
                           ))}
                         </tr>
                       </thead>
@@ -533,6 +530,15 @@ export default function LeaveBalances() {
                               </td>
                               {numCell(r.pendingHours, r.pendingHours > 0 ? 'var(--accent-purple)' : null)}
                               {numCell(r.canApplyHours, 'var(--accent-cyan)')}
+                              {!isStaff && !r.isMonthly && (
+                                <td style={{ ...cellStyle, textAlign: 'center' }}>
+                                  <button className="btn btn-sm btn-ghost" style={{ padding: '2px 10px', fontSize: 12 }}
+                                    onClick={() => openEditRow(r)}>
+                                    <Edit2 size={11} style={{ marginRight: 3 }} />調整
+                                  </button>
+                                </td>
+                              )}
+                              {!isStaff && r.isMonthly && <td style={cellStyle} />}
                             </tr>
                           )
                         })}
@@ -581,6 +587,32 @@ export default function LeaveBalances() {
           )}
         </div>
       </div>
+
+      {/* Single row edit modal */}
+      {editRow && (
+        <Modal title={`調整假別天數 — ${selectedEmp?.name} · ${editRow.label}`}
+          onClose={() => setEditRow(null)} onSubmit={handleEditSubmit}
+          submitLabel={editSaving ? '儲存中...' : '儲存'} submitDisabled={editSaving}>
+          <div style={{ padding: '8px 12px', marginBottom: 12, background: 'var(--bg-secondary)', borderRadius: 8, fontSize: 13, color: 'var(--text-muted)' }}>
+            目前法定：{editRow.totalHours} 小時（{editRow.totalHours / 8} 天）· 已休：{editRow.usedHours} 小時
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <Field label="總天數（手動覆蓋）" required>
+              <input className="form-input" type="number" min="0" step="0.5" style={{ width: '100%' }}
+                placeholder={String(editRow.totalHours / 8)}
+                value={editTotalDays} onChange={e => setEditTotalDays(e.target.value)} />
+            </Field>
+            <Field label="遞延天數">
+              <input className="form-input" type="number" min="0" step="0.5" style={{ width: '100%' }} placeholder="0"
+                value={editCarryOver} onChange={e => setEditCarryOver(e.target.value)} />
+            </Field>
+          </div>
+          <Field label="到期日">
+            <input className="form-input" type="date" style={{ width: '100%' }}
+              value={editExpiresAt} onChange={e => setEditExpiresAt(e.target.value)} />
+          </Field>
+        </Modal>
+      )}
 
       {/* Bulk Modal */}
       {showBulkModal && (() => {

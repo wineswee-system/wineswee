@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { QrCode, RefreshCw, Printer, Download, X, Clock, CheckCircle2, AlertCircle, ChevronDown } from 'lucide-react'
 import QRCode from 'qrcode'
 import { supabase } from '../../lib/supabase'
@@ -69,7 +70,7 @@ function QRModal({ session, storeName, tableNumber, onClose, onRefresh }) {
     win.document.close()
   }
 
-  return (
+  return createPortal(
     <div style={{ position: 'fixed', inset: 0, zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)' }} />
       <div style={{
@@ -142,7 +143,8 @@ function QRModal({ session, storeName, tableNumber, onClose, onRefresh }) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 

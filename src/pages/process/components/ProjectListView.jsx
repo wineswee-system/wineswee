@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, ChevronRight, FolderOpen, Rocket, CheckSquare, Edit3, Trash2, MoreVertical, Search, Download } from 'lucide-react'
+import { Plus, ChevronRight, FolderOpen, Rocket, CheckSquare, Edit3, Trash2, MoreVertical, Search, Download, ArrowUp } from 'lucide-react'
 import { exportToCsv, fmtDate } from '../../../lib/exportCsv'
 import { todayTW } from '../../../lib/datetime'
 import { supabase } from '../../../lib/supabase'
@@ -43,6 +43,7 @@ export default function ProjectListView({
   setSelected,
   openEdit,
   handleDelete,
+  handleMoveToTop,
   projMenuId,
   setProjMenuId,
   // form modal
@@ -309,7 +310,13 @@ export default function ProjectListView({
                   {projMenuId === p.id && (
                     <div style={{ position: 'absolute', right: 0, top: '100%', marginTop: 4, background: 'var(--bg-secondary)', border: '1px solid var(--border-medium)', borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.3)', zIndex: 50, minWidth: 130 }}>
                       <button
-                        style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '9px 14px', border: 'none', background: 'transparent', color: 'var(--text-primary)', fontSize: 13, cursor: 'pointer', borderRadius: '8px 8px 0 0' }}
+                        style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '9px 14px', border: 'none', background: 'transparent', color: 'var(--accent-cyan)', fontSize: 13, cursor: 'pointer', borderRadius: '8px 8px 0 0' }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'var(--glass-light)'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        onClick={(e) => { handleMoveToTop?.(p.id, e) }}
+                      ><ArrowUp size={13} /> 置頂</button>
+                      <button
+                        style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '9px 14px', border: 'none', background: 'transparent', color: 'var(--text-primary)', fontSize: 13, cursor: 'pointer' }}
                         onMouseEnter={e => e.currentTarget.style.background = 'var(--glass-light)'}
                         onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                         onClick={(e) => { setProjMenuId(null); openEdit(p, e) }}

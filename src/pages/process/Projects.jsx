@@ -417,6 +417,18 @@ export default function Projects() {
     setShowModal(true)
   }
 
+  const handleMoveToTop = (id, e) => {
+    e?.stopPropagation()
+    setProjects(prev => {
+      const idx = prev.findIndex(p => p.id === id)
+      if (idx <= 0) return prev
+      const next = [...prev]
+      next.unshift(next.splice(idx, 1)[0])
+      return next
+    })
+    setProjMenuId(null)
+  }
+
   const handleDelete = async (id, e) => {
     e?.stopPropagation()
     if (!(await confirm({ title: '刪除專案', message: `確定刪除此專案？所有相關流程與任務的連結將解除，資料會移入回收暫存區備份（可供復原）。此操作無法立即復原。`, confirmLabel: '確認刪除', danger: true }))) return
@@ -934,6 +946,7 @@ export default function Projects() {
       setSelected={setSelected}
       openEdit={openEdit}
       handleDelete={handleDelete}
+      handleMoveToTop={handleMoveToTop}
       projMenuId={projMenuId}
       setProjMenuId={setProjMenuId}
       showModal={showModal}

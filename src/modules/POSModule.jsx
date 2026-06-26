@@ -12,6 +12,7 @@ import InvoiceList      from '../pages/pos/InvoiceList'
 import ZReport          from '../pages/pos/ZReport'
 import KitchenDisplay   from '../pages/pos/KitchenDisplay'
 import WaiterMode       from '../pages/pos/WaiterMode'
+import MonthlyReport    from '../pages/pos/MonthlyReport'
 
 export default function POSModule() {
   return (
@@ -29,6 +30,7 @@ export default function POSModule() {
       <Route path="staff-performance"   element={<StaffPerformance />} />
       <Route path="orders"              element={<OrderHistory />} />
       <Route path="invoices"            element={<InvoiceList />} />
+      <Route path="monthly-report"      element={<MonthlyReport />} />
     </Routes>
   )
 }

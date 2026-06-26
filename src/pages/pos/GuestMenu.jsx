@@ -376,6 +376,13 @@ export default function GuestMenu() {
   const catBarRef = useRef(null)
   const t = T[lang]
 
+  // 全域 body overflow:hidden 會鎖住此頁捲動，mount 時解鎖，unmount 時還原
+  useEffect(() => {
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'auto'
+    return () => { document.body.style.overflow = prev || '' }
+  }, [])
+
   // ── Boot ─────────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!token || !storeId || !tableId) {

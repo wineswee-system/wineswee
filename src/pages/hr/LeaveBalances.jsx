@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Plus, Edit2, Calculator, User } from 'lucide-react'
+import { Plus, Edit2, Calculator, User, Users } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -59,6 +59,14 @@ export default function LeaveBalances() {
   const [cashoutItems, setCashoutItems] = useState([])
   const [cashoutLoading, setCashoutLoading] = useState(false)
   const [cashoutSaving, setCashoutSaving] = useState(false)
+
+  const [showBulkModal, setShowBulkModal] = useState(false)
+  const [bulkSelectedIds, setBulkSelectedIds] = useState([])
+  const [bulkSearch, setBulkSearch] = useState('')
+  const [bulkLeaveType, setBulkLeaveType] = useState('annual')
+  const [bulkDays, setBulkDays] = useState('')
+  const [bulkYear, setBulkYear] = useState(currentYear)
+  const [bulkSaving, setBulkSaving] = useState(false)
 
   const [form, setForm] = useState({
     employee_id: '', year: currentYear, leave_type: 'annual',
@@ -234,6 +242,58 @@ export default function LeaveBalances() {
     }
   }
 
+  const openBulk = () => {
+    setBulkSelectedIds([])
+    setBulkSearch('')
+    setBulkLeaveType('annual')
+    setBulkDays('')
+    setBulkYear(currentYear)
+    setShowBulkModal(true)
+  }
+
+  const handleBulkSubmit = async () => {
+    if (!bulkSelectedIds.length) { toast.warning('請選擇員工'); return }
+    if (bulkDays === '' || isNaN(Number(bulkDays))) { toast.warning('請輸入天數'); return }
+    const days = Number(bulkDays)
+    const orgId = profile?.organization_id
+    try {
+      setBulkSaving(true)
+      // fetch existing records for selected employees
+      const { data: existing } = await supabase.from('leave_balances')
+        .select('id, employee_id, total_days')
+        .eq('year', bulkYear).eq('leave_type', bulkLeaveType).eq('organization_id', orgId)
+        .in('employee_id', bulkSelectedIds)
+      const existingMap = {}
+      for (const r of existing || []) existingMap[r.employee_id] = r
+
+      const toUpdate = [], toInsert = []
+      for (const empId of bulkSelectedIds) {
+        if (existingMap[empId]) {
+          toUpdate.push({ id: existingMap[empId].id, total_days: Number(existingMap[empId].total_days || 0) + days })
+        } else {
+          toInsert.push({ employee_id: empId, year: bulkYear, leave_type: bulkLeaveType, total_days: Math.max(0, days), used_days: 0, organization_id: orgId })
+        }
+      }
+
+      for (const r of toUpdate) {
+        const { error } = await supabase.from('leave_balances').update({ total_days: r.total_days }).eq('id', r.id)
+        if (error) throw error
+      }
+      if (toInsert.length) {
+        const { error } = await supabase.from('leave_balances').insert(toInsert)
+        if (error) throw error
+      }
+
+      toast.success(`已更新 ${bulkSelectedIds.length} 人的 ${TYPE_LABEL[bulkLeaveType]} (${days > 0 ? '+' : ''}${days} 天)`)
+      setShowBulkModal(false)
+      reloadEmpData()
+    } catch (err) {
+      toast.error('儲存失敗：' + (err.message || '未知錯誤'))
+    } finally {
+      setBulkSaving(false)
+    }
+  }
+
   const openCashout = async () => {
     setCashoutLoading(true)
     setShowCashoutModal(true)
@@ -306,9 +366,14 @@ export default function LeaveBalances() {
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             {!isStaff && (
-              <button className="btn btn-ghost" onClick={openCashout} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <Calculator size={14} /> 特休結算
-              </button>
+              <>
+                <button className="btn btn-ghost" onClick={openBulk} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Users size={14} /> 批次調整天數
+                </button>
+                <button className="btn btn-ghost" onClick={openCashout} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Calculator size={14} /> 特休結算
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -516,6 +581,69 @@ export default function LeaveBalances() {
           )}
         </Modal>
       )}
+
+      {/* Bulk Modal */}
+      {showBulkModal && (() => {
+        const filteredEmps = employees.filter(e =>
+          !bulkSearch || e.name.includes(bulkSearch) || (e.dept || '').includes(bulkSearch)
+        )
+        const allSelected = filteredEmps.length > 0 && filteredEmps.every(e => bulkSelectedIds.includes(e.id))
+        const toggleAll = () => {
+          if (allSelected) setBulkSelectedIds(ids => ids.filter(id => !filteredEmps.find(e => e.id === id)))
+          else setBulkSelectedIds(ids => [...new Set([...ids, ...filteredEmps.map(e => e.id)])])
+        }
+        const toggleOne = (id) => setBulkSelectedIds(ids => ids.includes(id) ? ids.filter(i => i !== id) : [...ids, id])
+        return (
+          <Modal title="批次調整假別天數" onClose={() => setShowBulkModal(false)}
+            onSubmit={handleBulkSubmit}
+            submitLabel={bulkSaving ? '儲存中...' : `確認套用（${bulkSelectedIds.length} 人）`}
+            submitDisabled={bulkSaving || !bulkSelectedIds.length || bulkDays === ''}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 16 }}>
+              <Field label="年度" required>
+                <select className="form-input" style={{ width: '100%' }} value={bulkYear} onChange={e => setBulkYear(Number(e.target.value))}>
+                  {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
+                </select>
+              </Field>
+              <Field label="假別" required>
+                <select className="form-input" style={{ width: '100%' }} value={bulkLeaveType} onChange={e => setBulkLeaveType(e.target.value)}>
+                  {DISPLAY_TYPES.map(t => <option key={t} value={t}>{TYPE_LABEL[t] || t}</option>)}
+                </select>
+              </Field>
+              <Field label="新增天數" required>
+                <input className="form-input" type="number" step="0.5" style={{ width: '100%' }} placeholder="正數加、負數扣"
+                  value={bulkDays} onChange={e => setBulkDays(e.target.value)} />
+              </Field>
+            </div>
+            <Field label={`選擇員工（已選 ${bulkSelectedIds.length} / ${employees.length}）`}>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                <input className="form-input" placeholder="搜尋員工或部門..." value={bulkSearch}
+                  onChange={e => setBulkSearch(e.target.value)} style={{ flex: 1, fontSize: 13 }} />
+                <button className="btn btn-sm btn-ghost" onClick={toggleAll} style={{ whiteSpace: 'nowrap' }}>
+                  {allSelected ? '取消全選' : '全選'}
+                </button>
+              </div>
+              <div style={{ maxHeight: 260, overflowY: 'auto', border: '1px solid var(--border-subtle)', borderRadius: 8 }}>
+                {filteredEmps.length === 0 && (
+                  <div style={{ padding: 16, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>查無員工</div>
+                )}
+                {filteredEmps.map(e => (
+                  <label key={e.id} style={{
+                    display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', cursor: 'pointer',
+                    borderBottom: '1px solid var(--border-subtle)',
+                    background: bulkSelectedIds.includes(e.id) ? 'var(--accent-cyan-dim)' : 'transparent',
+                  }}>
+                    <input type="checkbox" checked={bulkSelectedIds.includes(e.id)} onChange={() => toggleOne(e.id)} />
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{e.name}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{e.dept || '—'} · {e.store || '—'}</div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </Field>
+          </Modal>
+        )
+      })()}
 
       {/* Add/Edit Modal */}
       {showModal && (

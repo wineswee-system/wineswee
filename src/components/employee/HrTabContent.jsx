@@ -99,6 +99,31 @@ export default function HrTabContent({
             </div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <div>
+              <div style={L}>薪資計算</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, height: 36 }}>
+                <button
+                  type="button"
+                  onClick={() => set('in_payroll', !(form.in_payroll ?? true))}
+                  style={{
+                    width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer',
+                    background: (form.in_payroll ?? true) ? 'var(--accent-cyan)' : 'var(--bg-tertiary)',
+                    position: 'relative', transition: 'background 0.2s',
+                  }}
+                >
+                  <span style={{
+                    position: 'absolute', top: 3, width: 18, height: 18, borderRadius: '50%',
+                    background: '#fff', transition: 'left 0.2s',
+                    left: (form.in_payroll ?? true) ? 23 : 3,
+                  }} />
+                </button>
+                <span style={{ color: (form.in_payroll ?? true) ? 'var(--accent-cyan)' : 'var(--text-muted)', fontSize: 13 }}>
+                  {(form.in_payroll ?? true) ? '編制內（計薪）' : '編制外（不計薪）'}
+                </span>
+              </div>
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <div><div style={L}>入職日期</div><input className="form-input" type="date" style={{ width: '100%' }} value={form.join_date || ''} onChange={e => set('join_date', e.target.value)} /></div>
             <div><div style={L}>試用期結束</div><input className="form-input" type="date" style={{ width: '100%' }} value={form.probation_end || ''} onChange={e => set('probation_end', e.target.value)} /></div>
           </div>

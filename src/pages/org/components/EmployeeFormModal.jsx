@@ -92,6 +92,30 @@ export default function EmployeeFormModal({
         </Field>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <Field label="薪資計算">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, height: 36 }}>
+            <button
+              type="button"
+              onClick={() => set('in_payroll', !form.in_payroll)}
+              style={{
+                width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer',
+                background: form.in_payroll ? 'var(--accent-cyan)' : 'var(--bg-tertiary)',
+                position: 'relative', transition: 'background 0.2s',
+              }}
+            >
+              <span style={{
+                position: 'absolute', top: 3, width: 18, height: 18, borderRadius: '50%',
+                background: '#fff', transition: 'left 0.2s',
+                left: form.in_payroll ? 23 : 3,
+              }} />
+            </button>
+            <span style={{ color: form.in_payroll ? 'var(--accent-cyan)' : 'var(--text-muted)', fontSize: 13 }}>
+              {form.in_payroll ? '編制內（計薪）' : '編制外（不計薪）'}
+            </span>
+          </div>
+        </Field>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
         <Field label="部門">
           <select className="form-input" style={{ width: '100%' }} value={form.department_id ?? ''} onChange={e => set('department_id', e.target.value ? Number(e.target.value) : null)}>
             <option value="">請選擇</option>

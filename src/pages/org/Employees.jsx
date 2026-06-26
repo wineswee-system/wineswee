@@ -113,6 +113,7 @@ export default function Employees() {
     role: '', supervisor_id: null,
     id_number: '', birth_date: '', gender: '', employee_number: '',
     probation_end_date: '', address: '',
+    in_payroll: true,
   })
   const navigate = useNavigate()
   const openDetail = (emp) => navigate(`/org/employees/${emp.id}`)

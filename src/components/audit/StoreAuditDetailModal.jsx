@@ -386,63 +386,84 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
 function ItemRow({ item, employees, editable, onChange }) {
   const empOpts = useMemo(() => empOptions(employees, { keyBy: 'id' }), [employees])
   const failed = item.passed === false
+  const showRemark = item.category_code === '五' && item.item_no === 6
   return (
     <div style={{
-      display: 'grid', gridTemplateColumns: '32px 1fr auto auto', gap: 8, padding: '8px 4px',
-      borderBottom: '1px solid var(--border)', alignItems: 'center', fontSize: 13,
+      padding: '8px 4px', borderBottom: '1px solid var(--border)', fontSize: 13,
       background: failed ? 'var(--accent-red-subtle)' : 'transparent',
     }}>
-      <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>{item.item_no}</div>
-      <div>
-        {item.item_text}
-        {failed && editable && (
-          <div style={{ width: '100%', marginTop: 4 }}>
-            <SearchableSelect
-              value={item.responsible_employee_id || ''}
-              onChange={(v) => {
-                const emp = employees.find(x => x.id === Number(v))
-                onChange({ responsible_employee_id: emp?.id || null, responsible_employee_name: emp?.name || null })
-              }}
-              options={empOpts}
-              placeholder="未指定責任人（算當班全體）"
+      <div style={{ display: 'grid', gridTemplateColumns: '32px 1fr auto auto', gap: 8, alignItems: 'center' }}>
+        <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>{item.item_no}</div>
+        <div>
+          {item.item_text}
+          {failed && editable && (
+            <div style={{ width: '100%', marginTop: 4 }}>
+              <SearchableSelect
+                value={item.responsible_employee_id || ''}
+                onChange={(v) => {
+                  const emp = employees.find(x => x.id === Number(v))
+                  onChange({ responsible_employee_id: emp?.id || null, responsible_employee_name: emp?.name || null })
+                }}
+                options={empOpts}
+                placeholder="未指定責任人（算當班全體）"
+              />
+            </div>
+          )}
+          {failed && !editable && item.responsible_employee_name && (
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>責任人：{item.responsible_employee_name}</div>
+          )}
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>扣 {item.deduct_score}</div>
+        <div style={{ display: 'flex', gap: 4 }}>
+          {editable ? (
+            <>
+              <button
+                onClick={() => onChange({ passed: true })}
+                style={{
+                  padding: '4px 8px', fontSize: 11, borderRadius: 4, cursor: 'pointer', border: 'none',
+                  background: item.passed === true ? 'var(--accent-green)' : 'var(--bg-primary)',
+                  color: item.passed === true ? '#fff' : 'var(--text-muted)',
+                }}
+              >合格</button>
+              <button
+                onClick={() => onChange({ passed: false })}
+                style={{
+                  padding: '4px 8px', fontSize: 11, borderRadius: 4, cursor: 'pointer', border: 'none',
+                  background: item.passed === false ? 'var(--accent-red)' : 'var(--bg-primary)',
+                  color: item.passed === false ? '#fff' : 'var(--text-muted)',
+                }}
+              >不合格</button>
+            </>
+          ) : (
+            <span style={{
+              padding: '3px 8px', borderRadius: 4, fontSize: 11, fontWeight: 700,
+              background: item.passed === true ? 'var(--accent-green-dim)' : item.passed === false ? 'var(--accent-red-dim)' : 'var(--bg-primary)',
+              color: item.passed === true ? 'var(--accent-green)' : item.passed === false ? 'var(--accent-red)' : 'var(--text-muted)',
+            }}>
+              {item.passed === true ? '✓ 合格' : item.passed === false ? '✗ 不合格' : '—'}
+            </span>
+          )}
+        </div>
+      </div>
+      {showRemark && (
+        <div style={{ marginTop: 6, marginLeft: 40 }}>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 3 }}>備註（現場數量 / 差異說明）</div>
+          {editable ? (
+            <textarea
+              className="form-input"
+              rows={2}
+              value={item.remark || ''}
+              onChange={e => onChange({ remark: e.target.value })}
+              placeholder="例：商品A 盤點11支，系統顯示10支"
+              style={{ width: '100%', fontSize: 12 }}
             />
-          </div>
-        )}
-        {failed && !editable && item.responsible_employee_name && (
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>責任人：{item.responsible_employee_name}</div>
-        )}
-      </div>
-      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>扣 {item.deduct_score}</div>
-      <div style={{ display: 'flex', gap: 4 }}>
-        {editable ? (
-          <>
-            <button
-              onClick={() => onChange({ passed: true })}
-              style={{
-                padding: '4px 8px', fontSize: 11, borderRadius: 4, cursor: 'pointer', border: 'none',
-                background: item.passed === true ? 'var(--accent-green)' : 'var(--bg-primary)',
-                color: item.passed === true ? '#fff' : 'var(--text-muted)',
-              }}
-            >合格</button>
-            <button
-              onClick={() => onChange({ passed: false })}
-              style={{
-                padding: '4px 8px', fontSize: 11, borderRadius: 4, cursor: 'pointer', border: 'none',
-                background: item.passed === false ? 'var(--accent-red)' : 'var(--bg-primary)',
-                color: item.passed === false ? '#fff' : 'var(--text-muted)',
-              }}
-            >不合格</button>
-          </>
-        ) : (
-          <span style={{
-            padding: '3px 8px', borderRadius: 4, fontSize: 11, fontWeight: 700,
-            background: item.passed === true ? 'var(--accent-green-dim)' : item.passed === false ? 'var(--accent-red-dim)' : 'var(--bg-primary)',
-            color: item.passed === true ? 'var(--accent-green)' : item.passed === false ? 'var(--accent-red)' : 'var(--text-muted)',
-          }}>
-            {item.passed === true ? '✓ 合格' : item.passed === false ? '✗ 不合格' : '—'}
-          </span>
-        )}
-      </div>
+          ) : (
+            item.remark
+              ? <div style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', padding: '4px 8px', background: 'var(--bg-secondary)', borderRadius: 4 }}>{item.remark}</div>
+              : <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>—</div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

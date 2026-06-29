@@ -416,9 +416,13 @@ export default function QRTableManager() {
       .then(({ data }) => {
         setStores(data ?? [])
         if (data?.length) {
-          setStoreId(s => s ?? data[0].id)
-          setStoreName(data[0].name)
-          setStoreCity(data[0].city ?? '')
+          setStoreId(prev => {
+            const effectiveId = prev ?? data[0].id
+            const found = data.find(x => String(x.id) === String(effectiveId)) ?? data[0]
+            setStoreName(found.name)
+            setStoreCity(found.city ?? '')
+            return effectiveId
+          })
         }
       })
   }, [orgId])
@@ -485,7 +489,7 @@ export default function QRTableManager() {
                   onChange={e => {
                     const id = e.target.value
                     setStoreId(id)
-                    const found = stores.find(s => s.id === id)
+                    const found = stores.find(s => String(s.id) === String(id))
                     setStoreName(found?.name ?? '')
                     setStoreCity(found?.city ?? '')
                   }}

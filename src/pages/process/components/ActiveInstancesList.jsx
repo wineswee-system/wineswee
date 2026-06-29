@@ -61,7 +61,7 @@ export default function ActiveInstancesList({ instances, getStats, onSelect, onA
                   )}
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 22, marginBottom: hasMeta ? 6 : 0 }}>
-                  {inst.store} · {inst.started_at?.slice(0, 10)}
+                  {[inst.store, inst.department].filter(Boolean).join(' · ')}{[inst.store, inst.department].some(Boolean) ? ' · ' : ''}{inst.started_at?.slice(0, 10)}
                 </div>
                 {hasMeta && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, alignItems: 'center', marginLeft: 22 }}>

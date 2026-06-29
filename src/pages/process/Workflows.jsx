@@ -871,10 +871,13 @@ export default function Workflows() {
   const handleCreateBlankWorkflow = async () => {
     const name = blankWorkflowForm.name.trim()
     if (!name) { toast.warning('請填寫流程名稱'); return }
+    const assigneeEmp = employees.find(e => e.name === blankWorkflowForm.assignee)
+    const assigneeDept = assigneeEmp?.dept || assigneeEmp?.departments?.name || null
     const { data, error } = await supabase.from('workflow_instances').insert({
       template_name: name,
       store: blankWorkflowForm.store || null,
       assignee: blankWorkflowForm.assignee || null,
+      department: assigneeDept,
       due_date: blankWorkflowForm.due_date || null,
       planned_start_date: blankWorkflowForm.planned_start_date || null,
       planned_end_date: blankWorkflowForm.planned_end_date || null,

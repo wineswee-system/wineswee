@@ -701,7 +701,7 @@ export default function WaiterMode() {
   const [showQr,        setShowQr]        = useState(false)
   const [qrUrl,         setQrUrl]         = useState('')
   const [genQr,         setGenQr]         = useState(false)
-  const [printBusy,     setPrintBusy]     = useState(false)
+  const [qrExpiry,      setQrExpiry]      = useState(null)
   const [wide,          setWide]          = useState(typeof window !== 'undefined' && window.innerWidth >= 900)
   const [variantMap,    setVariantMap]    = useState({}) // itemId → variantGroups[]
   const [variantTarget, setVariantTarget] = useState(null) // item being configured
@@ -867,15 +867,17 @@ export default function WaiterMode() {
     if (!selTable || !effectiveStoreId) return
     setGenQr(true)
     try {
+      const expiresAt = new Date(Date.now() + 4 * 60 * 60 * 1000)
       const { data: session, error } = await supabase.from('qr_order_sessions').insert({
         organization_id: orgId,
         store_id: effectiveStoreId,
         table_id: selTable.id,
         token: crypto.randomUUID(),
-        expires_at: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
+        expires_at: expiresAt.toISOString(),
       }).select('token').single()
       if (error) throw error
       setQrUrl(`${window.location.origin}/menu/${effectiveStoreId}/${selTable.id}?token=${session.token}`)
+      setQrExpiry(expiresAt)
       setShowQr(true)
     } catch (e) {
       toast.error('QR 產生失敗：' + (e.message || ''))
@@ -884,47 +886,33 @@ export default function WaiterMode() {
     }
   }
 
-  // ── Print table card (QR + time) ─────────────────────────────────────────
-  async function printTableCard() {
-    if (!selTable || !effectiveStoreId) return
-    setPrintBusy(true)
+  // ── QR modal actions ─────────────────────────────────────────────────────
+  async function printQrCard() {
+    if (!qrUrl || !selTable) return
     try {
-      const { data: session, error } = await supabase.from('qr_order_sessions').insert({
-        organization_id: orgId,
-        store_id: effectiveStoreId,
-        table_id: selTable.id,
-        token: crypto.randomUUID(),
-        expires_at: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
-      }).select('token').single()
-      if (error) throw error
-
-      const url = `${window.location.origin}/menu/${effectiveStoreId}/${selTable.id}?token=${session.token}`
-      const qrDataUrl = await QRCode.toDataURL(url, { width: 220, margin: 2, color: { dark: '#000000', light: '#ffffff' } })
-
+      const qrDataUrl = await QRCode.toDataURL(qrUrl, { width: 220, margin: 2, color: { dark: '#000000', light: '#ffffff' } })
       const now = new Date()
       const fmt = (d) => `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
-      const openTime   = fmt(now)
-      const expiryTime = fmt(new Date(now.getTime() + 4 * 60 * 60 * 1000))
-
+      const expiryTime = qrExpiry ? fmt(qrExpiry) : '—'
       const win = window.open('', '_blank', 'width=320,height=520')
       if (!win) { toast.error('請允許彈出視窗'); return }
       win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:"Noto Sans TC","微軟正黑體",sans-serif;text-align:center;padding:16px 12px}
-.store{font-size:12px;color:#888;margin-bottom:6px;letter-spacing:.5px}
+.store{font-size:12px;color:#888;margin-bottom:6px}
 hr{border:none;border-top:1px dashed #ccc;margin:10px 0}
 .tnum{font-size:42px;font-weight:900;letter-spacing:2px;margin:6px 0}
 .opentime{font-size:12px;color:#555;margin-bottom:10px}
 img{display:block;margin:0 auto}
-.hint{font-size:13px;font-weight:600;margin-top:10px;letter-spacing:.5px}
+.hint{font-size:13px;font-weight:600;margin-top:10px}
 .expiry{font-size:11px;color:#aaa;margin-top:4px}
 @media print{@page{margin:4mm;size:80mm auto}body{padding:8px}}
 </style></head><body>
 <div class="store">${storeName || '威士威'}</div>
 <hr>
 <div class="tnum">T${selTable.table_number}</div>
-<div class="opentime">開桌 ${openTime}</div>
+<div class="opentime">開桌 ${fmt(now)}</div>
 <img src="${qrDataUrl}" width="180" height="180" />
 <div class="hint">掃碼點餐</div>
 <div class="expiry">有效至 ${expiryTime}（4 小時）</div>
@@ -932,12 +920,18 @@ img{display:block;margin:0 auto}
 </body></html>`)
       win.document.close()
       win.focus()
-      setTimeout(() => { win.print() }, 400)
+      setTimeout(() => win.print(), 400)
     } catch (e) {
-      toast.error('印桌卡失敗：' + (e.message || ''))
-    } finally {
-      setPrintBusy(false)
+      toast.error('列印失敗：' + (e.message || ''))
     }
+  }
+
+  function downloadQr() {
+    if (!qrCanvasRef.current) return
+    const link = document.createElement('a')
+    link.download = `T${selTable?.table_number}-QR.png`
+    link.href = qrCanvasRef.current.toDataURL('image/png')
+    link.click()
   }
 
   // ── Submit cart to kitchen — returns orderId on success ───────────────────
@@ -1119,11 +1113,8 @@ img{display:block;margin:0 auto}
         </div>
         <div style={S.headerRight}>
           <button style={S.iconBtn(false)} onClick={backToTables}>← 換桌</button>
-          <button style={S.iconBtn(false)} onClick={generateQR} disabled={genQr} title="產生 QR 點餐連結">
-            {genQr ? '…' : 'QR'}
-          </button>
-          <button style={S.iconBtn(false)} onClick={printTableCard} disabled={printBusy} title="列印桌位服務單（含 QR + 時間）">
-            {printBusy ? '…' : '印桌卡'}
+          <button style={S.iconBtn(false)} onClick={generateQR} disabled={genQr} title="產生 QR 點餐連結 / 列印桌卡">
+            {genQr ? '…' : 'QR / 桌卡'}
           </button>
           {!wide && cartCount > 0 && (
             <button style={S.iconBtn(false)} disabled={submitBusy} onClick={handleSubmit}>
@@ -1265,13 +1256,44 @@ img{display:block;margin:0 auto}
       {showQr && qrUrl && createPortal(
         <div style={S.overlay}>
           <div onClick={() => setShowQr(false)} style={{ position: 'absolute', inset: 0 }} />
-          <div style={{ ...S.noteBox, alignItems: 'center', maxWidth: 320 }}>
-            <p style={{ ...S.noteTitle, textAlign: 'center' }}>掃碼點餐 — T{selTable?.table_number}</p>
-            <div style={{ background: '#fff', borderRadius: 12, padding: 10 }}>
+          <div style={{ position: 'relative', zIndex: 1, background: 'var(--bg-card)', borderRadius: 20, padding: '24px 20px 20px', maxWidth: 320, width: '90%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+            {/* Close */}
+            <button onClick={() => setShowQr(false)} style={{ position: 'absolute', top: 12, right: 14, background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: 22, cursor: 'pointer', lineHeight: 1, padding: 4 }}>×</button>
+
+            {/* Title + countdown */}
+            <div style={{ textAlign: 'center', marginTop: 4 }}>
+              <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)' }}>桌號 T{selTable?.table_number}</div>
+              {qrExpiry && (() => {
+                const diff = Math.max(0, qrExpiry - Date.now())
+                const hrs  = Math.floor(diff / 3600000)
+                const mins = Math.floor((diff % 3600000) / 60000)
+                return <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>{hrs > 0 ? `${hrs} 小時 ${mins} 分後到期` : `${mins} 分後到期`}</div>
+              })()}
+            </div>
+
+            {/* QR */}
+            <div style={{ background: '#fff', borderRadius: 14, padding: 12 }}>
               <canvas ref={qrCanvasRef} />
             </div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', wordBreak: 'break-all', textAlign: 'center' }}>{qrUrl}</div>
-            <button style={S.smallBtn(false)} onClick={() => setShowQr(false)}>關閉</button>
+
+            {/* URL */}
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', wordBreak: 'break-all', textAlign: 'center', maxWidth: 270, lineHeight: 1.5 }}>{qrUrl}</div>
+
+            {/* Actions */}
+            <div style={{ display: 'flex', gap: 8, width: '100%' }}>
+              <button onClick={printQrCard}
+                style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: 'none', background: 'var(--accent-cyan)', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                🖨 列印
+              </button>
+              <button onClick={downloadQr}
+                style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: '1px solid var(--border-primary)', background: 'var(--bg-secondary)', color: 'var(--text-secondary)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                ↓ 下載
+              </button>
+              <button onClick={generateQR} disabled={genQr} title="重新產生 QR"
+                style={{ padding: '10px 14px', borderRadius: 10, border: '1px solid var(--border-primary)', background: 'var(--bg-secondary)', color: 'var(--text-muted)', fontSize: 16, cursor: 'pointer' }}>
+                {genQr ? '…' : '↻'}
+              </button>
+            </div>
           </div>
         </div>,
         document.body

@@ -30,7 +30,9 @@ const roleColor = {
   '門市人員':   'badge-neutral',
 }
 
-const toLabel = r => ROLE_LABEL[r] ?? r ?? '—'
+// role_id → role name（prefer over text column to survive legacy 'employee' values）
+const ROLE_BY_ID = { 1: 'super_admin', 2: 'admin', 3: 'manager', 4: 'office_staff', 5: 'store_staff' }
+const toLabel = (role, role_id) => ROLE_LABEL[ROLE_BY_ID[role_id] ?? role] ?? role ?? '—'
 
 export default function Users() {
   const { profile } = useAuth()
@@ -48,7 +50,7 @@ export default function Users() {
     setLoading(true)
     const { data } = await supabase
       .from('employees')
-      .select('id, name, email, role, dept, status, position')
+      .select('id, name, email, role, role_id, dept, status, position')
       .eq('organization_id', orgId)
       .eq('status', '在職')          // 只列在職 — 離職的自動失權
       .order('id')
@@ -69,9 +71,10 @@ export default function Users() {
   )
 
   // 角色統計（legacy 'employee' 視為 office_staff）
-  const adminCount    = users.filter(u => u.role === 'admin' || u.role === 'super_admin').length
-  const managerCount  = users.filter(u => u.role === 'manager').length
-  const staffCount    = users.filter(u => ['store_staff', 'office_staff', 'employee'].includes(u.role) || !u.role).length
+  const resolveRole = u => ROLE_BY_ID[u.role_id] ?? u.role ?? ''
+  const adminCount    = users.filter(u => ['admin','super_admin'].includes(resolveRole(u))).length
+  const managerCount  = users.filter(u => resolveRole(u) === 'manager').length
+  const staffCount    = users.filter(u => ['store_staff','office_staff','employee'].includes(resolveRole(u)) || !resolveRole(u)).length
 
   return (
     <div className="fade-in">
@@ -127,7 +130,7 @@ export default function Users() {
                   沒有符合的員工
                 </td></tr>
               ) : filtered.map(u => {
-                const lbl = toLabel(u.role)
+                const lbl = toLabel(u.role, u.role_id)
                 return (
                   <tr key={u.id}>
                     <td style={{ fontWeight: 600 }}>{u.name}</td>

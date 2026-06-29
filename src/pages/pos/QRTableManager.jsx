@@ -48,25 +48,38 @@ function QRModal({ session, storeName, tableNumber, onClose, onRefresh }) {
   const print = () => {
     if (!canvasRef.current) return
     const dataUrl = canvasRef.current.toDataURL('image/png')
-    const win = window.open('', '_blank', 'width=400,height=520')
-    win.document.write(`
-      <html><head><title>QR 桌號 T${tableNumber}</title>
-      <style>
-        body { margin: 0; display: flex; flex-direction: column; align-items: center;
-               justify-content: center; min-height: 100vh; font-family: system-ui; background: #fff; }
-        img { width: 240px; height: 240px; }
-        h2  { margin: 16px 0 4px; font-size: 22px; font-weight: 800; color: #0f172a; }
-        p   { margin: 0; font-size: 14px; color: #64748b; }
-        .hint { margin-top: 12px; font-size: 12px; color: #94a3b8; }
-      </style></head>
-      <body>
-        <img src="${dataUrl}" />
-        <h2>桌號 T${tableNumber}</h2>
-        <p>${storeName}</p>
-        <p class="hint">掃描 QR 碼自助點餐</p>
-        <script>window.onload = () => { window.print(); window.close() }<\/script>
-      </body></html>
-    `)
+    const expiryStr = session?.expires_at ? (() => {
+      const d = new Date(session.expires_at)
+      return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
+    })() : null
+    const win = window.open('', '_blank', 'width=320,height=480')
+    if (!win) return
+    win.document.write(`<!DOCTYPE html><html>
+<head>
+  <meta charset="UTF-8">
+  <title>桌卡 T${tableNumber}</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:"Noto Sans TC","微軟正黑體",sans-serif;text-align:center;padding:16px 12px;background:#fff;color:#000}
+    .store{font-size:13px;color:#666;margin-bottom:4px}
+    .line{border:none;border-top:1px dashed #999;margin:8px 0}
+    .tnum{font-size:42px;font-weight:900;letter-spacing:2px;margin:8px 0 12px}
+    img{display:block;margin:0 auto}
+    .hint{font-size:14px;font-weight:600;margin-top:10px}
+    .expiry{font-size:11px;color:#888;margin-top:4px}
+    @media print{@page{margin:4mm;size:80mm auto}}
+  </style>
+</head>
+<body>
+  <div class="store">${storeName || '威士威'}</div>
+  <hr class="line">
+  <div class="tnum">T${tableNumber}</div>
+  <img src="${dataUrl}" width="180" height="180">
+  <div class="hint">掃碼點餐</div>
+  ${expiryStr ? `<div class="expiry">有效至 ${expiryStr}</div>` : ''}
+  <hr class="line">
+  <script>window.onload=()=>setTimeout(()=>window.print(),300)<\/script>
+</body></html>`)
     win.document.close()
   }
 

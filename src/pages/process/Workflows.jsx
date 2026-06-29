@@ -1312,7 +1312,7 @@ export default function Workflows() {
           color: 'var(--text-secondary)', lineHeight: 1.6,
         }}>
           💡 <strong>什麼是「流程」？</strong>由多個任務串接的可重用範本 — 適合「每次都要走相同步驟」的工作
-          （例：員工到職入職流程、月底結帳流程）。一次性、單點工作請建「任務」。
+          （例：員工到職入職流程、月底結帳流程）。
         </div>
       </div>
 

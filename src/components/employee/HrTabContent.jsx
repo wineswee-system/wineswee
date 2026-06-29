@@ -1,53 +1,31 @@
-import { useState, useRef, useEffect } from 'react'
-import { Upload, Eye, Plus, X, ChevronDown } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Upload, Eye, Plus, X } from 'lucide-react'
 import { getPTAnnualLeaveHours, getAnnualLeaveEntitlement } from '../../lib/leavePolicy'
 import SearchableSelect, { empOptions } from '../SearchableSelect'
 
 const maskBank = (v) => v ? '****' + v.slice(-4) : ''
 
-// 職位常用選項 — 可手打也可下拉選；點 ▼ 一律展開全部（不被已填字過濾）
 const POSITION_OPTS = [
-  '儲備幹部', '店長', '副店長', '資深店長', '督導', '經理', '副理', '主管', '組長', '主任',
-  '專員', '行政助理', '會計', '門市人員', '門市正職人員', '門市兼職人員', '正職人員', '兼職人員', '收銀員', '倉管人員',
+  { group: '管理職', opts: ['總經理', '副總經理', '執行長', '總監', '經理', '副理', '主管', '副主管', '店長', '副店長', '資深店長', '督導', '組長', '主任'] },
+  { group: '行政職', opts: ['資深工程師', '工程師', '專員', '行政助理', '會計', '儲備幹部', '業務代表'] },
+  { group: '門市職', opts: ['門市人員', '門市正職人員', '門市兼職人員', '正職人員', '兼職人員', '收銀員', '倉管人員', '助理', '實習生'] },
 ]
 
-// 手打 + 下拉二合一：input 可自由輸入，點 ▼ 或聚焦展開「全部」選項（不依輸入過濾）
 function PositionCombo({ value, onChange, placeholder }) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef(null)
-  useEffect(() => {
-    if (!open) return
-    const h = (e) => { if (!ref.current?.contains(e.target)) setOpen(false) }
-    document.addEventListener('mousedown', h)
-    return () => document.removeEventListener('mousedown', h)
-  }, [open])
   return (
-    <div ref={ref} style={{ position: 'relative', width: '100%' }}>
-      <input
-        className="form-input"
-        style={{ width: '100%', paddingRight: 30 }}
-        value={value || ''}
-        onChange={e => onChange(e.target.value)}
-        onFocus={() => setOpen(true)}
-        placeholder={placeholder}
-      />
-      <button type="button" tabIndex={-1} onClick={() => setOpen(o => !o)}
-        style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2, display: 'flex' }}>
-        <ChevronDown size={14} style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
-      </button>
-      {open && (
-        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4, zIndex: 50, background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 8, boxShadow: 'var(--shadow-lg)', maxHeight: 260, overflowY: 'auto' }}>
-          {POSITION_OPTS.map(opt => (
-            <div key={opt} onClick={() => { onChange(opt); setOpen(false) }}
-              style={{ padding: '7px 12px', cursor: 'pointer', fontSize: 13, color: 'var(--text-primary)', background: opt === value ? 'var(--glass-light)' : 'transparent' }}
-              onMouseEnter={e => { e.currentTarget.style.background = 'var(--glass-light)' }}
-              onMouseLeave={e => { e.currentTarget.style.background = opt === value ? 'var(--glass-light)' : 'transparent' }}>
-              {opt}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+    <select
+      className="form-input"
+      style={{ width: '100%' }}
+      value={value || ''}
+      onChange={e => onChange(e.target.value)}
+    >
+      <option value="">{placeholder || '— 不選 —'}</option>
+      {POSITION_OPTS.map(g => (
+        <optgroup key={g.group} label={g.group}>
+          {g.opts.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+        </optgroup>
+      ))}
+    </select>
   )
 }
 

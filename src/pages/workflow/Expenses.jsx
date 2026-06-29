@@ -21,6 +21,7 @@ import { postBindingFillDone } from '../../lib/embeddedBinding'
 
 import { toast } from '../../lib/toast'
 const CATEGORIES = ['交通', '住宿', '餐飲', '設備', '其他']
+const emptyItem = () => ({ name: '', qty: 1, unit_price: '', subtotal: 0 })
 
 export default function Expenses() {
   const { profile, hasPermission, isAdmin } = useAuth()
@@ -38,7 +39,8 @@ export default function Expenses() {
   const [showModal, setShowModal] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [cloneSourceAtts, setCloneSourceAtts] = useState([])  // 複製重送：來源單的附件 URL（送出後複製 storage 檔）
-  const [form, setForm] = useState({ employee: '', category: CATEGORIES[0], amount: '', date: '', description: '', receipt: true })
+  const [form, setForm] = useState({ employee: '', category: CATEGORIES[0], date: '', description: '', receipt: true })
+  const [lineItems, setLineItems] = useState([emptyItem()])
   const [errors, setErrors] = useState({})
   const [organization, setOrganization] = useState(null)  // 印簽呈用
   const [detailRow, setDetailRow] = useState(null)
@@ -140,7 +142,8 @@ export default function Expenses() {
   useEffect(() => {
     if (searchParams.get('new') === '1' && !showModal) {
       setEditingId(null)
-      setForm({ employee: '', category: CATEGORIES[0], amount: '', date: '', description: '', receipt: true })
+      setForm({ employee: '', category: CATEGORIES[0], date: '', description: '', receipt: true })
+      setLineItems([emptyItem()])
       setShowModal(true)
       const next = new URLSearchParams(searchParams)
       next.delete('new')
@@ -149,10 +152,19 @@ export default function Expenses() {
   }, [searchParams, showModal, setSearchParams]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+  const updateItem = (i, k, v) => setLineItems(items => {
+    const n = [...items]
+    n[i] = { ...n[i], [k]: v }
+    if (k === 'qty' || k === 'unit_price') n[i].subtotal = (Number(n[i].qty) || 0) * (Number(n[i].unit_price) || 0)
+    return n
+  })
 
   const handleSubmit = async () => {
-    if (!validateRequired(form, ['employee', 'category', 'amount', 'date', 'description'], setErrors)) return
-    const payload = { ...form, amount: Number(form.amount) }
+    if (!validateRequired(form, ['employee', 'category', 'date', 'description'], setErrors)) return
+    const total = lineItems.reduce((s, li) => s + (li.subtotal || 0), 0)
+    if (total <= 0) { toast.warning('請至少填一筆品項（含數量及單價）'); return }
+    const validItems = lineItems.filter(li => li.name || Number(li.unit_price) > 0)
+    const payload = { ...form, amount: total, items: validItems }
 
     // ── 編輯重送路徑 ──
     if (editingId) {
@@ -173,7 +185,8 @@ export default function Expenses() {
       setExpenses(prev => prev.map(x => x.id === editingId ? { ...x, ...payload, status: '待審核', reject_reason: null } : x))
       setShowModal(false)
       setEditingId(null)
-      setForm({ employee: profile?.name || employees[0]?.name || '', category: CATEGORIES[0], amount: '', date: '', description: '', receipt: true })
+      setForm({ employee: profile?.name || employees[0]?.name || '', category: CATEGORIES[0], date: '', description: '', receipt: true })
+      setLineItems([emptyItem()])
       return
     }
 
@@ -215,7 +228,8 @@ export default function Expenses() {
       }
       setShowModal(false)
       setAttachFiles([])
-      setForm({ employee: profile?.name || employees[0]?.name || '', category: CATEGORIES[0], amount: '', date: '', description: '', receipt: true })
+      setLineItems([emptyItem()])
+      setForm({ employee: profile?.name || employees[0]?.name || '', category: CATEGORIES[0], date: '', description: '', receipt: true })
       await createApprovalWorkflow('expense', data, form.employee)
       postBindingFillDone(bindingId ? Number(bindingId) : null)  // 任務 iframe inline：通知父視窗完成
     }
@@ -339,7 +353,8 @@ export default function Expenses() {
             )}
             <button className="btn btn-primary" onClick={() => {
               setEditingId(null)
-              setForm({ employee: profile?.name || employees[0]?.name || '', category: CATEGORIES[0], amount: '', date: '', description: '', receipt: true })
+              setForm({ employee: profile?.name || employees[0]?.name || '', category: CATEGORIES[0], date: '', description: '', receipt: true })
+              setLineItems([emptyItem()])
               setErrors({})
               setShowModal(true)
             }}><Plus size={14} /> 新增申請</button>
@@ -411,11 +426,11 @@ export default function Expenses() {
                           setForm({
                             employee: e.employee,
                             category: e.category || CATEGORIES[0],
-                            amount: e.amount?.toString() || '',
                             date: e.date || '',
                             description: e.description || '',
                             receipt: e.receipt ?? true,
                           })
+                          setLineItems(Array.isArray(e.items) && e.items.length ? e.items : [{ name: e.description || '', qty: 1, unit_price: e.amount || 0, subtotal: Number(e.amount) || 0 }])
                           setShowModal(true)
                         }}>✏️ {(e.status === '已駁回' || e.status === '已退回') ? '編輯重送' : '編輯'}</button>
                       )}
@@ -426,11 +441,11 @@ export default function Expenses() {
                           setForm({
                             employee: e.employee,
                             category: e.category || CATEGORIES[0],
-                            amount: e.amount?.toString() || '',
                             date: e.date || '',
                             description: e.description || '',
                             receipt: e.receipt ?? true,
                           })
+                          setLineItems(Array.isArray(e.items) && e.items.length ? e.items : [{ name: e.description || '', qty: 1, unit_price: e.amount || 0, subtotal: Number(e.amount) || 0 }])
                           setShowModal(true)
                         }}>📋 複製</button>
                       )}
@@ -467,19 +482,44 @@ export default function Expenses() {
               placeholder="搜尋員工姓名/職稱..."
             />
           </Field>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="會計科目" required error={errors.category} errorMsg="請選會計科目">
-              <select className="form-input" style={{ width: '100%' }} value={form.category} onChange={e => { set('category', e.target.value); clearError('category', setErrors) }}>
-                <option value="">— 請選擇會計科目 —</option>
-                {(accounts.length > 0
-                  ? accounts.map(a => <option key={a.id ?? a.code} value={a.name}>{a.code} {a.name}</option>)
-                  : CATEGORIES.map(c => <option key={c} value={c}>{c}</option>))}
-              </select>
-            </Field>
-            <Field label="金額 (NT$)" required error={errors.amount} errorMsg="請填寫金額">
-              <input className="form-input" type="number" style={{ width: '100%' }} placeholder="0" value={form.amount} onChange={e => { set('amount', e.target.value); clearError('amount', setErrors) }} />
-            </Field>
-          </div>
+          <Field label="會計科目" required error={errors.category} errorMsg="請選會計科目">
+            <select className="form-input" style={{ width: '100%' }} value={form.category} onChange={e => { set('category', e.target.value); clearError('category', setErrors) }}>
+              <option value="">— 請選擇會計科目 —</option>
+              {(accounts.length > 0
+                ? accounts.map(a => <option key={a.id ?? a.code} value={a.name}>{a.code} {a.name}</option>)
+                : CATEGORIES.map(c => <option key={c} value={c}>{c}</option>))}
+            </select>
+          </Field>
+          <Field label="品項明細" required>
+            <div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 72px 88px 72px 24px', gap: 4, marginBottom: 4 }}>
+                {['品名', '數量', '單價', '小計', ''].map((h, i) => (
+                  <div key={i} style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, paddingLeft: 2 }}>{h}</div>
+                ))}
+              </div>
+              {lineItems.map((li, i) => (
+                <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 72px 88px 72px 24px', gap: 4, marginBottom: 6, alignItems: 'center' }}>
+                  <input className="form-input" style={{ fontSize: 13 }} type="text" placeholder="品名" value={li.name} onChange={e => updateItem(i, 'name', e.target.value)} />
+                  <input className="form-input" style={{ fontSize: 13 }} type="number" placeholder="1" inputMode="decimal" value={li.qty} onChange={e => updateItem(i, 'qty', e.target.value)} />
+                  <input className="form-input" style={{ fontSize: 13 }} type="number" placeholder="0" inputMode="decimal" value={li.unit_price} onChange={e => updateItem(i, 'unit_price', e.target.value)} />
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', textAlign: 'right', paddingRight: 2 }}>
+                    {li.subtotal ? `NT$${Number(li.subtotal).toLocaleString()}` : '-'}
+                  </div>
+                  <button type="button" onClick={() => setLineItems(prev => prev.length > 1 ? prev.filter((_, j) => j !== i) : prev)}
+                    style={{ background: 'none', border: 'none', cursor: lineItems.length > 1 ? 'pointer' : 'default', color: lineItems.length > 1 ? 'var(--accent-red)' : 'transparent', padding: 0, fontSize: 16, lineHeight: 1 }}>×</button>
+                </div>
+              ))}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
+                <button type="button" className="btn btn-secondary" style={{ fontSize: 12, padding: '4px 10px' }}
+                  onClick={() => setLineItems(prev => [...prev, emptyItem()])}>
+                  <Plus size={11} /> 新增品項
+                </button>
+                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent-cyan)' }}>
+                  合計：NT$ {lineItems.reduce((s, li) => s + (li.subtotal || 0), 0).toLocaleString()}
+                </span>
+              </div>
+            </div>
+          </Field>
           <Field label="日期" required error={errors.date} errorMsg="請選日期">
             <input className="form-input" type="date" style={{ width: '100%' }} value={form.date} onChange={e => { set('date', e.target.value); clearError('date', setErrors) }} />
           </Field>

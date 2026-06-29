@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
-import { Paperclip } from 'lucide-react'
+import { Paperclip, Plus } from 'lucide-react'
 import Modal, { Field } from '../../../components/Modal'
 import SearchableSelect, { empOptions } from '../../../components/SearchableSelect'
 import { supabase } from '../../../lib/supabase'
 import { getAccounts } from '../../../lib/db'
 import { validateRequired, clearError } from '../../../lib/formValidation'
+import { toast } from '../../../lib/toast'
 import { useAuth } from '../../../contexts/AuthContext'
 
 // 經常性費用「擷取模式」表單 — 填完只整理成 draft（payload + attachFiles）回傳，不寫 DB。
@@ -12,11 +13,14 @@ import { useAuth } from '../../../contexts/AuthContext'
 //
 // props: { initialDraft, onCapture(draft), onClose }
 
+const emptyItem = () => ({ name: '', qty: 1, unit_price: '', subtotal: 0 })
+
 export default function ExpenseSimpleDraft({ initialDraft, onCapture, onClose }) {
   const { profile } = useAuth()
   const [employees, setEmployees] = useState([])
   const [accounts, setAccounts] = useState([])
-  const [form, setForm] = useState(() => initialDraft?.payload || { employee: profile?.name || '', category: '', amount: '', date: '', description: '', receipt: true })
+  const [form, setForm] = useState(() => initialDraft?.payload || { employee: profile?.name || '', category: '', date: '', description: '', receipt: true })
+  const [lineItems, setLineItems] = useState(() => initialDraft?.payload?.items || [emptyItem()])
   const [attachFiles, setAttachFiles] = useState(() => initialDraft?.attachFiles || [])
   const [errors, setErrors] = useState({})
 
@@ -34,6 +38,12 @@ export default function ExpenseSimpleDraft({ initialDraft, onCapture, onClose })
   }, [profile?.organization_id, profile?.name])
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+  const updateItem = (i, k, v) => setLineItems(items => {
+    const n = [...items]
+    n[i] = { ...n[i], [k]: v }
+    if (k === 'qty' || k === 'unit_price') n[i].subtotal = (Number(n[i].qty) || 0) * (Number(n[i].unit_price) || 0)
+    return n
+  })
 
   const handleFileSelect = (e) => {
     const files = Array.from(e.target.files || [])
@@ -43,9 +53,12 @@ export default function ExpenseSimpleDraft({ initialDraft, onCapture, onClose })
   const removeAttach = (idx) => setAttachFiles(prev => prev.filter((_, i) => i !== idx))
 
   const handleCapture = () => {
-    if (!validateRequired(form, ['employee', 'category', 'amount', 'date', 'description'], setErrors)) return false
+    if (!validateRequired(form, ['employee', 'category', 'date', 'description'], setErrors)) return false
+    const total = lineItems.reduce((s, li) => s + (li.subtotal || 0), 0)
+    if (total <= 0) { toast.warning('請至少填一筆品項（含數量及單價）'); return false }
     const empId = employees.find(e => e.name === form.employee)?.id || null
-    onCapture?.({ payload: { ...form }, attachFiles, empId })
+    const validItems = lineItems.filter(li => li.name || Number(li.unit_price) > 0)
+    onCapture?.({ payload: { ...form, amount: total, items: validItems }, attachFiles, empId })
     onClose?.()
   }
 
@@ -59,17 +72,42 @@ export default function ExpenseSimpleDraft({ initialDraft, onCapture, onClose })
           placeholder="搜尋員工姓名/職稱..."
         />
       </Field>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        <Field label="會計科目" required error={errors.category} errorMsg="請選會計科目">
-          <select className="form-input" style={{ width: '100%' }} value={form.category} onChange={e => { set('category', e.target.value); clearError('category', setErrors) }}>
-            <option value="">— 請選擇會計科目 —</option>
-            {accounts.map(a => <option key={a.id ?? a.code} value={a.name}>{a.code} {a.name}</option>)}
-          </select>
-        </Field>
-        <Field label="金額 (NT$)" required error={errors.amount} errorMsg="請填寫金額">
-          <input className="form-input" type="number" style={{ width: '100%' }} placeholder="0" value={form.amount} onChange={e => { set('amount', e.target.value); clearError('amount', setErrors) }} />
-        </Field>
-      </div>
+      <Field label="會計科目" required error={errors.category} errorMsg="請選會計科目">
+        <select className="form-input" style={{ width: '100%' }} value={form.category} onChange={e => { set('category', e.target.value); clearError('category', setErrors) }}>
+          <option value="">— 請選擇會計科目 —</option>
+          {accounts.map(a => <option key={a.id ?? a.code} value={a.name}>{a.code} {a.name}</option>)}
+        </select>
+      </Field>
+      <Field label="品項明細" required>
+        <div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 64px 84px 72px 24px', gap: 4, marginBottom: 4 }}>
+            {['品名', '數量', '單價', '小計', ''].map((h, i) => (
+              <div key={i} style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, paddingLeft: 2 }}>{h}</div>
+            ))}
+          </div>
+          {lineItems.map((li, i) => (
+            <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 64px 84px 72px 24px', gap: 4, marginBottom: 6, alignItems: 'center' }}>
+              <input className="form-input" style={{ fontSize: 13 }} type="text" placeholder="品名" value={li.name} onChange={e => updateItem(i, 'name', e.target.value)} />
+              <input className="form-input" style={{ fontSize: 13 }} type="number" placeholder="1" inputMode="decimal" value={li.qty} onChange={e => updateItem(i, 'qty', e.target.value)} />
+              <input className="form-input" style={{ fontSize: 13 }} type="number" placeholder="0" inputMode="decimal" value={li.unit_price} onChange={e => updateItem(i, 'unit_price', e.target.value)} />
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', textAlign: 'right', paddingRight: 2 }}>
+                {li.subtotal ? `NT$${Number(li.subtotal).toLocaleString()}` : '-'}
+              </div>
+              <button type="button" onClick={() => setLineItems(prev => prev.length > 1 ? prev.filter((_, j) => j !== i) : prev)}
+                style={{ background: 'none', border: 'none', cursor: lineItems.length > 1 ? 'pointer' : 'default', color: lineItems.length > 1 ? 'var(--accent-red)' : 'transparent', padding: 0, fontSize: 16, lineHeight: 1 }}>×</button>
+            </div>
+          ))}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
+            <button type="button" className="btn btn-secondary" style={{ fontSize: 12, padding: '4px 10px' }}
+              onClick={() => setLineItems(prev => [...prev, emptyItem()])}>
+              <Plus size={11} /> 新增品項
+            </button>
+            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent-cyan)' }}>
+              合計：NT$ {lineItems.reduce((s, li) => s + (li.subtotal || 0), 0).toLocaleString()}
+            </span>
+          </div>
+        </div>
+      </Field>
       <Field label="日期" required error={errors.date} errorMsg="請選日期">
         <input className="form-input" type="date" style={{ width: '100%' }} value={form.date} onChange={e => { set('date', e.target.value); clearError('date', setErrors) }} />
       </Field>

@@ -24,7 +24,7 @@ function menuUrl(storeId, tableId, token) {
 
 // ── QR preview modal ──────────────────────────────────────────────────────────
 
-function QRModal({ session, storeName, tableNumber, onClose, onRefresh }) {
+function QRModal({ session, storeName, storeCity, tableNumber, onClose, onRefresh }) {
   const canvasRef = useRef(null)
   const url = menuUrl(session.store_id, session.table_id, session.token)
 
@@ -48,11 +48,15 @@ function QRModal({ session, storeName, tableNumber, onClose, onRefresh }) {
   const print = () => {
     if (!canvasRef.current) return
     const dataUrl = canvasRef.current.toDataURL('image/png')
-    const expiryStr = session?.expires_at ? (() => {
-      const d = new Date(session.expires_at)
+    const fmt = iso => {
+      if (!iso) return null
+      const d = new Date(iso)
       return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
-    })() : null
-    const win = window.open('', '_blank', 'width=340,height=520')
+    }
+    const openStr   = fmt(session?.created_at)
+    const expiryStr = fmt(session?.expires_at)
+    const cityLine  = storeCity ? `<div class="hdr-city">${storeCity}</div>` : ''
+    const win = window.open('', '_blank', 'width=340,height=560')
     if (!win) return
     win.document.write(`<!DOCTYPE html><html>
 <head>
@@ -65,9 +69,11 @@ function QRModal({ session, storeName, tableNumber, onClose, onRefresh }) {
          width:76mm;max-width:100%}
     .hdr{border:2px solid #111;padding:7px 10px;margin-bottom:8px}
     .hdr-name{font-size:15px;font-weight:800;letter-spacing:2px}
+    .hdr-city{font-size:11px;color:#555;margin-top:2px;letter-spacing:1px}
     .dash{border:none;border-top:1px dashed #bbb;margin:8px 0}
+    .open{font-size:11px;color:#666;margin-bottom:6px}
     .tnum{font-size:52px;font-weight:900;letter-spacing:4px;
-          line-height:1;margin:8px 0 12px}
+          line-height:1;margin:6px 0 10px}
     .qr-wrap{display:inline-block;border:1px solid #ddd;padding:6px;margin-bottom:6px}
     img{display:block}
     .cta{font-size:15px;font-weight:700;letter-spacing:3px;margin:8px 0 2px}
@@ -81,8 +87,12 @@ function QRModal({ session, storeName, tableNumber, onClose, onRefresh }) {
   </style>
 </head>
 <body>
-  <div class="hdr"><div class="hdr-name">${storeName || '威士威'}</div></div>
+  <div class="hdr">
+    <div class="hdr-name">${storeName || '威士威'}</div>
+    ${cityLine}
+  </div>
   <hr class="dash">
+  ${openStr ? `<div class="open">開桌 ${openStr}</div>` : ''}
   <div class="tnum">T${tableNumber}</div>
   <div class="qr-wrap"><img src="${dataUrl}" width="200" height="200"></div>
   <div class="cta">掃 碼 點 餐</div>
@@ -174,7 +184,7 @@ function QRModal({ session, storeName, tableNumber, onClose, onRefresh }) {
 
 // ── Single table card ─────────────────────────────────────────────────────────
 
-function TableCard({ table, session, orgId, storeId, sessionMinutes, storeName, onSessionChange }) {
+function TableCard({ table, session, orgId, storeId, sessionMinutes, storeName, storeCity, onSessionChange }) {
   const [busy,   setBusy]   = useState(false)
   const [showQR, setShowQR] = useState(false)
 
@@ -358,6 +368,7 @@ function TableCard({ table, session, orgId, storeId, sessionMinutes, storeName, 
         <QRModal
           session={session}
           storeName={storeName}
+          storeCity={storeCity}
           tableNumber={table.table_number}
           onClose={() => setShowQR(false)}
           onRefresh={generate}
@@ -393,6 +404,7 @@ export default function QRTableManager() {
   const [stores,         setStores]         = useState([])
   const [storeId,        setStoreId]        = useState(null)
   const [storeName,      setStoreName]      = useState('')
+  const [storeCity,      setStoreCity]      = useState('')
   const [tables,         setTables]         = useState([])
   const [sessions,       setSessions]       = useState({})
   const [sessionMinutes, setSessionMinutes] = useState(240)
@@ -400,12 +412,13 @@ export default function QRTableManager() {
 
   useEffect(() => {
     if (!orgId) return
-    supabase.from('stores').select('id, name').eq('organization_id', orgId).order('name')
+    supabase.from('stores').select('id, name, city').eq('organization_id', orgId).order('name')
       .then(({ data }) => {
         setStores(data ?? [])
         if (data?.length) {
           setStoreId(s => s ?? data[0].id)
           setStoreName(data[0].name)
+          setStoreCity(data[0].city ?? '')
         }
       })
   }, [orgId])
@@ -472,7 +485,9 @@ export default function QRTableManager() {
                   onChange={e => {
                     const id = e.target.value
                     setStoreId(id)
-                    setStoreName(stores.find(s => s.id === id)?.name ?? '')
+                    const found = stores.find(s => s.id === id)
+                    setStoreName(found?.name ?? '')
+                    setStoreCity(found?.city ?? '')
                   }}
                   style={{ ...sel, paddingRight: 32 }}
                 >
@@ -520,6 +535,7 @@ export default function QRTableManager() {
               storeId={storeId}
               sessionMinutes={sessionMinutes}
               storeName={storeName}
+              storeCity={storeCity}
               onSessionChange={handleSessionChange}
             />
           ))}

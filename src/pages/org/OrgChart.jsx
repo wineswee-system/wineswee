@@ -40,6 +40,11 @@ export default function OrgChart() {
   const colors = ['var(--accent-cyan)', 'var(--accent-yellow)', 'var(--accent-green)', 'var(--accent-blue)', 'var(--accent-purple)']
   const dims = ['var(--accent-cyan-dim)', 'var(--accent-yellow-dim)', 'var(--accent-green-dim)', 'var(--accent-blue-dim)', 'var(--accent-purple-dim)']
 
+  // 頂層部門：動態從 departments 找，不寫死名稱
+  const APEX_KEYWORDS = ['執行長室', '總經理室', '董事長室', 'CEO', '執行長']
+  const apexDept = departments.find(d => APEX_KEYWORDS.some(k => d.name?.includes(k)))
+  const apexName = apexDept?.name || '執行長室'
+
   // 兼總經理室：讀 employees.is_executive_board 旗標 (DB 端標記)
   // 之前硬寫 [48, 52] 員工 id，老闆換人就壞 → 改用旗標
   const execBoardMembers = employees.filter(e => e.is_executive_board)
@@ -179,7 +184,7 @@ export default function OrgChart() {
               textAlign: 'center',
               minWidth: 160,
             }}>
-              <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--accent-cyan)' }}>總經理室</div>
+              <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--accent-cyan)' }}>{apexName}</div>
             </div>
             {execBoardMembers.length > 0 && (
               <div style={{
@@ -214,7 +219,7 @@ export default function OrgChart() {
 
           {/* Departments row（總經理室是 apex，不再列入） */}
           <div style={{ display: 'flex', justifyContent: 'space-around', gap: 10, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-            {departments.filter(d => d.name !== '總經理室').map((dept, i) => {
+            {departments.filter(d => d.name !== apexName).map((dept, i) => {
               const color = colors[i % colors.length]
               const dim = dims[i % dims.length]
               const head = managerName(dept)
@@ -336,7 +341,7 @@ export default function OrgChart() {
 
           {/* Fan-out tree for depts with many stores (e.g. 營運部) */}
           {bigStoreDepts.map((dept, i) => {
-            const visibleDepts = departments.filter(d => d.name !== '總經理室')
+            const visibleDepts = departments.filter(d => d.name !== apexName)
             const color = colors[visibleDepts.indexOf(dept) % colors.length]
             const dStores = deptStores(dept)
             return (
@@ -410,7 +415,7 @@ export default function OrgChart() {
 
           {/* Section tree for sectioned depts (e.g. 營運部 → 4 課) */}
           {sectionedDepts.map((dept) => {
-            const visibleDepts = departments.filter(d => d.name !== '總經理室')
+            const visibleDepts = departments.filter(d => d.name !== apexName)
             const color = colors[visibleDepts.indexOf(dept) % colors.length]
             const dim = dims[visibleDepts.indexOf(dept) % dims.length]
             const secs = deptSections(dept)

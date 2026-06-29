@@ -176,6 +176,7 @@ export default function Employees() {
         avatar,
         role,
         role_id: ROLE_ID_MAP[role] || 5,
+        organization_id: profile?.organization_id ?? null,
       }
       const { data, error } = await createEmployee(payload)
       if (error) throw error

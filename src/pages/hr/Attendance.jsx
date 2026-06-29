@@ -7,6 +7,7 @@ import { todayTW, monthStartTW, nowTimeTW } from '../../lib/datetime'
 import { useAuth } from '../../contexts/AuthContext'
 import { useErrorHandler } from '../../hooks/useErrorHandler'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import { supabase } from '../../lib/supabase'
 
 // 模式 tag — 對應 Edge Function 的 clock_in_mode / clock_out_mode（2026-05-28 簡化 5 → 2）
 //   normal 不顯示、outing 顯示「外出」
@@ -59,9 +60,12 @@ export default function Attendance() {
   const [clockingIn, setClockingIn] = useState(false)
   const [clockMsg, setClockMsg] = useState(null)
   const [tab, setTab] = useState('records') // records | hours
-  const [editingId, setEditingId] = useState(null)
+  const [editModal, setEditModal] = useState(null) // record being edited
   const [editClockIn, setEditClockIn] = useState('')
   const [editClockOut, setEditClockOut] = useState('')
+  const [editReason, setEditReason] = useState('')
+  const [editHistory, setEditHistory] = useState([])
+  const [historyLoading, setHistoryLoading] = useState(false)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -196,20 +200,27 @@ export default function Attendance() {
     setClockingIn(false)
   }
 
-  const openEdit = (r) => {
-    setEditingId(r.id)
+  const openEdit = async (r) => {
+    setEditModal(r)
     setEditClockIn(r.clock_in || '')
     setEditClockOut(r.clock_out || '')
+    setEditReason('')
+    setEditHistory([])
+    setHistoryLoading(true)
+    const { data } = await supabase.from('attendance_clock_edits')
+      .select('*').eq('attendance_record_id', r.id).order('created_at', { ascending: false })
+    setEditHistory(data || [])
+    setHistoryLoading(false)
   }
-  const cancelEdit = () => { setEditingId(null); setEditClockIn(''); setEditClockOut('') }
+  const cancelEdit = () => { setEditModal(null); setEditReason(''); setEditHistory([]) }
 
-  const saveEdit = async (r) => {
+  const saveEdit = async () => {
+    const r = editModal
+    if (!editReason.trim()) { alert('請填寫調整原因'); return }
     setSaving(true)
-    const { supabase } = await import('../../lib/supabase')
     const payload = {}
     if (editClockIn) payload.clock_in = editClockIn
     if (editClockOut) payload.clock_out = editClockOut
-    // 重算工時
     if (editClockIn && editClockOut) {
       const [ih, im] = editClockIn.split(':').map(Number)
       const [oh, om] = editClockOut.split(':').map(Number)
@@ -217,10 +228,25 @@ export default function Attendance() {
       if (hrs > 0) { payload.hours = Math.round(hrs * 10) / 10; payload.total_hours = payload.hours }
     }
     const { error } = await supabase.from('attendance_records').update(payload).eq('id', r.id)
-    setSaving(false)
-    if (error) { setClockMsg({ type: 'error', text: '儲存失敗：' + error.message }); return }
+    if (error) { setSaving(false); setClockMsg({ type: 'error', text: '儲存失敗：' + error.message }); return }
+    // 寫 audit log
+    const editorEmp = employees.find(e => e.name === profile?.name)
+    await supabase.from('attendance_clock_edits').insert({
+      attendance_record_id: r.id,
+      employee: r.employee,
+      date: r.date,
+      old_clock_in: r.clock_in || null,
+      new_clock_in: editClockIn || null,
+      old_clock_out: r.clock_out || null,
+      new_clock_out: editClockOut || null,
+      reason: editReason.trim(),
+      edited_by: profile?.name || '',
+      edited_by_id: editorEmp?.id || null,
+      organization_id: profile?.organization_id || null,
+    })
     setRecords(prev => prev.map(rec => rec.id === r.id ? { ...rec, ...payload } : rec))
     setClockMsg({ type: 'success', text: `${r.employee} ${r.date} 打卡時間已更新` })
+    setSaving(false)
     cancelEdit()
   }
 
@@ -346,22 +372,13 @@ export default function Attendance() {
                 const isNotClocked = r._rowType === 'notClocked'
                 const canClockOut = !isNotClocked && isToday && r.clock_in && !r.clock_out
                 const canClockIn = !isNotClocked && isToday && !r.clock_in
-                const isEditing = editingId === r.id
                 return (
-                  <div key={r.id} style={{ display: 'grid', gridTemplateColumns: '140px 100px 100px 85px 85px 60px 120px 145px 85px 110px 1fr', alignItems: 'center', borderBottom: '1px solid var(--border-subtle)', opacity: isNotClocked ? 0.75 : 1, background: isEditing ? 'var(--accent-cyan-dim)' : undefined }}>
+                  <div key={r.id} style={{ display: 'grid', gridTemplateColumns: '140px 100px 100px 85px 85px 60px 120px 145px 85px 110px 1fr', alignItems: 'center', borderBottom: '1px solid var(--border-subtle)', opacity: isNotClocked ? 0.75 : 1 }}>
                     <div style={{ padding: '4px 8px', fontWeight: 600, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.employee}</div>
                     <div style={{ padding: '4px 8px', fontSize: 12, color: 'var(--text-muted)' }}>{isNotClocked ? (r.dept || '-') : (getEmpDept(r.employee) || '-')}</div>
                     <div style={{ padding: '4px 8px', fontSize: 13 }}>{r.date}</div>
-                    <div style={{ padding: '4px 8px', fontSize: 13 }}>
-                      {isEditing
-                        ? <input type="time" value={editClockIn} onChange={e => setEditClockIn(e.target.value)} style={{ width: 76, fontSize: 12, padding: '2px 4px', borderRadius: 4, border: '1px solid var(--accent-cyan)', background: 'var(--bg-card)', color: 'var(--text-primary)' }} />
-                        : (r.clock_in || '-')}
-                    </div>
-                    <div style={{ padding: '4px 8px', fontSize: 13 }}>
-                      {isEditing
-                        ? <input type="time" value={editClockOut} onChange={e => setEditClockOut(e.target.value)} style={{ width: 76, fontSize: 12, padding: '2px 4px', borderRadius: 4, border: '1px solid var(--accent-cyan)', background: 'var(--bg-card)', color: 'var(--text-primary)' }} />
-                        : (r.clock_out || '-')}
-                    </div>
+                    <div style={{ padding: '4px 8px', fontSize: 13 }}>{r.clock_in || '-'}</div>
+                    <div style={{ padding: '4px 8px', fontSize: 13 }}>{r.clock_out || '-'}</div>
                     <div style={{ padding: '4px 8px', fontSize: 13 }}>{!isNotClocked && r.hours > 0 ? `${r.hours}h` : '-'}</div>
                     <div style={{ padding: '4px 8px' }}>{isNotClocked ? <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>-</span> : locationBadge(r)}</div>
                     <div style={{ padding: '4px 8px', fontSize: 11, fontFamily: 'monospace', color: 'var(--text-secondary)' }}>
@@ -377,26 +394,15 @@ export default function Attendance() {
                       {!isNotClocked && <ClockModeTags inMode={r.clock_in_mode} outMode={r.clock_out_mode} />}
                     </div>
                     <div style={{ padding: '4px 8px', display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                      {isEditing ? (
-                        <>
-                          <button className="btn btn-primary" style={{ fontSize: 11, padding: '3px 8px' }} disabled={saving} onClick={() => saveEdit(r)}>
-                            {saving ? '…' : '✓ 儲存'}
-                          </button>
-                          <button className="btn btn-secondary" style={{ fontSize: 11, padding: '3px 8px' }} onClick={cancelEdit}>取消</button>
-                        </>
-                      ) : (
-                        <>
-                          {canEditClock && !isNotClocked && (
-                            <button className="btn btn-secondary" style={{ fontSize: 11, padding: '3px 8px' }} onClick={() => openEdit(r)}>
-                              ✏️ 改時間
-                            </button>
-                          )}
-                          {(isNotClocked || canClockIn || canClockOut) && (
-                            <button className={`btn ${canClockOut ? 'btn-secondary' : 'btn-primary'}`} style={{ fontSize: 11, padding: '3px 10px' }} disabled={clockingIn} onClick={() => handleClockIn(r.employee)}>
-                              <Clock size={10} /> {canClockOut ? '下班打卡' : '上班打卡'}
-                            </button>
-                          )}
-                        </>
+                      {canEditClock && !isNotClocked && (
+                        <button className="btn btn-secondary" style={{ fontSize: 11, padding: '3px 8px' }} onClick={() => openEdit(r)}>
+                          ✏️ 改時間
+                        </button>
+                      )}
+                      {(isNotClocked || canClockIn || canClockOut) && (
+                        <button className={`btn ${canClockOut ? 'btn-secondary' : 'btn-primary'}`} style={{ fontSize: 11, padding: '3px 10px' }} disabled={clockingIn} onClick={() => handleClockIn(r.employee)}>
+                          <Clock size={10} /> {canClockOut ? '下班打卡' : '上班打卡'}
+                        </button>
                       )}
                     </div>
                   </div>
@@ -504,6 +510,76 @@ export default function Attendance() {
       })()}
 
       {tab === 'comparison' && <ScheduleComparisonTab storeFilter={storeFilter} />}
+
+      {/* ── 改時間 Modal ── */}
+      {editModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+          onClick={e => { if (e.target === e.currentTarget) cancelEdit() }}>
+          <div style={{ background: 'var(--bg-card)', borderRadius: 14, padding: 24, width: '100%', maxWidth: 480, maxHeight: '85vh', overflowY: 'auto', border: '1px solid var(--border-medium)' }}>
+            <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 4 }}>✏️ 調整打卡時間</div>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 20 }}>
+              {editModal.employee}・{editModal.date}
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
+              <div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>上班打卡</div>
+                <input type="time" value={editClockIn} onChange={e => setEditClockIn(e.target.value)}
+                  className="form-input" style={{ width: '100%' }} />
+              </div>
+              <div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>下班打卡</div>
+                <input type="time" value={editClockOut} onChange={e => setEditClockOut(e.target.value)}
+                  className="form-input" style={{ width: '100%' }} />
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>調整原因 <span style={{ color: 'var(--accent-red)' }}>*</span></div>
+              <textarea className="form-input" rows={3} style={{ width: '100%', resize: 'vertical' }}
+                placeholder="例：員工忘記打卡、系統錯誤..."
+                value={editReason} onChange={e => setEditReason(e.target.value)} />
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
+              <button className="btn btn-primary" style={{ flex: 1 }} disabled={saving} onClick={saveEdit}>
+                {saving ? '儲存中…' : '確認儲存'}
+              </button>
+              <button className="btn btn-secondary" style={{ flex: 1 }} onClick={cancelEdit}>取消</button>
+            </div>
+
+            {/* 調整紀錄 */}
+            <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 10 }}>📋 調整紀錄</div>
+              {historyLoading ? (
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', padding: 12 }}>載入中…</div>
+              ) : editHistory.length === 0 ? (
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', padding: 12 }}>尚無調整紀錄</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {editHistory.map(h => (
+                    <div key={h.id} style={{ padding: '10px 12px', background: 'var(--bg-secondary)', borderRadius: 8, fontSize: 12 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{h.edited_by}</span>
+                        <span style={{ color: 'var(--text-muted)' }}>{new Date(h.created_at).toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                      </div>
+                      <div style={{ color: 'var(--text-secondary)', display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 4 }}>
+                        {(h.old_clock_in !== h.new_clock_in) && (
+                          <span>上班：<span style={{ color: 'var(--accent-red)' }}>{h.old_clock_in || '—'}</span> → <span style={{ color: 'var(--accent-green)' }}>{h.new_clock_in || '—'}</span></span>
+                        )}
+                        {(h.old_clock_out !== h.new_clock_out) && (
+                          <span>下班：<span style={{ color: 'var(--accent-red)' }}>{h.old_clock_out || '—'}</span> → <span style={{ color: 'var(--accent-green)' }}>{h.new_clock_out || '—'}</span></span>
+                        )}
+                      </div>
+                      <div style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>「{h.reason}」</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -186,6 +186,7 @@ export default function Tasks() {
   const handleSubmit = async () => {
     const errs = {}
     if (!form.title) errs.title = '任務名稱為必填'
+    if (!form.assignee) errs.assignee = '負責人為必填'
     if (!form.due_date) errs.due_date = '截止日期為必填'
     if (Object.keys(errs).length > 0) { setFormErrors(errs); return false }
     setFormErrors({})
@@ -693,19 +694,19 @@ export default function Tasks() {
               onChange={e => { set('title', e.target.value); if (formErrors.title) setFormErrors(f => ({ ...f, title: undefined })) }} />
           </Field>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="負責人">
-              <SearchableSelect
-                value={form.assignee}
-                onChange={(v) => set('assignee', v || '')}
-                options={empOptions(employees, { keyBy: 'name' })}
-                placeholder="搜尋員工姓名/職稱..."
-              />
-            </Field>
-            <Field label="門市">
+            <Field label="門市／地點">
               <select className="form-input" style={{ width: '100%' }} value={form.store} onChange={e => set('store', e.target.value)}>
                 <option value="">— 選擇門市 —</option>
                 {stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
               </select>
+            </Field>
+            <Field label="負責人" required error={!!formErrors.assignee} errorMsg={formErrors.assignee}>
+              <SearchableSelect
+                value={form.assignee}
+                onChange={(v) => { set('assignee', v || ''); if (formErrors.assignee) setFormErrors(f => ({ ...f, assignee: undefined })) }}
+                options={empOptions(employees, { keyBy: 'name' })}
+                placeholder="搜尋員工姓名/職稱..."
+              />
             </Field>
             <Field label="計畫開始">
               <input className="form-input" type="date" style={{ width: '100%' }} value={form.planned_start} onChange={e => set('planned_start', e.target.value)} />

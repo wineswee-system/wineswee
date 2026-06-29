@@ -37,6 +37,7 @@ const FEATURES = [
   { module: '組織架構', label: '組織架構編輯',   view: null, edit: 'org.structure.edit' },
   // 出勤與請假
   { module: '出勤與請假', label: '打卡紀錄', view: 'attendance.view_all', edit: 'attendance.edit' },
+  { module: '出勤與請假', label: '補打卡編輯（任意員工）', view: null, edit: 'clock.correction_edit' },
   { module: '出勤與請假', label: '假單核可', view: null, edit: 'leave.approve' },
   { module: '出勤與請假', label: '加班核可', view: null, edit: 'ot.approve' },
   { module: '出勤與請假', label: '出差核可', view: null, edit: 'trip.approve' },

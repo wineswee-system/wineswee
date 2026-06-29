@@ -18,9 +18,16 @@ export default function BlankWorkflowModal({
     if (errors[k]) setErrors(e => ({ ...e, [k]: undefined }))
   }
 
+  const assigneeDept = (() => {
+    if (!blankWorkflowForm.assignee) return ''
+    const emp = employees.find(e => e.name === blankWorkflowForm.assignee)
+    return emp?.dept || emp?.departments?.name || ''
+  })()
+
   const handleSubmit = () => {
     const errs = {}
     if (!blankWorkflowForm.name?.trim()) errs.name = '流程名稱為必填'
+    if (!blankWorkflowForm.assignee?.trim()) errs.assignee = '負責人為必填'
     if (!blankWorkflowForm.planned_start_date) errs.planned_start_date = '計畫開始日期為必填'
     if (!blankWorkflowForm.planned_end_date) errs.planned_end_date = '預期完成日為必填'
     if (Object.keys(errs).length > 0) { setErrors(errs); return false }
@@ -38,19 +45,17 @@ export default function BlankWorkflowModal({
         />
       </Field>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        <Field label="門市／地點">
-          <select className="form-input" style={{ width: '100%' }} value={blankWorkflowForm.store} onChange={e => set('store', e.target.value)}>
-            <option value="">— 選擇門市 —</option>
-            {stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
-          </select>
-        </Field>
-        <Field label="負責人">
+        <Field label="負責人" required error={!!errors.assignee} errorMsg={errors.assignee}>
           <SearchableSelect
             value={blankWorkflowForm.assignee}
-            onChange={(v) => set('assignee', v || '')}
+            onChange={(v) => { set('assignee', v || ''); if (errors.assignee) setErrors(e => ({ ...e, assignee: undefined })) }}
             options={empOptions(employees, { keyBy: 'name' })}
             placeholder="搜尋負責人..."
           />
+        </Field>
+        <Field label="部門">
+          <input className="form-input" style={{ width: '100%', background: 'var(--bg-secondary)', color: assigneeDept ? 'var(--text-secondary)' : 'var(--text-muted)', cursor: 'default' }}
+            value={assigneeDept || '— 選負責人後自動帶入 —'} readOnly />
         </Field>
         <Field label="計畫開始" required error={!!errors.planned_start_date} errorMsg={errors.planned_start_date}>
           <input className="form-input" type="date" style={{ width: '100%' }}

@@ -32,6 +32,7 @@ const normalizeType = (t) => {
 export default function PunchCorrection() {
   const { profile, role, hasPermission } = useAuth()
   const canDeleteAll = hasPermission('hr_form.delete_all')
+  const canEditClock = hasPermission('clock.correction_edit')
   const { canApprove } = usePendingApprovals()
   const chainGuard = useChainGuard({ formType: 'correction', organizationId: profile?.organization_id })
   const navigate = useNavigate()
@@ -420,7 +421,7 @@ export default function PunchCorrection() {
                           {c.reject_reason && <div style={{ color: 'var(--accent-red)' }}>原因：{c.reject_reason}</div>}
                         </span>
                       )}
-                      {['待審核','申請中','已駁回','已退回'].includes(c.status) && c.employee === profile?.name && (
+                      {['待審核','申請中','已駁回','已退回'].includes(c.status) && (canEditClock || c.employee === profile?.name) && (
                         <button className="btn btn-sm btn-primary" style={{ padding: '4px 8px', fontSize: 11, background: 'var(--accent-orange)' }} onClick={() => openEditPunch(c)}>
                           ✏️ {(['已駁回','已退回'].includes(c.status)) ? '編輯重送' : '編輯'}
                         </button>

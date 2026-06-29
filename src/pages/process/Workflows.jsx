@@ -1276,6 +1276,10 @@ export default function Workflows() {
         onStepReorder={handleStepReorder}
         onArchive={handleArchiveInstance}
         onDelete={handleDeleteInstance}
+        onInstNameUpdate={(id, name) => {
+          setInstances(prev => prev.map(i => i.id === id ? { ...i, template_name: name } : i))
+          setSelectedInstance(prev => prev ? { ...prev, template_name: name } : prev)
+        }}
       />
     )
   }

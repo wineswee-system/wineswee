@@ -118,6 +118,8 @@ export default function InstanceDetailView({
   onArchive, onDelete,
   onChainApprove,
   onStepReorder,
+  onInstNameUpdate,
+  currentEmpId,
 }) {
   const [confirmModal, setConfirmModal] = useState({ open: false, step: null, reason: '' })
   const [menuOpen, setMenuOpen] = useState(false)
@@ -134,6 +136,9 @@ export default function InstanceDetailView({
   const [editingTitleId, setEditingTitleId] = useState(null)
   const [editingTitleVal, setEditingTitleVal] = useState('')
   const [titleSaving, setTitleSaving] = useState(false)
+  const [editingInstName, setEditingInstName] = useState(false)
+  const [instNameVal, setInstNameVal] = useState('')
+  const [instNameSaving, setInstNameSaving] = useState(false)
   const [ctxMenu, setCtxMenu] = useState(null) // { task, x, y }
   const [editingAssigneeId, setEditingAssigneeId] = useState(null)
   const [editingDueDateId, setEditingDueDateId] = useState(null)
@@ -146,6 +151,18 @@ export default function InstanceDetailView({
     if (Object.keys(errs).length > 0) { setAddTaskErrors(errs); return false }
     setAddTaskErrors({})
     return onAddTask()
+  }
+
+  const saveInstName = async () => {
+    const v = instNameVal.trim()
+    if (!v || v === inst.template_name) { setEditingInstName(false); return }
+    setInstNameSaving(true)
+    const { supabase } = await import('../../../lib/supabase')
+    const { error } = await supabase.from('workflow_instances').update({ template_name: v }).eq('id', inst.id)
+    setInstNameSaving(false)
+    if (error) { toast.error('儲存失敗：' + error.message); return }
+    onInstNameUpdate?.(inst.id, v)
+    setEditingInstName(false)
   }
 
   useEffect(() => {
@@ -187,9 +204,31 @@ export default function InstanceDetailView({
         </nav>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '20px 24px', background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 14 }}>
         <div style={{ flex: 1 }}>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 13, fontWeight: 400, color: 'var(--text-muted)' }}>wf-{inst.id}</span>
-            {inst.template_name}
+            {editingInstName ? (
+              <>
+                <input
+                  autoFocus
+                  value={instNameVal}
+                  onChange={e => setInstNameVal(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') saveInstName(); if (e.key === 'Escape') setEditingInstName(false) }}
+                  style={{ fontSize: 20, fontWeight: 800, border: '1.5px solid var(--accent-cyan)', borderRadius: 6, padding: '2px 8px', background: 'var(--bg-secondary)', color: 'var(--text-primary)', minWidth: 200, outline: 'none' }}
+                />
+                <button className="btn btn-primary" style={{ fontSize: 12, padding: '3px 10px' }} disabled={instNameSaving} onClick={saveInstName}>
+                  {instNameSaving ? '…' : '儲存'}
+                </button>
+                <button className="btn btn-secondary" style={{ fontSize: 12, padding: '3px 8px' }} onClick={() => setEditingInstName(false)}>取消</button>
+              </>
+            ) : (
+              <>
+                {inst.template_name}
+                <button title="編輯流程名稱" onClick={() => { setInstNameVal(inst.template_name); setEditingInstName(true) }}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '2px 4px', display: 'flex', alignItems: 'center' }}>
+                  <Pencil size={14} />
+                </button>
+              </>
+            )}
           </h2>
           <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>{inst.store} · {inst.started_at?.slice(0, 10)}</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 14, alignItems: 'center' }}>

@@ -52,32 +52,43 @@ function QRModal({ session, storeName, tableNumber, onClose, onRefresh }) {
       const d = new Date(session.expires_at)
       return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
     })() : null
-    const win = window.open('', '_blank', 'width=320,height=480')
+    const win = window.open('', '_blank', 'width=340,height=520')
     if (!win) return
     win.document.write(`<!DOCTYPE html><html>
 <head>
   <meta charset="UTF-8">
   <title>桌卡 T${tableNumber}</title>
   <style>
-    *{margin:0;padding:0;box-sizing:border-box}
-    body{font-family:"Noto Sans TC","微軟正黑體",sans-serif;text-align:center;padding:16px 12px;background:#fff;color:#000}
-    .store{font-size:13px;color:#666;margin-bottom:4px}
-    .line{border:none;border-top:1px dashed #999;margin:8px 0}
-    .tnum{font-size:42px;font-weight:900;letter-spacing:2px;margin:8px 0 12px}
-    img{display:block;margin:0 auto}
-    .hint{font-size:14px;font-weight:600;margin-top:10px}
-    .expiry{font-size:11px;color:#888;margin-top:4px}
-    @media print{@page{margin:4mm;size:80mm auto}}
+    *{margin:0;padding:0;box-sizing:border-box;outline:none!important}
+    body{font-family:"Noto Sans TC","蘋方","微軟正黑體",sans-serif;
+         text-align:center;padding:12px 10px 16px;background:#fff;color:#111;
+         width:76mm;max-width:100%}
+    .hdr{border:2px solid #111;padding:7px 10px;margin-bottom:8px}
+    .hdr-name{font-size:15px;font-weight:800;letter-spacing:2px}
+    .dash{border:none;border-top:1px dashed #bbb;margin:8px 0}
+    .tnum{font-size:52px;font-weight:900;letter-spacing:4px;
+          line-height:1;margin:8px 0 12px}
+    .qr-wrap{display:inline-block;border:1px solid #ddd;padding:6px;margin-bottom:6px}
+    img{display:block}
+    .cta{font-size:15px;font-weight:700;letter-spacing:3px;margin:8px 0 2px}
+    .expiry{font-size:11px;color:#777;margin-top:4px}
+    .foot{font-size:9px;color:#ccc;margin-top:10px;letter-spacing:1px}
+    @media print{
+      *{outline:none!important}
+      @page{margin:0;size:80mm auto}
+      body{padding:6px 4px 12px;-webkit-print-color-adjust:exact}
+    }
   </style>
 </head>
 <body>
-  <div class="store">${storeName || '威士威'}</div>
-  <hr class="line">
+  <div class="hdr"><div class="hdr-name">${storeName || '威士威'}</div></div>
+  <hr class="dash">
   <div class="tnum">T${tableNumber}</div>
-  <img src="${dataUrl}" width="180" height="180">
-  <div class="hint">掃碼點餐</div>
-  ${expiryStr ? `<div class="expiry">有效至 ${expiryStr}</div>` : ''}
-  <hr class="line">
+  <div class="qr-wrap"><img src="${dataUrl}" width="200" height="200"></div>
+  <div class="cta">掃 碼 點 餐</div>
+  <hr class="dash">
+  ${expiryStr ? `<div class="expiry">有效至 ${expiryStr}（4 小時）</div>` : ''}
+  <div class="foot">請勿將此卡轉交他人使用</div>
   <script>window.onload=()=>setTimeout(()=>window.print(),300)<\/script>
 </body></html>`)
     win.document.close()

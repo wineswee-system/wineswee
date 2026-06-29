@@ -37,11 +37,12 @@ function ClockModeTags({ inMode, outMode }) {
 }
 
 export default function Attendance() {
-  const { profile, role } = useAuth()
+  const { profile, role, hasPermission } = useAuth()
   const { handleError } = useErrorHandler('hr')
   const userRole = role?.name || profile?.role || 'store_staff'
   const isStaff = userRole === 'store_staff'
   const isManager = userRole === 'manager'
+  const canEditClock = hasPermission('clock.correction_edit')
 
   const [records, setRecords] = useState([])
   const [employees, setEmployees] = useState([])
@@ -58,6 +59,10 @@ export default function Attendance() {
   const [clockingIn, setClockingIn] = useState(false)
   const [clockMsg, setClockMsg] = useState(null)
   const [tab, setTab] = useState('records') // records | hours
+  const [editingId, setEditingId] = useState(null)
+  const [editClockIn, setEditClockIn] = useState('')
+  const [editClockOut, setEditClockOut] = useState('')
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     const orgId = profile?.organization_id
@@ -191,6 +196,34 @@ export default function Attendance() {
     setClockingIn(false)
   }
 
+  const openEdit = (r) => {
+    setEditingId(r.id)
+    setEditClockIn(r.clock_in || '')
+    setEditClockOut(r.clock_out || '')
+  }
+  const cancelEdit = () => { setEditingId(null); setEditClockIn(''); setEditClockOut('') }
+
+  const saveEdit = async (r) => {
+    setSaving(true)
+    const { supabase } = await import('../../lib/supabase')
+    const payload = {}
+    if (editClockIn) payload.clock_in = editClockIn
+    if (editClockOut) payload.clock_out = editClockOut
+    // 重算工時
+    if (editClockIn && editClockOut) {
+      const [ih, im] = editClockIn.split(':').map(Number)
+      const [oh, om] = editClockOut.split(':').map(Number)
+      const hrs = ((oh * 60 + om) - (ih * 60 + im)) / 60
+      if (hrs > 0) { payload.hours = Math.round(hrs * 10) / 10; payload.total_hours = payload.hours }
+    }
+    const { error } = await supabase.from('attendance_records').update(payload).eq('id', r.id)
+    setSaving(false)
+    if (error) { setClockMsg({ type: 'error', text: '儲存失敗：' + error.message }); return }
+    setRecords(prev => prev.map(rec => rec.id === r.id ? { ...rec, ...payload } : rec))
+    setClockMsg({ type: 'success', text: `${r.employee} ${r.date} 打卡時間已更新` })
+    cancelEdit()
+  }
+
   const locationBadge = (r) => {
     if (!r.clock_in_location) return <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>-</span>
     const isExternal = r.clock_in_location === '外部位置'
@@ -313,13 +346,22 @@ export default function Attendance() {
                 const isNotClocked = r._rowType === 'notClocked'
                 const canClockOut = !isNotClocked && isToday && r.clock_in && !r.clock_out
                 const canClockIn = !isNotClocked && isToday && !r.clock_in
+                const isEditing = editingId === r.id
                 return (
-                  <div key={r.id} style={{ display: 'grid', gridTemplateColumns: '140px 100px 100px 85px 85px 60px 120px 145px 85px 110px 1fr', alignItems: 'center', borderBottom: '1px solid var(--border-subtle)', opacity: isNotClocked ? 0.75 : 1 }}>
+                  <div key={r.id} style={{ display: 'grid', gridTemplateColumns: '140px 100px 100px 85px 85px 60px 120px 145px 85px 110px 1fr', alignItems: 'center', borderBottom: '1px solid var(--border-subtle)', opacity: isNotClocked ? 0.75 : 1, background: isEditing ? 'var(--accent-cyan-dim)' : undefined }}>
                     <div style={{ padding: '4px 8px', fontWeight: 600, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.employee}</div>
                     <div style={{ padding: '4px 8px', fontSize: 12, color: 'var(--text-muted)' }}>{isNotClocked ? (r.dept || '-') : (getEmpDept(r.employee) || '-')}</div>
                     <div style={{ padding: '4px 8px', fontSize: 13 }}>{r.date}</div>
-                    <div style={{ padding: '4px 8px', fontSize: 13 }}>{r.clock_in || '-'}</div>
-                    <div style={{ padding: '4px 8px', fontSize: 13 }}>{r.clock_out || '-'}</div>
+                    <div style={{ padding: '4px 8px', fontSize: 13 }}>
+                      {isEditing
+                        ? <input type="time" value={editClockIn} onChange={e => setEditClockIn(e.target.value)} style={{ width: 76, fontSize: 12, padding: '2px 4px', borderRadius: 4, border: '1px solid var(--accent-cyan)', background: 'var(--bg-card)', color: 'var(--text-primary)' }} />
+                        : (r.clock_in || '-')}
+                    </div>
+                    <div style={{ padding: '4px 8px', fontSize: 13 }}>
+                      {isEditing
+                        ? <input type="time" value={editClockOut} onChange={e => setEditClockOut(e.target.value)} style={{ width: 76, fontSize: 12, padding: '2px 4px', borderRadius: 4, border: '1px solid var(--accent-cyan)', background: 'var(--bg-card)', color: 'var(--text-primary)' }} />
+                        : (r.clock_out || '-')}
+                    </div>
                     <div style={{ padding: '4px 8px', fontSize: 13 }}>{!isNotClocked && r.hours > 0 ? `${r.hours}h` : '-'}</div>
                     <div style={{ padding: '4px 8px' }}>{isNotClocked ? <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>-</span> : locationBadge(r)}</div>
                     <div style={{ padding: '4px 8px', fontSize: 11, fontFamily: 'monospace', color: 'var(--text-secondary)' }}>
@@ -334,11 +376,27 @@ export default function Attendance() {
                     <div style={{ padding: '4px 8px' }}>
                       {!isNotClocked && <ClockModeTags inMode={r.clock_in_mode} outMode={r.clock_out_mode} />}
                     </div>
-                    <div style={{ padding: '4px 8px' }}>
-                      {(isNotClocked || canClockIn || canClockOut) && (
-                        <button className={`btn ${canClockOut ? 'btn-secondary' : 'btn-primary'}`} style={{ fontSize: 11, padding: '3px 10px' }} disabled={clockingIn} onClick={() => handleClockIn(r.employee)}>
-                          <Clock size={10} /> {canClockOut ? '下班打卡' : '上班打卡'}
-                        </button>
+                    <div style={{ padding: '4px 8px', display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                      {isEditing ? (
+                        <>
+                          <button className="btn btn-primary" style={{ fontSize: 11, padding: '3px 8px' }} disabled={saving} onClick={() => saveEdit(r)}>
+                            {saving ? '…' : '✓ 儲存'}
+                          </button>
+                          <button className="btn btn-secondary" style={{ fontSize: 11, padding: '3px 8px' }} onClick={cancelEdit}>取消</button>
+                        </>
+                      ) : (
+                        <>
+                          {canEditClock && !isNotClocked && (
+                            <button className="btn btn-secondary" style={{ fontSize: 11, padding: '3px 8px' }} onClick={() => openEdit(r)}>
+                              ✏️ 改時間
+                            </button>
+                          )}
+                          {(isNotClocked || canClockIn || canClockOut) && (
+                            <button className={`btn ${canClockOut ? 'btn-secondary' : 'btn-primary'}`} style={{ fontSize: 11, padding: '3px 10px' }} disabled={clockingIn} onClick={() => handleClockIn(r.employee)}>
+                              <Clock size={10} /> {canClockOut ? '下班打卡' : '上班打卡'}
+                            </button>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>

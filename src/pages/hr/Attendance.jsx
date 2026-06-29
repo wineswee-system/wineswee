@@ -207,8 +207,11 @@ export default function Attendance() {
     setEditReason('')
     setEditHistory([])
     setHistoryLoading(true)
-    const { data } = await supabase.from('attendance_clock_edits')
-      .select('*').eq('attendance_record_id', r.id).order('created_at', { ascending: false })
+    // 顯示該員工當天的補打卡申請紀錄當 history
+    const { data } = await supabase.from('clock_corrections')
+      .select('id, date, type, correction_time, reason, status, approver, created_at, employee')
+      .eq('employee', r.employee).eq('date', r.date)
+      .order('created_at', { ascending: false })
     setEditHistory(data || [])
     setHistoryLoading(false)
   }
@@ -228,25 +231,10 @@ export default function Attendance() {
       if (hrs > 0) { payload.hours = Math.round(hrs * 10) / 10; payload.total_hours = payload.hours }
     }
     const { error } = await supabase.from('attendance_records').update(payload).eq('id', r.id)
-    if (error) { setSaving(false); setClockMsg({ type: 'error', text: '儲存失敗：' + error.message }); return }
-    // 寫 audit log
-    const editorEmp = employees.find(e => e.name === profile?.name)
-    await supabase.from('attendance_clock_edits').insert({
-      attendance_record_id: r.id,
-      employee: r.employee,
-      date: r.date,
-      old_clock_in: r.clock_in || null,
-      new_clock_in: editClockIn || null,
-      old_clock_out: r.clock_out || null,
-      new_clock_out: editClockOut || null,
-      reason: editReason.trim(),
-      edited_by: profile?.name || '',
-      edited_by_id: editorEmp?.id || null,
-      organization_id: profile?.organization_id || null,
-    })
+    setSaving(false)
+    if (error) { setClockMsg({ type: 'error', text: '儲存失敗：' + error.message }); return }
     setRecords(prev => prev.map(rec => rec.id === r.id ? { ...rec, ...payload } : rec))
     setClockMsg({ type: 'success', text: `${r.employee} ${r.date} 打卡時間已更新` })
-    setSaving(false)
     cancelEdit()
   }
 
@@ -554,24 +542,26 @@ export default function Attendance() {
               {historyLoading ? (
                 <div style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', padding: 12 }}>載入中…</div>
               ) : editHistory.length === 0 ? (
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', padding: 12 }}>尚無調整紀錄</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', padding: 12 }}>無補打卡申請紀錄</div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {editHistory.map(h => (
                     <div key={h.id} style={{ padding: '10px 12px', background: 'var(--bg-secondary)', borderRadius: 8, fontSize: 12 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                        <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{h.edited_by}</span>
-                        <span style={{ color: 'var(--text-muted)' }}>{new Date(h.created_at).toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                        <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>
+                          {h.type === 'clock_in' || h.type === '上班打卡' ? '🕐 上班補打' : '🕔 下班補打'} → {h.correction_time}
+                        </span>
+                        <span style={{
+                          padding: '1px 6px', borderRadius: 4, fontSize: 10, fontWeight: 700,
+                          background: h.status === '已核准' ? 'var(--accent-green-dim)' : h.status === '已駁回' || h.status === '已退回' ? 'var(--accent-red-dim)' : 'var(--accent-orange-dim)',
+                          color: h.status === '已核准' ? 'var(--accent-green)' : h.status === '已駁回' || h.status === '已退回' ? 'var(--accent-red)' : 'var(--accent-orange)',
+                        }}>{h.status}</span>
                       </div>
-                      <div style={{ color: 'var(--text-secondary)', display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 4 }}>
-                        {(h.old_clock_in !== h.new_clock_in) && (
-                          <span>上班：<span style={{ color: 'var(--accent-red)' }}>{h.old_clock_in || '—'}</span> → <span style={{ color: 'var(--accent-green)' }}>{h.new_clock_in || '—'}</span></span>
-                        )}
-                        {(h.old_clock_out !== h.new_clock_out) && (
-                          <span>下班：<span style={{ color: 'var(--accent-red)' }}>{h.old_clock_out || '—'}</span> → <span style={{ color: 'var(--accent-green)' }}>{h.new_clock_out || '—'}</span></span>
-                        )}
+                      <div style={{ color: 'var(--text-muted)', fontStyle: 'italic', marginBottom: 2 }}>「{h.reason || '—'}」</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                        {new Date(h.created_at).toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                        {h.approver && ` · 核准：${h.approver}`}
                       </div>
-                      <div style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>「{h.reason}」</div>
                     </div>
                   ))}
                 </div>

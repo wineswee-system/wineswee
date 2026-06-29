@@ -141,6 +141,7 @@ export default function InstanceDetailView({
   const handleAddTask = () => {
     const errs = {}
     if (!taskForm.title?.trim()) errs.title = '任務名稱為必填'
+    if (!taskForm.assignee?.trim()) errs.assignee = '負責人為必填'
     if (!taskForm.due_date) errs.due_date = '截止日期為必填'
     if (Object.keys(errs).length > 0) { setAddTaskErrors(errs); return false }
     setAddTaskErrors({})
@@ -707,21 +708,21 @@ export default function InstanceDetailView({
               onChange={e => setTaskForm(f => ({ ...f, description: e.target.value }))} />
           </Field>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="負責人">
-              <SearchableSelect
-                value={taskForm.assignee}
-                onChange={(v) => setTaskForm(f => ({ ...f, assignee: v || '' }))}
-                options={empOptions(employees, { keyBy: 'name' })}
-                placeholder="搜尋負責人..."
-              />
-            </Field>
-            <Field label="門市">
+            <Field label="門市／地點">
               <select className="form-input" style={{ width: '100%' }}
                 value={taskForm.store}
                 onChange={e => setTaskForm(f => ({ ...f, store: e.target.value }))}>
                 <option value="">請選擇</option>
                 {stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
               </select>
+            </Field>
+            <Field label="負責人" required error={!!addTaskErrors.assignee} errorMsg={addTaskErrors.assignee}>
+              <SearchableSelect
+                value={taskForm.assignee}
+                onChange={(v) => { setTaskForm(f => ({ ...f, assignee: v || '' })); if (addTaskErrors.assignee) setAddTaskErrors(e => ({ ...e, assignee: undefined })) }}
+                options={empOptions(employees, { keyBy: 'name' })}
+                placeholder="搜尋負責人..."
+              />
             </Field>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>

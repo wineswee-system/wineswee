@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { QrCode, RefreshCw, Printer, Download, X, Clock, CheckCircle2, AlertCircle, ChevronDown } from 'lucide-react'
 import QRCode from 'qrcode'
 import { supabase } from '../../lib/supabase'
-import { useOrgId } from '../../contexts/AuthContext'
+import { useAuth } from '../../contexts/AuthContext'
 import { toast } from '../../lib/toast'
 import PageHeader from '../../components/ui/PageHeader'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -24,7 +24,7 @@ function menuUrl(storeId, tableId, token) {
 
 // ── QR preview modal ──────────────────────────────────────────────────────────
 
-function QRModal({ session, storeName, storeCity, tableNumber, onClose, onRefresh }) {
+function QRModal({ session, orgName, storeName, storeCity, tableNumber, onClose, onRefresh }) {
   const canvasRef = useRef(null)
   const url = menuUrl(session.store_id, session.table_id, session.token)
 
@@ -68,7 +68,8 @@ function QRModal({ session, storeName, storeCity, tableNumber, onClose, onRefres
          text-align:center;padding:12px 10px 16px;background:#fff;color:#111;
          width:76mm;max-width:100%}
     .hdr{border:2px solid #111;padding:7px 10px;margin-bottom:8px}
-    .hdr-name{font-size:15px;font-weight:800;letter-spacing:2px}
+    .hdr-brand{font-size:13px;font-weight:600;letter-spacing:1px;color:#555}
+    .hdr-name{font-size:17px;font-weight:900;letter-spacing:2px;margin-top:2px}
     .hdr-city{font-size:11px;color:#555;margin-top:2px;letter-spacing:1px}
     .dash{border:none;border-top:1px dashed #bbb;margin:8px 0}
     .open{font-size:11px;color:#666;margin-bottom:6px}
@@ -88,7 +89,8 @@ function QRModal({ session, storeName, storeCity, tableNumber, onClose, onRefres
 </head>
 <body>
   <div class="hdr">
-    <div class="hdr-name">${storeName || '威士威'}</div>
+    ${orgName ? `<div class="hdr-brand">${orgName}</div>` : ''}
+    <div class="hdr-name">${storeName || '門市'}</div>
     ${cityLine}
   </div>
   <hr class="dash">
@@ -184,7 +186,7 @@ function QRModal({ session, storeName, storeCity, tableNumber, onClose, onRefres
 
 // ── Single table card ─────────────────────────────────────────────────────────
 
-function TableCard({ table, session, orgId, storeId, sessionMinutes, storeName, storeCity, onSessionChange }) {
+function TableCard({ table, session, orgId, storeId, sessionMinutes, orgName, storeName, storeCity, onSessionChange }) {
   const [busy,   setBusy]   = useState(false)
   const [showQR, setShowQR] = useState(false)
 
@@ -367,6 +369,7 @@ function TableCard({ table, session, orgId, storeId, sessionMinutes, storeName, 
       {showQR && isActive && (
         <QRModal
           session={session}
+          orgName={orgName}
           storeName={storeName}
           storeCity={storeCity}
           tableNumber={table.table_number}
@@ -399,7 +402,9 @@ function Chip({ label, value, color }) {
 }
 
 export default function QRTableManager() {
-  const orgId = useOrgId()
+  const { profile } = useAuth()
+  const orgId  = profile?.organization_id ?? null
+  const orgName = profile?.org?.name ?? ''
 
   const [stores,         setStores]         = useState([])
   const [storeId,        setStoreId]        = useState(null)
@@ -538,6 +543,7 @@ export default function QRTableManager() {
               orgId={orgId}
               storeId={storeId}
               sessionMinutes={sessionMinutes}
+              orgName={orgName}
               storeName={storeName}
               storeCity={storeCity}
               onSessionChange={handleSessionChange}

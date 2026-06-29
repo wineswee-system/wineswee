@@ -39,6 +39,7 @@ export default function TaskQuickCreateModal({
   const handleSubmit = async () => {
     const errs = {}
     if (!form.title.trim()) errs.title = '任務名稱必填'
+    if (!form.assignee) errs.assignee = '負責人為必填'
     if (!form.due_date) errs.due_date = '截止日期必填'
     if (Object.keys(errs).length > 0) { setErrors(errs); return }
     setSaving(true)
@@ -62,24 +63,33 @@ export default function TaskQuickCreateModal({
           value={form.description} onChange={e => set('description', e.target.value)} />
       </Field>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        <Field label="負責人">
-          <SearchableSelect
-            value={form.assignee}
-            onChange={v => set('assignee', v || '')}
-            options={empOptions(employees, { keyBy: 'name' })}
-            placeholder="搜尋負責人..."
-          />
-        </Field>
-        {stores.length > 0 && (
-          <Field label="門市">
+      {stores.length > 0 ? (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <Field label="門市／地點">
             <select className="form-input" style={{ width: '100%' }} value={form.store} onChange={e => set('store', e.target.value)}>
               <option value="">未指定</option>
               {stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
             </select>
           </Field>
-        )}
-      </div>
+          <Field label="負責人" required error={!!errors.assignee} errorMsg={errors.assignee}>
+            <SearchableSelect
+              value={form.assignee}
+              onChange={v => { set('assignee', v || '') }}
+              options={empOptions(employees, { keyBy: 'name' })}
+              placeholder="搜尋負責人..."
+            />
+          </Field>
+        </div>
+      ) : (
+        <Field label="負責人" required error={!!errors.assignee} errorMsg={errors.assignee}>
+          <SearchableSelect
+            value={form.assignee}
+            onChange={v => { set('assignee', v || '') }}
+            options={empOptions(employees, { keyBy: 'name' })}
+            placeholder="搜尋負責人..."
+          />
+        </Field>
+      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
         <Field label="優先級">

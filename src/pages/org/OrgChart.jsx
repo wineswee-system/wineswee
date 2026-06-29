@@ -250,29 +250,12 @@ export default function OrgChart() {
                         minWidth: 90,
                       }}>
                         <div style={{ fontWeight: 700, color: aColor, fontSize: 13 }}>{aDept.name}</div>
-                        <div style={{ fontSize: 10, color: aColor, opacity: 0.85, marginTop: 3, fontWeight: 600 }}>
-                          共 {headcountOf(aDept)} 人
-                        </div>
-                      </div>
-                      {aMgr && (
-                        <>
-                          <div style={{ width: 1, height: 10, background: 'var(--border-strong)' }} />
-                          <div style={{
-                            border: `1px dashed ${aColor}`,
-                            borderRadius: 8,
-                            padding: '5px 10px',
-                            textAlign: 'center',
-                            background: 'var(--glass-light)',
-                            minWidth: 80,
-                          }}>
-                            {aMgr.position && (
-                              <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{aMgr.position}</div>
-                            )}
-                            <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>{aMgr.name}</div>
-                            {aMgr.name_en && <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{aMgr.name_en}</div>}
+                        {aMgr && (
+                          <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4, lineHeight: 1.35 }}>
+                            {positionInDept(aMgr, aDept.id) ? `${positionInDept(aMgr, aDept.id)} ${aMgr.name}` : labelOf(aMgr)}
                           </div>
-                        </>
-                      )}
+                        )}
+                      </div>
                     {aMembers.length > 0 && (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 6 }}>
                         {aMembers.map(emp => (
@@ -323,7 +306,7 @@ export default function OrgChart() {
                   {/* vertical connector from top bus */}
                   <div style={{ width: 1, height: 24, background: 'var(--border-strong)' }} />
 
-                  {/* Department solid box */}
+                  {/* Department box — 部門名 + 主管合一 */}
                   <div style={{
                     background: dim,
                     border: `1.5px solid ${color}`,
@@ -333,34 +316,15 @@ export default function OrgChart() {
                     width: '100%',
                   }}>
                     <div style={{ fontWeight: 700, color, fontSize: 13, lineHeight: 1.3 }}>{dept.name}</div>
-                    <div style={{ fontSize: 10, color, opacity: 0.85, marginTop: 3, fontWeight: 600 }}>
-                      共 {headcountOf(dept)} 人
-                    </div>
+                    {[managerOf(dept), ...subs].filter(Boolean).map(m => {
+                      const pos = positionInDept(m, dept.id)
+                      return (
+                        <div key={m.id} style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4, lineHeight: 1.35 }}>
+                          {pos ? `${pos} ${m.name}` : labelOf(m)}
+                        </div>
+                      )
+                    })}
                   </div>
-
-                  {/* Dashed manager box under dept */}
-                  {hasMgr && (
-                    <>
-                      <div style={{ width: 1, height: 14, background: 'var(--border-strong)' }} />
-                      <div style={{
-                        border: `1px dashed ${color}`,
-                        borderRadius: 8,
-                        padding: '6px 10px',
-                        textAlign: 'center',
-                        background: 'var(--glass-light)',
-                        minWidth: 80,
-                        display: 'flex', flexDirection: 'column', gap: 6,
-                      }}>
-                        {[managerOf(dept), ...subs].filter(Boolean).map(m => (
-                          <div key={m.id} style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500, lineHeight: 1.35 }}>
-                            {m.position && <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{m.position}</div>}
-                            <div>{m.name}</div>
-                            {m.name_en && <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{m.name_en}</div>}
-                          </div>
-                        ))}
-                      </div>
-                    </>
-                  )}
 
                   {/* Members (inline, small count) */}
                   {mems.length > 0 && (

@@ -66,6 +66,7 @@ export default function Workflows() {
   // Filters
   const [search, setSearch] = useState('')
   const [filterStore, setFilterStore] = useState('')
+  const [filterDept, setFilterDept] = useState('')
   const [filterAssignee, setFilterAssignee] = useState('')
 
   // Detail view
@@ -1235,6 +1236,7 @@ export default function Workflows() {
       if (!matchesInst && !matchesTask) return false
     }
     if (filterStore && i.store !== filterStore) return false
+    if (filterDept && i.department !== filterDept) return false
     if (filterAssignee && i.assignee !== filterAssignee) return false
     return true
   })
@@ -1325,10 +1327,10 @@ export default function Workflows() {
           <input type="text" placeholder="搜尋 ID、流程/任務名稱、負責人..." className="form-input" style={{ paddingLeft: 38, width: '100%' }} value={search} onChange={e => setSearch(e.target.value)} />
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
-          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>🏪 門市</span>
-          <select className="form-input" style={{ fontSize: 13, minWidth: 160 }} value={filterStore} onChange={e => setFilterStore(e.target.value)}>
-            <option value="">全部門市</option>
-            {stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>🏢 部門</span>
+          <select className="form-input" style={{ fontSize: 13, minWidth: 160 }} value={filterDept} onChange={e => setFilterDept(e.target.value)}>
+            <option value="">全部部門</option>
+            {[...new Set(instances.map(i => i.department).filter(Boolean))].sort().map(d => <option key={d} value={d}>{d}</option>)}
           </select>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>

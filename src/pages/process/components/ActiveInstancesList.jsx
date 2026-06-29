@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { ChevronRight, MoreVertical, Archive, Trash2, CheckCircle2, FolderOpen, User, Users } from 'lucide-react'
+import { ChevronRight, MoreVertical, Archive, Trash2, CheckCircle2, FolderOpen, User, Users, Building2 } from 'lucide-react'
 
 export default function ActiveInstancesList({ instances, getStats, onSelect, onArchive, onDelete, projects = [], lineGroups = [] }) {
   const [menuOpenId, setMenuOpenId] = useState(null)
@@ -23,7 +23,7 @@ export default function ActiveInstancesList({ instances, getStats, onSelect, onA
         const accent = isComplete ? 'var(--accent-green)' : 'var(--accent-cyan)'
         const project = projects.find(p => p.id === inst.project_id)
         const instGroups = inst.groups || []
-        const hasMeta = project || inst.assignee || instGroups.length > 0
+        const hasMeta = project || inst.assignee || inst.department || instGroups.length > 0
 
         return (
           <div key={inst.id} className="card" style={{
@@ -61,13 +61,18 @@ export default function ActiveInstancesList({ instances, getStats, onSelect, onA
                   )}
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 22, marginBottom: hasMeta ? 6 : 0 }}>
-                  {[inst.store, inst.department].filter(Boolean).join(' · ')}{[inst.store, inst.department].some(Boolean) ? ' · ' : ''}{inst.started_at?.slice(0, 10)}
+                  {inst.store ? `${inst.store} · ` : ''}{inst.started_at?.slice(0, 10)}
                 </div>
                 {hasMeta && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, alignItems: 'center', marginLeft: 22 }}>
                     {project && (
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 5, background: 'var(--accent-purple-dim)', color: 'var(--accent-purple)', border: '1px solid rgba(168,85,247,0.2)' }}>
                         <FolderOpen size={10} /> {project.name}
+                      </span>
+                    )}
+                    {inst.department && (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 5, background: 'var(--accent-blue-dim)', color: 'var(--accent-blue)', border: '1px solid rgba(59,130,246,0.2)' }}>
+                        <Building2 size={10} /> {inst.department}
                       </span>
                     )}
                     {inst.assignee && (

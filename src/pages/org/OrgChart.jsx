@@ -34,6 +34,19 @@ export default function OrgChart() {
       .finally(() => setLoading(false))
   }, [profile?.organization_id])
 
+  // 即時反映部門改名 / 新增 / 刪除
+  useEffect(() => {
+    const orgId = profile?.organization_id
+    if (!orgId) return
+    const channel = supabase
+      .channel(`org-depts-${orgId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'departments' }, () => {
+        getDepartments(orgId).then(res => setDepartments(res.data || []))
+      })
+      .subscribe()
+    return () => supabase.removeChannel(channel)
+  }, [profile?.organization_id])
+
   if (loading) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>載入中...</div>
 
   // 顏色順序：青 → 黃 → 綠 → 藍 → 紫（拿掉紅色，避免「部門/人名紅字」誤判成警告/異常）

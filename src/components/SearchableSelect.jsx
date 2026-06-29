@@ -320,8 +320,8 @@ export function empOptions(employees = [], opts = {}) {
     const parts = [e.name]
     if (e.name_en) parts.push(`(${e.name_en})`)
     if (e.position) parts.push(e.position)
-    const storeName = e.store || e.stores?.name
-    const deptName  = e.dept  || e.departments?.name
+    const storeName = e.stores?.name || e.store
+    const deptName  = e.departments?.name || e.dept
     const group = storeName ? `🏪 ${storeName}` : (deptName ? `🏢 ${deptName}` : '未分類')
     const sublabel = e.status === '離職'
       ? `已離職${e.resign_date ? ' ' + e.resign_date : ''}`

@@ -34,7 +34,7 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
     setLoading(true)
     const [a, i, d, e] = await Promise.all([
       supabase.from('store_audits').select('*').eq('id', auditId).single(),
-      supabase.from('store_audit_items').select('*').eq('audit_id', auditId).order('category_code').order('item_no'),
+      supabase.from('store_audit_items').select('*').eq('audit_id', auditId).order('item_no'),
       supabase.from('store_audit_on_duty').select('*').eq('audit_id', auditId).order('sort_order'),
       supabase.from('employees').select('id, name, name_en, position, dept, store, department_id, store_id, departments!department_id(name), stores!store_id(name)').eq('status', '在職').order('name'),
     ])
@@ -67,13 +67,18 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
   const isApproving = audit.status === '申請中'
   const isAuditor = profile?.id === audit.auditor_id
 
-  // 群組化 items
-  const grouped = items.reduce((acc, item) => {
-    const k = item.category_code
-    if (!acc[k]) acc[k] = { name: item.category_name, items: [] }
-    acc[k].items.push(item)
-    return acc
-  }, {})
+  // 群組化 items，依一二三四五六正確排序
+  const CATEGORY_ORDER = { '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6 }
+  const grouped = Object.fromEntries(
+    Object.entries(
+      items.reduce((acc, item) => {
+        const k = item.category_code
+        if (!acc[k]) acc[k] = { name: item.category_name, items: [] }
+        acc[k].items.push(item)
+        return acc
+      }, {})
+    ).sort(([a], [b]) => (CATEGORY_ORDER[a] || 99) - (CATEGORY_ORDER[b] || 99))
+  )
 
   // 統計
   const passed = items.filter(i => i.passed === true).length

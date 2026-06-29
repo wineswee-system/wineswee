@@ -512,7 +512,7 @@ export default function Attendance() {
 
       {/* ── 改時間 Modal ── */}
       {editModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1000, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '40px 16px 16px' }}
           onClick={e => { if (e.target === e.currentTarget) cancelEdit() }}>
           <div style={{ background: 'var(--bg-card)', borderRadius: 14, padding: 24, width: '100%', maxWidth: 480, maxHeight: '85vh', overflowY: 'auto', border: '1px solid var(--border-medium)' }}>
             <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 4 }}>✏️ 調整打卡時間</div>

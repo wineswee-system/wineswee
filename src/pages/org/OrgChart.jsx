@@ -265,8 +265,8 @@ export default function OrgChart() {
                             background: 'var(--glass-light)',
                             minWidth: 80,
                           }}>
-                            {positionInDept(aMgr, aDept.id) && (
-                              <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{positionInDept(aMgr, aDept.id)}</div>
+                            {aMgr.position && (
+                              <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{aMgr.position}</div>
                             )}
                             <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>{aMgr.name}</div>
                             {aMgr.name_en && <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{aMgr.name_en}</div>}
@@ -351,16 +351,13 @@ export default function OrgChart() {
                         minWidth: 80,
                         display: 'flex', flexDirection: 'column', gap: 6,
                       }}>
-                        {[managerOf(dept), ...subs].filter(Boolean).map(m => {
-                          const pos = positionInDept(m, dept.id)
-                          return (
-                            <div key={m.id} style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500, lineHeight: 1.35 }}>
-                              {pos && <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{pos}</div>}
-                              <div>{m.name}</div>
-                              {m.name_en && <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{m.name_en}</div>}
-                            </div>
-                          )
-                        })}
+                        {[managerOf(dept), ...subs].filter(Boolean).map(m => (
+                          <div key={m.id} style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500, lineHeight: 1.35 }}>
+                            {m.position && <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{m.position}</div>}
+                            <div>{m.name}</div>
+                            {m.name_en && <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{m.name_en}</div>}
+                          </div>
+                        ))}
                       </div>
                     </>
                   )}

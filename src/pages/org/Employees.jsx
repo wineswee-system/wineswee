@@ -168,11 +168,15 @@ export default function Employees() {
       const payload = {
         ...formForEmployee,
         salary_type: _cat === 'parttime' ? 'hourly' : 'monthly',
+        base_salary: Number(form.base_salary) || 0,
+        hourly_rate: Number(form.hourly_rate) || null,
+        weekly_hours: Number(form.weekly_hours) || 40,
         department_id: form.department_id ? Number(form.department_id) : null,
         store_id: form.store_id ? Number(form.store_id) : null,
         supervisor_id: form.supervisor_id ? Number(form.supervisor_id) : null,
         birth_date: form.birth_date || null,
         probation_end_date: form.probation_end_date || null,
+        join_date: form.join_date || null,
         avatar,
         role,
         role_id: ROLE_ID_MAP[role] || 5,
@@ -215,6 +219,7 @@ export default function Employees() {
           role: '', supervisor_id: null,
           id_number: '', birth_date: '', gender: '', employee_number: '',
           probation_end_date: '', address: '',
+          in_payroll: true,
         })
         // Auto-start onboarding workflow if template exists
         const { data: tpl } = await supabase.from('sop_templates')

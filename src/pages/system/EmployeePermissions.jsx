@@ -108,6 +108,7 @@ const FEATURES = [
   { module: '導航顯示', label: '行政庶務',              view: null, edit: 'nav.admin_office' },
   { module: '導航顯示', label: '表單建立器',            view: null, edit: 'nav.hr_form.builder' },
   { module: '導航顯示', label: '專案工作管理',          view: null, edit: 'nav.project.work' },
+  { module: '導航顯示', label: '任務管理（任務頁）',     view: null, edit: 'nav.project.tasks' },
   { module: '導航顯示', label: '專案設定 / AI 助理',    view: null, edit: 'nav.project.admin' },
   // 首頁戰情儀表板分頁（manager+ 預設有；admin 可逐人調）
   { module: '導航顯示', label: '戰情儀表板：人·HR 分頁', view: null, edit: 'nav.dashboard.hr' },

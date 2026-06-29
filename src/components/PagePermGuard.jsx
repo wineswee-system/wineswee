@@ -28,7 +28,7 @@ export const PAGE_PERM = {
   '/hr/surveys':          'survey.view_result',
   '/hr/attrition':        'ai_attrition.view',
   // 任務：admin 以上才可進，堵繞 URL
-  '/process/tasks':                            'nav.project.admin',
+  '/process/tasks':                            'nav.project.tasks',
   // 簽核鏈設定：只有 approval_chain.edit（admin / super_admin）能進，堵繞 URL
   '/process/settings/chains':                 'approval_chain.edit',
   '/process/settings/chains/edit':            'approval_chain.edit',

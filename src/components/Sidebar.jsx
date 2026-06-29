@@ -309,7 +309,7 @@ export default function Sidebar() {
     '/process/projects':                'nav.project.work',
     '/process/workflows':               'nav.project.work',
     '/process/approvals':               'nav.project.work',
-    '/process/tasks':                   'nav.project.admin',
+    '/process/tasks':                   'nav.project.tasks',
     '/process/checklists':              'nav.project.work',
     '/system/approval-rules':           'nav.project.admin',
     '/process/settings/chains':         'nav.project.admin',

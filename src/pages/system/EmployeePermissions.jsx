@@ -113,6 +113,7 @@ const FEATURES = [
   // 首頁戰情儀表板分頁（manager+ 預設有；admin 可逐人調）
   { module: '導航顯示', label: '戰情儀表板：人·HR 分頁', view: null, edit: 'nav.dashboard.hr' },
   { module: '導航顯示', label: '戰情儀表板：流程 分頁',  view: null, edit: 'nav.dashboard.process' },
+  { module: 'LIFF',    label: 'LIFF 門市稽核',          view: null, edit: 'liff.store_audit' },
 ]
 
 // 批次模式單一動作的 pill：label + 開/關兩個圓形 icon button

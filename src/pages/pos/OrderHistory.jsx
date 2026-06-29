@@ -29,7 +29,7 @@ export default function OrderHistory() {
     setLoading(true)
     let q = supabase
       .from('pos_orders')
-      .select('id, order_number, status, guest_count, opened_at, paid_at, res_tables(table_number)')
+      .select('id, order_number, status, guest_count, opened_at, paid_at, discount_amount, discount_type, discount_value, tax_amount, carrier_type, carrier_id, buyer_tax_id, buyer_company, invoice_number, res_tables(table_number)')
       .eq('store_id', storeId)
       .gte('opened_at', `${dateFrom}T00:00:00`)
       .lte('opened_at', `${dateTo}T23:59:59`)
@@ -103,21 +103,57 @@ export default function OrderHistory() {
     }
   }
 
-  function printOrderReceipt(order, items) {
-    const lines = items.map(i => `${i.name} ×${i.quantity}  $${(i.unit_price * i.quantity).toLocaleString()}`).join('\n')
-    const win = window.open('', '_blank', 'width=400,height=600')
+  async function printOrderReceipt(order, items) {
+    const { data: pmts } = await supabase
+      .from('pos_payments').select('amount, payment_method').eq('order_id', order.id)
+    const pmt = pmts?.[0]
+    const PAY_LABEL = { cash: '現金', card: '信用卡', line_pay: 'LINE Pay', jkopay: '街口', other: '其他' }
+    const activeItems = items.filter(i => !i.voided_at)
+    const subtotal = activeItems.reduce((s, i) => s + Number(i.unit_price) * i.quantity, 0)
+    const disc = Number(order.discount_amount) || 0
+    const total = subtotal - disc
+    const tax = Number(order.tax_amount) || 0
+    const itemRows = activeItems.map(i => {
+      const amt = Number(i.unit_price) * i.quantity
+      return `<tr><td style="padding:3px 0;font-size:13px">${i.name} <span style="color:#999">×${i.quantity}</span></td><td style="text-align:right;font-size:13px;white-space:nowrap">NT$${amt.toLocaleString()}</td></tr>`
+    }).join('')
+    const invLine = order.carrier_type === 'mobile'  ? `<div style="font-size:11px;color:#666;margin-top:3px">手機載具：${order.carrier_id || '—'}</div>`
+                  : order.carrier_type === 'company' ? `<div style="font-size:11px;color:#666;margin-top:3px">統編：${order.buyer_tax_id}　${order.buyer_company}</div>`
+                  : ''
+    const win = window.open('', '_blank', 'width=320,height=600')
     if (!win) { toast.error('請允許彈出視窗'); return }
-    win.document.write(`<pre style="font-family:monospace;font-size:13px;padding:16px">
-訂單 #${order.order_number}
-桌號：T${order.res_tables?.table_number ?? '—'}
-開單：${fmtTime(order.opened_at)}
-結帳：${fmtTime(order.paid_at)}
-────────────────────────
-${lines}
-────────────────────────
-</pre>`)
+    win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:"Noto Sans TC","微軟正黑體",sans-serif;padding:14px 12px}
+.s{font-size:14px;font-weight:700;text-align:center;margin-bottom:2px}
+.m{font-size:11px;color:#888;text-align:center;margin-bottom:8px}
+hr{border:none;border-top:1px dashed #999;margin:8px 0}
+table{width:100%;border-collapse:collapse}
+.r{display:flex;justify-content:space-between;font-size:13px;padding:3px 0}
+.big{display:flex;justify-content:space-between;font-size:17px;font-weight:800;padding:5px 0}
+.sm{font-size:11px;color:#888;text-align:right}
+.th{text-align:center;font-size:12px;color:#aaa;margin-top:10px}
+@media print{@page{margin:2mm;size:80mm auto}}
+</style></head><body>
+<div class="s">訂單 #${order.order_number}</div>
+<div class="m">T${order.res_tables?.table_number ?? '—'}　結帳：${fmtTime(order.paid_at)}</div>
+<hr>
+<table>${itemRows}</table>
+<hr>
+<div class="r"><span>小計</span><span>NT$${subtotal.toLocaleString()}</span></div>
+${disc > 0 ? `<div class="r"><span style="color:#888">折扣</span><span style="color:#c07000">－NT$${disc.toLocaleString()}</span></div>` : ''}
+<div class="big"><span>合計</span><span>NT$${total.toLocaleString()}</span></div>
+${tax > 0 ? `<div class="sm">含稅（5%）NT$${tax.toLocaleString()}</div>` : ''}
+<hr>
+${pmt ? `<div class="r"><span>付款方式</span><span style="font-weight:700">${PAY_LABEL[pmt.payment_method] ?? pmt.payment_method}</span></div>` : ''}
+${invLine}
+${order.invoice_number ? `<div style="font-size:11px;color:#666;margin-top:2px">發票號碼：${order.invoice_number}</div>` : (order.carrier_type && order.carrier_type !== 'none' ? `<div style="font-size:11px;color:#888;margin-top:2px">發票：待開立</div>` : '')}
+<div class="th">謝謝惠顧</div>
+</body></html>`)
     win.document.close()
-    win.print()
+    win.focus()
+    setTimeout(() => win.print(), 400)
   }
 
   const paidCount = orders.filter(o => o.status === 'paid').length

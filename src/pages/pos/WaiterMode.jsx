@@ -289,6 +289,44 @@ const S = {
   coFoot: { padding: '14px 20px', display: 'flex', gap: 10, flexShrink: 0 },
 }
 
+// ── Kitchen slip printer ───────────────────────────────────────────────────────
+function printKitchenSlip(tableNumber, rows) {
+  try {
+    const now     = new Date()
+    const timeStr = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`
+    const totalQty = rows.reduce((s, r) => s + (r.quantity ?? r.qty ?? 1), 0)
+    const itemRows = rows.map(r => {
+      const qty  = r.quantity ?? r.qty ?? 1
+      const note = r.note ? `<tr><td colspan="2" style="font-size:12px;color:#444;padding:0 0 5px 4px">⚑ ${r.note}</td></tr>` : ''
+      return `<tr><td style="font-size:16px;font-weight:700;padding:4px 0">${r.name ?? r.item_name ?? ''}</td><td style="font-size:16px;font-weight:700;text-align:right;white-space:nowrap">× ${qty}</td></tr>${note}`
+    }).join('')
+
+    const win = window.open('', '_blank', 'width=320,height=480')
+    if (!win) return
+    win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:"Noto Sans TC","微軟正黑體",monospace;padding:12px 10px;width:100%}
+.hdr{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
+.tnum{font-size:34px;font-weight:900;letter-spacing:1px}
+.time{font-size:15px;color:#333;font-weight:600}
+hr{border:none;border-top:2px dashed #000;margin:8px 0}
+table{width:100%;border-collapse:collapse}
+.foot{font-size:12px;color:#666;text-align:right;margin-top:6px}
+@media print{@page{margin:2mm;size:80mm auto}button{display:none}}
+</style></head><body>
+<div class="hdr"><span class="tnum">T${tableNumber}</span><span class="time">${timeStr}</span></div>
+<hr>
+<table>${itemRows}</table>
+<hr>
+<div class="foot">共 ${totalQty} 品</div>
+</body></html>`)
+    win.document.close()
+    win.focus()
+    setTimeout(() => { win.print(); setTimeout(() => win.close(), 800) }, 350)
+  } catch (_) { /* 印表機未就緒時靜默，不影響送廚房主流程 */ }
+}
+
 function Spinner() {
   return (
     <>
@@ -307,13 +345,19 @@ const PAY_METHODS = [
   { key: 'other',   label: '其他' },
 ]
 
-function CheckoutModal({ tableNumber, orgId, storeId, orderId, onClose, onDone }) {
+const PAY_LABEL = { cash: '現金', card: '信用卡', line_pay: 'LINE Pay', jkopay: '街口', other: '其他' }
+
+function CheckoutModal({ tableNumber, orgId, storeId, orderId, storeName, onClose, onDone }) {
   const [payMethod, setPayMethod] = useState('cash')
   const [busy,      setBusy]      = useState(false)
   const [dbItems,   setDbItems]   = useState([])
   const [loading,   setLoading]   = useState(true)
-  const [discType,  setDiscType]  = useState('percent')
-  const [discVal,   setDiscVal]   = useState('')
+  const [discType,     setDiscType]     = useState('percent')
+  const [discVal,      setDiscVal]      = useState('')
+  const [invType,      setInvType]      = useState('none')   // 'none' | 'mobile' | 'company'
+  const [carrierId,    setCarrierId]    = useState('')
+  const [buyerTaxId,   setBuyerTaxId]   = useState('')
+  const [buyerCompany, setBuyerCompany] = useState('')
 
   // Fetch fresh from DB on mount; exclude voided items
   useEffect(() => {
@@ -326,12 +370,61 @@ function CheckoutModal({ tableNumber, orgId, storeId, orderId, onClose, onDone }
   }, [orderId])
 
   const subtotal    = dbItems.reduce((s, i) => s + Number(i.unit_price) * i.quantity, 0)
+  const taxAmount   = Math.round(subtotal * 5 / 105)   // 含稅 5%（結帳前小計含稅）
   const discAmount  = discVal
     ? discType === 'percent'
       ? Math.round(subtotal * Math.min(parseFloat(discVal) || 0, 100) / 100)
       : Math.min(parseFloat(discVal) || 0, subtotal)
     : 0
   const total = subtotal - discAmount
+
+  function printReceipt() {
+    try {
+      const now = new Date()
+      const dateStr = `${now.getFullYear()}/${now.getMonth()+1}/${now.getDate()} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`
+      const itemRows = dbItems.map(i => {
+        const amt = Number(i.unit_price) * i.quantity
+        return `<tr><td style="padding:3px 0;font-size:13px">${i.name} <span style="color:#999">×${i.quantity}</span></td><td style="text-align:right;font-size:13px;white-space:nowrap">NT$${amt.toLocaleString()}</td></tr>`
+      }).join('')
+      const invLine = invType === 'mobile'  ? `<div style="font-size:11px;color:#666;margin-top:3px">手機載具：${carrierId || '—'}</div>`
+                    : invType === 'company' ? `<div style="font-size:11px;color:#666;margin-top:3px">統編：${buyerTaxId}　${buyerCompany}</div>`
+                    : ''
+      const win = window.open('', '_blank', 'width=320,height=600')
+      if (!win) return
+      win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:"Noto Sans TC","微軟正黑體",sans-serif;padding:14px 12px}
+.s{font-size:14px;font-weight:700;text-align:center;margin-bottom:2px}
+.m{font-size:11px;color:#888;text-align:center;margin-bottom:8px}
+hr{border:none;border-top:1px dashed #999;margin:8px 0}
+table{width:100%;border-collapse:collapse}
+.r{display:flex;justify-content:space-between;font-size:13px;padding:3px 0}
+.big{display:flex;justify-content:space-between;font-size:17px;font-weight:800;padding:5px 0}
+.sm{font-size:11px;color:#888;text-align:right}
+.th{text-align:center;font-size:12px;color:#aaa;margin-top:10px}
+@media print{@page{margin:2mm;size:80mm auto}}
+</style></head><body>
+<div class="s">${storeName || '威士威'}</div>
+<div class="m">T${tableNumber}　${dateStr}</div>
+<hr>
+<table>${itemRows}</table>
+<hr>
+<div class="r"><span>小計</span><span>NT$${subtotal.toLocaleString()}</span></div>
+${discAmount > 0 ? `<div class="r"><span style="color:#888">折扣（${discType==='percent'?discVal+'%':'定額'}）</span><span style="color:#c07000">－NT$${discAmount.toLocaleString()}</span></div>` : ''}
+<div class="big"><span>合計</span><span>NT$${total.toLocaleString()}</span></div>
+<div class="sm">含稅（5%）NT$${taxAmount.toLocaleString()}</div>
+<hr>
+<div class="r"><span>付款方式</span><span style="font-weight:700">${PAY_LABEL[payMethod] ?? payMethod}</span></div>
+${invLine}
+${invType !== 'none' ? `<div style="font-size:11px;color:#888;margin-top:2px">發票：${invType==='mobile'?'雲端發票（手機載具）':invType==='company'?'公司統編發票':''}　待開立</div>` : ''}
+<div class="th">謝謝惠顧</div>
+</body></html>`)
+      win.document.close()
+      win.focus()
+      setTimeout(() => win.print(), 400)
+    } catch (_) {}
+  }
 
   async function confirm() {
     setBusy(true)
@@ -346,18 +439,26 @@ function CheckoutModal({ tableNumber, orgId, storeId, orderId, onClose, onDone }
       if (pErr) throw pErr
 
       const orderUpdate = {
-        status: 'paid',
-        paid_at: new Date().toISOString(),
+        status:   'paid',
+        paid_at:  new Date().toISOString(),
+        tax_amount: taxAmount,
         ...(discAmount > 0 && {
-          discount_type: discType,
-          discount_value: parseFloat(discVal) || 0,
+          discount_type:   discType,
+          discount_value:  parseFloat(discVal) || 0,
           discount_amount: discAmount,
+        }),
+        ...(invType !== 'none' && {
+          carrier_type:  invType,
+          carrier_id:    invType === 'mobile'  ? carrierId    : null,
+          buyer_tax_id:  invType === 'company' ? buyerTaxId   : null,
+          buyer_company: invType === 'company' ? buyerCompany : null,
         }),
       }
       const { error: uErr } = await supabase.from('pos_orders').update(orderUpdate).eq('id', orderId)
       if (uErr) throw uErr
 
       toast.success(`T${tableNumber} 結帳完成 NT$${total.toLocaleString()}`)
+      printReceipt()
       onDone()
     } catch (e) {
       toast.error('結帳失敗：' + e.message)
@@ -426,6 +527,46 @@ function CheckoutModal({ tableNumber, orgId, storeId, orderId, onClose, onDone }
           <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-muted)' }}>應收合計</span>
           <span style={{ fontSize: 28, fontWeight: 800, color: 'var(--text-primary)' }}>NT${total.toLocaleString()}</span>
         </div>
+
+        {/* Invoice section */}
+        <div style={{ padding: '10px 20px 4px', fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.5px' }}>發票</div>
+        <div style={{ padding: '4px 20px 6px', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {[['none','不開立'],['mobile','手機載具'],['company','公司統編']].map(([v, l]) => (
+            <button key={v} onClick={() => setInvType(v)}
+              style={{ padding: '6px 12px', borderRadius: 8, border: '1.5px solid', fontSize: 12, fontWeight: invType === v ? 700 : 500, cursor: 'pointer',
+                borderColor: invType === v ? 'var(--accent-purple)' : 'var(--border-primary)',
+                background:  invType === v ? 'var(--accent-purple-dim)' : 'var(--bg-card)',
+                color:       invType === v ? 'var(--accent-purple)' : 'var(--text-muted)',
+              }}>{l}</button>
+          ))}
+        </div>
+        {invType === 'mobile' && (
+          <div style={{ padding: '0 20px 10px' }}>
+            <input
+              placeholder="手機條碼 /ABC-1234"
+              value={carrierId}
+              onChange={e => setCarrierId(e.target.value.toUpperCase())}
+              maxLength={8}
+              style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border-primary)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
+            />
+          </div>
+        )}
+        {invType === 'company' && (
+          <div style={{ padding: '0 20px 10px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <input
+              placeholder="統一編號（8 碼）"
+              value={buyerTaxId}
+              onChange={e => setBuyerTaxId(e.target.value.replace(/\D/g, '').slice(0, 8))}
+              style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border-primary)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
+            />
+            <input
+              placeholder="公司抬頭"
+              value={buyerCompany}
+              onChange={e => setBuyerCompany(e.target.value)}
+              style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border-primary)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
+            />
+          </div>
+        )}
 
         <div style={{ padding: '10px 20px 4px', fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.5px' }}>付款方式</div>
         <div style={S.coPayMethods}>
@@ -560,6 +701,7 @@ export default function WaiterMode() {
   const [showQr,        setShowQr]        = useState(false)
   const [qrUrl,         setQrUrl]         = useState('')
   const [genQr,         setGenQr]         = useState(false)
+  const [printBusy,     setPrintBusy]     = useState(false)
   const [wide,          setWide]          = useState(typeof window !== 'undefined' && window.innerWidth >= 900)
   const [variantMap,    setVariantMap]    = useState({}) // itemId → variantGroups[]
   const [variantTarget, setVariantTarget] = useState(null) // item being configured
@@ -742,6 +884,62 @@ export default function WaiterMode() {
     }
   }
 
+  // ── Print table card (QR + time) ─────────────────────────────────────────
+  async function printTableCard() {
+    if (!selTable || !effectiveStoreId) return
+    setPrintBusy(true)
+    try {
+      const { data: session, error } = await supabase.from('qr_order_sessions').insert({
+        organization_id: orgId,
+        store_id: effectiveStoreId,
+        table_id: selTable.id,
+        token: crypto.randomUUID(),
+        expires_at: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
+      }).select('token').single()
+      if (error) throw error
+
+      const url = `${window.location.origin}/menu/${effectiveStoreId}/${selTable.id}?token=${session.token}`
+      const qrDataUrl = await QRCode.toDataURL(url, { width: 220, margin: 2, color: { dark: '#000000', light: '#ffffff' } })
+
+      const now = new Date()
+      const fmt = (d) => `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
+      const openTime   = fmt(now)
+      const expiryTime = fmt(new Date(now.getTime() + 4 * 60 * 60 * 1000))
+
+      const win = window.open('', '_blank', 'width=320,height=520')
+      if (!win) { toast.error('請允許彈出視窗'); return }
+      win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:"Noto Sans TC","微軟正黑體",sans-serif;text-align:center;padding:16px 12px}
+.store{font-size:12px;color:#888;margin-bottom:6px;letter-spacing:.5px}
+hr{border:none;border-top:1px dashed #ccc;margin:10px 0}
+.tnum{font-size:42px;font-weight:900;letter-spacing:2px;margin:6px 0}
+.opentime{font-size:12px;color:#555;margin-bottom:10px}
+img{display:block;margin:0 auto}
+.hint{font-size:13px;font-weight:600;margin-top:10px;letter-spacing:.5px}
+.expiry{font-size:11px;color:#aaa;margin-top:4px}
+@media print{@page{margin:4mm;size:80mm auto}body{padding:8px}}
+</style></head><body>
+<div class="store">${storeName || '威士威'}</div>
+<hr>
+<div class="tnum">T${selTable.table_number}</div>
+<div class="opentime">開桌 ${openTime}</div>
+<img src="${qrDataUrl}" width="180" height="180" />
+<div class="hint">掃碼點餐</div>
+<div class="expiry">有效至 ${expiryTime}（4 小時）</div>
+<hr>
+</body></html>`)
+      win.document.close()
+      win.focus()
+      setTimeout(() => { win.print() }, 400)
+    } catch (e) {
+      toast.error('印桌卡失敗：' + (e.message || ''))
+    } finally {
+      setPrintBusy(false)
+    }
+  }
+
   // ── Submit cart to kitchen — returns orderId on success ───────────────────
   async function handleSubmit() {
     if (cartCount === 0 || !selTable) return null
@@ -779,6 +977,7 @@ export default function WaiterMode() {
       setExistingItems(prev => [...prev, ...rows.map(r => ({ ...r, id: r.menu_item_id + Date.now() }))])
       setCart({})
       toast.success('已送廚房')
+      printKitchenSlip(selTable.table_number, rows)
       return currentOrderId
     } catch (e) {
       setErrMsg(e?.message ?? '送出失敗')
@@ -922,6 +1121,9 @@ export default function WaiterMode() {
           <button style={S.iconBtn(false)} onClick={backToTables}>← 換桌</button>
           <button style={S.iconBtn(false)} onClick={generateQR} disabled={genQr} title="產生 QR 點餐連結">
             {genQr ? '…' : 'QR'}
+          </button>
+          <button style={S.iconBtn(false)} onClick={printTableCard} disabled={printBusy} title="列印桌位服務單（含 QR + 時間）">
+            {printBusy ? '…' : '印桌卡'}
           </button>
           {!wide && cartCount > 0 && (
             <button style={S.iconBtn(false)} disabled={submitBusy} onClick={handleSubmit}>
@@ -1092,6 +1294,7 @@ export default function WaiterMode() {
           orgId={orgId}
           storeId={effectiveStoreId}
           orderId={orderId}
+          storeName={storeName}
           onClose={() => setShowCheckout(false)}
           onDone={afterCheckout}
         />

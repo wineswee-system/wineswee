@@ -45,6 +45,13 @@ export default function OrgChart() {
   const apexDept = departments.find(d => APEX_KEYWORDS.some(k => d.name?.includes(k)))
   const apexName = apexDept?.name || '執行長室'
 
+  // 稽核室類直屬 apex 的部門 — 從主部門 bus 移出，顯示為 apex 的直接側支
+  const AUDIT_DEPT_KEYWORDS = ['稽核室', '內部稽核', '監察室']
+  const auditDepts = departments.filter(d =>
+    AUDIT_DEPT_KEYWORDS.some(k => d.name?.includes(k))
+  )
+  const auditDeptIds = new Set(auditDepts.map(d => d.id))
+
   // 兼總經理室：讀 employees.is_executive_board 旗標 (DB 端標記)
   // 之前硬寫 [48, 52] 員工 id，老闆換人就壞 → 改用旗標
   const execBoardMembers = employees.filter(e => e.is_executive_board)
@@ -197,19 +204,92 @@ export default function OrgChart() {
                 padding: '8px 14px',
                 minWidth: 120,
               }}>
-                <div style={{ fontSize: 10, color: 'var(--accent-purple)', fontWeight: 700, textAlign: 'center', letterSpacing: 1 }}>高管</div>
                 {execBoardMembers.map(emp => (
-                  <div key={emp.id} style={{ fontSize: 13, fontWeight: 600, color: 'var(--accent-purple)', textAlign: 'center' }}>
-                    {labelOf(emp)}
+                  <div key={emp.id} style={{ textAlign: 'center' }}>
+                    {emp.position && (
+                      <div style={{ fontSize: 10, color: 'var(--accent-purple)', fontWeight: 700, letterSpacing: 1 }}>{emp.position}</div>
+                    )}
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--accent-purple)' }}>{labelOf(emp)}</div>
                   </div>
                 ))}
               </div>
             )}
           </div>
 
-          {/* Vertical line */}
-          <div style={{ display: 'flex', justifyContent: 'center' }}>
-            <div style={{ width: 1, height: 24, background: 'var(--border-strong)' }} />
+          {/* Vertical line + 稽核室 direct-report branch */}
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'stretch' }}>
+            {/* left mirror spacer keeps center line centered when audit branch is shown */}
+            {auditDepts.length > 0 && <div style={{ flex: '0 0 220px' }} />}
+            {/* center vertical line stretches to height of branch content */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', height: '100%' }}>
+              <div style={{ width: 1, background: 'var(--border-strong)', flex: 1, minHeight: 24 }} />
+            </div>
+            {/* 稽核室 side branches */}
+            {auditDepts.map((aDept) => {
+              const allVis = departments.filter(d => d.name !== apexName)
+              const aidx = allVis.findIndex(d => d.id === aDept.id)
+              const aColor = colors[Math.max(0, aidx) % colors.length]
+              const aDim = dims[Math.max(0, aidx) % dims.length]
+              const aMgr = managerOf(aDept)
+              const aMembers = deptMembersExcludingStoreStaff(aDept)
+              return (
+                <div key={aDept.id} style={{ flex: '0 0 220px', display: 'flex', alignItems: 'flex-start', paddingTop: 8, paddingBottom: 8 }}>
+                  <div style={{ width: 28, height: 1, background: 'var(--border-strong)', marginTop: 15, flexShrink: 0 }} />
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <div style={{
+                      background: aDim,
+                      border: `1.5px solid ${aColor}`,
+                      borderRadius: 10,
+                      padding: '8px 14px',
+                      textAlign: 'center',
+                      minWidth: 90,
+                    }}>
+                      <div style={{ fontWeight: 700, color: aColor, fontSize: 13 }}>{aDept.name}</div>
+                      <div style={{ fontSize: 10, color: aColor, opacity: 0.85, marginTop: 3, fontWeight: 600 }}>
+                        共 {headcountOf(aDept)} 人
+                      </div>
+                    </div>
+                    {aMgr && (
+                      <>
+                        <div style={{ width: 1, height: 10, background: 'var(--border-strong)' }} />
+                        <div style={{
+                          border: `1px dashed ${aColor}`,
+                          borderRadius: 8,
+                          padding: '5px 10px',
+                          textAlign: 'center',
+                          background: 'var(--glass-light)',
+                          minWidth: 80,
+                        }}>
+                          {positionInDept(aMgr, aDept.id) && (
+                            <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{positionInDept(aMgr, aDept.id)}</div>
+                          )}
+                          <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>{aMgr.name}</div>
+                          {aMgr.name_en && <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{aMgr.name_en}</div>}
+                        </div>
+                      </>
+                    )}
+                    {aMembers.length > 0 && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 6 }}>
+                        {aMembers.map(emp => (
+                          <div key={emp.id} style={{
+                            background: 'var(--glass-light)',
+                            border: '1px solid var(--border-subtle)',
+                            borderRadius: 8,
+                            padding: '4px 8px',
+                            textAlign: 'center',
+                            fontSize: 12,
+                            minWidth: 80,
+                          }}>
+                            <div style={{ fontWeight: 500 }}>{labelOf(emp)}</div>
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{emp.position}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
           </div>
 
           {/* Horizontal line */}
@@ -219,7 +299,7 @@ export default function OrgChart() {
 
           {/* Departments row（總經理室是 apex，不再列入） */}
           <div style={{ display: 'flex', justifyContent: 'space-around', gap: 10, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-            {departments.filter(d => d.name !== apexName).map((dept, i) => {
+            {departments.filter(d => d.name !== apexName && !auditDeptIds.has(d.id)).map((dept, i) => {
               const color = colors[i % colors.length]
               const dim = dims[i % dims.length]
               const head = managerName(dept)
@@ -341,7 +421,7 @@ export default function OrgChart() {
 
           {/* Fan-out tree for depts with many stores (e.g. 營運部) */}
           {bigStoreDepts.map((dept, i) => {
-            const visibleDepts = departments.filter(d => d.name !== apexName)
+            const visibleDepts = departments.filter(d => d.name !== apexName && !auditDeptIds.has(d.id))
             const color = colors[visibleDepts.indexOf(dept) % colors.length]
             const dStores = deptStores(dept)
             return (
@@ -415,7 +495,7 @@ export default function OrgChart() {
 
           {/* Section tree for sectioned depts (e.g. 營運部 → 4 課) */}
           {sectionedDepts.map((dept) => {
-            const visibleDepts = departments.filter(d => d.name !== apexName)
+            const visibleDepts = departments.filter(d => d.name !== apexName && !auditDeptIds.has(d.id))
             const color = colors[visibleDepts.indexOf(dept) % colors.length]
             const dim = dims[visibleDepts.indexOf(dept) % dims.length]
             const secs = deptSections(dept)

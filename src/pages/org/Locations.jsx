@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Plus, Pencil, Trash2, MapPin } from 'lucide-react'
 import { getStores, createStore, updateStore, deleteStore, getEmployees, getCompanies } from '../../lib/db'
+import { getDepartmentSectionsAll } from '../../lib/db/org'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import { empLabel } from '../../lib/empLabel'
@@ -10,7 +11,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
 import { geocodeAddress } from '../../lib/geocoding'
-const EMPTY_FORM = { name: '', company: '', company_id: '', address: '', phone: '', manager: '', manager_id: '', status: '營運中', store_code: '', store_type: 'retail', city: '', lat: '', lng: '', clock_radius: 150, allowed_wifi: '', late_tolerance_minutes: 5, early_clock_minutes: 30, clock_in_method: 'any' }
+const EMPTY_FORM = { name: '', company: '', company_id: '', address: '', phone: '', manager: '', manager_id: '', status: '營運中', store_code: '', store_type: 'retail', city: '', lat: '', lng: '', clock_radius: 150, allowed_wifi: '', late_tolerance_minutes: 5, early_clock_minutes: 30, clock_in_method: 'any', section_id: '' }
 
 export default function Locations() {
   const { role, hasPermission } = useAuth()
@@ -18,6 +19,7 @@ export default function Locations() {
   const [stores, setStores] = useState([])
   const [employees, setEmployees] = useState([])
   const [companies, setCompanies] = useState([])
+  const [sections, setSections] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [showModal, setShowModal] = useState(false)
@@ -26,10 +28,11 @@ export default function Locations() {
   const [form, setForm] = useState(EMPTY_FORM)
 
   useEffect(() => {
-    Promise.all([getStores(), getEmployees(), getCompanies()]).then(([s, e, c]) => {
+    Promise.all([getStores(), getEmployees(), getCompanies(), getDepartmentSectionsAll()]).then(([s, e, c, sec]) => {
       setStores(s.data || [])
       setEmployees(e.data || [])
       setCompanies(c.data || [])
+      setSections(sec.data || [])
     }).catch(err => {
       console.error('Failed to load data:', err)
       setError('資料載入失敗，請重新整理頁面')
@@ -52,6 +55,7 @@ export default function Locations() {
       address: s.address || '',
       phone: s.phone || '',
       manager_id: s.manager_id || '',
+      section_id: s.section_id || '',
       status: s.status || '營運中',
       store_code: s.store_code || '',
       store_type: s.store_type || 'retail',
@@ -68,10 +72,12 @@ export default function Locations() {
   }
 
   const handleDelete = async (s) => {
-    if (!(await confirm({ message: `確定要刪除「${s.name}」嗎？此操作無法復原。` }))) return
+    if (!(await confirm({ message: `確定要刪除「${s.name}」嗎？此操作無法復原。`, danger: true, confirmLabel: '刪除' }))) return
     try {
-      await deleteStore(s.id)
+      const { error } = await deleteStore(s.id)
+      if (error) throw error
       setStores(prev => prev.filter(x => x.id !== s.id))
+      toast.success(`已刪除「${s.name}」`)
     } catch (err) {
       toast.error('刪除失敗：' + (err.message || '未知錯誤'))
     }
@@ -96,6 +102,7 @@ export default function Locations() {
       late_tolerance_minutes: parseInt(form.late_tolerance_minutes) || 5,
       early_clock_minutes: parseInt(form.early_clock_minutes) || 30,
       clock_in_method: form.clock_in_method || 'any',
+      section_id: form.section_id ? parseInt(form.section_id) : null,
     }
     try {
       if (editingStore) {
@@ -224,11 +231,17 @@ export default function Locations() {
               </select>
             </Field>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
             <Field label="所屬公司">
               <select className="form-input" style={{ width: '100%' }} value={form.company_id} onChange={e => set('company_id', e.target.value)}>
                 <option value="">請選擇</option>
                 {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </Field>
+            <Field label="所屬課別">
+              <select className="form-input" style={{ width: '100%' }} value={form.section_id} onChange={e => set('section_id', e.target.value)}>
+                <option value="">無</option>
+                {sections.map(sec => <option key={sec.id} value={sec.id}>{sec.name}</option>)}
               </select>
             </Field>
             <Field label="城市">

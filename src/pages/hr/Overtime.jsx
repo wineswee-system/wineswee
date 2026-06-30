@@ -223,10 +223,15 @@ export default function Overtime() {
       }
 
       // ── 新增路徑 ──
-      const { data, error } = await createOvertimeRequest({ ...form, status: '待審核' })
+      const empRow = employees.find(em => em.name === form.employee)
+      const { data, error } = await createOvertimeRequest({
+        ...form,
+        status: '待審核',
+        organization_id: profile?.organization_id,
+        employee_id: empRow?.id ?? null,
+      })
       if (error) throw error
       if (data) {
-        const empRow = employees.find(em => em.name === form.employee)
         if (attachFiles.length > 0) {
           await uploadAttachments(data.id, empRow?.id)
           setAttachFiles([])

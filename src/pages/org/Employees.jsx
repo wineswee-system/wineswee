@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Search, UserMinus, UserPlus, Pencil, Mail, Upload, Building2, Trash2, Users, FileText } from 'lucide-react'
+import { Plus, Search, UserMinus, UserPlus, Pencil, Mail, Upload, Building2, Trash2, Users, FileText, UserCheck, Power } from 'lucide-react'
 import { exportEmployeeCertificate } from '../../lib/exportCertificate'
 import { getEmployeesList, createEmployee, updateEmployee, inviteEmployee } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
@@ -119,6 +119,56 @@ export default function Employees() {
   const openDetail = (emp) => navigate(`/org/employees/${emp.id}`)
   const [showCsvImport, setShowCsvImport] = useState(false)
   const [pageTab, setPageTab] = useState('employees')
+
+  // 簽核代理 tab state
+  const delegToday = () => new Date().toISOString().slice(0, 10)
+  const [delegRules, setDelegRules] = useState([])
+  const [delegLoading, setDelegLoading] = useState(false)
+  const [delegSaving, setDelegSaving] = useState(false)
+  const [delegForm, setDelegForm] = useState({ delegator_employee_id: '', delegate_employee_id: '', effective_from: '', effective_to: '', reason: '' })
+  const loadDelegations = async () => {
+    setDelegLoading(true)
+    const { data } = await supabase.from('approval_delegation_rules').select('*').order('created_at', { ascending: false })
+    setDelegRules(data || [])
+    setDelegLoading(false)
+  }
+  useEffect(() => { if (pageTab === 'delegations') loadDelegations() }, [pageTab]) // eslint-disable-line react-hooks/exhaustive-deps
+  const delegEmpName = (id) => employees.find(e => e.id === id)?.name || `#${id}`
+  const isActiveNow = (r) => r.is_active && r.effective_from <= delegToday() && (!r.effective_to || r.effective_to >= delegToday())
+  const addDelegation = async () => {
+    const delegator = Number(delegForm.delegator_employee_id)
+    const delegate = Number(delegForm.delegate_employee_id)
+    if (!delegator || !delegate) { toast.error('請選委託人與代理人'); return }
+    if (delegator === delegate) { toast.error('委託人與代理人不能是同一人'); return }
+    if (!delegForm.effective_from) { toast.error('請填生效起日'); return }
+    if (delegForm.effective_to && delegForm.effective_to < delegForm.effective_from) { toast.error('結束日不能早於起日'); return }
+    setDelegSaving(true)
+    const { error } = await supabase.from('approval_delegation_rules').insert({
+      org_id: profile?.organization_id,
+      delegator_employee_id: delegator,
+      delegate_employee_id: delegate,
+      effective_from: delegForm.effective_from,
+      effective_to: delegForm.effective_to || null,
+      reason: delegForm.reason || null,
+      is_active: true,
+    })
+    setDelegSaving(false)
+    if (error) { toast.error('新增失敗：' + error.message); return }
+    toast.success('已新增代理規則')
+    setDelegForm({ delegator_employee_id: '', delegate_employee_id: '', effective_from: delegToday(), effective_to: '', reason: '' })
+    loadDelegations()
+  }
+  const toggleDelegation = async (r) => {
+    const { error } = await supabase.from('approval_delegation_rules').update({ is_active: !r.is_active }).eq('id', r.id)
+    if (error) { toast.error('更新失敗：' + error.message); return }
+    loadDelegations()
+  }
+  const removeDelegation = async (r) => {
+    if (!(await confirm({ message: `刪除「${delegEmpName(r.delegator_employee_id)} → ${delegEmpName(r.delegate_employee_id)}」代理規則？`, danger: true }))) return
+    const { error } = await supabase.from('approval_delegation_rules').delete().eq('id', r.id)
+    if (error) { toast.error('刪除失敗：' + error.message); return }
+    loadDelegations()
+  }
   const [showDeptModal, setShowDeptModal] = useState(false)
   const [editingDept, setEditingDept] = useState(null)
   const [deptForm, setDeptForm] = useState({ name: '', manager_id: '', description: '', level: '部', parent_department_id: '' })
@@ -443,6 +493,14 @@ export default function Employees() {
         }}>
           <Building2 size={14} /> 部門管理 ({departments.length})
         </button>
+        <button onClick={() => setPageTab('delegations')} style={{
+          padding: '8px 20px', borderRadius: 8, border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 13,
+          display: 'flex', alignItems: 'center', gap: 6,
+          background: pageTab === 'delegations' ? 'var(--accent-cyan)' : 'transparent',
+          color: pageTab === 'delegations' ? '#fff' : 'var(--text-secondary)',
+        }}>
+          <UserCheck size={14} /> 簽核代理
+        </button>
       </div>
 
       {/* ══ Department Card View ══ */}
@@ -676,6 +734,101 @@ export default function Employees() {
         </div>
       </div>
       </>}
+
+      {/* ══ 簽核代理 Tab ══ */}
+      {pageTab === 'delegations' && (
+        <div style={{ maxWidth: 860 }}>
+          <div className="card" style={{ padding: 18, marginBottom: 16 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent-blue)', marginBottom: 12 }}>＋ 新增代理規則</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+              <div>
+                <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>委託人（誰的簽核）</label>
+                <SearchableSelect value={delegForm.delegator_employee_id}
+                  onChange={v => setDelegForm(f => ({ ...f, delegator_employee_id: v }))}
+                  options={empOptions(employees.filter(e => e.status === '在職'))} placeholder="搜尋委託人…" />
+              </div>
+              <div>
+                <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>代理人（誰來代簽）</label>
+                <SearchableSelect value={delegForm.delegate_employee_id}
+                  onChange={v => setDelegForm(f => ({ ...f, delegate_employee_id: v }))}
+                  options={empOptions(employees.filter(e => e.status === '在職'))} placeholder="搜尋代理人…" />
+              </div>
+              <div>
+                <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>生效起日</label>
+                <input className="form-input" type="date" style={{ width: '100%' }} value={delegForm.effective_from}
+                  onChange={e => setDelegForm(f => ({ ...f, effective_from: e.target.value }))} />
+              </div>
+              <div>
+                <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>結束日（空=長期）</label>
+                <input className="form-input" type="date" style={{ width: '100%' }} value={delegForm.effective_to}
+                  onChange={e => setDelegForm(f => ({ ...f, effective_to: e.target.value }))} />
+              </div>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>原因（選填）</label>
+                <input className="form-input" type="text" style={{ width: '100%' }} placeholder="例：出國 / 休假"
+                  value={delegForm.reason} onChange={e => setDelegForm(f => ({ ...f, reason: e.target.value }))} />
+              </div>
+            </div>
+            <div style={{ marginTop: 12, textAlign: 'right' }}>
+              <button className="btn btn-primary" onClick={addDelegation} disabled={delegSaving}>
+                <Plus size={14} /> {delegSaving ? '新增中…' : '新增代理'}
+              </button>
+            </div>
+          </div>
+
+          <div className="card" style={{ padding: 18 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent-blue)', marginBottom: 12 }}>
+              代理規則（{delegRules.length}）
+            </div>
+            {delegLoading ? (
+              <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>載入中…</div>
+            ) : delegRules.length === 0 ? (
+              <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>目前沒有代理規則</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {delegRules.map(r => {
+                  const active = isActiveNow(r)
+                  return (
+                    <div key={r.id} style={{
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12,
+                      padding: '10px 14px', borderRadius: 8, background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)',
+                      opacity: r.is_active ? 1 : 0.55,
+                    }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>
+                          {delegEmpName(r.delegator_employee_id)}
+                          <span style={{ color: 'var(--text-muted)', margin: '0 6px' }}>→</span>
+                          <span style={{ color: 'var(--accent-cyan)' }}>{delegEmpName(r.delegate_employee_id)}</span>
+                          <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}> 代簽</span>
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                          {String(r.effective_from || '').slice(0, 10)} – {r.effective_to ? String(r.effective_to).slice(0, 10) : '長期'}
+                          {r.reason ? ` · ${r.reason}` : ''}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                        <span style={{ padding: '3px 10px', borderRadius: 12, fontSize: 11, fontWeight: 700,
+                          background: active ? 'var(--accent-green-dim)' : 'var(--glass-light)',
+                          color: active ? 'var(--accent-green)' : 'var(--text-muted)' }}>
+                          {!r.is_active ? '已停用' : active ? '代理中' : '未到期/已過期'}
+                        </span>
+                        <button className="btn btn-secondary" style={{ padding: '4px 8px' }}
+                          title={r.is_active ? '停用' : '啟用'} onClick={() => toggleDelegation(r)}>
+                          <Power size={13} />
+                        </button>
+                        <button className="btn btn-secondary" style={{ padding: '4px 8px', color: 'var(--accent-red)' }}
+                          title="刪除" onClick={() => removeDelegation(r)}>
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* 新增員工 Modal */}
       <EmployeeFormModal

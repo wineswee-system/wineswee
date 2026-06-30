@@ -1391,8 +1391,8 @@ export default function TeamDashboard() {
                 return (
                   <div key={t.id}
                     onClick={() => navigate(
-                      t.workflow_instance_id ? `/process/workflows?focus=${t.workflow_instance_id}`
-                      : t.project_id ? `/process/projects?project=${t.project_id}`
+                      canSeeProcess && t.workflow_instance_id ? `/process/workflows?focus=${t.workflow_instance_id}`
+                      : canSeeProcess && t.project_id ? `/process/projects?project=${t.project_id}`
                       : `/process/tasks?focus=${t.id}`
                     )}
                     style={{

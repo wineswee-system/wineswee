@@ -250,7 +250,14 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
     }
 
     const { data, error } = await updateEmployee(employee.id, dataToSave)
-    if (error) { toast.error('儲存失敗，請稍後再試'); setSaving(false); return }
+    if (error) {
+      if (error.message?.includes('employees_employee_number_key')) {
+        toast.error('員工編號已被使用，請換一個編號')
+      } else {
+        toast.error('儲存失敗，請稍後再試')
+      }
+      setSaving(false); return
+    }
     if (data) {
       onUpdate(data); setIsDirty(false)
       if (storeChanged) {

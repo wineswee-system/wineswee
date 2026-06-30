@@ -227,6 +227,7 @@ export default function Employees() {
         birth_date: form.birth_date || null,
         probation_end_date: form.probation_end_date || null,
         join_date: form.join_date || null,
+        employee_number: form.employee_number || null,
         avatar,
         role,
         role_id: ROLE_ID_MAP[role] || 5,
@@ -299,7 +300,11 @@ export default function Employees() {
       }
     } catch (err) {
       console.error('Operation failed:', err)
-      toast.error('操作失敗：' + (err.message || '未知錯誤'))
+      if (err.message?.includes('employees_employee_number_key')) {
+        toast.error('員工編號已被使用，請換一個編號或留空自動產生')
+      } else {
+        toast.error('操作失敗：' + (err.message || '未知錯誤'))
+      }
     }
   }
 

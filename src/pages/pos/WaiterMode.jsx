@@ -359,6 +359,10 @@ function CheckoutModal({ tableNumber, orgId, storeId, orderId, storeName, onClos
   const [carrierId,    setCarrierId]    = useState('')
   const [buyerTaxId,   setBuyerTaxId]   = useState('')
   const [buyerCompany, setBuyerCompany] = useState('')
+  const [noteVal,      setNoteVal]      = useState('')
+  const [memberPhone,  setMemberPhone]  = useState('')
+  const [member,       setMember]       = useState(null)   // { id, name, phone, level, total_points }
+  const [memberBusy,   setMemberBusy]   = useState(false)
 
   // Fetch items + order meta (opened_at, order_number, note) on mount
   useEffect(() => {
@@ -369,15 +373,34 @@ function CheckoutModal({ tableNumber, orgId, storeId, orderId, storeName, onClos
         .is('voided_at', null)
         .order('created_at'),
       supabase.from('pos_orders')
-        .select('opened_at, order_number, note')
+        .select('opened_at, order_number, note, member_id, members(id, name, phone, level, total_points)')
         .eq('id', orderId)
         .maybeSingle(),
     ]).then(([itemsRes, orderRes]) => {
       setDbItems(itemsRes.data ?? [])
-      setOrderInfo(orderRes.data ?? {})
+      const ord = orderRes.data ?? {}
+      setOrderInfo(ord)
+      setNoteVal(ord.note ?? '')
+      if (ord.members) {
+        setMember(ord.members)
+        setMemberPhone(ord.members.phone ?? '')
+      }
       setLoading(false)
     })
   }, [orderId])
+
+  async function searchMember() {
+    const q = memberPhone.trim()
+    if (!q) return
+    setMemberBusy(true)
+    const { data } = await supabase.from('members')
+      .select('id, name, phone, level, total_points')
+      .ilike('phone', `%${q}%`)
+      .limit(1).maybeSingle()
+    setMemberBusy(false)
+    if (data) setMember(data)
+    else toast.error('查無此會員')
+  }
 
   const subtotal    = dbItems.reduce((s, i) => s + Number(i.unit_price) * i.quantity, 0)
   const taxAmount   = Math.round(subtotal * 5 / 105)   // 含稅 5%（結帳前小計含稅）
@@ -478,6 +501,8 @@ ${orderNote ? `<div>備註:${orderNote}</div>` : ''}
         status:   'paid',
         paid_at:  new Date().toISOString(),
         tax_amount: taxAmount,
+        note:     noteVal.trim() || null,
+        member_id: member?.id ?? null,
         ...(discAmount > 0 && {
           discount_type:   discType,
           discount_value:  parseFloat(discVal) || 0,
@@ -562,6 +587,46 @@ ${orderNote ? `<div>備註:${orderNote}</div>` : ''}
           )}
           <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-muted)' }}>應收合計</span>
           <span style={{ fontSize: 28, fontWeight: 800, color: 'var(--text-primary)' }}>NT${total.toLocaleString()}</span>
+        </div>
+
+        {/* 備註 */}
+        <div style={{ padding: '10px 20px 4px', fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.5px' }}>備註</div>
+        <div style={{ padding: '0 20px 10px' }}>
+          <input
+            placeholder="輸入備註（選填）"
+            value={noteVal}
+            onChange={e => setNoteVal(e.target.value)}
+            style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border-primary)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
+          />
+        </div>
+
+        {/* 會員綁定 */}
+        <div style={{ padding: '10px 20px 4px', fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.5px' }}>會員</div>
+        <div style={{ padding: '0 20px 10px' }}>
+          {member ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, background: 'var(--accent-cyan-dim)', border: '1px solid var(--accent-cyan)' }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent-cyan)' }}>{member.name}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{member.phone} · {member.level} · {member.total_points} 點</div>
+              </div>
+              <button onClick={() => { setMember(null); setMemberPhone('') }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 16, lineHeight: 1, padding: 0 }}>×</button>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', gap: 6 }}>
+              <input
+                placeholder="手機號碼搜尋"
+                value={memberPhone}
+                onChange={e => setMemberPhone(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && searchMember()}
+                style={{ flex: 1, padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border-primary)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: 13, outline: 'none' }}
+              />
+              <button onClick={searchMember} disabled={memberBusy}
+                style={{ padding: '8px 14px', borderRadius: 8, border: 'none', background: 'var(--accent-cyan)', color: '#fff', fontSize: 13, fontWeight: 600, cursor: memberBusy ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap' }}>
+                {memberBusy ? '…' : '搜尋'}
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Invoice section */}

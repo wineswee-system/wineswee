@@ -120,4 +120,12 @@ BEGIN
 END;
 $$;
 
+-- ── form_chain_configs.applicant_type CHECK：加 store_staff ─────────────
+ALTER TABLE public.form_chain_configs
+  DROP CONSTRAINT IF EXISTS chk_form_chain_applicant_type;
+
+ALTER TABLE public.form_chain_configs
+  ADD CONSTRAINT chk_form_chain_applicant_type
+  CHECK (applicant_type IN ('all', 'manager', 'staff', 'store_staff'));
+
 NOTIFY pgrst, 'reload schema';

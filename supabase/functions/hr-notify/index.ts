@@ -784,27 +784,30 @@ function buildApprovalDelegatedNotification(details: {
   reason?: string;
   effective_from?: string;
   effective_to?: string;
-  rt?: string;               // expense_request | expense_settle | ...
+  rt?: string;
   request_id?: number;
-  doc_label?: string;        // 費用申請 / 費用驗收
+  doc_label?: string;
   title?: string;
   applicant_name?: string;
   applicant_dept?: string;
   amount?: number;
   currency?: string;
-  summary?: string;          // 類型摘要(請假:假別+起迄+天數;加班:時數…)
+  summary?: string;
   store?: string;
   step_name?: string;
   due_date?: string;
   due_time?: string;
-  liff_to?: string;          // LIFF 深連結目標路徑(各類型自訂)
+  liff_to?: string;
   liff_id?: string | null;
 }) {
-  const LC = { brand: '#8b5cf6', danger: '#ef4444', muted: '#666666', dark: '#444444' };
+  const BRAND = '#8b5cf6';
   // LINE postback approve 支援的 rt(postback-approval.ts);不支援的不放核准鈕
   const APPROVE_RT = ['leave', 'overtime', 'trip', 'expense', 'expense_request', 'expense_settle', 'correction', 'off_request', 'goods_transfer', 'form_submission'];
 
-  let dueLabel = '未設定'; let isOverdue = false;
+  const period = `${(details.effective_from || '').slice(5).replace('-', '/')}–${details.effective_to ? details.effective_to.slice(5).replace('-', '/') : '長期'}`;
+  const sym = CUR_SYM[details.currency || 'TWD'] || (details.currency ?? 'NT$');
+
+  let dueLabel = ''; let isOverdue = false;
   if (details.due_date) {
     const rawDate = String(details.due_date).slice(0, 10);
     const dm = rawDate.match(/^\d{4}-(\d{2})-(\d{2})/);
@@ -812,47 +815,59 @@ function buildApprovalDelegatedNotification(details: {
     const hh = tm ? tm[1].padStart(2, '0') : '17'; const mi = tm ? tm[2].padStart(2, '0') : '00';
     if (dm) { dueLabel = `${dm[1]}/${dm[2]} ${hh}:${mi}`; const dt = new Date(`${rawDate}T${hh}:${mi}:00+08:00`); if (!isNaN(dt.getTime())) isOverdue = dt < new Date(); }
   }
-  const period = `${(details.effective_from || '').slice(5)}–${details.effective_to ? details.effective_to.slice(5) : '長期'}`;
-  const sym = CUR_SYM[details.currency || 'TWD'] || (details.currency ?? 'NT$');
 
-  const body: any[] = [
-    { type: 'text', text: `你正在代理 ${details.delegator_name || ''} 的簽核`, weight: 'bold', size: 'sm', wrap: true, color: LC.brand },
-    { type: 'text', text: `代理期間 ${period}${details.reason ? ` · ${details.reason}` : ''}`, size: 'xs', color: LC.muted, wrap: true },
+  const applicantLine = [details.applicant_name, details.applicant_dept].filter(Boolean).join(' · ');
+  const id = details.request_id;
+  const rt = details.rt || 'expense_request';
+  const docLabel = details.doc_label || '簽核';
+
+  const bodyContents: object[] = [
+    // 代理人資訊區
+    row('代替', details.delegator_name || '—', BRAND),
+    row('期間', `${period}${details.reason ? ` · ${details.reason}` : ''}`),
     { type: 'separator', margin: 'sm' },
-    { type: 'text', text: `${details.doc_label || '簽核'} #${details.request_id ?? ''}`, weight: 'bold', size: 'sm', wrap: true, margin: 'sm' },
+    // 單據資訊區
+    row('類型', `${docLabel}　#${id ?? '—'}`),
+    ...(applicantLine ? [row('申請人', applicantLine)] : []),
+    ...(details.summary ? [row('內容', details.summary)] : []),
+    ...(details.amount != null ? [row('金額', `${sym} ${Number(details.amount).toLocaleString()}`)] : []),
+    ...(details.store ? [row('門市', details.store)] : []),
+    ...(details.step_name ? [row('關卡', details.step_name)] : []),
+    ...(dueLabel ? [row('到期', dueLabel, isOverdue ? '#ef4444' : '#111111')] : []),
   ];
-  if (details.title) body.push({ type: 'text', text: details.title, size: 'sm', color: LC.dark, wrap: true });
-  if (details.applicant_name) body.push({ type: 'text', text: `申請人：${details.applicant_name}${details.applicant_dept ? ` · ${details.applicant_dept}` : ''}`, size: 'sm', color: LC.muted, wrap: true });
-  if (details.summary) body.push({ type: 'text', text: details.summary, size: 'sm', color: LC.dark, wrap: true });
-  if (details.amount != null) body.push({ type: 'text', text: `金額：${sym} ${Number(details.amount).toLocaleString()}`, size: 'sm', color: LC.dark });
-  if (details.step_name) body.push({ type: 'text', text: `目前關卡：${details.step_name}（原簽核人 ${details.delegator_name || ''}）`, size: 'sm', color: LC.muted, wrap: true });
-  if (details.store) body.push({ type: 'text', text: `門市：${details.store}`, size: 'sm', color: LC.muted });
-  if (details.due_date) body.push({ type: 'text', text: `到期：${dueLabel}`, size: 'sm', color: isOverdue ? LC.danger : LC.muted, weight: isOverdue ? 'bold' : 'regular' });
 
-  const id = details.request_id; const rt = details.rt || 'expense_request';
   const toPath = details.liff_to
     || (rt === 'expense_settle' ? `/expense-request?settle_id=${id}` : rt === 'expense_request' ? `/expense-request` : `/`);
   const liffUrl = details.liff_id ? `https://liff.line.me/${details.liff_id}?to=${encodeURIComponent(toPath)}` : null;
   const canApprove = APPROVE_RT.includes(rt);
-  const footer = {
-    type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '14px',
-    contents: [
-      ...(canApprove ? [{ type: 'button', style: 'primary', height: 'sm', color: LC.brand,
-        action: { type: 'postback', label: '✅ 核准（代簽）', data: `action=approve&type=request&rt=${rt}&id=${id}`, displayText: '核准（代簽）' } }] : []),
-      ...(liffUrl ? [{ type: 'button', style: canApprove ? 'secondary' : 'primary', height: 'sm', ...(canApprove ? {} : { color: LC.brand }),
-        action: { type: 'uri', label: '前往簽核 / 看明細', uri: liffUrl } }] : []),
-    ],
-  };
 
   return {
     type: 'flex',
-    altText: `🔄 代簽通知：代 ${details.delegator_name || ''} 簽 ${details.doc_label || ''} #${details.request_id ?? ''}`,
+    altText: `🔄 代簽 ${docLabel}：代 ${details.delegator_name || ''} 簽 #${id ?? ''}`,
     contents: {
       type: 'bubble', size: 'kilo',
-      header: { type: 'box', layout: 'vertical', backgroundColor: LC.brand, paddingAll: '14px',
-        contents: [{ type: 'text', text: '🔄 代簽通知', color: '#FFFFFF', weight: 'bold', size: 'md' }] },
-      body: { type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '14px', contents: body },
-      footer,
+      header: {
+        type: 'box', layout: 'vertical', backgroundColor: BRAND, paddingAll: '14px',
+        contents: [
+          { type: 'text', text: '🔄 代簽通知', color: '#FFFFFF', weight: 'bold', size: 'md' },
+          { type: 'text', text: docLabel, color: '#E9D5FF', size: 'sm', margin: 'xs' },
+        ],
+      },
+      body: { type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '14px', contents: bodyContents },
+      footer: {
+        type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '12px',
+        contents: [
+          ...(canApprove ? [{
+            type: 'button', style: 'primary', height: 'sm', color: BRAND,
+            action: { type: 'postback', label: '✅ 核准（代簽）', data: `action=approve&type=request&rt=${rt}&id=${id}`, displayText: '核准（代簽）' },
+          }] : []),
+          ...(liffUrl ? [{
+            type: 'button', style: canApprove ? 'secondary' : 'primary', height: 'sm',
+            ...(canApprove ? {} : { color: BRAND }),
+            action: { type: 'uri', label: '前往簽核 / 看明細', uri: liffUrl },
+          }] : []),
+        ],
+      },
     },
   };
 }

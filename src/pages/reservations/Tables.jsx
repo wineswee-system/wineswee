@@ -115,11 +115,23 @@ export default function Tables() {
   }
 
   const saveTable = async () => {
+    let resolvedOrgId = orgId
+    if (!resolvedOrgId) {
+      // stores.organization_id is NULL for this store — fall back to user's own org
+      const { data: { user } } = await supabase.auth.getUser()
+      const { data: emp } = await supabase
+        .from('employees').select('organization_id')
+        .eq('auth_user_id', user?.id).single()
+      if (!emp?.organization_id) { alert('無法取得組織資訊，請重新整理頁面'); return }
+      resolvedOrgId = emp.organization_id
+      setOrgId(resolvedOrgId)
+    }
     setSaving(true)
-    const data = { ...form, store_id: storeId, organization_id: orgId, capacity: Number(form.capacity), x_pos: Number(form.x_pos), y_pos: Number(form.y_pos) }
-    if (editing === 'new') await createResTable(data)
-    else await updateResTable(editing, data)
-    setSaving(false); setEditing(null); loadData()
+    const data = { ...form, store_id: storeId, organization_id: resolvedOrgId, capacity: Number(form.capacity), x_pos: Number(form.x_pos), y_pos: Number(form.y_pos) }
+    const res = editing === 'new' ? await createResTable(data) : await updateResTable(editing, data)
+    setSaving(false)
+    if (res.error) { alert(`儲存失敗：${res.error.message}`); return }
+    setEditing(null); loadData()
   }
 
   const delTable = async (id) => {

@@ -802,7 +802,7 @@ function buildApprovalDelegatedNotification(details: {
 }) {
   const LC = { brand: '#8b5cf6', danger: '#ef4444', muted: '#666666', dark: '#444444' };
   // LINE postback approve 支援的 rt(postback-approval.ts);不支援的不放核准鈕
-  const APPROVE_RT = ['leave', 'overtime', 'trip', 'expense', 'expense_request', 'expense_settle', 'correction', 'off_request', 'goods_transfer'];
+  const APPROVE_RT = ['leave', 'overtime', 'trip', 'expense', 'expense_request', 'expense_settle', 'correction', 'off_request', 'goods_transfer', 'form_submission'];
 
   let dueLabel = '未設定'; let isOverdue = false;
   if (details.due_date) {
@@ -827,7 +827,7 @@ function buildApprovalDelegatedNotification(details: {
   if (details.amount != null) body.push({ type: 'text', text: `金額：${sym} ${Number(details.amount).toLocaleString()}`, size: 'sm', color: LC.dark });
   if (details.step_name) body.push({ type: 'text', text: `目前關卡：${details.step_name}（原簽核人 ${details.delegator_name || ''}）`, size: 'sm', color: LC.muted, wrap: true });
   if (details.store) body.push({ type: 'text', text: `門市：${details.store}`, size: 'sm', color: LC.muted });
-  body.push({ type: 'text', text: `到期：${dueLabel}`, size: 'sm', color: isOverdue ? LC.danger : LC.muted, weight: isOverdue ? 'bold' : 'regular' });
+  if (details.due_date) body.push({ type: 'text', text: `到期：${dueLabel}`, size: 'sm', color: isOverdue ? LC.danger : LC.muted, weight: isOverdue ? 'bold' : 'regular' });
 
   const id = details.request_id; const rt = details.rt || 'expense_request';
   const toPath = details.liff_to

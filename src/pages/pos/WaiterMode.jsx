@@ -980,7 +980,7 @@ img{display:block;margin:0 auto}
       if (!currentOrderId) {
         const { data: newOrder, error: oErr } = await supabase
           .from('pos_orders')
-          .insert({ organization_id: orgId, store_id: effectiveStoreId, table_id: selTable.id, status: 'open', opened_by: user.id, order_type: orderType })
+          .insert({ organization_id: orgId, store_id: effectiveStoreId, table_id: selTable.id, status: 'open', opened_by: profile?.id ?? null, order_type: orderType })
           .select('id').single()
         if (oErr) throw oErr
         currentOrderId = newOrder.id

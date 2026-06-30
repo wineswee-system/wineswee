@@ -596,7 +596,7 @@ export default function OrgChart() {
                                           minWidth: 80,
                                           textAlign: 'center',
                                         }}>
-                                          店長 {labelOf(mgr)}
+                                          {mgr.position ? `${mgr.position} ` : ''}{labelOf(mgr)}
                                         </div>
                                       </>
                                     )}

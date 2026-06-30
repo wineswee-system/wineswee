@@ -117,13 +117,12 @@ export default function Tables() {
   const saveTable = async () => {
     let resolvedOrgId = orgId
     if (!resolvedOrgId) {
-      // stores.organization_id is NULL for this store — fall back to user's own org
-      const { data: { user } } = await supabase.auth.getUser()
-      const { data: emp } = await supabase
-        .from('employees').select('organization_id')
-        .eq('auth_user_id', user?.id).single()
-      if (!emp?.organization_id) { alert('無法取得組織資訊，請重新整理頁面'); return }
-      resolvedOrgId = emp.organization_id
+      // stores.organization_id is NULL for this store — borrow from another store that has it
+      const { data: s } = await supabase
+        .from('stores').select('organization_id')
+        .not('organization_id', 'is', null).limit(1).single()
+      if (!s?.organization_id) { alert('無法取得組織資訊，請確認其他門市已設定組織'); return }
+      resolvedOrgId = s.organization_id
       setOrgId(resolvedOrgId)
     }
     setSaving(true)

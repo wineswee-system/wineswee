@@ -261,9 +261,9 @@ export default function Sidebar() {
     '/org/organizations':  'nav.org.full',
     '/org/chart':          'nav.org.full',
     '/org/companies':      'nav.org.full',
-    '/org/departments':    'nav.org.internal',
+    '/org/departments':    'nav.org.departments',
     '/org/employees':      'nav.org.employees',
-    '/org/locations':      'nav.org.internal',
+    '/org/locations':      'nav.org.locations',
     '/org/templates':      'nav.hr_form.builder',
     // ── 排班管理 ──
     '/hr/schedule':           'nav.schedule.basic',

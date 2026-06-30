@@ -100,6 +100,8 @@ const FEATURES = [
   { module: '導航顯示', label: '組織完整管理',          view: null, edit: 'nav.org.full' },
   { module: '導航顯示', label: '組織內部資料',          view: null, edit: 'nav.org.internal' },
   { module: '導航顯示', label: '員工管理（限 admin）',  view: null, edit: 'nav.org.employees' },
+  { module: '導航顯示', label: '部門管理（限 admin）',  view: null, edit: 'nav.org.departments' },
+  { module: '導航顯示', label: '門市管理（限 admin）',  view: null, edit: 'nav.org.locations' },
   { module: '導航顯示', label: '排班與假日',            view: null, edit: 'nav.schedule.basic' },
   { module: '導航顯示', label: '排班規則 / 工時設定',   view: null, edit: 'nav.schedule.config' },
   { module: '導航顯示', label: '薪資查看與發放',        view: null, edit: 'nav.salary.basic' },

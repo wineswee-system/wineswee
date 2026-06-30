@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import {
   getResTables, createResTable, updateResTable, deleteResTable,
@@ -9,6 +9,8 @@ import { Plus, Trash2, Save, Map, List } from 'lucide-react'
 
 const SHAPES = { rect: '方形', round: '圓形', booth: 'Booth' }
 const DEF = { table_number: '', capacity: 4, shape: 'rect', x_pos: 0, y_pos: 0, is_combinable: false, is_active: true }
+const CELL_W = 90
+const CELL_H = 74
 
 export default function Tables() {
   const [stores, setStores]       = useState([])
@@ -23,6 +25,11 @@ export default function Tables() {
   const [saving, setSaving]       = useState(false)
   const [showCombo, setShowCombo] = useState(false)
   const [comboForm, setComboForm] = useState({ name: '', table_ids: [], combined_capacity: 0 })
+
+  // drag-and-drop state
+  const canvasRef = useRef(null)
+  const dragRef   = useRef(null) // { id, origX, origY, curX, curY, offX, offY }
+  const [dragPos, setDragPos] = useState(null) // { id, x, y } — render-only
 
   useEffect(() => {
     supabase.from('stores').select('id,name,organization_id').then(({ data }) => {
@@ -40,6 +47,72 @@ export default function Tables() {
       .finally(() => setLoading(false))
   }
   useEffect(() => { loadData() }, [storeId]) // eslint-disable-line
+
+  const maxX = Math.max(9,  ...tables.map(t => t.x_pos))
+  const maxY = Math.max(6,  ...tables.map(t => t.y_pos))
+  const gridCols = Math.max(12, maxX + 3)
+  const gridRows = Math.max(8,  maxY + 3)
+
+  // global drag handlers — window-level so fast swipes don't escape the canvas
+  useEffect(() => {
+    const onMove = (e) => {
+      const d = dragRef.current
+      if (!d || !canvasRef.current) return
+      const rect = canvasRef.current.getBoundingClientRect()
+      const nx = Math.max(0, Math.min(gridCols - 1, Math.round((e.clientX - rect.left - d.offX) / CELL_W)))
+      const ny = Math.max(0, Math.min(gridRows - 1, Math.round((e.clientY - rect.top  - d.offY) / CELL_H)))
+      if (nx !== d.curX || ny !== d.curY) {
+        dragRef.current = { ...d, curX: nx, curY: ny }
+        setDragPos({ id: d.id, x: nx, y: ny })
+      }
+    }
+    const onUp = async () => {
+      const d = dragRef.current
+      if (!d) return
+      dragRef.current = null
+      setDragPos(null)
+      const { id, origX, origY, curX, curY } = d
+      if (curX !== origX || curY !== origY) {
+        await updateResTable(id, { x_pos: curX, y_pos: curY })
+        loadData()
+      } else {
+        // pure click → open edit modal
+        const t = tables.find(tb => tb.id === id)
+        if (t) {
+          setEditing(t.id)
+          setForm({ table_number: t.table_number, capacity: t.capacity, shape: t.shape, x_pos: t.x_pos, y_pos: t.y_pos, is_combinable: t.is_combinable, is_active: t.is_active })
+        }
+      }
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup',   onUp)
+    return () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup',   onUp)
+    }
+  }, [tables, gridCols, gridRows]) // eslint-disable-line
+
+  const handleTableMouseDown = (e, t) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const rect = canvasRef.current.getBoundingClientRect()
+    dragRef.current = {
+      id: t.id, origX: t.x_pos, origY: t.y_pos, curX: t.x_pos, curY: t.y_pos,
+      offX: (e.clientX - rect.left) - t.x_pos * CELL_W,
+      offY: (e.clientY - rect.top)  - t.y_pos * CELL_H,
+    }
+    setDragPos({ id: t.id, x: t.x_pos, y: t.y_pos })
+  }
+
+  // click on empty canvas cell → add new table
+  const handleCanvasClick = (e) => {
+    if (e.target !== canvasRef.current) return // hit a table div
+    const rect = canvasRef.current.getBoundingClientRect()
+    const x = Math.max(0, Math.min(gridCols - 1, Math.floor((e.clientX - rect.left) / CELL_W)))
+    const y = Math.max(0, Math.min(gridRows - 1, Math.floor((e.clientY - rect.top)  / CELL_H)))
+    const occupied = tables.find(t => t.x_pos === x && t.y_pos === y)
+    if (!occupied) { setEditing('new'); setForm({ ...DEF, x_pos: x, y_pos: y }) }
+  }
 
   const saveTable = async () => {
     setSaving(true)
@@ -65,13 +138,10 @@ export default function Tables() {
   const inp = { padding: '7px 10px', borderRadius: 8, border: '1px solid var(--border-primary)', background: 'var(--bg-tertiary)', color: 'var(--text-primary)', fontSize: 14, width: '100%', boxSizing: 'border-box' }
   const lbl = { display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }
 
-  const maxX = Math.max(9, ...tables.map(t => t.x_pos))
-  const maxY = Math.max(6, ...tables.map(t => t.y_pos))
-
   if (loading) return <LoadingSpinner />
 
   return (
-    <div style={{ padding: 24, maxWidth: 1100, margin: '0 auto' }}>
+    <div style={{ padding: 24, maxWidth: 1200, margin: '0 auto' }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
         <h1 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>桌位設定</h1>
@@ -87,11 +157,9 @@ export default function Tables() {
             </button>
           ))}
         </div>
-        {tab === 'list' && (
-          <button onClick={() => { setEditing('new'); setForm(DEF) }} style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 5, padding: '7px 14px', borderRadius: 8, border: 'none', background: 'var(--accent-cyan)', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
-            <Plus size={14}/> 新增桌位
-          </button>
-        )}
+        <button onClick={() => { setEditing('new'); setForm(DEF) }} style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 5, padding: '7px 14px', borderRadius: 8, border: 'none', background: 'var(--accent-cyan)', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+          <Plus size={14}/> 新增桌位
+        </button>
       </div>
 
       {tab === 'list' && (
@@ -146,30 +214,100 @@ export default function Tables() {
         </>
       )}
 
-      {/* MAP TAB */}
-      {tab === 'map' && (
+      {/* ── MAP TAB — drag-and-drop floor plan ── */}
+      {tab === 'map' && tables.length === 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: '64px 24px', background: 'var(--bg-secondary)', borderRadius: 12, border: '1px solid var(--border-primary)', textAlign: 'center' }}>
+          <div style={{ fontSize: 48 }}>🪑</div>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>此門市尚無桌位資料</div>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>請先在清單新增桌位，再回來配置平面圖</div>
+          </div>
+          <button
+            onClick={() => { setTab('list'); setEditing('new'); setForm(DEF) }}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 20px', borderRadius: 8, border: 'none', background: 'var(--accent-cyan)', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}
+          >
+            <Plus size={14}/> 前往新增桌位
+          </button>
+        </div>
+      )}
+
+      {tab === 'map' && tables.length > 0 && (
         <div>
-          <p style={{ color: 'var(--text-muted)', fontSize: 13, marginBottom: 12 }}>點擊桌位可切換至清單編輯坐標</p>
-          <div style={{ overflowX: 'auto', border: '1px solid var(--border-primary)', borderRadius: 12, padding: 12, background: 'var(--bg-secondary)' }}>
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: `repeat(${maxX + 2}, 100px)`,
-              gridTemplateRows: `repeat(${maxY + 2}, 80px)`,
-              gap: 6, minWidth: (maxX + 2) * 106,
-            }}>
-              {tables.map(t => (
-                <div key={t.id} onClick={() => { setEditing(t.id); setForm({ table_number: t.table_number, capacity: t.capacity, shape: t.shape, x_pos: t.x_pos, y_pos: t.y_pos, is_combinable: t.is_combinable, is_active: t.is_active }); setTab('list') }}
-                  style={{ gridColumn: t.x_pos + 1, gridRow: t.y_pos + 1, background: 'var(--accent-cyan-dim)', border: '2px solid var(--accent-cyan)', borderRadius: t.shape === 'round' ? '50%' : 8, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent-cyan)' }}>{t.table_number}</div>
-                  <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{t.capacity}人</div>
-                </div>
-              ))}
+          <p style={{ color: 'var(--text-muted)', fontSize: 13, marginBottom: 12 }}>
+            拖曳桌位移動位置 · 點空格新增桌位 · 點桌位編輯詳情
+          </p>
+          <div style={{ overflowX: 'auto', overflowY: 'auto' }}>
+            <div
+              ref={canvasRef}
+              onClick={handleCanvasClick}
+              style={{
+                position: 'relative',
+                width:  gridCols * CELL_W,
+                height: gridRows * CELL_H,
+                border: '1px solid var(--border-primary)',
+                borderRadius: 12,
+                background: 'var(--bg-secondary)',
+                // grid lines via CSS repeating gradient
+                backgroundImage: [
+                  `linear-gradient(to right, var(--border-primary) 1px, transparent 1px)`,
+                  `linear-gradient(to bottom, var(--border-primary) 1px, transparent 1px)`,
+                ].join(', '),
+                backgroundSize: `${CELL_W}px ${CELL_H}px`,
+                cursor: dragPos ? 'grabbing' : 'default',
+                userSelect: 'none',
+              }}
+            >
+              {tables.map(t => {
+                const isD = dragPos?.id === t.id
+                const x   = isD ? dragPos.x : t.x_pos
+                const y   = isD ? dragPos.y : t.y_pos
+                const pad = 5
+                return (
+                  <div
+                    key={t.id}
+                    onMouseDown={(e) => handleTableMouseDown(e, t)}
+                    style={{
+                      position: 'absolute',
+                      left:   x * CELL_W + pad,
+                      top:    y * CELL_H + pad,
+                      width:  CELL_W - pad * 2,
+                      height: CELL_H - pad * 2,
+                      background: isD
+                        ? 'var(--accent-cyan)'
+                        : t.is_active ? 'var(--accent-cyan-dim)' : 'var(--bg-tertiary)',
+                      border: `2px solid ${t.is_active ? 'var(--accent-cyan)' : 'var(--border-primary)'}`,
+                      borderRadius:
+                        t.shape === 'round' ? '50%' :
+                        t.shape === 'booth' ? '4px 4px 14px 14px' : 10,
+                      display: 'flex', flexDirection: 'column',
+                      alignItems: 'center', justifyContent: 'center',
+                      cursor: dragPos ? 'grabbing' : 'grab',
+                      zIndex: isD ? 20 : 1,
+                      boxShadow: isD
+                        ? '0 8px 24px rgba(0,0,0,0.45)'
+                        : '0 1px 4px rgba(0,0,0,0.2)',
+                      opacity: t.is_active ? 1 : 0.45,
+                      // instant snap while dragging, smooth settle after drop
+                      transition: isD ? 'none' : 'left 0.12s ease, top 0.12s ease',
+                      pointerEvents: dragPos && !isD ? 'none' : 'auto',
+                    }}
+                  >
+                    <div style={{ fontSize: 13, fontWeight: 700, color: isD ? '#fff' : 'var(--accent-cyan)', pointerEvents: 'none', letterSpacing: 0.5 }}>
+                      {t.table_number}
+                    </div>
+                    <div style={{ fontSize: 10, color: isD ? 'rgba(255,255,255,0.75)' : 'var(--text-muted)', pointerEvents: 'none', marginTop: 2 }}>
+                      {t.capacity}人
+                    </div>
+                  </div>
+                )
+              })}
+
             </div>
           </div>
         </div>
       )}
 
-      {/* Edit table modal */}
+      {/* Edit / new table modal */}
       {editing && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ background: 'var(--bg-secondary)', borderRadius: 16, width: 420, padding: 24, boxShadow: '0 20px 60px rgba(0,0,0,0.4)' }}>
@@ -183,7 +321,7 @@ export default function Tables() {
                 </select>
               </div>
               <div></div>
-              <div><label style={lbl}>X 位置 (欄)</label><input type="number" min="0" max="20" value={form.x_pos} onChange={e => setForm(f => ({ ...f, x_pos: Number(e.target.value) }))} style={inp}/></div>
+              <div><label style={lbl}>X 位置 (欄)</label><input type="number" min="0" max="30" value={form.x_pos} onChange={e => setForm(f => ({ ...f, x_pos: Number(e.target.value) }))} style={inp}/></div>
               <div><label style={lbl}>Y 位置 (列)</label><input type="number" min="0" max="20" value={form.y_pos} onChange={e => setForm(f => ({ ...f, y_pos: Number(e.target.value) }))} style={inp}/></div>
               <div style={{ gridColumn: '1/-1', display: 'flex', gap: 20 }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: 'var(--text-secondary)' }}>

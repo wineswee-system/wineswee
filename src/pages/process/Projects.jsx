@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { toast } from '../../lib/toast'
 import { supabase } from '../../lib/supabase'
 import { getEmployees, getDepartments, getProjectSections, createProjectSection, updateProjectSection, deleteProjectSection, createWorkflowInstance, updateTask, createTask, drainEntity } from '../../lib/db'
@@ -23,6 +24,7 @@ const PROJECT_FIELD_LABELS = {
 export default function Projects() {
   const { profile } = useAuth()
   const { logAction, logFieldChange } = useAuditLog()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [projects, setProjects] = useState([])
   const [workflows, setWorkflows] = useState([])
   const [tasks, setTasks] = useState([])
@@ -185,7 +187,8 @@ export default function Projects() {
     for (const t of [...(directRes.data || []), ...(wfTaskRes.data || [])]) {
       if (!taskMap.has(t.id)) taskMap.set(t.id, t)
     }
-    setProjects(pRes.data || [])
+    const allProjects = pRes.data || []
+    setProjects(allProjects)
     setWorkflows(wRes.data || [])
     setTasks([...taskMap.values()].sort((a, b) => (a.step_order ?? 0) - (b.step_order ?? 0)))
     setEmployees((eRes.data || []).filter(e => e.status === '在職'))
@@ -196,6 +199,14 @@ export default function Projects() {
     setExpenses(expRes.data || [])
     setDepartments(dRes.data || [])
     setLoading(false)
+
+    // 從 ?project=id 自動展開專案（儀表板點任務導過來）
+    const focusProjId = searchParams.get('project')
+    if (focusProjId) {
+      const proj = allProjects.find(p => p.id === Number(focusProjId))
+      if (proj) setSelected(proj)
+      setSearchParams(sp => { const x = new URLSearchParams(sp); x.delete('project'); return x }, { replace: true })
+    }
   }
 
   // Re-run when auth profile resolves (avoids race where load() fires before profile is ready)

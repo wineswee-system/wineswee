@@ -1390,7 +1390,11 @@ export default function TeamDashboard() {
                 const due = t.due_date ? daysBetween(t.due_date, today) : null
                 return (
                   <div key={t.id}
-                    onClick={() => navigate(`/process/tasks?focus=${t.id}`)}
+                    onClick={() => navigate(
+                      t.workflow_instance_id ? `/process/workflows?focus=${t.workflow_instance_id}`
+                      : t.project_id ? `/process/projects?project=${t.project_id}`
+                      : `/process/tasks?focus=${t.id}`
+                    )}
                     style={{
                       padding: 12, borderRadius: 10, border: `1px solid ${C.borderSubtle}`,
                       background: C.bg2, cursor: 'pointer',
@@ -1408,6 +1412,7 @@ export default function TeamDashboard() {
                       <div style={{ fontSize: 13, fontWeight: 600 }}>{t.title}</div>
                       <div style={{ fontSize: 11, color: C.muted, marginTop: 2, display: 'flex', gap: 8 }}>
                         {t.workflow && <span>📋 {t.workflow}</span>}
+                        {!t.workflow && t.project_id && <span>🗂 專案任務</span>}
                         <span>狀態：{t.status}</span>
                       </div>
                     </div>

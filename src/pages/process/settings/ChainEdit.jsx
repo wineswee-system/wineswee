@@ -22,9 +22,10 @@ export default function ChainEdit() {
   const [activeType, setActiveType] = useState('all')
 
   const TABS = [
-    { key: 'all',     label: '全員通用', desc: '未設定主管／員工專屬鏈時的 fallback' },
-    { key: 'manager', label: '部門主管', desc: '申請人為某部門的主管（departments.manager_id）時套用，門市店長算一般員工' },
-    { key: 'staff',   label: '一般員工', desc: '不是任何部門或門市主管的員工套用' },
+    { key: 'all',         label: '全員通用', desc: '未設定其他專屬鏈時的 fallback' },
+    { key: 'manager',     label: '部門主管', desc: '申請人為 departments.manager_id 或 stores.manager_id（店長/資深店長也算）時套用' },
+    { key: 'store_staff', label: '門市人員', desc: '有門市歸屬（store_id IS NOT NULL）且非店長的員工套用' },
+    { key: 'staff',       label: '行政人員', desc: '沒有門市歸屬、也非主管的總部/行政員工套用' },
   ]
 
   if (!canEditChain) {
@@ -59,7 +60,7 @@ export default function ChainEdit() {
       {showTypeTabs && (
         <div style={{ marginBottom: 20 }}>
           <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 8 }}>
-            可依申請人角色設定不同簽核鏈。送出時系統優先套用「部門主管」或「一般員工」的鏈；找不到時 fallback 至「全員通用」。
+            可依申請人角色設定不同簽核鏈。送出時系統依序套用「部門主管」→「門市人員」→「行政人員」；找不到時 fallback 至「全員通用」。
           </div>
           <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--border-subtle)', paddingBottom: 0 }}>
             {TABS.map(t => (

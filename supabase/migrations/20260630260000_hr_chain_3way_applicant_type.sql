@@ -5,9 +5,10 @@
 --       遇到「店長兼課長」會跳層或重複。
 --
 -- 新分類（只影響 HR A-type trigger）：
---   dept_manager  → departments.manager_id = 申請人  OR  stores.manager_id = 申請人
---   store_staff   → employee.store_id IS NOT NULL（且非主管）
---   admin_staff   → 其他（行政/總部員工）
+--   manager     → departments.manager_id = 申請人  OR  stores.manager_id = 申請人
+--                 （對應 UI「部門主管」tab，沿用現有 key）
+--   store_staff → employee.store_id IS NOT NULL（且非主管）（新 key）
+--   staff       → 其他（行政/總部員工）（沿用現有 key）
 --
 -- fallback 順序：specific_type → 'all'
 -- （若未設 specific type 的 chain，就沿用現有 'all' chain）
@@ -59,16 +60,16 @@ BEGIN
            AND organization_id = v_org_id
       )
     THEN
-      v_specific_type := 'dept_manager';
+      v_specific_type := 'manager';      -- 對應 UI「部門主管」tab
 
     ELSIF v_applicant_store IS NOT NULL THEN
-      v_specific_type := 'store_staff';
+      v_specific_type := 'store_staff';  -- 新增「門市人員」tab
 
     ELSE
-      v_specific_type := 'admin_staff';
+      v_specific_type := 'staff';        -- 對應 UI「行政人員」tab
     END IF;
   ELSE
-    v_specific_type := 'admin_staff';
+    v_specific_type := 'staff';
   END IF;
 
   -- ── 查 chain（specific → fallback 'all'）────────────────────────────

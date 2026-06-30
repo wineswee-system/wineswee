@@ -632,9 +632,15 @@ export default function Employees() {
                     )}
                   </td>
                   <td>
-                    <span className={`badge ${e.status === '在職' ? 'badge-success' : 'badge-danger'}`}>
-                      <span className="badge-dot"></span>{e.status}
-                    </span>
+                    {e.status === '在職' && e.join_date && e.join_date > new Date().toISOString().slice(0, 10) ? (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700, background: 'var(--accent-purple-dim)', color: 'var(--accent-purple)' }}>
+                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent-purple)', flexShrink: 0 }} />待入職
+                      </span>
+                    ) : (
+                      <span className={`badge ${e.status === '在職' ? 'badge-success' : 'badge-danger'}`}>
+                        <span className="badge-dot"></span>{e.status}
+                      </span>
+                    )}
                   </td>
                   <td>
                     <div style={{ display: 'flex', gap: 6 }}>

@@ -92,7 +92,7 @@ BEGIN
 
   v_chain_id := CASE
     WHEN TG_TABLE_NAME = 'form_submissions' THEN
-      (SELECT ft.approval_chain_id FROM public.form_templates ft WHERE ft.id = NEW.template_id)
+      (SELECT ft.approval_chain_id FROM public.form_templates ft WHERE ft.id = (to_jsonb(NEW)->>'template_id')::int)
     ELSE
       (to_jsonb(NEW)->>'approval_chain_id')::int
   END;

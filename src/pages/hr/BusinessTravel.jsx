@@ -208,7 +208,7 @@ export default function BusinessTravel() {
 
   const filtered = trips.filter(t =>
     (deptFilter === '' || getEmpDept(t.employee) === deptFilter) &&
-    (!search.trim() || String(t.id).includes(search.trim()))
+    (!search.trim() || [String(t.id), t.employee, t.destination, t.purpose].some(f => (f||'').toLowerCase().includes(search.trim().toLowerCase())))
   )
 
 

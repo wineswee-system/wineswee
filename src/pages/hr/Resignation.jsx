@@ -255,7 +255,7 @@ export default function Resignation() {
   // 用 web_list_my_pending_approval_ids RPC 判定（chain step 動態解人 + 自己不能簽自己）
   // 取代原本只看 target_emp_id 又 || isAdmin 的簡陋邏輯
   const canIApprove = (req) => canApprove('resignation_requests', req.id)
-  const displayList = search.trim() ? list.filter(r => String(r.id).includes(search.trim())) : list
+  const displayList = search.trim() ? list.filter(r => [String(r.id), r.employee?.name, r.reason].some(f => (f||'').toLowerCase().includes(search.trim().toLowerCase()))) : list
 
   return (
     <div className="fade-in">

@@ -111,7 +111,7 @@ export default function ShiftSwaps() {
 
   if (loading) return <LoadingSpinner />
 
-  const displayList = search.trim() ? list.filter(r => String(r.id).includes(search.trim())) : list
+  const displayList = search.trim() ? list.filter(r => [String(r.id), r.requester_emp?.name, r.target_emp?.name, r.reason].some(f => (f||'').toLowerCase().includes(search.trim().toLowerCase()))) : list
   const peerCount = list.filter(r => r.status === '待對方同意' && r.target_id === profile?.id).length
   const managerCount = list.filter(r => r.status === '待主管核准' && r.requester_id !== profile?.id && r.target_id !== profile?.id).length
 

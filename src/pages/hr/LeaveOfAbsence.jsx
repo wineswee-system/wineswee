@@ -249,7 +249,7 @@ export default function LeaveOfAbsence() {
   if (loading) return <LoadingSpinner />
 
   const canIApprove = (req) => canApprove('leave_of_absence_requests', req.id)
-  const displayList = search.trim() ? list.filter(r => String(r.id).includes(search.trim())) : list
+  const displayList = search.trim() ? list.filter(r => [String(r.id), r.employee?.name, r.reason_type, r.reason_detail].some(f => (f||'').toLowerCase().includes(search.trim().toLowerCase()))) : list
 
   return (
     <div className="fade-in">

@@ -518,10 +518,10 @@ export default function FormSubmissions() {
               </tr>
             </thead>
             <tbody>
-              {list.filter(s => !search.trim() || String(s.id).includes(search.trim())).length === 0 && (
+              {list.filter(s => !search.trim() || [String(s.id), s.applicant?.name, s.template?.name].some(f => (f||'').toLowerCase().includes(search.trim().toLowerCase()))).length === 0 && (
                 <tr><td colSpan={7} style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>無資料</td></tr>
               )}
-              {list.filter(s => !search.trim() || String(s.id).includes(search.trim())).map(s => {
+              {list.filter(s => !search.trim() || [String(s.id), s.applicant?.name, s.template?.name].some(f => (f||'').toLowerCase().includes(search.trim().toLowerCase()))).map(s => {
                 const sb = STATUS_BADGE[s.status] || {}
                 // chain 中間關卡用 RPC 算「這關該不該給我簽」；沒設 chain 的單 admin 仍可一鍵核准
                 const canApprove = s.status === '申請中' && (

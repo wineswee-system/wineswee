@@ -294,7 +294,7 @@ export default function TransferRequest() {
 
   // 改走 web_list_my_pending_approval_ids RPC（chain step 動態解人 + 自己不能簽自己）
   const canIApprove = (req) => canApprove('personnel_transfer_requests', req.id)
-  const displayList = search.trim() ? list.filter(r => String(r.id).includes(search.trim())) : list
+  const displayList = search.trim() ? list.filter(r => [String(r.id), r.employee?.name, r.transfer_type, r.new_position, r.reason].some(f => (f||'').toLowerCase().includes(search.trim().toLowerCase()))) : list
 
   return (
     <div className="fade-in">

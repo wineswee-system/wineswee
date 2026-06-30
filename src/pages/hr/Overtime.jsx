@@ -404,7 +404,7 @@ export default function Overtime() {
   const filtered = records.filter(r =>
     (deptFilter === '' || getEmpDept(r.employee) === deptFilter) &&
     (storeFilter === '' || r.store === storeFilter) &&
-    (!search.trim() || String(r.id).includes(search.trim()))
+    (!search.trim() || [String(r.id), r.employee_name, r.reason, r.store].some(f => (f||'').toLowerCase().includes(search.trim().toLowerCase())))
   )
 
 

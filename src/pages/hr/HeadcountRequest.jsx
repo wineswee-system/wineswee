@@ -421,7 +421,7 @@ export default function HeadcountRequest() {
   if (loading) return <LoadingSpinner />
 
   const canIApprove = (req) => canApprove('headcount_requests', req.id)
-  const displayList = search.trim() ? list.filter(r => String(r.id).includes(search.trim())) : list
+  const displayList = search.trim() ? list.filter(r => [String(r.id), r.employee?.name, r.job_title, r.need_dept?.name, r.job_type].some(f => (f||'').toLowerCase().includes(search.trim().toLowerCase()))) : list
 
   return (
     <div className="fade-in">

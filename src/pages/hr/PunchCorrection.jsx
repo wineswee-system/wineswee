@@ -331,7 +331,7 @@ export default function PunchCorrection() {
     if (tab === 'pending' && c.status !== '待審核') return false
     if (tab === 'approved' && c.status !== '已核准') return false
     if (tab === 'rejected' && c.status !== '已駁回') return false
-    if (search.trim() && !String(c.id).includes(search.trim())) return false
+    if (search.trim() && ![String(c.id), c.employee_name, c.reason, c.type].some(f => (f||'').toLowerCase().includes(search.trim().toLowerCase()))) return false
     return true
   })
 

@@ -801,7 +801,7 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
       }
     }
     if (!q) return true
-    return String(r.id).includes(q)
+    return [String(r.id), r.employee, r.title, r.account_code].some(f => (f||'').toLowerCase().includes(q.toLowerCase()))
   })
 
   const counts = {}

@@ -6,9 +6,9 @@ INSERT INTO public.permissions (code, name, module, is_nav)
 VALUES ('nav.org.employees', 'Sidebar：員工管理', '導航', true)
 ON CONFLICT (code) DO NOTHING;
 
--- super_admin (1)、admin (2)、manager (3)
+-- 只給 super_admin (1)、admin (2)；manager / office_staff 不開
 INSERT INTO public.role_permissions (role_id, permission_id)
-SELECT r, id FROM public.permissions, (VALUES (1),(2),(3)) AS t(r)
+SELECT r, id FROM public.permissions, (VALUES (1),(2)) AS t(r)
  WHERE code = 'nav.org.employees'
    AND NOT EXISTS (
      SELECT 1 FROM public.role_permissions rp

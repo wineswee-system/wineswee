@@ -467,10 +467,22 @@ export default function ChainConfigModal({ open, onClose, formType, formLabel, o
       }
 
       if (!cid) {
-        const { data: newChain, error: chainErr } = await supabase
-          .from('approval_chains').insert(chainPayload).select().single()
-        if (chainErr) throw chainErr
-        cid = newChain.id
+        // 先找同名鏈（避免 unique constraint 衝突）
+        const { data: existing } = await supabase
+          .from('approval_chains')
+          .select('id')
+          .eq('name', chainPayload.name)
+          .eq('organization_id', chainPayload.organization_id)
+          .maybeSingle()
+        if (existing?.id) {
+          cid = existing.id
+          await supabase.from('approval_chains').update(chainPayload).eq('id', cid)
+        } else {
+          const { data: newChain, error: chainErr } = await supabase
+            .from('approval_chains').insert(chainPayload).select().single()
+          if (chainErr) throw chainErr
+          cid = newChain.id
+        }
       } else {
         const { error: upErr } = await supabase.from('approval_chains').update(chainPayload).eq('id', cid)
         if (upErr) throw upErr

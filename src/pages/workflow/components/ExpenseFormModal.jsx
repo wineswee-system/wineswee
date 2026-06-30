@@ -507,7 +507,7 @@ export default function ExpenseFormModal({
             {/* 複製重送：從原單帶入的舊附件（會一起送出，可逐一移除） */}
             {carriedAtts.length > 0 && (
               <div style={{ marginBottom: 8 }}>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>📎 從原單帶入（送出時一併複製，可移除）</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>📎 {editingId ? '原始附件（按 × 移除後提交即永久刪除）' : '從原單帶入（送出時一併複製，可移除）'}</div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                   {carriedAtts.map((a, i) => (
                     <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, padding: '4px 8px', background: 'var(--accent-cyan-dim)', borderRadius: 6 }}>

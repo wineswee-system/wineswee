@@ -89,8 +89,9 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
   const [isExpense, setIsExpense] = useState(true)
   const [errors, setErrors] = useState({})
   const [editingId, setEditingId] = useState(null)  // null = 新增, 數字 = 編輯重送
-  const [carriedAtts, setCarriedAtts] = useState([])  // 複製重送帶過來的舊附件（彈窗內可刪，送出時複製留下的）
+  const [carriedAtts, setCarriedAtts] = useState([])  // 複製重送/編輯帶過來的舊附件（彈窗內可刪）
   const removeCarriedAtt = (idx) => setCarriedAtts(prev => prev.filter((_, i) => i !== idx))
+  const originalEditAttIdsRef = useRef([])  // 編輯模式：記錄原始附件 id，供送出時對比刪除
   const [files, setFiles] = useState([])
   const [settleFiles, setSettleFiles] = useState([])
   const [attachments, setAttachments] = useState({})
@@ -239,17 +240,18 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
   const openEditResubmit = (req, asClone = false) => {
     setEditingId(asClone ? null : req.id)
     // 複製模式：把來源單的舊附件帶進彈窗（可刪/可改），送出時複製留下的；編輯模式不帶
-    if (asClone) {
-      supabase.from('expense_request_attachments')
-        .select('file_name, storage_path, file_size, file_type, stage')
-        .eq('request_id', req.id).eq('stage', 'request')
-        .then(({ data }) => setCarriedAtts((data || []).map(a => ({
+    // 複製模式 + 編輯模式都帶入舊附件，讓用戶可以看到原始附件並決定保留或刪除
+    supabase.from('expense_request_attachments')
+      .select('id, file_name, storage_path, file_size, file_type, stage')
+      .eq('request_id', req.id).eq('stage', 'request')
+      .then(({ data }) => {
+        const atts = (data || []).map(a => ({
           ...a,
           url: supabase.storage.from('attachments').getPublicUrl(a.storage_path).data?.publicUrl,
-        }))))
-    } else {
-      setCarriedAtts([])
-    }
+        }))
+        setCarriedAtts(atts)
+        if (!asClone) originalEditAttIdsRef.current = atts.map(a => a.id).filter(Boolean)
+      })
     setForm({
       employee: req.employee || '',
       account_code: req.account_code || '',
@@ -342,6 +344,16 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
 
       if (files.length > 0) {
         await uploadFiles(editingId, files, 'request')
+      }
+
+      // 編輯模式：刪除用戶在彈窗內移除的原有附件
+      if (originalEditAttIdsRef.current.length > 0) {
+        const keptIds = new Set(carriedAtts.map(a => a.id).filter(Boolean))
+        const toDelete = originalEditAttIdsRef.current.filter(id => !keptIds.has(id))
+        if (toDelete.length > 0) {
+          await supabase.from('expense_request_attachments').delete().in('id', toDelete)
+        }
+        originalEditAttIdsRef.current = []
       }
 
       // 重啟對應 workflow_instance 的駁回那關 → DB trigger 自動推 LINE

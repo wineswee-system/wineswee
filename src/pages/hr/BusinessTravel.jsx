@@ -121,16 +121,24 @@ export default function BusinessTravel() {
   }
 
   const handleApprove = async (id) => {
-    const { data } = await updateBusinessTripStatus(id, '已核准')
-    if (data) setTrips(prev => prev.map(t => t.id === id ? data : t))
+    const { data: result, error } = await supabase.rpc('web_advance_chain_request', {
+      p_type: 'trip', p_id: id, p_action: 'approve',
+    })
+    if (error) { toast.error('操作失敗：' + error.message); return }
+    if (!result?.ok) { toast.error('操作失敗：' + (result?.error || '未知')); return }
+    setTrips(prev => prev.map(t => t.id === id ? { ...t, status: result.status } : t))
   }
 
   const handleReject = async (id, reasonArg) => {
     const reason = reasonArg ?? prompt('請輸入駁回原因：')
     if (reason === null) return
     if (!reason.trim()) { toast.warning('請填寫駁回原因'); return }
-    const { data } = await updateBusinessTripStatus(id, '已駁回', reason.trim())
-    if (data) setTrips(prev => prev.map(t => t.id === id ? data : t))
+    const { data: result, error } = await supabase.rpc('web_advance_chain_request', {
+      p_type: 'trip', p_id: id, p_action: 'reject', p_reason: reason.trim(),
+    })
+    if (error) { toast.error('操作失敗：' + error.message); return }
+    if (!result?.ok) { toast.error('操作失敗：' + (result?.error || '未知')); return }
+    setTrips(prev => prev.map(t => t.id === id ? { ...t, status: result.status } : t))
   }
 
   if (loading) return <LoadingSpinner />

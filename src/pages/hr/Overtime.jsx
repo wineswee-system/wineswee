@@ -273,26 +273,13 @@ export default function Overtime() {
   const handleApprove = async (id) => {
     try {
       const record = records.find(r => r.id === id)
-      if (record) {
-        const wf = await getWorkflowForRecord('加班簽核', record.employee)
-        const pendingStep = wf?.workflow_steps?.find(s => s.status === '待處理')
-        if (pendingStep) {
-          const result = await advanceWorkflow(pendingStep.id, profile?.name || '主管', '核准')
-          if (result.error) { toast.error('操作失敗：' + result.error); return }
-          setRecords(prev => prev.map(r => r.id === id ? { ...r, status: '已核准' } : r))
-          await writeAttendance(record)
-          return
-        }
-      }
-      // Fallback: no workflow running — use secure RPC (enforces org isolation + status guard)
-      const { data, error } = await supabase.rpc('secure_update_overtime_status', {
-        p_id: id, p_status: '已核准',
+      const { data: result, error } = await supabase.rpc('web_advance_chain_request', {
+        p_type: 'overtime', p_id: id, p_action: 'approve',
       })
       if (error) throw error
-      if (data) {
-        setRecords(prev => prev.map(r => r.id === id ? data : r))
-        await writeAttendance(data)
-      }
+      if (!result?.ok) { toast.error('操作失敗：' + (result?.error || '未知')); return }
+      if (result.event === 'approved' && record) await writeAttendance(record)
+      setRecords(prev => prev.map(r => r.id === id ? { ...r, status: result.status } : r))
     } catch (err) {
       console.error('Operation failed:', err)
       toast.error('操作失敗：' + (err.message || '未知錯誤'))
@@ -304,23 +291,12 @@ export default function Overtime() {
     if (reason === null) return
     if (!reason.trim()) { toast.warning('請填寫駁回原因'); return }
     try {
-      const record = records.find(r => r.id === id)
-      if (record) {
-        const wf = await getWorkflowForRecord('加班簽核', record.employee)
-        const pendingStep = wf?.workflow_steps?.find(s => s.status === '待處理')
-        if (pendingStep) {
-          const result = await advanceWorkflow(pendingStep.id, profile?.name || '主管', '退回', reason.trim())
-          if (result.error) { toast.error('操作失敗：' + result.error); return }
-          setRecords(prev => prev.map(r => r.id === id ? { ...r, status: '已拒絕' } : r))
-          return
-        }
-      }
-      // Fallback: no workflow running — use secure RPC (enforces org isolation + status guard)
-      const { data, error } = await supabase.rpc('secure_update_overtime_status', {
-        p_id: id, p_status: '已駁回', p_reject_reason: reason.trim(),
+      const { data: result, error } = await supabase.rpc('web_advance_chain_request', {
+        p_type: 'overtime', p_id: id, p_action: 'reject', p_reason: reason.trim(),
       })
       if (error) throw error
-      if (data) setRecords(prev => prev.map(r => r.id === id ? data : r))
+      if (!result?.ok) { toast.error('操作失敗：' + (result?.error || '未知')); return }
+      setRecords(prev => prev.map(r => r.id === id ? { ...r, status: result.status } : r))
     } catch (err) {
       toast.error('操作失敗：' + (err.message || '未知錯誤'))
     }

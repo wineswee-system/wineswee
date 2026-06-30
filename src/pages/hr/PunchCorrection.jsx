@@ -256,65 +256,58 @@ export default function PunchCorrection() {
 
   const handleApprove = async (id) => {
     const correction = corrections.find(c => c.id === id)
-    const { data } = await supabase.from('clock_corrections')
-      .update({ status: '已核准', approver: profile?.name || '管理員', approved_at: new Date().toISOString() })
-      .eq('id', id).select().single()
-    if (data) {
-      setCorrections(prev => prev.map(c => c.id === id ? data : c))
+    const { data: result, error } = await supabase.rpc('web_advance_chain_request', {
+      p_type: 'correction', p_id: id, p_action: 'approve',
+    })
+    if (error) { toast.error('操作失敗：' + error.message); return }
+    if (!result?.ok) { toast.error('操作失敗：' + (result?.error || '未知')); return }
 
+    if (result.event === 'approved' && correction) {
       // Write correction back to attendance_records
-      if (correction) {
-        const matchField = correction.employee_id ? 'employee_id' : 'employee'
-        const matchValue = correction.employee_id || correction.employee
-        const { data: existing } = await supabase.from('attendance_records')
-          .select('*')
-          .eq(matchField, matchValue)
-          .eq('date', correction.date).maybeSingle()
-
-        if (existing) {
-          const update = {}
-          if (normalizeType(correction.type) === 'clock_in') {
-            update.clock_in = correction.correction_time
-          } else {
-            update.clock_out = correction.correction_time
-          }
-          // Recalculate hours when both in/out exist
-          const finalIn = update.clock_in || existing.clock_in
-          const finalOut = update.clock_out || existing.clock_out
-          if (finalIn && finalOut) {
-            const [inH, inM] = finalIn.split(':').map(Number)
-            const [outH, outM] = finalOut.split(':').map(Number)
-            let diff = (outH * 60 + outM) - (inH * 60 + inM)
-            if (diff < 0) diff += 24 * 60 // overnight shift
-            update.hours = Math.round(diff / 60 * 10) / 10
-          }
-          update.status = existing.status === '未打卡' ? '補登' : existing.status
-          await supabase.from('attendance_records').update(update).eq('id', existing.id)
+      const matchField = correction.employee_id ? 'employee_id' : 'employee'
+      const matchValue = correction.employee_id || correction.employee
+      const { data: existing } = await supabase.from('attendance_records')
+        .select('*').eq(matchField, matchValue).eq('date', correction.date).maybeSingle()
+      if (existing) {
+        const update = {}
+        if (normalizeType(correction.type) === 'clock_in') {
+          update.clock_in = correction.correction_time
         } else {
-          // Create new record
-          const newRecord = {
-            employee: correction.employee,
-            date: correction.date,
-            status: '補登',
-          }
-          if (normalizeType(correction.type) === 'clock_in') {
-            newRecord.clock_in = correction.correction_time
-          } else {
-            newRecord.clock_out = correction.correction_time
-          }
-          await supabase.from('attendance_records').insert(newRecord)
+          update.clock_out = correction.correction_time
         }
+        const finalIn = update.clock_in || existing.clock_in
+        const finalOut = update.clock_out || existing.clock_out
+        if (finalIn && finalOut) {
+          const [inH, inM] = finalIn.split(':').map(Number)
+          const [outH, outM] = finalOut.split(':').map(Number)
+          let diff = (outH * 60 + outM) - (inH * 60 + inM)
+          if (diff < 0) diff += 24 * 60
+          update.hours = Math.round(diff / 60 * 10) / 10
+        }
+        update.status = existing.status === '未打卡' ? '補登' : existing.status
+        await supabase.from('attendance_records').update(update).eq('id', existing.id)
+      } else {
+        const newRecord = { employee: correction.employee, date: correction.date, status: '補登' }
+        if (normalizeType(correction.type) === 'clock_in') {
+          newRecord.clock_in = correction.correction_time
+        } else {
+          newRecord.clock_out = correction.correction_time
+        }
+        await supabase.from('attendance_records').insert(newRecord)
       }
     }
+    setCorrections(prev => prev.map(c => c.id === id ? { ...c, status: result.status } : c))
   }
 
   const handleReject = async (id, reasonArg) => {
     const reason = reasonArg ?? prompt('駁回原因：')
     if (!reason) return
-    const { data } = await supabase.from('clock_corrections')
-      .update({ status: '已駁回', reject_reason: reason })
-      .eq('id', id).select().single()
-    if (data) setCorrections(prev => prev.map(c => c.id === id ? data : c))
+    const { data: result, error } = await supabase.rpc('web_advance_chain_request', {
+      p_type: 'correction', p_id: id, p_action: 'reject', p_reason: reason,
+    })
+    if (error) { toast.error('操作失敗：' + error.message); return }
+    if (!result?.ok) { toast.error('操作失敗：' + (result?.error || '未知')); return }
+    setCorrections(prev => prev.map(c => c.id === id ? { ...c, status: result.status } : c))
   }
 
   const handleDelete = async (row) => {

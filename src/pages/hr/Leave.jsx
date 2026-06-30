@@ -391,14 +391,14 @@ export default function Leave() {
   }
 
   const handleApprove = async (id) => {
-    const leave = leaves.find(l => l.id === id)
-    if (leave) {
-      const wf = await getWorkflowForRecord('請假簽核', leave.employee)
-      const pendingStep = wf?.workflow_steps?.find(s => s.status === '待處理')
-      if (pendingStep) {
-        const result = await advanceWorkflow(pendingStep.id, profile?.name || '主管', '核准')
-        if (result.error) { toast.error('操作失敗：' + result.error); return }
-        setLeaves(prev => prev.map(l => l.id === id ? { ...l, status: '已核准' } : l))
+    try {
+      const leave = leaves.find(l => l.id === id)
+      const { data: result, error } = await supabase.rpc('web_advance_chain_request', {
+        p_type: 'leave', p_id: id, p_action: 'approve',
+      })
+      if (error) { toast.error('操作失敗：' + error.message); return }
+      if (!result?.ok) { toast.error('操作失敗：' + (result?.error || '未知')); return }
+      if (result.event === 'approved' && leave) {
         const bus = getEventBus()
         await bus.publish('hr.leave.approved', {
           leave_id: String(id),
@@ -410,7 +410,6 @@ export default function Leave() {
           end_date: leave.end_date || leave.start_date,
           approver: profile?.name || '',
         })
-        // Write leave to schedule
         if (leave.start_date && leave.days) {
           const totalDays = Math.ceil(leave.days)
           for (let i = 0; i < totalDays; i++) {
@@ -422,61 +421,26 @@ export default function Leave() {
             )
           }
         }
-        return
       }
-    }
-    // Fallback: no workflow running — use secure RPC (enforces org isolation + status guard)
-    const { data, error: rpcErr } = await supabase.rpc('secure_update_leave_status', {
-      p_id: id, p_status: '已核准', p_approver: profile?.name || '',
-    })
-    if (rpcErr) { toast.error('操作失敗：' + rpcErr.message); return }
-    if (data) {
-      setLeaves(prev => prev.map(l => l.id === id ? data : l))
-      const bus = getEventBus()
-      await bus.publish('hr.leave.approved', {
-        leave_id: String(id),
-        employee: data.employee,
-        employee_id: String(data.employee_id || ''),
-        type: data.type,
-        days: data.days || 0,
-        start_date: data.start_date,
-        end_date: data.end_date || data.start_date,
-        approver: profile?.name || '',
-      })
-      if (data.start_date && data.days) {
-        const totalDays = Math.ceil(data.days)
-        for (let i = 0; i < totalDays; i++) {
-          const d = new Date(data.start_date)
-          d.setDate(d.getDate() + i)
-          await supabase.from('schedules').upsert(
-            { employee: data.employee, date: d.toISOString().slice(0, 10), shift: '休', organization_id: profile?.organization_id || null },
-            { onConflict: 'employee,date' }
-          )
-        }
-      }
+      setLeaves(prev => prev.map(l => l.id === id ? { ...l, status: result.status } : l))
+    } catch (err) {
+      toast.error('操作失敗：' + (err.message || '未知錯誤'))
     }
   }
   const handleReject = async (id, reasonArg) => {
-    // 從 ApprovalDetailModal 來的會帶 reason；舊路徑（保留相容）會 prompt
     const reason = reasonArg ?? prompt('請輸入拒絕原因：')
     if (reason === null) return
     if (!reason.trim()) { toast.warning('請填寫拒絕原因'); return }
-    const leave = leaves.find(l => l.id === id)
-    if (leave) {
-      const wf = await getWorkflowForRecord('請假簽核', leave.employee)
-      const pendingStep = wf?.workflow_steps?.find(s => s.status === '待處理')
-      if (pendingStep) {
-        const result = await advanceWorkflow(pendingStep.id, profile?.name || '主管', '退回', reason.trim())
-        if (result.error) { toast.error('操作失敗：' + result.error); return }
-        setLeaves(prev => prev.map(l => l.id === id ? { ...l, status: '已拒絕' } : l))
-        return
-      }
+    try {
+      const { data: result, error } = await supabase.rpc('web_advance_chain_request', {
+        p_type: 'leave', p_id: id, p_action: 'reject', p_reason: reason.trim(),
+      })
+      if (error) { toast.error('操作失敗：' + error.message); return }
+      if (!result?.ok) { toast.error('操作失敗：' + (result?.error || '未知')); return }
+      setLeaves(prev => prev.map(l => l.id === id ? { ...l, status: result.status } : l))
+    } catch (err) {
+      toast.error('操作失敗：' + (err.message || '未知錯誤'))
     }
-    const { data, error: rpcErr } = await supabase.rpc('secure_update_leave_status', {
-      p_id: id, p_status: '已駁回', p_approver: profile?.name || '', p_reject_reason: reason.trim(),
-    })
-    if (rpcErr) { toast.error('操作失敗：' + rpcErr.message); return }
-    if (data) setLeaves(prev => prev.map(l => l.id === id ? data : l))
   }
 
   const getEmpDept = useCallback((name) => employees.find(e => e.name === name)?.dept || '', [employees])

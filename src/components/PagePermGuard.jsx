@@ -36,6 +36,7 @@ export const PAGE_PERM = {
   '/process/settings/transfer-apply-chains':  'approval_chain.edit',
   '/process/settings/transfer-receipt-chains':'approval_chain.edit',
   '/process/settings/delegation':             'approval.delegate_manage',
+  '/org/employees':                           'nav.org.employees',
 }
 
 function NoPermission() {

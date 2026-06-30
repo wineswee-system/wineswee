@@ -262,7 +262,7 @@ export default function Sidebar() {
     '/org/chart':          'nav.org.full',
     '/org/companies':      'nav.org.full',
     '/org/departments':    'nav.org.internal',
-    '/org/employees':      'nav.org.internal',
+    '/org/employees':      'nav.org.employees',
     '/org/locations':      'nav.org.internal',
     '/org/templates':      'nav.hr_form.builder',
     // ── 排班管理 ──

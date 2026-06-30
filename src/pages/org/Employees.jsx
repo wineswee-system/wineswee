@@ -493,14 +493,16 @@ export default function Employees() {
         }}>
           <Building2 size={14} /> 部門管理 ({departments.length})
         </button>
-        <button onClick={() => setPageTab('delegations')} style={{
-          padding: '8px 20px', borderRadius: 8, border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 13,
-          display: 'flex', alignItems: 'center', gap: 6,
-          background: pageTab === 'delegations' ? 'var(--accent-cyan)' : 'transparent',
-          color: pageTab === 'delegations' ? '#fff' : 'var(--text-secondary)',
-        }}>
-          <UserCheck size={14} /> 簽核代理
-        </button>
+        {isAdmin && (
+          <button onClick={() => setPageTab('delegations')} style={{
+            padding: '8px 20px', borderRadius: 8, border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 13,
+            display: 'flex', alignItems: 'center', gap: 6,
+            background: pageTab === 'delegations' ? 'var(--accent-cyan)' : 'transparent',
+            color: pageTab === 'delegations' ? '#fff' : 'var(--text-secondary)',
+          }}>
+            <UserCheck size={14} /> 簽核代理
+          </button>
+        )}
       </div>
 
       {/* ══ Department Card View ══ */}
@@ -736,7 +738,7 @@ export default function Employees() {
       </>}
 
       {/* ══ 簽核代理 Tab ══ */}
-      {pageTab === 'delegations' && (
+      {pageTab === 'delegations' && isAdmin && (
         <div style={{ maxWidth: 860 }}>
           <div className="card" style={{ padding: 18, marginBottom: 16 }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent-blue)', marginBottom: 12 }}>＋ 新增代理規則</div>

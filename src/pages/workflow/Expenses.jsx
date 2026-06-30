@@ -1,7 +1,7 @@
 ﻿import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useReturnNav } from '../../lib/useReturnNav'
-import { Plus, Printer, Settings, Paperclip } from 'lucide-react'
+import { Plus, Printer, Settings, Paperclip, Search, X, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
 import { getExpenses, createExpense, updateExpenseStatus, getAccounts } from '../../lib/db'
 import { createApprovalWorkflow } from '../../lib/workflowIntegration'
 import { supabase } from '../../lib/supabase'
@@ -35,6 +35,7 @@ export default function Expenses() {
   const [departments, setDepartments] = useState([])
   const [deptFilter, setDeptFilter] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
+  const [dateSort, setDateSort] = useState('desc') // 'asc' | 'desc'
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [showModal, setShowModal] = useState(false)
@@ -351,19 +352,24 @@ export default function Expenses() {
   }
 
   const q = searchQuery.trim().toLowerCase()
-  const filtered = expenses.filter(e => {
-    if (deptFilter && getEmpDept(e.employee) !== deptFilter) return false
-    if (q) {
-      const expNo = `EXP-${String(e.id).padStart(4, '0')}`
-      return (
-        expNo.toLowerCase().includes(q) ||
-        (e.employee || '').toLowerCase().includes(q) ||
-        (e.category || '').toLowerCase().includes(q) ||
-        (e.description || '').toLowerCase().includes(q)
-      )
-    }
-    return true
-  })
+  const filtered = expenses
+    .filter(e => {
+      if (deptFilter && getEmpDept(e.employee) !== deptFilter) return false
+      if (q) {
+        const expNo = `EXP-${String(e.id).padStart(4, '0')}`
+        return (
+          expNo.toLowerCase().includes(q) ||
+          (e.employee || '').toLowerCase().includes(q) ||
+          (e.category || '').toLowerCase().includes(q) ||
+          (e.description || '').toLowerCase().includes(q)
+        )
+      }
+      return true
+    })
+    .sort((a, b) => {
+      const da = (a.date || '').localeCompare(b.date || '')
+      return dateSort === 'asc' ? da : -da
+    })
 
 
   const totalPending = filtered.filter(e => e.status === '待審核').reduce((s, e) => s + Number(e.amount), 0)
@@ -395,24 +401,27 @@ export default function Expenses() {
       </div>
 
       {/* 篩選列 */}
-      <div style={{
-        display: 'flex', gap: 12, marginBottom: 16, padding: '12px 16px',
-        background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 10,
-        alignItems: 'center', flexWrap: 'wrap',
-      }}>
-        <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>🏢 部門</span>
+      <div style={{ display: 'flex', gap: 10, marginBottom: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+        {/* 搜尋欄（同非經常性費用樣式）*/}
+        <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+          <Search size={13} style={{ position: 'absolute', left: 8, color: 'var(--text-muted)', pointerEvents: 'none' }} />
+          <input
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="搜尋編號 / 員工 / 科目 / 說明"
+            style={{ paddingLeft: 26, paddingRight: searchQuery ? 26 : 10, paddingTop: 5, paddingBottom: 5, borderRadius: 6, border: '1px solid var(--border-medium)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: 13, outline: 'none', width: 220 }}
+          />
+          {searchQuery && (
+            <button onClick={() => setSearchQuery('')} style={{ position: 'absolute', right: 6, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}>
+              <X size={12} />
+            </button>
+          )}
+        </div>
+        {/* 部門篩選 */}
         <select className="form-input" style={{ fontSize: 13, minWidth: 140 }} value={deptFilter} onChange={e => setDeptFilter(e.target.value)}>
           <option value="">全部部門</option>
           {departments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
         </select>
-        <input
-          className="form-input"
-          type="text"
-          placeholder="搜尋編號 / 員工 / 科目 / 說明…"
-          value={searchQuery}
-          onChange={e => setSearchQuery(e.target.value)}
-          style={{ fontSize: 13, minWidth: 220, flex: 1 }}
-        />
       </div>
 
       <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
@@ -433,7 +442,14 @@ export default function Expenses() {
       <div className="card">
         <div className="data-table-wrapper">
           <table className="data-table">
-            <thead><tr><th>編號</th><th>員工</th><th>部門</th><th>會計科目</th><th>金額</th><th>日期</th><th>說明</th><th>收據</th><th>狀態</th><th>操作</th></tr></thead>
+            <thead><tr>
+              <th>編號</th><th>員工</th><th>部門</th><th>會計科目</th><th>金額</th>
+              <th style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
+                onClick={() => setDateSort(s => s === 'desc' ? 'asc' : 'desc')}>
+                日期 {dateSort === 'desc' ? <ArrowDown size={11} style={{ verticalAlign: -1 }} /> : <ArrowUp size={11} style={{ verticalAlign: -1 }} />}
+              </th>
+              <th>說明</th><th>收據</th><th>狀態</th><th>操作</th>
+            </tr></thead>
             <tbody>
               {filtered.length === 0 && <tr><td colSpan={10} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>尚無申請</td></tr>}
               {filtered.map(e => (

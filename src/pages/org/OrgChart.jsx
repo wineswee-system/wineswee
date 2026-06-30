@@ -265,7 +265,7 @@ export default function OrgChart() {
                         <div style={{ fontWeight: 700, color: aColor, fontSize: 13 }}>{aDept.name}</div>
                         {aMgr && (
                           <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4, lineHeight: 1.35 }}>
-                            {positionInDept(aMgr, aDept.id) ? `${positionInDept(aMgr, aDept.id)} ${aMgr.name}` : labelOf(aMgr)}
+                            {aMgr.position ? `${aMgr.position} ${aMgr.name}` : labelOf(aMgr)}
                           </div>
                         )}
                       </div>
@@ -329,14 +329,11 @@ export default function OrgChart() {
                     width: '100%',
                   }}>
                     <div style={{ fontWeight: 700, color, fontSize: 13, lineHeight: 1.3 }}>{dept.name}</div>
-                    {[managerOf(dept), ...subs].filter(Boolean).map(m => {
-                      const pos = positionInDept(m, dept.id)
-                      return (
-                        <div key={m.id} style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4, lineHeight: 1.35 }}>
-                          {pos ? `${pos} ${m.name}` : labelOf(m)}
-                        </div>
-                      )
-                    })}
+                    {[managerOf(dept), ...subs].filter(Boolean).map(m => (
+                      <div key={m.id} style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4, lineHeight: 1.35 }}>
+                        {m.position ? `${m.position} ${m.name}` : labelOf(m)}
+                      </div>
+                    ))}
                   </div>
 
                   {/* Members (inline, small count) */}

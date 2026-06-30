@@ -500,12 +500,22 @@ export default function POSTerminal() {
       })
 
       // Build receipt data
+      const nowDate = new Date()
+      const printTime = nowDate.toLocaleString('zh-TW', { hour12: false,
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit' }).replace(/\//g, '-')
       const receipt = {
-        storeName: '威士威企業總部',
+        storeName: tenant?.store_name || tenant?.name || '威士威企業總部',
         txnNum,
         invoiceNum,
         paymentId: payResult.paymentId,
-        date: new Date().toLocaleString('zh-TW'),
+        printTime,
+        terminalId: '01',
+        orderType: '外帶',
+        orderNum: txnNum,
+        seqNum: invoiceSeq,
+        openedAt: printTime,
+        date: nowDate.toLocaleString('zh-TW'),
         items: cart.map(c => ({ name: c.name, qty: c.qty, price: c.price, amount: c.price * c.qty })),
         subtotal,
         discount: safeDiscount,

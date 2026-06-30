@@ -351,6 +351,7 @@ function CheckoutModal({ tableNumber, orgId, storeId, orderId, storeName, onClos
   const [payMethod, setPayMethod] = useState('cash')
   const [busy,      setBusy]      = useState(false)
   const [dbItems,   setDbItems]   = useState([])
+  const [orderInfo, setOrderInfo] = useState({})
   const [loading,   setLoading]   = useState(true)
   const [discType,     setDiscType]     = useState('percent')
   const [discVal,      setDiscVal]      = useState('')
@@ -359,14 +360,23 @@ function CheckoutModal({ tableNumber, orgId, storeId, orderId, storeName, onClos
   const [buyerTaxId,   setBuyerTaxId]   = useState('')
   const [buyerCompany, setBuyerCompany] = useState('')
 
-  // Fetch fresh from DB on mount; exclude voided items
+  // Fetch items + order meta (opened_at, order_number, note) on mount
   useEffect(() => {
-    supabase.from('pos_order_items')
-      .select('id, name, unit_price, quantity')
-      .eq('order_id', orderId)
-      .is('voided_at', null)
-      .order('created_at')
-      .then(({ data }) => { setDbItems(data ?? []); setLoading(false) })
+    Promise.all([
+      supabase.from('pos_order_items')
+        .select('id, name, unit_price, quantity')
+        .eq('order_id', orderId)
+        .is('voided_at', null)
+        .order('created_at'),
+      supabase.from('pos_orders')
+        .select('opened_at, order_number, note')
+        .eq('id', orderId)
+        .maybeSingle(),
+    ]).then(([itemsRes, orderRes]) => {
+      setDbItems(itemsRes.data ?? [])
+      setOrderInfo(orderRes.data ?? {})
+      setLoading(false)
+    })
   }, [orderId])
 
   const subtotal    = dbItems.reduce((s, i) => s + Number(i.unit_price) * i.quantity, 0)
@@ -381,44 +391,70 @@ function CheckoutModal({ tableNumber, orgId, storeId, orderId, storeName, onClos
   function printReceipt() {
     try {
       const now = new Date()
-      const dateStr = `${now.getFullYear()}/${now.getMonth()+1}/${now.getDate()} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`
+      const pad = (n) => String(n).padStart(2, '0')
+      const printTime = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`
+      const openedDate = orderInfo.opened_at ? new Date(orderInfo.opened_at) : now
+      const openTime = `${pad(openedDate.getHours())}:${pad(openedDate.getMinutes())}:${pad(openedDate.getSeconds())}`
+      const openedStr = `${openedDate.getFullYear()}-${pad(openedDate.getMonth()+1)}-${pad(openedDate.getDate())} ${pad(openedDate.getHours())}:${pad(openedDate.getMinutes())}`
+      const orderNum = orderInfo.order_number || orderId?.toString().slice(-8).toUpperCase() || '-'
+      const orderNote = orderInfo.note || ''
+
       const itemRows = dbItems.map(i => {
         const amt = Number(i.unit_price) * i.quantity
-        return `<tr><td style="padding:3px 0;font-size:13px">${i.name} <span style="color:#999">×${i.quantity}</span></td><td style="text-align:right;font-size:13px;white-space:nowrap">NT$${amt.toLocaleString()}</td></tr>`
+        return `<tr>
+          <td style="padding:2px 0;font-size:13px;word-break:break-all">${i.name}</td>
+          <td style="text-align:center;font-size:13px;padding:2px 4px;white-space:nowrap">${i.quantity}</td>
+          <td style="text-align:right;font-size:13px;white-space:nowrap">${amt.toLocaleString()}</td>
+        </tr>`
       }).join('')
-      const invLine = invType === 'mobile'  ? `<div style="font-size:11px;color:#666;margin-top:3px">手機載具：${carrierId || '—'}</div>`
-                    : invType === 'company' ? `<div style="font-size:11px;color:#666;margin-top:3px">統編：${buyerTaxId}　${buyerCompany}</div>`
+      const invLine = invType === 'mobile'  ? `<div style="font-size:11px;color:#666;margin-top:2px">手機載具：${carrierId || '—'}</div>`
+                    : invType === 'company' ? `<div style="font-size:11px;color:#666;margin-top:2px">統編：${buyerTaxId}　${buyerCompany}</div>`
                     : ''
-      const win = window.open('', '_blank', 'width=320,height=600')
+      const win = window.open('', '_blank', 'width=320,height=680')
       if (!win) return
       win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:"Noto Sans TC","微軟正黑體",sans-serif;padding:14px 12px}
-.s{font-size:14px;font-weight:700;text-align:center;margin-bottom:2px}
-.m{font-size:11px;color:#888;text-align:center;margin-bottom:8px}
-hr{border:none;border-top:1px dashed #999;margin:8px 0}
+body{font-family:"Courier New","Noto Sans TC","微軟正黑體",monospace;padding:10px 10px;font-size:12px;line-height:1.7}
+.center{text-align:center}
+.bold{font-weight:700}
+hr{border:none;border-top:1px dashed #000;margin:4px 0}
 table{width:100%;border-collapse:collapse}
-.r{display:flex;justify-content:space-between;font-size:13px;padding:3px 0}
-.big{display:flex;justify-content:space-between;font-size:17px;font-weight:800;padding:5px 0}
-.sm{font-size:11px;color:#888;text-align:right}
-.th{text-align:center;font-size:12px;color:#aaa;margin-top:10px}
+table th{font-size:12px;font-weight:400;border-bottom:1px dashed #000;padding-bottom:3px}
+.th-name{text-align:left}
+.th-qty{text-align:center}
+.th-amt{text-align:right}
+.r{display:flex;justify-content:space-between;font-size:12px;padding:2px 0}
+.total{display:flex;justify-content:space-between;font-size:15px;font-weight:800;padding:3px 0}
 @media print{@page{margin:2mm;size:80mm auto}}
 </style></head><body>
-<div class="s">${storeName || '威士威'}</div>
-<div class="m">T${tableNumber}　${dateStr}</div>
+<div class="center bold" style="font-size:14px;margin-bottom:2px">${storeName || '威士威'}</div>
+<div>內用:${orderNum}</div>
+<div class="center bold" style="font-size:13px;letter-spacing:1px">內用==結帳單==</div>
 <hr>
-<table>${itemRows}</table>
+<div>列印時間${printTime} 機01</div>
+<div>單:${orderNum}</div>
+<div>送達時間:${openedStr}</div>
+<div>桌:T${tableNumber}</div>
+<div>開:${openTime}</div>
 <hr>
-<div class="r"><span>小計</span><span>NT$${subtotal.toLocaleString()}</span></div>
-${discAmount > 0 ? `<div class="r"><span style="color:#888">折扣（${discType==='percent'?discVal+'%':'定額'}）</span><span style="color:#c07000">－NT$${discAmount.toLocaleString()}</span></div>` : ''}
-<div class="big"><span>合計</span><span>NT$${total.toLocaleString()}</span></div>
-<div class="sm">含稅（5%）NT$${taxAmount.toLocaleString()}</div>
+<table>
+  <thead><tr>
+    <th class="th-name">品名</th>
+    <th class="th-qty">數量</th>
+    <th class="th-amt">金額</th>
+  </tr></thead>
+  <tbody>${itemRows}</tbody>
+</table>
 <hr>
-<div class="r"><span>付款方式</span><span style="font-weight:700">${PAY_LABEL[payMethod] ?? payMethod}</span></div>
+${discAmount > 0 ? `<div class="r"><span>折扣</span><span>-${discAmount.toLocaleString()}</span></div>` : ''}
+<div class="total"><span>合計:</span><span>${total.toLocaleString()}</span></div>
+<hr>
+<div class="r"><span>付款方式</span><span class="bold">${PAY_LABEL[payMethod] ?? payMethod}</span></div>
 ${invLine}
-${invType !== 'none' ? `<div style="font-size:11px;color:#888;margin-top:2px">發票：${invType==='mobile'?'雲端發票（手機載具）':invType==='company'?'公司統編發票':''}　待開立</div>` : ''}
-<div class="th">謝謝惠顧</div>
+${orderNote ? `<div>備註:${orderNote}</div>` : ''}
+<hr>
+<div class="center" style="margin-top:6px;font-weight:600">謝謝惠顧</div>
 </body></html>`)
       win.document.close()
       win.focus()

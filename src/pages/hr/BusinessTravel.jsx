@@ -111,7 +111,7 @@ export default function BusinessTravel() {
     }
 
     // ── 新增路徑 ──
-    const { data } = await createBusinessTrip({ ...payload, status: '待審核' })
+    const { data } = await createBusinessTrip({ ...payload, status: '待審核', organization_id: profile?.organization_id ?? null })
     if (data) {
       setTrips(prev => [...prev, data])
       setShowModal(false)

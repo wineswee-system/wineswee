@@ -39,6 +39,20 @@ export const PAGE_PERM = {
   '/org/employees':                           'nav.org.employees',
   '/org/departments':                         'nav.org.departments',
   '/org/locations':                           'nav.org.locations',
+  // 出勤管理功能（store_staff 不能進）
+  '/hr/clock-rules':                          'nav.schedule.config',
+  '/hr/attendance-diff-report':               'nav.schedule.basic',
+  '/hr/import':                               'nav.hr_form.builder',
+  // 排班管理功能
+  '/hr/schedule-xlsx-import':                 'nav.schedule.basic',
+  // HR 表單管理
+  '/hr/forms/transfer':                       'nav.schedule.basic',
+  '/hr/forms/headcount':                      'nav.schedule.basic',
+  '/hr/recently-deleted':                     'nav.org.full',
+  // LMS 管理
+  '/system/offer-letter-templates':           'nav.lms.admin',
+  '/lms/admin':                               'nav.lms.admin',
+  '/lms/progress':                            'nav.schedule.basic',
 }
 
 function NoPermission() {

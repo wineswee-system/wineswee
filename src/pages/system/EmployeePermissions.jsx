@@ -108,6 +108,7 @@ const FEATURES = [
   { module: '導航顯示', label: '進階薪資',              view: null, edit: 'nav.salary.advanced' },
   { module: '導航顯示', label: '法令工資設定',          view: null, edit: 'nav.salary.law' },
   { module: '導航顯示', label: '人才發展',              view: null, edit: 'nav.talent' },
+  { module: '導航顯示', label: 'LMS 課程管理（限 admin）', view: null, edit: 'nav.lms.admin' },
   { module: '導航顯示', label: '員工體驗管理',          view: null, edit: 'nav.experience_mgr' },
   { module: '導航顯示', label: '行政庶務',              view: null, edit: 'nav.admin_office' },
   { module: '導航顯示', label: '表單建立器',            view: null, edit: 'nav.hr_form.builder' },

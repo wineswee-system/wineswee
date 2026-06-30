@@ -266,10 +266,14 @@ export default function Sidebar() {
     '/org/locations':      'nav.org.locations',
     '/org/templates':      'nav.hr_form.builder',
     // ── 排班管理 ──
-    '/hr/schedule':           'nav.schedule.basic',
-    '/hr/holidays':           'nav.schedule.basic',
-    '/hr/schedule-rules':     'nav.schedule.config',
-    '/hr/work-unit-settings': 'nav.schedule.config',
+    '/hr/clock-rules':            'nav.schedule.config',  // admin/super_admin
+    '/hr/attendance-diff-report': 'nav.schedule.basic',   // manager+
+    '/hr/import':                 'nav.hr_form.builder',  // manager/admin（批次匯入）
+    '/hr/schedule':               'nav.schedule.basic',
+    '/hr/holidays':               'nav.schedule.basic',
+    '/hr/schedule-rules':         'nav.schedule.config',
+    '/hr/work-unit-settings':     'nav.schedule.config',
+    '/hr/schedule-xlsx-import':   'nav.schedule.basic',   // manager+（排班匯入）
     // ── 薪酬與福利 ──
     '/hr/salary':            'nav.salary.basic',
     '/hr/salary-structures': 'nav.salary.basic',
@@ -284,6 +288,10 @@ export default function Sidebar() {
     '/hr/benefit-settings':  'nav.salary.advanced',
     '/hr/labor-law-rates':   'nav.salary.law',
     '/hr/insurance-grade':   'nav.salary.law',
+    // ── HR 表單（管理功能） ──
+    '/hr/forms/transfer':     'nav.schedule.basic',   // 人事異動：manager/office_staff+
+    '/hr/forms/headcount':    'nav.schedule.basic',   // 人力需求：manager/office_staff+
+    '/hr/recently-deleted':   'nav.org.full',         // 最近刪除：manager/admin+
     // ── 人才發展 ──
     '/hr/recruitment':        'nav.talent',
     '/hr/training':           'nav.talent',
@@ -291,6 +299,10 @@ export default function Sidebar() {
     '/hr/transfer':           'nav.talent',
     '/hr/contract-employees': 'nav.talent',
     '/hr/foreign-workers':    'nav.talent',
+    // ── LMS ──
+    '/system/offer-letter-templates': 'nav.lms.admin', // admin/super_admin
+    '/lms/admin':             'nav.lms.admin',          // admin/super_admin
+    '/lms/progress':          'nav.schedule.basic',     // 全員進度：manager/office_staff+
     // ── 員工體驗（除員工自助）──
     '/hr/surveys':   'nav.experience_mgr',
     '/hr/assistant': 'nav.experience_mgr',

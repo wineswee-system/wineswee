@@ -32,7 +32,7 @@ export default function MyTasksWidget() {
     if (profile?.id) conds.push(`assignee_id.eq.${profile.id}`)
     if (profile?.name) conds.push(`assignee.eq.${profile.name}`)
     let q = supabase.from('tasks')
-      .select('id, title, status, due_date, store, assignee, assignee_id')
+      .select('id, title, status, due_date, store, assignee, assignee_id, workflow_instance_id, project_id')
       .in('status', ACTIVE)
       .or(conds.join(','))
       .order('due_date', { ascending: true, nullsFirst: false })
@@ -65,7 +65,11 @@ export default function MyTasksWidget() {
             const s = STATUS_STYLE[t.status] || STATUS_STYLE['待處理']
             const overdue = t.due_date && String(t.due_date).slice(0, 10) < overdueToday
             return (
-              <div key={t.id} onClick={() => navigate(`/process/tasks?focus=${t.id}`)}
+              <div key={t.id} onClick={() => navigate(
+                t.workflow_instance_id ? `/process/workflows?focus=${t.workflow_instance_id}`
+                : t.project_id ? `/process/projects?project=${t.project_id}`
+                : `/process/tasks?focus=${t.id}`
+              )}
                 style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10,
                   padding: '9px 12px', borderRadius: 8, background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)', cursor: 'pointer' }}>
                 <div style={{ minWidth: 0 }}>

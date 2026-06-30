@@ -2,7 +2,7 @@
 -- 只給 super_admin / admin / manager；
 -- office_staff 保留 nav.org.internal（部門/門市仍可看）但不能進員工管理。
 
-INSERT INTO public.permissions (code, name, module, is_nav)
+INSERT INTO public.permissions (code, name, module, is_active)
 VALUES ('nav.org.employees', 'Sidebar：員工管理', '導航', true)
 ON CONFLICT (code) DO NOTHING;
 

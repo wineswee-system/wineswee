@@ -67,6 +67,7 @@ const blankStep = (idx) => ({
   target_dept_id: null,
   target_store_id: null,
   target_section_id: null,
+  skip_if_no_approver: false,
 })
 
 export default function ChainConfigModal({ open, onClose, formType, formLabel, organizationId, mode = 'single', embedded = false, applicantType = 'all', categoryFilter = null }) {
@@ -192,6 +193,7 @@ export default function ChainConfigModal({ open, onClose, formType, formLabel, o
       target_dept_id: s.target_dept_id || null,
       target_store_id: s.target_store_id || null,
       target_section_id: s.target_section_id || null,
+      skip_if_no_approver: s.skip_if_no_approver || false,
     })))
   }
 
@@ -489,6 +491,7 @@ export default function ChainConfigModal({ open, onClose, formType, formLabel, o
         target_dept_id: s.target_dept_id || null,
         target_store_id: s.target_store_id || null,
         target_section_id: s.target_section_id || null,
+        skip_if_no_approver: s.skip_if_no_approver || false,
         organization_id: organizationId,
       }))
       const { error: stepsErr } = await supabase.from('approval_chain_steps').insert(stepRows)

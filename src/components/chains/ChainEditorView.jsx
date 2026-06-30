@@ -236,6 +236,18 @@ export default function ChainEditorView({
                 </div>
               )}
 
+              {preview.dynamic && (
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>
+                  <input
+                    type="checkbox"
+                    checked={!!step.skip_if_no_approver}
+                    onChange={e => updateStep(idx, { skip_if_no_approver: e.target.checked })}
+                    style={{ accentColor: 'var(--accent-cyan)', width: 14, height: 14 }}
+                  />
+                  找不到簽核人時自動跳過此關
+                </label>
+              )}
+
               <div style={{
                 padding: '6px 10px', borderRadius: 6,
                 background: preview.ok ? 'var(--accent-green-dim)' : 'var(--accent-orange-dim)',
@@ -271,7 +283,7 @@ export default function ChainEditorView({
 
       <div style={{ marginTop: 16, padding: 12, borderRadius: 8, background: 'var(--bg-tertiary)', fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.6 }}>
         💡 <b>動態目標</b>：每次申請才會解析（例：申請人部門主管會依申請人 department_id 動態決定）<br/>
-        💡 <b>解不到簽核者</b>：表示組織圖未設好（例：員工未設 department_id）→ 申請會卡住，請先到員工資料補
+        💡 <b>解不到簽核者</b>：表示組織圖未設好（例：員工未設 department_id）→ 申請會卡住。若勾選「找不到時自動跳過」則送出當下解不到人就自動跳過
       </div>
     </>
   )

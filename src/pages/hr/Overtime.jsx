@@ -60,8 +60,9 @@ export default function Overtime() {
   const [showModal, setShowModal] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [cloneSourceId, setCloneSourceId] = useState(null)  // 複製重送：來源單 id（送出後複製其附件）
-  const [carriedAtts, setCarriedAtts] = useState([])  // 複製重送帶入的舊附件（彈窗內可看/可刪，送出時複製留下的）
+  const [carriedAtts, setCarriedAtts] = useState([])  // 編輯/複製帶入的舊附件（彈窗內可看/可刪）
   const removeCarriedAtt = (idx) => setCarriedAtts(prev => prev.filter((_, i) => i !== idx))
+  const originalEditAttIdsRef = useRef([])
   const [form, setForm] = useState({ employee: '', date: '', start_time: '', end_time: '', hours: 0, reason: '', store: '', ot_type: 'pay' })
   const [stores, setStores] = useState([])
   const [error, setError] = useState(null)
@@ -190,6 +191,19 @@ export default function Overtime() {
           .update({ ...form, status: '待審核', reject_reason: null })
           .eq('id', editingId)
         if (updErr) throw updErr
+        // 刪除被移除的附件
+        if (originalEditAttIdsRef.current.length > 0) {
+          const keptIds = new Set(carriedAtts.map(a => a.id).filter(Boolean))
+          const toDelete = originalEditAttIdsRef.current.filter(id => !keptIds.has(id))
+          if (toDelete.length > 0) await supabase.from('form_attachments').delete().in('id', toDelete)
+          originalEditAttIdsRef.current = []
+        }
+        // 上傳新增的附件
+        if (attachFiles.length > 0) {
+          const empRow = employees.find(em => em.name === form.employee)
+          await uploadFormAttachments({ formType: 'overtime', formId: editingId, files: attachFiles, organizationId: profile?.organization_id, uploaderEmpId: empRow?.id, uploaderName: form.employee })
+          setAttachFiles([])
+        }
         try {
           const { error: rpcErr } = await supabase.rpc('resume_workflow_for_request', { p_type: 'overtime', p_id: editingId })
           if (rpcErr) {
@@ -203,6 +217,7 @@ export default function Overtime() {
         setRecords(prev => prev.map(r => r.id === editingId ? { ...r, ...form, status: '待審核', reject_reason: null } : r))
         setShowModal(false)
         setEditingId(null)
+        setCarriedAtts([])
         setForm({ employee: profile?.name || employees[0]?.name || '', date: '', start_time: '', end_time: '', hours: 0, reason: '', store: '', ot_type: 'pay' })
         return
       }
@@ -530,6 +545,10 @@ export default function Overtime() {
                           <button className="btn btn-sm btn-primary" style={{ background: 'var(--accent-orange)' }} onClick={() => {
                             setEditingId(o.id)
                             setForm({ employee: o.employee, date: o.date || '', start_time: o.start_time || '', end_time: o.end_time || '', hours: o.hours || 0, reason: o.reason || '', store: o.store || '', ot_type: o.ot_type || 'pay' })
+                            loadCarriedFormAttachments('overtime', o.id).then(atts => {
+                              setCarriedAtts(atts)
+                              originalEditAttIdsRef.current = atts.map(a => a.id).filter(Boolean)
+                            })
                             setShowModal(true)
                           }}>✏️ {isRejected ? '編輯重送' : '編輯'}</button>
                         )

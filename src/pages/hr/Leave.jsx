@@ -312,6 +312,14 @@ export default function Leave() {
         .update({ ...payload, status: '待審核', reject_reason: null })
         .eq('id', editingId)
       if (updErr) { toast.error('更新失敗：' + updErr.message); return }
+      // 同步附件：保留沒被移除的 + 上傳新增的
+      const keptUrls = cloneSourceAtts.filter(u => typeof u === 'string')
+      let allUrls = [...keptUrls]
+      if (attachFiles.length > 0) {
+        const newUrls = await uploadAttachments(editingId, empRow?.id)
+        allUrls = [...keptUrls, ...newUrls]
+      }
+      await supabase.from('leave_requests').update({ attachments: allUrls }).eq('id', editingId)
       try {
         const { error: rpcErr } = await supabase.rpc('resume_workflow_for_request', { p_type: 'leave', p_id: editingId })
         if (rpcErr) {
@@ -322,9 +330,10 @@ export default function Leave() {
         console.error('[resume_workflow] failed:', e)
         toast.error('簽核流程重啟失敗：' + (e.message || '未知錯誤'))
       }
-      setLeaves(prev => prev.map(l => l.id === editingId ? { ...l, ...payload, status: '待審核', reject_reason: null } : l))
+      setLeaves(prev => prev.map(l => l.id === editingId ? { ...l, ...payload, status: '待審核', reject_reason: null, attachments: allUrls } : l))
       setShowModal(false)
       setEditingId(null)
+      setCloneSourceAtts([])
       setForm({ employee: profile?.name || employees[0]?.name || '', type: 'annual', start_date: '', end_date: '', start_time: '09:00', end_time: '18:00', unit: 'day', hours: 0, days: 1, reason: '' })
       setValidationMsg('')
       return
@@ -693,6 +702,7 @@ export default function Leave() {
                         return (
                           <button className="btn btn-sm btn-primary" style={{ background: 'var(--accent-orange)' }} onClick={() => {
                             setEditingId(l.id)
+                            setCloneSourceAtts(Array.isArray(l.attachments) ? l.attachments : [])
                             setForm({
                               employee: l.employee || '',
                               type: l.type || 'annual',

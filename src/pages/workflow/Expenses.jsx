@@ -172,6 +172,25 @@ export default function Expenses() {
         .update({ ...payload, status: '待審核', reject_reason: null })
         .eq('id', editingId)
       if (updErr) { toast.error('更新失敗：' + updErr.message); return }
+      // 同步附件：保留沒被移除的 URL + 上傳新增的檔案
+      const keptUrls = cloneSourceAtts.filter(u => typeof u === 'string')
+      let allUrls = [...keptUrls]
+      if (attachFiles.length > 0) {
+        const empRow = employees.find(e2 => e2.name === form.employee)
+        const newUrls = []
+        for (const { file } of attachFiles) {
+          const ext = (file.name.split('.').pop() || 'bin').toLowerCase()
+          const path = `emp-${empRow?.id || 'unknown'}/${editingId}-${Date.now()}.${ext}`
+          const { error: upErr } = await supabase.storage.from('expense-receipts').upload(path, file, { cacheControl: '3600', upsert: true })
+          if (!upErr) {
+            const { data: urlData } = supabase.storage.from('expense-receipts').getPublicUrl(path)
+            if (urlData?.publicUrl) newUrls.push(urlData.publicUrl)
+          }
+        }
+        allUrls = [...keptUrls, ...newUrls]
+        setAttachFiles([])
+      }
+      await supabase.from('expenses').update({ attachments: allUrls }).eq('id', editingId)
       try {
         const { error: rpcErr } = await supabase.rpc('resume_workflow_for_request', { p_type: 'expense', p_id: editingId })
         if (rpcErr) {
@@ -182,9 +201,10 @@ export default function Expenses() {
         console.error('[resume_workflow] failed:', e)
         toast.error('簽核流程重啟失敗：' + (e.message || '未知錯誤'))
       }
-      setExpenses(prev => prev.map(x => x.id === editingId ? { ...x, ...payload, status: '待審核', reject_reason: null } : x))
+      setExpenses(prev => prev.map(x => x.id === editingId ? { ...x, ...payload, status: '待審核', reject_reason: null, attachments: allUrls } : x))
       setShowModal(false)
       setEditingId(null)
+      setCloneSourceAtts([])
       setForm({ employee: profile?.name || employees[0]?.name || '', category: CATEGORIES[0], date: '', description: '', receipt: true })
       setLineItems([emptyItem()])
       return
@@ -423,6 +443,7 @@ export default function Expenses() {
                       {['待審核','申請中','已駁回','已退回'].includes(e.status) && e.employee === profile?.name && (
                         <button className="btn btn-sm btn-primary" style={{ background: 'var(--accent-orange)' }} onClick={() => {
                           setEditingId(e.id)
+                          setCloneSourceAtts(Array.isArray(e.attachments) ? e.attachments : [])
                           setForm({
                             employee: e.employee,
                             category: e.category || CATEGORIES[0],

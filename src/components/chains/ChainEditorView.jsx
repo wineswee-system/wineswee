@@ -7,6 +7,8 @@ const TARGET_TYPES = [
   { value: 'fixed_role',  group: '🔒 寫死指定', label: '指定角色（全部人）', needs: 'role'  },
   { value: 'fixed_dept',  group: '🔒 寫死指定', label: '指定部門（全部人）', needs: 'dept'  },
   { value: 'applicant_supervisor',          group: '👤 申請人連動', label: '申請人的直屬主管（依員工卡設定）', needs: null },
+  { value: 'applicant_supervisor_l2',       group: '👤 申請人連動', label: '直屬主管的直屬主管（L2）',          needs: null },
+  { value: 'applicant_supervisor_l3',       group: '👤 申請人連動', label: '直屬主管的直屬主管的直屬主管（L3）', needs: null },
   { value: 'applicant_dept_manager',        group: '👤 申請人連動', label: '申請人部門的主管',   needs: null },
   { value: 'applicant_store_manager',       group: '👤 申請人連動', label: '申請人門市的店長',   needs: null },
   { value: 'applicant_store_supervisor',    group: '👤 申請人連動', label: '申請人門市的督導（position=督導）', needs: null },

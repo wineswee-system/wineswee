@@ -46,6 +46,7 @@ export async function buildSalaryBriefMessage(db: SupabaseClient, lineUserId: st
 
   const empName = r.employee_name ?? "";
   const hasPin = !!r.has_pin;
+  const usingDefault = !!r.using_default_pin;
   const hasRecord = !!r.has_record;
 
   // ── Header ──
@@ -65,14 +66,14 @@ export async function buildSalaryBriefMessage(db: SupabaseClient, lineUserId: st
   } else {
     body.push(row("月份", r.month ?? "—", { bold: true }));
     body.push({ type: "separator", margin: "md" });
-    if (hasPin) {
-      body.push(row("實發 (隱藏)", r.net_salary_masked ?? "$ ***", { valueColor: COLOR_GOLD, bold: true }));
+    body.push(row("實發 (隱藏)", r.net_salary_masked ?? "$ ***", { valueColor: COLOR_GOLD, bold: true }));
+    if (usingDefault) {
       body.push({
-        type: "text", text: "🔒 完整明細需密碼解鎖", color: TEXT_SECONDARY, size: "xxs", align: "center", margin: "md", wrap: true,
+        type: "text", text: "🔒 預設密碼為身分證後 4 碼", color: COLOR_INFO, size: "xxs", align: "center", margin: "md", wrap: true,
       });
     } else {
       body.push({
-        type: "text", text: "尚未設定密碼，請先設 4-6 位數字密碼", color: COLOR_INFO, size: "xs", align: "center", margin: "md", wrap: true,
+        type: "text", text: "🔒 完整明細需密碼解鎖", color: TEXT_SECONDARY, size: "xxs", align: "center", margin: "md", wrap: true,
       });
     }
   }
@@ -86,11 +87,11 @@ export async function buildSalaryBriefMessage(db: SupabaseClient, lineUserId: st
       style: "primary", color: COLOR_GOLD, height: "sm",
     });
   }
-  if (!hasPin) {
+  if (hasPin && !usingDefault && hasRecord) {
     footer.push({
       type: "button",
-      action: { type: "postback", label: "🔧 設定密碼", data: "action=setup&type=salary" },
-      style: "primary", color: COLOR_PRIMARY, height: "sm",
+      action: { type: "postback", label: "🔑 忘記密碼（重設為預設）", data: "action=reset&type=salary" },
+      style: "secondary", height: "sm",
     });
   }
   if (liffId) {

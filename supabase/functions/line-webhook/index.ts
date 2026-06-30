@@ -311,7 +311,7 @@ serve(async (req) => {
           } else if (!(data as any)?.ok) {
             const errMap: Record<string, string> = {
               "EMPLOYEE_NOT_FOUND": "你的 LINE 還沒綁員工",
-              "PIN_NOT_SET": "尚未設定密碼，請先點 [🔧 設定密碼]",
+              "PIN_NOT_SET": "員工資料尚未填身分證號，請聯絡管理員補上",
               "WRONG_PIN": "密碼錯誤，請重新點 [🔓 輸入密碼解鎖] 再試",
             };
             resultMsg = text(`❌ ${errMap[(data as any)?.error ?? ""] ?? "解鎖失敗"}`);

@@ -21,8 +21,9 @@ const fmtDue = (d) => {
 
 // 我的任務 — 儀表板 widget：列出指派給目前使用者、進行中的任務，點擊開任務
 export default function MyTasksWidget() {
-  const { profile } = useAuth()
+  const { profile, hasPermission } = useAuth()
   const navigate = useNavigate()
+  const canAccessTasks = hasPermission('nav.project.tasks')
   const [tasks, setTasks] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -49,10 +50,12 @@ export default function MyTasksWidget() {
         <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8, margin: 0 }}>
           <Briefcase size={16} style={{ color: 'var(--accent-cyan)' }} /> 我的任務
         </h3>
-        <button onClick={() => navigate('/process/tasks')}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-cyan)', fontSize: 12, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 2 }}>
-          全部 <ChevronRight size={13} />
-        </button>
+        {canAccessTasks && (
+          <button onClick={() => navigate('/process/tasks')}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-cyan)', fontSize: 12, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+            全部 <ChevronRight size={13} />
+          </button>
+        )}
       </div>
 
       {loading ? (
@@ -65,13 +68,14 @@ export default function MyTasksWidget() {
             const s = STATUS_STYLE[t.status] || STATUS_STYLE['待處理']
             const overdue = t.due_date && String(t.due_date).slice(0, 10) < overdueToday
             return (
-              <div key={t.id} onClick={() => navigate(
-                t.workflow_instance_id ? `/process/workflows?focus=${t.workflow_instance_id}`
-                : t.project_id ? `/process/projects?project=${t.project_id}`
-                : `/process/tasks?focus=${t.id}`
-              )}
+              <div key={t.id} onClick={() => {
+                if (t.workflow_instance_id) navigate(`/process/workflows?focus=${t.workflow_instance_id}`)
+                else if (t.project_id) navigate(`/process/projects?project=${t.project_id}`)
+                else if (canAccessTasks) navigate(`/process/tasks?focus=${t.id}`)
+              }}
                 style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10,
-                  padding: '9px 12px', borderRadius: 8, background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)', cursor: 'pointer' }}>
+                  padding: '9px 12px', borderRadius: 8, background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)',
+                  cursor: (t.workflow_instance_id || t.project_id || canAccessTasks) ? 'pointer' : 'default' }}>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.title}</div>
                   <div style={{ fontSize: 11, color: overdue ? 'var(--accent-red)' : 'var(--text-muted)', marginTop: 2, fontWeight: overdue ? 700 : 400 }}>

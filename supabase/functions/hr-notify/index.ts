@@ -1527,19 +1527,23 @@ serve(async (req) => {
       let enriched = { ...details, liff_id: acct?.liffId || null };
       if (details?.task_id && !details?.due_date) {
         const { data: task } = await db.from("tasks")
-          .select("id, title, due_date, due_time, description, notes, store, assignee, workflow_instance_id, created_by")
+          .select("id, title, due_date, due_time, description, notes, store, assignee, workflow_instance_id, created_by, step_order")
           .eq("id", details.task_id).maybeSingle();
         if (task) {
           // 抓 workflow_instance template_name + created_by（發起人）
           let workflowName: string | undefined = details.workflow_name;
-          // 優先：tasks.created_by（任務直接建立者）
-          // fallback：workflow_instances.created_by（流程發起人）
           let initiatedBy: string | undefined = details.initiated_by || task.created_by || undefined;
+          let totalSteps: number | undefined = undefined;
           if (task.workflow_instance_id) {
             const { data: inst } = await db.from("workflow_instances")
               .select("template_name, created_by").eq("id", task.workflow_instance_id).maybeSingle();
             if (!workflowName) workflowName = inst?.template_name || undefined;
             if (!initiatedBy) initiatedBy = inst?.created_by || undefined;
+            // 算此流程的總任務步數
+            const { count } = await db.from("tasks")
+              .select("id", { count: "exact", head: true })
+              .eq("workflow_instance_id", task.workflow_instance_id);
+            totalSteps = count ?? undefined;
           }
           // 抓 employee dept
           const { data: emp } = await db.from("employees")
@@ -1557,6 +1561,8 @@ serve(async (req) => {
             department: emp?.dept,
             workflow_name: workflowName,
             initiated_by: initiatedBy,
+            step_order: task.step_order ?? undefined,
+            total_steps: totalSteps,
           };
         }
       }

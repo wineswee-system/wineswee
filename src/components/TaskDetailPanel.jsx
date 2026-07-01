@@ -253,7 +253,8 @@ export default function TaskDetailPanel({
       workflow_instance_id: form.workflow_instance_id || null,
       project_id: form.project_id || null,
     }
-    const { data } = await updateTask(task.id, payload)
+    const { data, error: updateErr } = await updateTask(task.id, payload)
+    if (updateErr) { toast.error('儲存失敗：' + updateErr.message); setSaving(false); return }
     if (data) {
       onUpdate(data)
       toast.success('已更新')

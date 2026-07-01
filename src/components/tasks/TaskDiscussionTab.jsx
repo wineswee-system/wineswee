@@ -48,7 +48,7 @@ export default function TaskDiscussionTab({ task, profile, attachments, setAttac
     ? colleagues.filter(e =>
         e.name.includes(mentionQuery) &&
         e.id !== profile?.id
-      ).slice(0, 8)
+      )
     : []
 
   const handleInput = (e) => {
@@ -175,7 +175,8 @@ export default function TaskDiscussionTab({ task, profile, attachments, setAttac
               position: 'absolute', bottom: '100%', left: 0, right: 50,
               background: 'var(--bg-card)', border: '1px solid var(--border-subtle)',
               borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.25)',
-              zIndex: 100, marginBottom: 4, overflow: 'hidden',
+              zIndex: 100, marginBottom: 4,
+              maxHeight: 260, overflowY: 'auto',
             }}>
               {filteredColleagues.map(emp => (
                 <div

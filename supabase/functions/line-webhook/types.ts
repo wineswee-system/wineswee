@@ -22,7 +22,9 @@ export type ApprovalRequestType =
   | "resignation"
   | "transfer"
   | "loa"
-  | "headcount";
+  | "headcount"
+  // 門市稽核（走 liff_store_audit_approve 獨立 RPC）
+  | "store_audit";
 
 // ── Pending Action types ────────────────────────────────────────────────────
 

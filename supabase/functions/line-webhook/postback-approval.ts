@@ -42,6 +42,8 @@ function parseRequestType(s: string | undefined): ApprovalRequestType | null {
     "correction", "cover", "off_request", "form_submission", "goods_transfer",
     // HR B 類 chain（走 hr_chain_approve）
     "resignation", "transfer", "loa", "headcount",
+    // 門市稽核（走 liff_store_audit_approve 獨立 RPC）
+    "store_audit",
   ];
   return (valid as string[]).includes(s ?? "") ? (s as ApprovalRequestType) : null;
 }
@@ -61,6 +63,7 @@ const handleApprove: PostbackHandler = async (params, ctx) => {
   // 呼叫對應 RPC：off_request 走 liff_approve_off_request、
   // goods_transfer 走 liff_approve_transfer、
   // HR B 類（離職/異動/留停/人力需求）走 hr_chain_approve（用 employee_id）、
+  // store_audit 走 liff_store_audit_approve（20260604 restore 洗掉舊分支後獨立化）、
   // 其他走 liff_approve_request
   let data: any, error: any;
   if (rt === "off_request") {
@@ -69,6 +72,10 @@ const handleApprove: PostbackHandler = async (params, ctx) => {
     }));
   } else if (rt === "goods_transfer") {
     ({ data, error } = await ctx.db.rpc("liff_approve_transfer", {
+      p_line_user_id: ctx.userId, p_id: id, p_action: "approve", p_reason: null,
+    }));
+  } else if (rt === "store_audit") {
+    ({ data, error } = await ctx.db.rpc("liff_store_audit_approve", {
       p_line_user_id: ctx.userId, p_id: id, p_action: "approve", p_reason: null,
     }));
   } else if (isHrChainType(rt)) {
@@ -198,21 +205,29 @@ const handleReject: PostbackHandler = async (params, ctx) => {
       off_request: "off_requests",
       form_submission: "form_submissions",
       goods_transfer: "goods_transfer_requests",
+      store_audit: "store_audits",
     };
-    // 不同類型查不同欄位（goods_transfer 用 applicant_name；其他用 employee）
-    const nameCol = rt === "goods_transfer" ? "applicant_name" : "employee";
+    // 不同類型查不同欄位（goods_transfer 用 applicant_name；store_audit 用 auditor_name；其他用 employee）
+    const nameCol = rt === "goods_transfer"
+      ? "applicant_name"
+      : rt === "store_audit"
+      ? "auditor_name"
+      : "employee";
     const { data: rec } = await ctx.db.from(tableMap[rt]).select(`status, ${nameCol}`).eq("id", id).maybeSingle();
     if (!rec) return [txt(`❌ 找不到 #${id}（可能已刪除）`)];
-    // expense_settle 期待狀態是「待核銷」；goods_transfer 期待「申請審核中」或「驗收審核中」；其他「待審核/申請中」
+    // expense_settle 期待「待核銷」；goods_transfer 期待「申請/驗收審核中」；
+    // store_audit 期待「待確認 / 申請中」；其他「待審核 / 申請中」
     const validStatus = rt === "expense_settle"
       ? rec.status === "待核銷"
       : rt === "goods_transfer"
       ? (rec.status === "申請審核中" || rec.status === "驗收審核中")
+      : rt === "store_audit"
+      ? (rec.status === "待確認" || rec.status === "申請中")
       : (rec.status === "待審核" || rec.status === "申請中");
     if (!validStatus) {
       return [txt(`⚠️ 此單已是「${rec.status}」狀態，不能再駁回`)];
     }
-    applicantName = (rec as any).applicant_name ?? (rec as any).employee ?? "員工";
+    applicantName = (rec as any).applicant_name ?? (rec as any).auditor_name ?? (rec as any).employee ?? "員工";
   }
 
   // 寫 pending action — 下一段使用者打的文字會被當駁回原因

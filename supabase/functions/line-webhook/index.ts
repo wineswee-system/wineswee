@@ -361,6 +361,7 @@ serve(async (req) => {
           resultMsg = text("⚠️ 駁回原因不能空白，請重新點 [❌ 駁回]");
         } else {
           // off_request → liff_approve_off_request；goods_transfer → liff_approve_transfer；
+          // store_audit → liff_store_audit_approve；
           // HR B 類（resignation/transfer/loa/headcount）→ hr_chain_approve（用 employee_id）；
           // 其他 → liff_approve_request
           const HR_CHAIN_RT = ["resignation", "transfer", "loa", "headcount"];
@@ -371,6 +372,10 @@ serve(async (req) => {
             }));
           } else if (pending.request_type === "goods_transfer") {
             ({ data, error } = await db.rpc("liff_approve_transfer", {
+              p_line_user_id: lineUserId, p_id: pending.request_id, p_action: "reject", p_reason: reason,
+            }));
+          } else if (pending.request_type === "store_audit") {
+            ({ data, error } = await db.rpc("liff_store_audit_approve", {
               p_line_user_id: lineUserId, p_id: pending.request_id, p_action: "reject", p_reason: reason,
             }));
           } else if (HR_CHAIN_RT.includes(pending.request_type)) {

@@ -5,7 +5,38 @@
       "Bash(git add:*)",
       "Bash(git commit -m ':*)",
       "Bash(git push:*)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(grep -E \"color:\\\\s*['\\\\\"]#[0-9a-fA-F]{3,6}['\\\\\"]\\(?!fff\\)|backgroundColor:\\\\s*['\\\\\"]#[0-9a-fA-F]{3,6}['\\\\\"]|background:\\\\s*['\\\\\"]#[0-9a-fA-F]{3,6}['\\\\\"]\" c:/Users/TING/Documents/Astro8/AI/sme-ops/src/pages/Dashboard.jsx)",
+      "Bash(202606)",
+      "Bash(202605)",
+      "Bash(202504[3-9])",
+      "Bash(20260429)",
+      "Bash(20260430\" | sort | tail -50)",
+      "Read(//c/Users/TING/AppData/Local/Temp/claude/c--Users-TING-Documents-Astro8-AI-sme-ops/efd37c49-3765-43e2-bad1-9cae661a18b9/tool-results/**)",
+      "Bash(xargs -I{} bash -c 'echo \"=== {} ===\" && grep -E \"^export \" \"{}\"')",
+      "Bash(grep -E \"\\\\.\\(xlsx|md|txt\\)$\")",
+      "Bash(echo \"---exit $?---\")",
+      "Bash(echo \"st-exit=$?\")",
+      "Bash(git check-ignore *)",
+      "Bash(echo \"ci-exit=$?\")",
+      "Bash(git mv *)",
+      "Bash(npm test *)",
+      "Bash(grep -vE 'FAIL|Error|❯|\\\\||^\\\\s*$')",
+      "Bash(npx vitest *)",
+      "Bash(npx esbuild *)",
+      "Bash(echo \"exit=$?\")",
+      "PowerShell(npm run build)",
+      "Bash(xargs grep -l \"crm_\\\\|member\\\\|coupon\\\\|loyalty\\\\|campaign\\\\|segment\")",
+      "Bash(xargs grep -l \"create table.*\\\\\\(sku\\\\|inventory\\\\|stock\\\\|warehouse\\\\|bin\\\\|product\\\\\\)\")",
+      "Read(//c/Users/TING/Documents/Astro8/AI/sme-ops/**)",
+      "PowerShell(New-Item -ItemType Directory -Force \"c:\\\\Users\\\\TING\\\\Documents\\\\Astro8\\\\AI\\\\sme-ops\\\\src\\\\pages\\\\dispatch\")",
+      "PowerShell(head)",
+      "PowerShell(\\(Get-Content \"c:\\\\Users\\\\TING\\\\Documents\\\\Astro8\\\\AI\\\\sme-ops\\\\src\\\\pages\\\\dispatch\\\\DispatchDashboard.jsx\"\\).Count; \\(Get-Content \"c:\\\\Users\\\\TING\\\\Documents\\\\Astro8\\\\AI\\\\sme-ops\\\\src\\\\pages\\\\dispatch\\\\DispatchQueue.jsx\"\\).Count; \\(Get-Content \"c:\\\\Users\\\\TING\\\\Documents\\\\Astro8\\\\AI\\\\sme-ops\\\\src\\\\pages\\\\dispatch\\\\DispatchRoutes.jsx\"\\).Count)",
+      "PowerShell(npm run build 2>&1)",
+      "Bash(awk '/CREATE TABLE \\(IF NOT EXISTS \\)?\\(public\\\\.\\)?members \\\\\\(/,/\\\\\\);/' supabase/schema_dump_raw.sql)"
+    ],
+    "additionalDirectories": [
+      "\\tmp"
     ]
   }
 }

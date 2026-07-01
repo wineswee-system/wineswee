@@ -1,4 +1,4 @@
-import { memo } from 'react'
+import { memo, lazy, Suspense } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import Overview from '../pages/wms/Overview'
 import SKUs from '../pages/wms/SKUs'
@@ -15,6 +15,11 @@ import Transfers from '../pages/wms/Transfers'
 import Returns from '../pages/wms/Returns'
 import Kitting from '../pages/wms/Kitting'
 import AIInventory from '../pages/wms/AIInventory'
+import LoadingSpinner from '../components/LoadingSpinner'
+
+const PickListManager = lazy(() => import('../pages/wms/PickListManager'))
+const PackStation     = lazy(() => import('../pages/wms/PackStation'))
+const DockManagement  = lazy(() => import('../pages/wms/DockManagement'))
 
 export default memo(function WMSModule() {
   return (
@@ -34,6 +39,9 @@ export default memo(function WMSModule() {
       <Route path="returns" element={<Returns />} />
       <Route path="kitting" element={<Kitting />} />
       <Route path="ai" element={<AIInventory />} />
+      <Route path="picklist" element={<Suspense fallback={<LoadingSpinner />}><PickListManager /></Suspense>} />
+      <Route path="pack" element={<Suspense fallback={<LoadingSpinner />}><PackStation /></Suspense>} />
+      <Route path="dock" element={<Suspense fallback={<LoadingSpinner />}><DockManagement /></Suspense>} />
     </Routes>
   )
 })

@@ -1,12 +1,24 @@
-﻿import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
+﻿// jspdf / jspdf-autotable 改為動態 import — 只有真的按「匯出 PDF」才下載這兩包
 import { printSignOff } from './printSignOff'
 import { formatCurrency, fmtNT as fmt } from './currency'
 import { isWeekendDay } from './scheduleUtils'
 
 import { toast } from './toast'
+
+// Lazy-load jspdf + jspdf-autotable（一起抓，autoTable 逐次呼叫時套用）
+async function loadPdfLibs() {
+  const [jspdfMod, autoTableMod] = await Promise.all([
+    import('jspdf'),
+    import('jspdf-autotable'),
+  ])
+  return {
+    jsPDF: jspdfMod.default ?? jspdfMod.jsPDF,
+    autoTable: autoTableMod.default ?? autoTableMod.autoTable,
+  }
+}
+
 // Common PDF setup with Chinese-friendly font
-function createPdf(title, subtitle) {
+function createPdf(jsPDF, title, subtitle) {
   const doc = new jsPDF()
   // Header
   doc.setFontSize(18)
@@ -21,8 +33,9 @@ function createPdf(title, subtitle) {
 }
 
 // Export attendance records
-export function exportAttendancePdf(records, filters = {}) {
-  const doc = createPdf('Attendance Report', `Date: ${filters.date || 'All'} | Dept: ${filters.dept || 'All'}`)
+export async function exportAttendancePdf(records, filters = {}) {
+  const { jsPDF, autoTable } = await loadPdfLibs()
+  const doc = createPdf(jsPDF, 'Attendance Report', `Date: ${filters.date || 'All'} | Dept: ${filters.dept || 'All'}`)
 
   const head = [['#', 'Employee', 'Date', 'Clock In', 'Clock Out', 'Hours', 'Status']]
   const body = records.map((r, i) => [
@@ -56,8 +69,9 @@ export function exportAttendancePdf(records, filters = {}) {
 }
 
 // Export salary records
-export function exportSalaryPdf(records, month) {
-  const doc = createPdf('Salary Report', `Month: ${month}`)
+export async function exportSalaryPdf(records, month) {
+  const { jsPDF, autoTable } = await loadPdfLibs()
+  const doc = createPdf(jsPDF, 'Salary Report', `Month: ${month}`)
 
   const head = [['#', 'Employee', 'Base', 'Allowance', 'OT', 'Bonus', 'Deductions', 'Insurance', 'Net']]
   const body = records.map((r, i) => {
@@ -96,8 +110,9 @@ export function exportSalaryPdf(records, month) {
 }
 
 // Export trial balance
-export function exportTrialBalancePdf(trialData, asOfDate, totals = {}) {
-  const doc = createPdf('Trial Balance', `As of: ${asOfDate}`)
+export async function exportTrialBalancePdf(trialData, asOfDate, totals = {}) {
+  const { jsPDF, autoTable } = await loadPdfLibs()
+  const doc = createPdf(jsPDF, 'Trial Balance', `As of: ${asOfDate}`)
 
   const head = [['Account Code', 'Account Name', 'Type', 'Debit Balance', 'Credit Balance']]
   const body = trialData.map(r => [
@@ -139,9 +154,11 @@ export function exportTrialBalancePdf(trialData, asOfDate, totals = {}) {
 }
 
 // Export 401 tax report
-export function exportTaxReportPdf(reportData) {
+export async function exportTaxReportPdf(reportData) {
+  const { jsPDF, autoTable } = await loadPdfLibs()
   const { period, startDate, endDate, sales, purchases, summary } = reportData
   const doc = createPdf(
+    jsPDF,
     '401 Tax Report',
     `Period: ${period} (${startDate} ~ ${endDate}) | Generated: ${new Date().toLocaleString('zh-TW')}`
   )

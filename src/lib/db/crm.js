@@ -193,10 +193,10 @@ export const updateSurveyQuestion = (id, data) =>
 export const deleteSurveyQuestion = (id) =>
   supabase.from('survey_questions').delete().eq('id', id)
 
+// 單一 RPC 批次重排（sort_order = 陣列位置，0-based，與舊 Promise.all 行為一致）
+// 見 migration 20260702620000_db_misc_fixes.sql
 export const reorderSurveyQuestions = (questions) =>
-  Promise.all(questions.map((q, i) =>
-    supabase.from('survey_questions').update({ sort_order: i }).eq('id', q.id)
-  ))
+  supabase.rpc('reorder_survey_questions', { p_ids: questions.map(q => q.id) })
 
 // ── Survey Invitations ─────────────────────────────────────
 export const getSurveyInvitations = (surveyId, { status } = {}) => {

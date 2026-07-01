@@ -2,11 +2,16 @@
  * Middleware: Idempotent event processing.
  *
  * Kafka delivers at-least-once, so the same event may arrive multiple times.
- * This middleware deduplicates by event ID using an in-memory LRU cache
- * (fast path) backed by a Supabase lookup (durable path).
+ * This middleware deduplicates by event ID using an in-memory cache.
  *
- * When migrating to Kafka, this middleware prevents duplicate side effects
- * from redelivered messages or consumer group rebalances.
+ * NOTE: today event IDs are randomly generated per publish (EventBus builds a
+ * fresh `evt_...` id every time), so the cache never produces a hit in the
+ * current in-memory setup. It is kept because it becomes effective once a
+ * transport with STABLE envelope IDs exists — e.g. Kafka redelivery or
+ * consumer-group rebalances re-deliver the SAME event id, which this cache
+ * then correctly skips. The former per-event Supabase lookup against
+ * business_events was removed: it cost one DB round-trip per publish and
+ * could never match for the same reason.
  */
 
 const CACHE_MAX_SIZE = 10000
@@ -34,37 +39,12 @@ export async function idempotencyMiddleware(event, next) {
     _processedEvents.delete(eventId) // Expired, reprocess
   }
 
-  // Durable path: check business_events table
-  // (In Kafka mode, this catches duplicates across process restarts)
-  try {
-    const { supabase } = await import('../../supabase.js')
-    const { data } = await supabase
-      .from('business_events')
-      .select('event_id')
-      .eq('event_id', eventId)
-      .maybeSingle()
-
-    if (data) {
-      console.debug(`[Idempotency] Skipping already-persisted event: ${eventId}`)
-      _processedEvents.set(eventId, now)
-      return // Already processed
-    }
-  } catch {
-    // If DB check fails, proceed (at-least-once is safer than at-most-once)
-  }
-
   // Mark as processed before running handlers
   _processedEvents.set(eventId, now)
 
-  // Evict oldest entries if cache is full
-  if (_processedEvents.size > CACHE_MAX_SIZE) {
-    const keysToDelete = []
-    for (const [key, timestamp] of _processedEvents) {
-      if (now - timestamp > CACHE_TTL_MS || keysToDelete.length < _processedEvents.size - CACHE_MAX_SIZE) {
-        keysToDelete.push(key)
-      }
-    }
-    keysToDelete.forEach(k => _processedEvents.delete(k))
+  // Evict oldest entries (Map preserves insertion order) until back under cap
+  while (_processedEvents.size > CACHE_MAX_SIZE) {
+    _processedEvents.delete(_processedEvents.keys().next().value)
   }
 
   return next()

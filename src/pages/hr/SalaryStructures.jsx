@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Plus, Edit2, DollarSign, Users, X, Download } from 'lucide-react'
-import * as XLSX from 'xlsx'
+// xlsx 改為動態 import（見 handleExport）— 避免打進主 bundle
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
@@ -267,6 +267,7 @@ export default function SalaryStructures() {
         }
       })
       if (rows.length === 0) { toast.warning('目前篩選沒有資料可匯出'); return }
+      const XLSX = await import('xlsx') // lazy-load：按下匯出才下載 xlsx
       const ws = XLSX.utils.json_to_sheet(rows, { header: Object.keys(rows[0]) })
       const wb = XLSX.utils.book_new()
       XLSX.utils.book_append_sheet(wb, ws, '薪資架構')

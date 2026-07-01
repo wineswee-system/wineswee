@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Upload, Download, CheckCircle2, XCircle, AlertTriangle, RefreshCw } from 'lucide-react'
-import * as XLSX from 'xlsx'
+// xlsx 改為動態 import（見 xlsxToRows）— 避免把 xlsx 打進主 bundle
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { parseCSV } from '../../lib/wenzhong'
@@ -214,7 +214,8 @@ export default function HRImport() {
   }
 
   // ── 從 XLSX sheet 抽出 flat rows（略過 metadata，自動找標題行）──
-  function xlsxToRows(buffer) {
+  async function xlsxToRows(buffer) {
+    const XLSX = await import('xlsx') // lazy-load：只有真的解析 XLSX 才下載
     const wb  = XLSX.read(buffer, { type: 'array' })
     const ws  = wb.Sheets[wb.SheetNames[0]]
     const mat = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
@@ -246,11 +247,11 @@ export default function HRImport() {
     const isXlsx = /\.xlsx?$/i.test(file.name)
     const reader = new FileReader()
 
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
         let rawRows
         if (isXlsx) {
-          rawRows = xlsxToRows(new Uint8Array(e.target.result))
+          rawRows = await xlsxToRows(new Uint8Array(e.target.result))
         } else {
           // 104 匯出前幾行是 metadata（資料類型/日期/條件/筆數 + 空白）
           // 找到真正的欄位標題行（含「員工編號」或「員工姓名」或同時含「姓名」+「部門」）

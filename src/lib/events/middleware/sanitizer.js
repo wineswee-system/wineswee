@@ -33,8 +33,9 @@ const WARN_PATTERNS = [
 // Combined for scanForInjection (detection/logging)
 const DANGEROUS_PATTERNS = [...BLOCK_PATTERNS, ...WARN_PATTERNS]
 
-// Fields that should be positive numbers
-const NUMERIC_POSITIVE_FIELDS = [
+// Fields that must be finite numbers. Negative values are ALLOWED —
+// refunds, credit notes, and stock adjustments legitimately carry negatives.
+const NUMERIC_FIELDS = [
   'amount', 'total_amount', 'total', 'price', 'qty', 'quantity',
   'net_salary', 'gross_salary', 'days', 'hours',
 ]
@@ -93,7 +94,10 @@ function detectInjection(value, fieldPath) {
       return {
         field: fieldPath,
         pattern: pattern.source,
-        value: value.slice(0, 100), // Truncate for logging
+        value: value.slice(0, 100), // Truncated for logging only
+        // Classify against the ORIGINAL full value — truncation must not
+        // hide a BLOCK pattern that sits past the first 100 chars.
+        blocking: BLOCK_PATTERNS.some(p => p.test(value)),
       }
     }
   }
@@ -133,9 +137,8 @@ export async function sanitizerMiddleware(event, next) {
   const violations = scanForInjection(event.payload)
   if (violations.length > 0) {
     // Classify violations: BLOCK high-confidence destructive SQL; WARN+sanitize the rest
-    const blocking = violations.filter(v =>
-      BLOCK_PATTERNS.some(p => p.test(v.value))
-    )
+    // (v.blocking was computed against the full untruncated value in detectInjection)
+    const blocking = violations.filter(v => v.blocking)
     if (blocking.length > 0) {
       log.error('Blocking event: destructive SQL pattern detected in payload', {
         event_type: event.type,
@@ -154,11 +157,12 @@ export async function sanitizerMiddleware(event, next) {
   // 2. Sanitize all string values in payload
   event.payload = sanitizePayload(event.payload)
 
-  // 3. Validate numeric fields are positive
-  for (const field of NUMERIC_POSITIVE_FIELDS) {
+  // 3. Validate numeric fields are finite numbers (negatives pass through —
+  //    refunds / credit notes / stock adjustments are valid business values)
+  for (const field of NUMERIC_FIELDS) {
     if (field in event.payload) {
       const val = Number(event.payload[field])
-      if (isNaN(val) || val < 0) {
+      if (!Number.isFinite(val)) {
         log.warn('Invalid numeric field in event', {
           event_type: event.type,
           field,

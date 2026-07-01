@@ -1,5 +1,6 @@
 import { supabase } from '../supabase.js'
 import { logger } from '../logger.js'
+import { getTenantOrgId } from '../events/middleware/tenantContext.js'
 
 const log = logger.forModule('cqrs')
 
@@ -40,12 +41,18 @@ function setCache(key, data) {
   _cache.set(key, { data, timestamp: Date.now() })
 }
 
+// Cache keys are tenant-scoped so one org's cached read models never leak
+// into another org's session (multi-tenant safety). 'global' before login.
+function orgScope() {
+  return getTenantOrgId() || 'global'
+}
+
 /**
  * Dashboard KPIs — pre-aggregated metrics.
  * Cache TTL: 30 seconds (hot path, called on every dashboard load).
  */
 export async function getDashboardKPIs() {
-  const cacheKey = 'dashboard-kpis'
+  const cacheKey = `dashboard-kpis:${orgScope()}`
   const cached = getCached(cacheKey, 30_000)
   if (cached) return cached
 
@@ -87,7 +94,7 @@ export async function getDashboardKPIs() {
  * Cache TTL: 5 minutes.
  */
 export async function getSalesAnalytics(period = 'daily', days = 30) {
-  const cacheKey = `sales-analytics-${period}-${days}`
+  const cacheKey = `sales-analytics-${period}-${days}:${orgScope()}`
   const cached = getCached(cacheKey, 300_000)
   if (cached) return cached
 
@@ -102,9 +109,15 @@ export async function getSalesAnalytics(period = 'daily', days = 30) {
     .gte('date', sinceStr)
     .order('date', { ascending: true })
 
-  // Fallback to live query if MV doesn't exist
+  // Fallback to live query if the MV query failed. Warn with the actual error —
+  // it may be a missing MV, but could also be RLS or a transient failure that
+  // should not be silently masked.
   if (error) {
-    log.debug('MV not available, using live query', { view: 'mv_daily_sales' })
+    log.warn('MV query failed, falling back to live query', {
+      view: 'mv_daily_sales',
+      error_code: error.code,
+      error_message: error.message,
+    })
     const { data: txns } = await supabase
       .from('pos_transactions')
       .select('created_at, store, total, payment_method')
@@ -140,7 +153,7 @@ export async function getSalesAnalytics(period = 'daily', days = 30) {
  * Cache TTL: 10 minutes.
  */
 export async function getCustomerRevenue(months = 12) {
-  const cacheKey = `customer-revenue-${months}`
+  const cacheKey = `customer-revenue-${months}:${orgScope()}`
   const cached = getCached(cacheKey, 600_000)
   if (cached) return cached
 
@@ -154,7 +167,12 @@ export async function getCustomerRevenue(months = 12) {
     .order('total_revenue', { ascending: false })
 
   if (error) {
-    log.debug('MV not available, using live query', { view: 'mv_customer_revenue' })
+    // Same as above: surface the real error instead of silently falling back
+    log.warn('MV query failed, falling back to live query', {
+      view: 'mv_customer_revenue',
+      error_code: error.code,
+      error_message: error.message,
+    })
     const { data: arData } = await supabase
       .from('accounts_receivable')
       .select('customer, amount, paid_amount, created_at')
@@ -184,7 +202,7 @@ export async function getCustomerRevenue(months = 12) {
  * Cache TTL: 1 minute.
  */
 export async function getInventoryHealth() {
-  const cacheKey = 'inventory-health'
+  const cacheKey = `inventory-health:${orgScope()}`
   const cached = getCached(cacheKey, 60_000)
   if (cached) return cached
 

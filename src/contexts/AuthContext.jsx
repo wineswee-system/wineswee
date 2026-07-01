@@ -71,7 +71,10 @@ export function AuthProvider({ children }) {
     const params = new URLSearchParams(window.location.search)
     const tokenHash = params.get('token_hash')
     if (tokenHash) {
-      const type = params.get('type') || 'magiclink'
+      // Whitelist the type param — never pass arbitrary query-string values to verifyOtp
+      const VALID_TYPES = ['magiclink', 'email', 'recovery', 'invite', 'signup']
+      const rawType = params.get('type')
+      const type = VALID_TYPES.includes(rawType) ? rawType : 'magiclink'
       supabase.auth.verifyOtp({ token_hash: tokenHash, type })
         .then(() => window.history.replaceState({}, '', '/'))
     }
@@ -157,9 +160,11 @@ export function AuthProvider({ children }) {
       })
       .subscribe()
 
-    // Polling 備援：每 60 秒查一次，如果 force_logout_at 比本次登入晚就登出
+    // Polling 備援：約每 60-75 秒查一次（加 jitter 打散，避免全體 client 同秒齊發），
+    // 如果 force_logout_at 比本次登入晚就登出
     // 連續失敗（Supabase 掛掉 521/522）最多退讓 4 個週期，避免 outage 期間打爆 API
     let failCount = 0
+    const pollIntervalMs = 60000 + Math.random() * 15000 // per-timer jitter
     const timer = setInterval(async () => {
       if (failCount >= 4) { failCount--; return }
       const { data, error } = await supabase
@@ -173,7 +178,7 @@ export function AuthProvider({ children }) {
         const flagTime = new Date(data.force_logout_at).getTime()
         if (flagTime > loginTime) supabase.auth.signOut()
       }
-    }, 60000)
+    }, pollIntervalMs)
 
     return () => {
       supabase.removeChannel(channel)

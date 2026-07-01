@@ -1,7 +1,8 @@
 import { supabase } from '../supabase'
 
 export const getSKUs = () =>
-  supabase.from('skus').select('*').order('id')
+  // 用於品項選單（報價/訂單/發票/BOM），2000 足以涵蓋 SME 品項數
+  supabase.from('skus').select('*').order('id').limit(2000)
 
 export const updateSKU = (id, data) =>
   supabase.from('skus').update(data).eq('id', id).select().single()

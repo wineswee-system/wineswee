@@ -1,6 +1,5 @@
 import { InMemoryTransport } from './transports/InMemoryTransport.js'
 import { tenantContextMiddleware } from './middleware/tenantContext.js'
-import { outboxMiddleware } from './middleware/outbox.js'
 import { sanitizerMiddleware } from './middleware/sanitizer.js'
 import { rateLimitMiddleware } from './middleware/rateLimit.js'
 import { idempotencyMiddleware } from './middleware/idempotency.js'
@@ -153,17 +152,16 @@ export function resetEventBus() {
 /**
  * Create the default bus with full middleware chain.
  *
- * Middleware execution order (10-layer enterprise pipeline):
+ * Middleware execution order (9-layer enterprise pipeline):
  *   1.  tenantContext    — inject tenant_id from localStorage
- *   2.  outbox           — write event to event_outbox for at-least-once durability
- *   3.  sanitizer        — XSS/SQL injection protection, input validation
- *   4.  rateLimit        — per-tenant event throttling (burst protection)
- *   5.  idempotency      — deduplicate events (critical for Kafka at-least-once)
- *   6.  validator        — validate payload against EVENT_CATALOG schema
- *   7.  tracing          — OpenTelemetry-compatible distributed tracing spans
- *   8.  auditLogger      — persist event to business_events table (batched, 250ms flush)
- *   9.  deadLetterQueue  — capture handler errors to DLQ table (runs after retry exhaustion)
- *   10. retry            — retry transport delivery with exponential backoff (LAST — calls
+ *   2.  sanitizer        — XSS/SQL injection protection, input validation
+ *   3.  rateLimit        — per-tenant event throttling (burst protection)
+ *   4.  idempotency      — deduplicate events (critical for Kafka at-least-once)
+ *   5.  validator        — validate payload against EVENT_CATALOG schema
+ *   6.  tracing          — OpenTelemetry-compatible distributed tracing spans
+ *   7.  auditLogger      — persist event to business_events table (batched, 250ms flush)
+ *   8.  deadLetterQueue  — capture handler errors to DLQ table (runs after retry exhaustion)
+ *   9.  retry            — retry transport delivery with exponential backoff (LAST — calls
  *                          transport directly; on failure DLQ above captures the final error)
  *
  * Retry + DLQ ordering note:
@@ -180,14 +178,17 @@ function createDefaultBus() {
   const transport = new InMemoryTransport()
   const bus = new EventBus(transport)
   bus.use(tenantContextMiddleware)   //  1
-  bus.use(outboxMiddleware)          //  2 — NEW: durability guarantee
-  bus.use(sanitizerMiddleware)       //  3
-  bus.use(rateLimitMiddleware)       //  4
-  bus.use(idempotencyMiddleware)     //  5
-  bus.use(validatorMiddleware)       //  6
-  bus.use(tracingMiddleware)         //  7
-  bus.use(auditLoggerMiddleware)     //  8
-  bus.use(deadLetterQueueMiddleware) //  9
-  bus.use(retryMiddleware)           // 10 — NEW: retry AFTER DLQ wraps it
+  // NOTE: outboxMiddleware deliberately NOT registered. It wrote every event to
+  // event_outbox (one extra INSERT per publish), but createOutboxWorker is never
+  // started client-side, so pending rows accumulated forever with no consumer.
+  // Re-enable it only alongside a running worker (Kafka / server-side).
+  bus.use(sanitizerMiddleware)       //  2
+  bus.use(rateLimitMiddleware)       //  3
+  bus.use(idempotencyMiddleware)     //  4
+  bus.use(validatorMiddleware)       //  5
+  bus.use(tracingMiddleware)         //  6
+  bus.use(auditLoggerMiddleware)     //  7
+  bus.use(deadLetterQueueMiddleware) //  8
+  bus.use(retryMiddleware)           //  9 — retry AFTER DLQ wraps it
   return bus
 }

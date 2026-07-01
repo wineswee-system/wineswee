@@ -6,7 +6,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { calculateLaborInsurance, calculateHealthInsurance, calculateLaborPension, calculateMonthlyWithholding, calculateNetSalary, calculateInServiceDays } from '../../lib/payroll'
 import { loadInsuranceBrackets } from '../../lib/insuranceBrackets'
 import { exportSalaryPdf } from '../../lib/exportPdf'
-import * as XLSX from 'xlsx'
+// xlsx 改為動態 import（見 handleExportTransfer）— 避免打進主 bundle
 import { getEffectiveBenefits, calculateBonus, getStoreIdByName } from '../../lib/benefitPolicy'
 import { computeBatchPayroll } from '../../lib/payrollCalc'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -467,6 +467,7 @@ export default function Salary() {
       '金額':       Math.round(Number(r.amount) || 0),
       '姓名':       r.name || '',
     }))
+    const XLSX = await import('xlsx') // lazy-load：按下匯出才下載 xlsx
     const ws = XLSX.utils.json_to_sheet(rows, { header: ['身分證字號', '帳號', '金額', '姓名'] })
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, '代發薪')

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { Upload, CheckCircle2, AlertTriangle, RefreshCw, ChevronDown, ChevronRight, FileSpreadsheet, Users, Calendar } from 'lucide-react'
-import * as XLSX from 'xlsx'
+// xlsx 改為動態 import（見 parseScheduleXlsx / parseShiftCatalog / handleFile）— 避免打進主 bundle
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { toast } from '../../lib/toast'
@@ -99,7 +99,8 @@ function normalizeName(raw) {
 }
 
 // ── XLSX 解析（純函式，無副作用）────────────────────────────
-function parseScheduleXlsx(buffer) {
+async function parseScheduleXlsx(buffer) {
+  const XLSX = await import('xlsx') // lazy-load
   const wb  = XLSX.read(buffer, { type: 'array' })
   const ws  = wb.Sheets[wb.SheetNames[0]]
   const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
@@ -182,7 +183,8 @@ function parseScheduleXlsx(buffer) {
 }
 
 // ── 班別定義目錄解析（掃描所有工作表找 班別名稱/工作範圍 標頭）────
-function parseShiftCatalog(wb) {
+async function parseShiftCatalog(wb) {
+  const XLSX = await import('xlsx') // lazy-load
   for (const sheetName of wb.SheetNames) {
     const ws  = wb.Sheets[sheetName]
     const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
@@ -385,9 +387,10 @@ export default function ScheduleXlsxImport() {
     const buffer = await file.arrayBuffer()
     const bytes  = new Uint8Array(buffer)
     try {
+      const XLSX       = await import('xlsx') // lazy-load
       const wb         = XLSX.read(bytes, { type: 'array' })
-      const parsedData = parseScheduleXlsx(bytes)
-      const catalog    = parseShiftCatalog(wb)
+      const parsedData = await parseScheduleXlsx(bytes)
+      const catalog    = await parseShiftCatalog(wb)
       setParsed(parsedData)
       setShiftCatalog(catalog)
     } catch (err) {
@@ -405,8 +408,9 @@ export default function ScheduleXlsxImport() {
     if (!file.name.match(/\.xlsx?$/i)) { toast.error('請選擇 .xlsx / .xls 檔案'); return }
     const buffer = await file.arrayBuffer()
     try {
+      const XLSX    = await import('xlsx') // lazy-load
       const wb      = XLSX.read(new Uint8Array(buffer), { type: 'array' })
-      const catalog = parseShiftCatalog(wb)
+      const catalog = await parseShiftCatalog(wb)
       if (catalog.length === 0) {
         toast.error('未找到班別定義欄位（需含「班別名稱」與「工作範圍」欄）')
       } else {

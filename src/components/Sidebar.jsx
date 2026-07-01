@@ -100,10 +100,12 @@ const routeToGroup = (pathname) => {
   if (pathname === '/') return 'dashboard'
   if (pathname.startsWith('/crm') || pathname.startsWith('/sales') || pathname.startsWith('/pos') || pathname.startsWith('/reservations')) return 'commerce'
   if (pathname.startsWith('/purchase') || pathname.startsWith('/wms') || pathname.startsWith('/manufacturing')) return 'supply'
+  if (pathname.startsWith('/dispatch')) return 'dispatch'
   if (pathname.startsWith('/finance')) return 'finance'
   if (pathname.startsWith('/process')) return 'project'
   if (pathname.startsWith('/org/line')) return 'system' // LINE integration lives in System sidebar
   if (pathname.startsWith('/hr') || pathname.startsWith('/org')) return 'people'
+  if (pathname.startsWith('/comms')) return 'comms'
   if (pathname.startsWith('/analytics')) return 'analytics'
   if (pathname.startsWith('/super-admin')) return 'super-admin'
   if (pathname.startsWith('/system') || pathname.startsWith('/ai') || pathname.startsWith('/integration')) return 'system'
@@ -247,6 +249,7 @@ export default function Sidebar() {
     dashboard: null,                 // 全員可見
     commerce:  'nav.group.crm',
     supply:    'nav.group.supply',
+    dispatch:  'dispatch.view',
     finance:   'finance.view',       // 既有舊 perm
     people:    null,                 // 大家都有「個人 HR」section
     project:   'nav.project.work',   // 有專案工作就能看到 group
@@ -378,7 +381,7 @@ export default function Sidebar() {
   // Build all dropdown groups including super-admin
   const showSuperAdmin = hasPermission('nav.group.super_admin')
   const allGroups = showSuperAdmin
-    ? [...roleFiltered, { key: 'super-admin', icon: Shield, label: '超管', color: '#ef4444' }]
+    ? [...roleFiltered, { key: 'super-admin', icon: Shield, label: '超管', color: 'var(--accent-red)' }]
     : roleFiltered
 
   return (

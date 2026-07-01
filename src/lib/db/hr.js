@@ -1,7 +1,7 @@
 import { supabase } from '../supabase'
 
 export const getPerformanceReviews = (orgId) => {
-  let q = supabase.from('performance_reviews').select('*').order('id')
+  let q = supabase.from('performance_reviews').select('*').order('id').limit(1000)
   if (orgId) q = q.eq('organization_id', orgId)
   return q
 }

@@ -4,16 +4,15 @@ import { logger } from './logger.js'
 const log = logger.forModule('jobs')
 
 /**
- * Background Job Queue
+ * Background Job Queue (in-tab async task runner)
  *
  * Runs long-running operations (MRP calculation, payroll batch, report generation)
- * outside the UI thread. Jobs are persisted to Supabase for durability and
- * can be picked up by Edge Functions for server-side processing.
- *
- * Architecture:
- * - Client enqueues a job → stored in `tasks` table with type='background_job'
- * - Client-side worker processes immediately (for light jobs)
- * - Heavy jobs should be offloaded to Supabase Edge Functions or a serverless worker
+ * asynchronously within the CURRENT browser tab. Jobs live in an in-memory Map:
+ * - No persistence — jobs and their results are lost when the tab closes/reloads
+ * - No server-side processing — handlers run in this JS context
+ * - Retries with exponential backoff, up to max_attempts per job
+ * - Terminal jobs (completed/failed/cancelled) are kept for a while so callers
+ *   can read results, capped at MAX_TERMINAL_JOBS (oldest evicted first)
  *
  * Usage:
  *   import { jobQueue } from './jobQueue'
@@ -26,6 +25,20 @@ const _handlers = new Map()
 
 // Active job tracking
 const _activeJobs = new Map()
+
+// Terminal-job eviction: keep the last MAX_TERMINAL_JOBS finished jobs so
+// getJobStatus/onComplete can still read results, evict oldest beyond that.
+const MAX_TERMINAL_JOBS = 100
+const _terminalJobIds = []
+
+function markTerminal(jobId) {
+  _terminalJobIds.push(jobId)
+  while (_terminalJobIds.length > MAX_TERMINAL_JOBS) {
+    const oldest = _terminalJobIds.shift()
+    _activeJobs.delete(oldest)
+    _callbacks.delete(oldest)
+  }
+}
 
 // Completion callbacks
 const _callbacks = new Map()
@@ -90,6 +103,7 @@ async function processJob(job) {
     job.status = 'failed'
     job.error = `No handler registered for ${job.type}`
     notifyCallbacks(job.id, job)
+    markTerminal(job.id)
     return
   }
 
@@ -124,6 +138,7 @@ async function processJob(job) {
   }
 
   notifyCallbacks(job.id, job)
+  markTerminal(job.id) // status here is 'completed' or 'failed' (retry path returned earlier)
 }
 
 function notifyCallbacks(jobId, job) {
@@ -175,6 +190,7 @@ export function cancelJob(jobId) {
   if (job && job.status === 'pending') {
     job.status = 'cancelled'
     log.info('Job cancelled', { jobId })
+    markTerminal(jobId)
     return true
   }
   return false

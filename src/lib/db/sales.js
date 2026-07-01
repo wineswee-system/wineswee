@@ -122,7 +122,8 @@ export const deletePriceRule = (id) =>
   supabase.from('price_rules').delete().eq('id', id)
 
 export const getPOSTransactions = (orgId) => {
-  let q = supabase.from('pos_transactions').select('*').order('id', { ascending: false })
+  // 已按 id desc（= 最新在前）排序；limit 防止交易量大時整表拉回
+  let q = supabase.from('pos_transactions').select('*').order('id', { ascending: false }).limit(1000)
   if (orgId) q = q.eq('organization_id', orgId)
   return q
 }
@@ -146,6 +147,8 @@ export const createPOSTransaction = (data) =>
     p_points_used: data.points_used ?? 0,
     p_invoice_number: data.invoice_number ?? null,
     p_invoice_carrier: data.invoice_carrier ?? null,
+    // 離線補送冪等鍵：佇列時以 crypto.randomUUID() 產生，重試帶同值 → RPC 冪等重放
+    p_client_tx_id: data.client_tx_id ?? null,
   })
 
 export const updatePOSTransaction = (id, data) =>
@@ -185,7 +188,7 @@ export const updateShipment = (id, data) =>
   supabase.from('shipments').update(data).eq('id', id).select().single()
 
 export const getMembers = (orgId) => {
-  let q = supabase.from('members').select('*').order('id', { ascending: false })
+  let q = supabase.from('members').select('*').order('id', { ascending: false }).limit(2000)
   if (orgId) q = q.eq('organization_id', orgId)
   return q
 }

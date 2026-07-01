@@ -9,7 +9,7 @@ export const getPayrollRuns = (orgId) =>
   })
 
 export const getPayrollRecords = (runId, orgId) => {
-  let q = supabase.from('payroll_records').select('*').eq('payroll_run_id', runId).order('id')
+  let q = supabase.from('payroll_records').select('*').eq('payroll_run_id', runId).order('id').limit(1000)
   if (orgId) q = q.eq('organization_id', orgId)
   return q
 }

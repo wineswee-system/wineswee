@@ -24,6 +24,9 @@ const PortalHome = lazy(() => import('./pages/portal/PortalHome'))
 const EmployeePortal = lazy(() => import('./pages/portal/EmployeePortal'))
 const Login = lazy(() => import('./pages/Login'))
 const OvertimeExceptionImport = lazy(() => import('./pages/hr/OvertimeExceptionImport'))
+const BookingPublicPage   = lazy(() => import('./pages/comms/BookingPublicPage'))
+const BookingConfirmation = lazy(() => import('./pages/comms/BookingConfirmation'))
+const PublicTracking      = lazy(() => import('./pages/dispatch/PublicTracking'))
 
 // ── Module registry (lazy components + manifests) ──
 import { ALL_MODULES } from './modules/index'
@@ -228,6 +231,11 @@ export default function App() {
           <Route path="/login" element={<Suspense fallback={<LoadingSpinner />}><Login /></Suspense>} />
           {/* Guest QR self-order menu — public, no auth required */}
           <Route path="/menu/:storeId/:tableId" element={<Suspense fallback={<LoadingSpinner />}><GuestMenu /></Suspense>} />
+          {/* Calendly-style booking pages — public, no auth required (external bookers) */}
+          <Route path="/book/:slug" element={<Suspense fallback={<LoadingSpinner />}><BookingPublicPage /></Suspense>} />
+          <Route path="/book/confirm/:appointmentId" element={<Suspense fallback={<LoadingSpinner />}><BookingConfirmation /></Suspense>} />
+          {/* Public shipment tracking — no auth required */}
+          <Route path="/track/:number" element={<Suspense fallback={<LoadingSpinner />}><PublicTracking /></Suspense>} />
           {/* /liff/* routes 已移除 — 由獨立 LIFF app (sme-ops-liff.vercel.app) 處理 */}
           <Route path="/portal" element={<PortalGuard><PortalLayout /></PortalGuard>}>
             <Route index element={<PortalHome />} />

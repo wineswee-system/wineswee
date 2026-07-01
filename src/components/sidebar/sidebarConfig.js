@@ -16,17 +16,24 @@ import {
   Globe, Trash2, Upload,
   ConciergeBell, TableProperties, Timer, Map, ClipboardEdit,
   QrCode, ChefHat,
+  Mail, Inbox, CalendarClock, Link2, Contact,
 } from 'lucide-react'
 
 // ── Major Groups for top bar ──
+// color 只被 CSS 消費（Sidebar.jsx inline style 的 --group-color 自訂屬性與 style.color），
+// var(...) 可正常解析，故改用 src/index.css 的 --accent-* token（亮/暗主題自動切換）。
+// 例外：project(#6366f1 indigo)、comms(#2dd4bf teal) 在 index.css 無對應 token，
+// 且 CLAUDE.md 禁止新增色系；為保留群組視覺辨識度暫留 hex。
 export const majorGroups = [
-  { key: 'dashboard', icon: LayoutDashboard, label: '儀表板', color: '#22d3ee', path: '/' },
-  { key: 'commerce', icon: Handshake, label: '商務營運', color: '#3b82f6' },
-  { key: 'supply', icon: Warehouse, label: '供應鏈', color: '#34d399' },
-  { key: 'finance', icon: CreditCard, label: '財務會計', color: '#fbbf24' },
-  { key: 'people', icon: Users, label: '人員組織', color: '#a78bfa' },
-  { key: 'project', icon: Workflow, label: '專案流程', color: '#6366f1' },
-  { key: 'analytics', icon: BarChart3, label: '數據分析', color: '#f472b6' },
+  { key: 'dashboard', icon: LayoutDashboard, label: '儀表板', color: 'var(--accent-cyan)', path: '/' },
+  { key: 'commerce', icon: Handshake, label: '商務營運', color: 'var(--accent-blue)' },
+  { key: 'supply', icon: Warehouse, label: '供應鏈', color: 'var(--accent-green)' },
+  { key: 'dispatch', icon: Truck, label: '物流調度', color: 'var(--accent-orange)' },
+  { key: 'finance', icon: CreditCard, label: '財務會計', color: 'var(--accent-yellow)' },
+  { key: 'people', icon: Users, label: '人員組織', color: 'var(--accent-purple)' },
+  { key: 'project', icon: Workflow, label: '專案流程', color: '#6366f1' }, // indigo：無對應 token，見上註
+  { key: 'comms', icon: Mail, label: '通訊協作', color: '#2dd4bf' }, // teal：無對應 token，見上註
+  { key: 'analytics', icon: BarChart3, label: '數據分析', color: 'var(--accent-pink)' },
 ]
 
 // ── Mega menu + sidebar content for each group ──
@@ -377,6 +384,81 @@ export const groupNav = {
         { icon: Bot, label: 'Agent 控制台', path: '/ai/agent', title: 'AI Agent：執行多步驟自動化任務' },
         { icon: BookOpen, label: '說明中心', path: '/ai/help', title: '系統使用說明文件' },
         { icon: BookOpen, label: '教學中心', path: '/ai/tutorial', title: '操作教學影片與步驟指引' },
+      ]
+    },
+  ],
+
+  comms: [
+    {
+      label: '電子郵件',
+      icon: Mail,
+      children: [
+        { icon: Inbox, label: '收件匣', path: '/comms/inbox' },
+        { icon: FileEdit, label: '撰寫郵件', path: '/comms/compose' },
+        { icon: FileText, label: '草稿', path: '/comms/drafts' },
+        { icon: Send, label: '寄件備份', path: '/comms/sent' },
+        { icon: Users, label: '共用信箱', path: '/comms/mailboxes' },
+      ]
+    },
+    {
+      label: '行事曆',
+      icon: CalendarDays,
+      children: [
+        { icon: CalendarDays, label: '行事曆', path: '/comms/calendar' },
+        { icon: Link2, label: '預約連結', path: '/comms/booking' },
+        { icon: CalendarClock, label: '不在辦公室', path: '/comms/ooo' },
+      ]
+    },
+    {
+      label: '聯絡人',
+      icon: Contact,
+      children: [
+        { icon: Contact, label: '聯絡人', path: '/comms/contacts' },
+        { icon: Upload, label: '匯入聯絡人', path: '/comms/contacts/import' },
+        { icon: RefreshCcw, label: '同步設定', path: '/comms/contacts/sync' },
+      ]
+    },
+    {
+      label: '自動化與設定',
+      icon: Settings,
+      children: [
+        { icon: Sparkles, label: 'AI 技能', path: '/comms/skills' },
+        { icon: Tag, label: '標籤管理', path: '/comms/labels' },
+        { icon: Layers, label: '分類管理', path: '/comms/categories' },
+        { icon: Zap, label: '郵件規則', path: '/comms/rules' },
+        { icon: Settings, label: '帳號設定', path: '/comms/accounts' },
+      ]
+    },
+  ],
+
+  dispatch: [
+    {
+      label: '調度中心',
+      icon: Eye,
+      children: [
+        { icon: Eye,           label: '調度總覽',   path: '/dispatch' },
+        { icon: ClipboardList, label: '任務佇列',   path: '/dispatch/queue' },
+        { icon: Map,           label: '路線管理',   path: '/dispatch/routes' },
+        { icon: Calendar,      label: '排程日曆',   path: '/dispatch/schedule' },
+        { icon: MapPin,        label: '追蹤中心',   path: '/dispatch/tracking' },
+        { icon: BarChart2,     label: '物流分析',   path: '/dispatch/analytics' },
+      ]
+    },
+    {
+      label: '車隊管理',
+      icon: Truck,
+      children: [
+        { icon: Truck,  label: '車輛管理', path: '/dispatch/fleet' },
+        { icon: Users,  label: '司機管理', path: '/dispatch/fleet/drivers' },
+      ]
+    },
+    {
+      label: 'WMS 出貨流程',
+      icon: Package,
+      children: [
+        { icon: ClipboardList, label: '揀貨管理', path: '/wms/picklist' },
+        { icon: CheckSquare,   label: '包裝站',   path: '/wms/pack' },
+        { icon: ArrowRightLeft, label: '碼頭交接', path: '/wms/dock' },
       ]
     },
   ],

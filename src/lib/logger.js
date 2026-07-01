@@ -44,6 +44,37 @@ function getUserId() {
   return null
 }
 
+// ── PII redaction ──
+// Sensitive key denylist (case-insensitive substring match). Any data field
+// whose key contains one of these gets its value replaced with '[REDACTED]'.
+// Applies in BOTH dev and prod output — logs must never carry PII/credentials.
+// (src/lib/dataMasking.js has per-format display masks; not reused here because
+// redaction is key-driven and recursive, not format-driven.)
+const SENSITIVE_KEY_SUBSTRINGS = [
+  'password', 'token', 'secret', 'api_key', 'apikey', 'authorization',
+  'salary', 'net_salary', 'base_salary', 'bank_account', 'id_number',
+  'national_id', 'phone', 'email', 'address', 'credentials',
+]
+
+function isSensitiveKey(key) {
+  const k = String(key).toLowerCase()
+  return SENSITIVE_KEY_SUBSTRINGS.some(s => k.includes(s))
+}
+
+const REDACT_MAX_DEPTH = 4
+
+/** Recursively redact sensitive keys. Returns a new structure — never mutates input. */
+function redactPII(value, depth = 0) {
+  if (value === null || typeof value !== 'object') return value
+  if (depth >= REDACT_MAX_DEPTH) return value
+  if (Array.isArray(value)) return value.map(v => redactPII(v, depth + 1))
+  const out = {}
+  for (const [k, v] of Object.entries(value)) {
+    out[k] = isSensitiveKey(k) ? '[REDACTED]' : redactPII(v, depth + 1)
+  }
+  return out
+}
+
 function createLogEntry(level, message, data = {}, context = {}) {
   return {
     timestamp: new Date().toISOString(),
@@ -59,10 +90,10 @@ function createLogEntry(level, message, data = {}, context = {}) {
       error_message: data.error.message,
       error_stack: IS_PROD ? undefined : data.error.stack,
     } : {}),
-    // Include remaining data fields
-    data: Object.fromEntries(
+    // Include remaining data fields (PII-redacted, both dev and prod)
+    data: redactPII(Object.fromEntries(
       Object.entries(data).filter(([k]) => !['module', 'correlation_id', 'tenant_id', 'user_id', 'error'].includes(k))
-    ),
+    )),
   }
 }
 

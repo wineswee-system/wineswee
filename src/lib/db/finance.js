@@ -20,7 +20,7 @@ export const deleteAccount = (id) =>
   supabase.from('accounts').delete().eq('id', id)
 
 export const getJournalEntries = (orgId) => {
-  let q = supabase.from('journal_entries').select('*').order('id', { ascending: false })
+  let q = supabase.from('journal_entries').select('*').order('id', { ascending: false }).limit(1000)
   if (orgId) q = q.eq('organization_id', orgId)
   return q
 }
@@ -105,7 +105,7 @@ export const updateBankTransaction = (id, data) =>
   supabase.from('bank_transactions').update(data).eq('id', id).select().single()
 
 export const getInventoryTransactions = (sku) => {
-  const q = supabase.from('inventory_transactions').select('*').order('date')
+  const q = supabase.from('inventory_transactions').select('*').order('date').limit(2000)
   return sku ? q.eq('sku', sku) : q
 }
 

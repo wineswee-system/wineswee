@@ -31,6 +31,8 @@ import { confirm } from '../../lib/confirm'
 // Fallback shift types (used if DB hasn't loaded yet)
 const REST_SHIFT = { label: '休', color: 'var(--text-muted)', dim: 'var(--glass-medium)' }
 
+// 班別顏色 s.color 是 DB 持久化的 hex（門市設定 color picker 存 hex），
+// 只能用字串串接加透明度做 dim；var(--x) token 無法串接，僅無自訂色時走 token fallback。
 function hexToDim(hex) {
   return hex + '20'
 }
@@ -39,7 +41,7 @@ function buildShiftTypes(dbShifts) {
   const fromDB = dbShifts.map(s => ({
     label: s.name,
     color: s.color || 'var(--accent-cyan)',
-    dim: hexToDim(s.color || '#22d3ee'),
+    dim: s.color ? hexToDim(s.color) : 'var(--accent-cyan-dim)',
     start_time: s.start_time?.slice(0, 5),
     end_time: s.end_time?.slice(0, 5),
   }))

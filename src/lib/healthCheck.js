@@ -1,5 +1,7 @@
 import { supabase } from './supabase.js'
 import { logger } from './logger.js'
+// Static import is safe: nothing under ./events/ imports healthCheck.js (no cycle)
+import { getEventBus } from './events/EventBus.js'
 
 const log = logger.forModule('health')
 
@@ -94,16 +96,14 @@ async function checkAuth() {
 
 function checkEventBus() {
   try {
-    const { getEventBus } = require('./events/index.js')
     const bus = getEventBus()
     const subscriberCount = bus._subscribers?.size || 0
     return {
       status: subscriberCount > 0 ? 'healthy' : 'degraded',
       subscriber_count: subscriberCount,
     }
-  } catch {
-    // Dynamic import not available in this context
-    return { status: 'healthy', note: 'static check only' }
+  } catch (err) {
+    return { status: 'degraded', error: err.message }
   }
 }
 

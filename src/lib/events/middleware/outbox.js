@@ -6,6 +6,13 @@ const log = logger.forModule('events.outbox')
 /**
  * Outbox Pattern Middleware
  *
+ * ⚠️ CURRENTLY NOT REGISTERED in the default EventBus middleware chain.
+ * Reason: it inserts one event_outbox row per publish, but createOutboxWorker
+ * is never started in the client, so 'pending' rows accumulated forever with
+ * no consumer draining them. Kept (with its exports) for future Kafka or
+ * server-side use — re-register in EventBus.createDefaultBus() only together
+ * with a running outbox worker.
+ *
  * Ensures atomicity between database writes and event publishing.
  * Instead of publishing events directly, writes them to an `event_outbox` table.
  * A background worker then reads the outbox and publishes to the transport.

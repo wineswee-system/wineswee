@@ -13,6 +13,11 @@ export function setTenantOrgId(orgId) {
   _orgId = orgId ?? null
 }
 
+/** Current session's org id (null before profile loads / after signOut). */
+export function getTenantOrgId() {
+  return _orgId
+}
+
 export async function tenantContextMiddleware(event, next) {
   if (!event.metadata.organization_id && _orgId) {
     event.metadata.organization_id = _orgId

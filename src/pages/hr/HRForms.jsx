@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../../contexts/AuthContext'
 import {
   CalendarDays, Clock, Fingerprint, Briefcase, Receipt,
   TrendingUp, ArrowLeftRight, BarChart2, UserCheck, GraduationCap,
@@ -20,7 +21,7 @@ const CATEGORIES = [
       { icon: Clock,        name: '加班申請（事後）', desc: '已加完班的補登申請', color: 'var(--accent-orange)', dim: 'var(--accent-orange-dim)', action: '/hr/overtime' },
       // 預先加班、銷假 — 透過 builder 自訂建立（admin 進 /hr/form-builder 拉欄位即可）
       { icon: Fingerprint,  name: '忘刷補登', desc: '補登忘刷打卡紀錄', color: 'var(--accent-purple)', dim: 'var(--accent-purple-dim)', action: '/hr/punch-correction' },
-      { icon: AlarmClock,   name: '提早下班登記', desc: '店方安排員工提早下班（無簽核，當天不計早退扣款）', color: 'var(--accent-orange)', dim: 'var(--accent-orange-dim)', action: '/hr/early-leave', tag: '新' },
+      { icon: AlarmClock,   name: '提早下班登記', desc: '店方安排員工提早下班（無簽核，當天不計早退扣款）', color: 'var(--accent-orange)', dim: 'var(--accent-orange-dim)', action: '/hr/early-leave', tag: '新', superAdminOnly: true },
     ],
   },
   {
@@ -31,8 +32,8 @@ const CATEGORIES = [
       { icon: LogOut,         name: '離職申請', desc: '員工離職申請與交接', color: 'var(--accent-red)', dim: 'var(--accent-red-dim)', action: '/hr/forms/resignation', tag: '新' },
       // 留職停薪 — 透過 builder 自訂建立
       { icon: ArrowLeftRight, name: '人事異動', desc: '調職、升遷、調薪、跨部門調動', color: 'var(--accent-purple)', dim: 'var(--accent-purple-dim)', action: '/hr/forms/transfer', tag: '新' },
-      { icon: UserCheck,      name: '試用期評核', desc: '新進員工試用期滿考核', color: 'var(--accent-green)', dim: 'var(--accent-green-dim)', action: '/hr/probation' },
-      { icon: BarChart2,      name: '績效考核', desc: '定期績效評核與目標設定', color: 'var(--accent-purple)', dim: 'var(--accent-purple-dim)', action: '/hr/performance' },
+      { icon: UserCheck,      name: '試用期評核', desc: '新進員工試用期滿考核', color: 'var(--accent-green)', dim: 'var(--accent-green-dim)', action: '/hr/probation', superAdminOnly: true },
+      { icon: BarChart2,      name: '績效考核', desc: '定期績效評核與目標設定', color: 'var(--accent-purple)', dim: 'var(--accent-purple-dim)', action: '/hr/performance', superAdminOnly: true },
     ],
   },
   {
@@ -40,7 +41,7 @@ const CATEGORIES = [
     title: '💰 出差',
     desc: '出差申請（費用相關已移到「流程 → 業務申請」）',
     forms: [
-      { icon: Briefcase, name: '出差申請', desc: '外出辦公、洽公申請', color: 'var(--accent-blue)', dim: 'var(--accent-blue-dim)', action: '/hr/travel' },
+      { icon: Briefcase, name: '出差申請', desc: '外出辦公、洽公申請', color: 'var(--accent-blue)', dim: 'var(--accent-blue-dim)', action: '/hr/travel', superAdminOnly: true },
     ],
   },
   {
@@ -49,11 +50,11 @@ const CATEGORIES = [
     desc: '招募、訓練、文件、職災等',
     forms: [
       { icon: Users,         name: '人力需求申請', desc: '部門新增人力需求提報（走簽核鏈）', color: 'var(--accent-cyan)', dim: 'var(--accent-cyan-dim)', action: '/hr/forms/headcount', tag: '新' },
-      { icon: Users,         name: '招募追蹤', desc: '已核准單的招募進度看板', color: 'var(--accent-blue)', dim: 'var(--accent-blue-dim)', action: '/hr/recruitment' },
-      { icon: GraduationCap, name: '教育訓練', desc: '內外訓課程報名與費用', color: 'var(--accent-blue)', dim: 'var(--accent-blue-dim)', action: '/hr/training' },
-      { icon: FileSignature, name: '文件簽核', desc: '合約、協議書、重要文件簽核', color: 'var(--accent-purple)', dim: 'var(--accent-purple-dim)', action: '/hr/documents' },
-      { icon: AlertTriangle, name: '工傷通報', desc: '職場意外事故通報', color: 'var(--accent-red)', dim: 'var(--accent-red-dim)', action: '/hr/labor-inspection' },
-      { icon: MessageSquare, name: '員工意見反映', desc: '建議、申訴與意見回饋', color: 'var(--accent-orange)', dim: 'var(--accent-orange-dim)', action: '/hr/surveys' },
+      { icon: Users,         name: '招募追蹤', desc: '已核准單的招募進度看板', color: 'var(--accent-blue)', dim: 'var(--accent-blue-dim)', action: '/hr/recruitment', superAdminOnly: true },
+      { icon: GraduationCap, name: '教育訓練', desc: '內外訓課程報名與費用', color: 'var(--accent-blue)', dim: 'var(--accent-blue-dim)', action: '/hr/training', superAdminOnly: true },
+      { icon: FileSignature, name: '文件簽核', desc: '合約、協議書、重要文件簽核', color: 'var(--accent-purple)', dim: 'var(--accent-purple-dim)', action: '/hr/documents', superAdminOnly: true },
+      { icon: AlertTriangle, name: '工傷通報', desc: '職場意外事故通報', color: 'var(--accent-red)', dim: 'var(--accent-red-dim)', action: '/hr/labor-inspection', superAdminOnly: true },
+      { icon: MessageSquare, name: '員工意見反映', desc: '建議、申訴與意見回饋', color: 'var(--accent-orange)', dim: 'var(--accent-orange-dim)', action: '/hr/surveys', superAdminOnly: true },
     ],
   },
 ]
@@ -71,6 +72,8 @@ const COLOR_MAP = {
 
 export default function HRForms() {
   const navigate = useNavigate()
+  const { profile } = useAuth()
+  const isSuperAdmin = profile?.role === 'super_admin'
   const [customByCategory, setCustomByCategory] = useState({})
   useEffect(() => {
     // 只抓 scope='hr' 的自訂表單；business_expense/business_non_expense 已搬到「業務申請」
@@ -93,8 +96,8 @@ export default function HRForms() {
     })
   }, [])
 
-  const totalForms = CATEGORIES.reduce((s, c) => s + c.forms.length, 0)
-    + Object.values(customByCategory).reduce((s, arr) => s + arr.length, 0)
+  const totalForms = CATEGORIES.reduce((s, c) => s + c.forms.filter(f => isSuperAdmin || !f.superAdminOnly).length, 0)
+    + Object.values(customByCategory).reduce((s, arr) => s + arr.filter(f => isSuperAdmin || !f.superAdminOnly).length, 0)
 
   return (
     <div className="fade-in">
@@ -120,7 +123,7 @@ export default function HRForms() {
             <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{cat.desc}</div>
           </div>
           <div className="hr-forms-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
-            {[...cat.forms, ...(customByCategory[cat.key] || [])].map((f) => {
+            {[...cat.forms, ...(customByCategory[cat.key] || [])].filter(f => isSuperAdmin || !f.superAdminOnly).map((f) => {
               const Icon = f.icon
               return (
                 <div key={f.name} className="card"

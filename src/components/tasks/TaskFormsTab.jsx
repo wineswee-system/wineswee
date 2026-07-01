@@ -185,6 +185,9 @@ export default function TaskFormsTab({ task, formBindings, setFormBindings }) {
               const locked = isLocked(b)
               const isOther = b.fill_mode === 'other'
               const done = b.status === '已完成'
+              const vp = b.form_id ? bindingViewPath(b) : null
+              const rowClickable = !!vp || act.clickable
+              const handleRowClick = () => { if (vp) navigate(vp); else if (act.clickable) onAction(b) }
               return (
                 <div key={b.id}
                   style={{
@@ -195,20 +198,16 @@ export default function TaskFormsTab({ task, formBindings, setFormBindings }) {
                   }}>
                   {/* 第一列：表單 + 狀態 + 動作 */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                    cursor: act.clickable ? 'pointer' : 'default' }}
-                    onClick={() => act.clickable && onAction(b)}>
+                    cursor: rowClickable ? 'pointer' : 'default' }}
+                    onClick={handleRowClick}>
                     <div>
                       <div style={{ fontSize: 13, fontWeight: 600 }}>
                         {s.icon} {b.form_label}
-                        {b.form_id && (() => {
-                          const vp = bindingViewPath(b)
-                          return vp
-                            ? <span onClick={e => { e.stopPropagation(); navigate(vp) }}
-                                style={{ marginLeft: 6, fontSize: 11, color: 'var(--accent-cyan)', cursor: 'pointer', textDecoration: 'underline' }}>
-                                #{b.form_id}
-                              </span>
-                            : <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--text-muted)' }}>#{b.form_id}</span>
-                        })()}
+                        {b.form_id && (
+                          <span style={{ marginLeft: 6, fontSize: 11, color: vp ? 'var(--accent-cyan)' : 'var(--text-muted)', textDecoration: vp ? 'underline' : 'none' }}>
+                            #{b.form_id}
+                          </span>
+                        )}
                       </div>
                       <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
                         完成條件：{b.required_status}

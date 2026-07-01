@@ -164,7 +164,7 @@ export default function StoreAudits() {
                     <td>{r.shift || '—'}</td>
                     <td>{r.auditor_name}</td>
                     <td style={{ color: r.total_deducted > 0 ? 'var(--accent-red)' : 'var(--text-muted)' }}>
-                      {r.total_deducted > 0 ? `-${r.total_deducted}` : '0'} / {r.total_max_score}
+                      {(r.total_max_score || 0) - (r.total_deducted || 0)}
                     </td>
                     <td>
                       <span style={{ padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700, background: s.bg, color: s.color }}>{r.status}</span>

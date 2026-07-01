@@ -529,6 +529,50 @@ function buildTaskAutoStarted(details: {
   };
 }
 
+// ── task_mentioned：在任務備註 @tag 某人，通知被 tag 的員工 ─────
+function buildTaskMentioned(details: {
+  task_id?: number;
+  task_title?: string;
+  author?: string;
+  content?: string;
+  liff_id?: string | null;
+}) {
+  const url = details.task_id && details.liff_id
+    ? buildLiffTaskUrl(details.task_id, details.liff_id)
+    : null;
+  const snippet = details.content ? (details.content.length > 80 ? details.content.slice(0, 80) + '…' : details.content) : '';
+  return {
+    type: "flex",
+    altText: `💬 ${details.author || '有人'} 在任務中提到您`,
+    contents: {
+      type: "bubble", size: "kilo",
+      header: {
+        type: "box", layout: "vertical", backgroundColor: "#2563EB", paddingAll: "14px",
+        contents: [
+          { type: "text", text: `💬 有人提到您`, weight: "bold", color: "#FFFFFF", size: "md" },
+        ],
+      },
+      body: {
+        type: "box", layout: "vertical", paddingAll: "14px", spacing: "sm",
+        contents: [
+          row("任務", details.task_title || '（未命名）'),
+          row("提及者", details.author || '—'),
+          ...(snippet ? [row("內容", snippet)] : []),
+        ],
+      },
+      ...(url ? {
+        footer: {
+          type: "box", layout: "vertical", paddingAll: "10px", backgroundColor: "#F7FAFC",
+          contents: [{
+            type: "button", style: "primary", color: "#2563EB", height: "sm",
+            action: { type: "uri", label: "前往任務", uri: url },
+          }],
+        },
+      } : {}),
+    },
+  };
+}
+
 // ── interview_completed：面試官打完成績，通知負責 HR ─────
 function buildInterviewCompleted(details: {
   candidate_id?: number;
@@ -1376,6 +1420,7 @@ serve(async (req) => {
       || type === "approval_delegated"
       || type === "expense_settle_todo"
       || type === "interview_completed"
+      || type === "task_mentioned"
       || type === "goods_transfer_step_assigned"
       || type === "goods_transfer_receipt_pending"
       || type === "goods_transfer_extra_assigned"
@@ -1479,6 +1524,8 @@ serve(async (req) => {
       message = buildExpenseSettleTodoNotification({ ...details, liff_id: acct?.liffId || null });
     } else if (type === "interview_completed") {
       message = buildInterviewCompleted({ ...details, liff_id: acct?.liffId || null });
+    } else if (type === "task_mentioned") {
+      message = buildTaskMentioned({ ...details, liff_id: acct?.liffId || null });
     } else {
       return new Response(JSON.stringify({ error: `Unknown type: ${type}` }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },

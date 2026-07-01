@@ -1473,13 +1473,17 @@ serve(async (req) => {
     } else if (type === "goods_transfer_extra_cancelled_info") {
       message = buildGoodsTransferNotification("extra_cancelled_info", details);
     } else if (type === "store_audit_on_duty_assigned") {
-      message = buildStoreAuditNotification("on_duty_assigned", details);
+      const _saUrl = acct?.liffId ? `https://liff.line.me/${acct.liffId}?to=${encodeURIComponent(`/store-audit/${details.audit_id}`)}` : null;
+      message = buildStoreAuditNotification("on_duty_assigned", { ...details, liff_url: _saUrl });
     } else if (type === "store_audit_step_assigned") {
-      message = buildStoreAuditNotification("step_assigned", details);
+      const _saUrl = acct?.liffId ? `https://liff.line.me/${acct.liffId}?to=${encodeURIComponent(`/store-audit/${details.audit_id}`)}` : null;
+      message = buildStoreAuditNotification("step_assigned", { ...details, liff_url: _saUrl });
     } else if (type === "store_audit_approved") {
-      message = buildStoreAuditNotification("approved", details);
+      const _saUrl = acct?.liffId ? `https://liff.line.me/${acct.liffId}?to=${encodeURIComponent(`/store-audit/${details.audit_id}`)}` : null;
+      message = buildStoreAuditNotification("approved", { ...details, liff_url: _saUrl });
     } else if (type === "store_audit_rejected") {
-      message = buildStoreAuditNotification("rejected", details);
+      const _saUrl = acct?.liffId ? `https://liff.line.me/${acct.liffId}?to=${encodeURIComponent(`/store-audit/${details.audit_id}`)}` : null;
+      message = buildStoreAuditNotification("rejected", { ...details, liff_url: _saUrl });
     } else if (type === "task_auto_started") {
       // 補抓 task 完整欄位（trigger 只丟 task_id + 簡單 details，這裡 hydrate）
       let enriched = { ...details, liff_id: acct?.liffId || null };

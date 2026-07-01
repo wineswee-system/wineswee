@@ -89,17 +89,15 @@ export default function Tasks() {
     return Promise.all([
       getTasks(),
       supabase.from('employees').select('id, name, department_id, position, dept').eq('status', '在職').order('name'),
-      supabase.from('stores').select('*').eq('organization_id', profile?.organization_id).order('name'),
       supabase.from('departments').select('id, name').order('name'),
       supabase.from('projects').select('id, name').order('name'),
       getCategories('task'),
       getWorkflows(),
       getApprovalChains(),
-    ]).then(([t, e, s, d, p, cat, wf, ac]) => {
+    ]).then(([t, e, d, p, cat, wf, ac]) => {
       const rows = t.data || []
       setTasks(rows)
       setEmployees(e.data || [])
-      setStores(s.data || [])
       setDepartments(d.data || [])
       setProjects(p.data || [])
       setTaskCategories(cat.data || [])
@@ -117,6 +115,12 @@ export default function Tasks() {
       .catch(err => { console.error('Failed to load:', err); setError('資料載入失敗') })
       .finally(() => setLoading(false))
   }, [])
+
+  useEffect(() => {
+    if (!profile?.organization_id) return
+    supabase.from('stores').select('*').eq('organization_id', profile.organization_id).order('name')
+      .then(({ data }) => setStores(data || []))
+  }, [profile?.organization_id])
 
   // Live-sync: reflect DB changes made by other users or tabs without a full refresh
   useRealtimeTasks(setTasks)

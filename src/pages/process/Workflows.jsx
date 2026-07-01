@@ -116,13 +116,11 @@ export default function Workflows() {
   const [deployForm, setDeployForm] = useState({ location: '', assignees: {} })
 
   useEffect(() => {
-    if (!profile?.organization_id) return
     Promise.all([
       getWorkflows(),
       getWorkflowInstances({ excludeTemplates: HR_APPROVAL_TEMPLATE_NAMES }),
       getTasks(),
       supabase.from('employees').select('id, name, name_en, dept, position, department_id, store, store_id, departments!department_id(name), stores!store_id(name)').eq('status', '在職').order('name'),
-      supabase.from('stores').select('*').eq('organization_id', profile.organization_id).order('name'),
       supabase.from('checklists').select('*').order('id'),
       supabase.from('sop_templates').select('*').order('id'),
       supabase.from('departments').select('*').order('name'),
@@ -130,12 +128,11 @@ export default function Workflows() {
       getWorkflowCategories(),
       supabase.from('projects').select('id, name').order('name'),
       supabase.from('line_groups').select('id, group_name').order('group_name'),
-    ]).then(([w, inst, t, emp, loc, cl, tpl, dept, ac, cat, proj, lg]) => {
+    ]).then(([w, inst, t, emp, cl, tpl, dept, ac, cat, proj, lg]) => {
       setWorkflows(w.data || [])
       setInstances(inst.data || [])
       setAllTasks(t.data || [])
       setEmployees(emp.data || [])
-      setStores(loc.data || [])
       setChecklists(cl.data || [])
       setTemplates(tpl.data || [])
       setDepartments(dept.data || [])
@@ -147,6 +144,12 @@ export default function Workflows() {
       console.error('Failed to load:', err)
       setError('資料載入失敗')
     }).finally(() => setLoading(false))
+  }, [])
+
+  useEffect(() => {
+    if (!profile?.organization_id) return
+    supabase.from('stores').select('*').eq('organization_id', profile.organization_id).order('name')
+      .then(({ data }) => setStores(data || []))
   }, [profile?.organization_id])
 
   // Live-sync: reflect task & workflow-instance changes from other users/tabs

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { toast } from '../../lib/toast'
+import { useAuth } from '../../contexts/AuthContext'
 import FormBindingsPicker from '../FormBindingsPicker'
 import SearchableSelect, { empOptions } from '../SearchableSelect'
 import FillFormModal from './FillFormModal'
@@ -22,6 +23,11 @@ function navTo(b, bindings) {
 
 export default function TaskFormsTab({ task, formBindings, setFormBindings }) {
   const navigate = useNavigate()
+  const { profile } = useAuth()
+  const isSuperAdmin = profile?.role === 'super_admin'
+  const visibleBindings = isSuperAdmin
+    ? formBindings
+    : formBindings.filter(b => !b.form_templates?.super_admin_only)
   const [employees, setEmployees] = useState([])
   const [pickerFor, setPickerFor] = useState(null)   // binding.id 目前展開選人的列
   const [busyId, setBusyId] = useState(null)         // 正在送指派 / 切模式的列
@@ -131,7 +137,7 @@ export default function TaskFormsTab({ task, formBindings, setFormBindings }) {
     await reloadBindings()
   }
 
-  const completed = formBindings.filter(b => b.status === '已完成').length
+  const completed = visibleBindings.filter(b => b.status === '已完成').length
 
   // 小型切換 pill
   const ModePill = ({ active, onClick, disabled, children }) => (
@@ -168,18 +174,19 @@ export default function TaskFormsTab({ task, formBindings, setFormBindings }) {
           }))}
           onChange={handleChange}
           lockedKeys={formBindings.filter(b => b.form_id).map(b => `${b.form_type}-${b.form_template_id ?? 'null'}`)}
+          isSuperAdmin={isSuperAdmin}
         />
       </div>
 
       {/* ── Status list (only when bindings exist) ── */}
-      {formBindings.length > 0 && (
+      {visibleBindings.length > 0 && (
         <div style={{ padding: '16px 20px', borderRadius: 10, background: 'var(--bg-card)', border: '1px solid var(--border-subtle)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
             <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent-blue)' }}>📄 填寫狀態</span>
-            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{completed}/{formBindings.length} 完成</span>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{completed}/{visibleBindings.length} 完成</span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {formBindings.map(b => {
+            {visibleBindings.map(b => {
               const s = STATUS_STYLE[b.status] || STATUS_STYLE['未填']
               const act = actionFor(b)
               const locked = isLocked(b)

@@ -118,7 +118,7 @@ export default function TaskDetailPanel({
       safe(getApprovalChains()),
       safe(getApprovalFormByTask(task.id)),
       safe(getTaskConfirmations(task.id)),
-      safe(supabase.from('task_form_bindings').select('*').eq('task_id', task.id).order('id')),
+      safe(supabase.from('task_form_bindings').select('*, form_templates(super_admin_only)').eq('task_id', task.id).order('id')),
       safe(supabase.from('sop_templates').select('id, name, steps').order('id')),
       safe(supabase.from('workflow_instances').select('id, template_name, status, started_at, store').eq('triggered_by_task_id', task.id).order('started_at', { ascending: false })),
       safe(supabase.from('projects').select('id, name, owner_id').order('name')),
@@ -173,7 +173,7 @@ export default function TaskDetailPanel({
       }, async () => {
         const { data } = await supabase
           .from('task_form_bindings')
-          .select('*')
+          .select('*, form_templates(super_admin_only)')
           .eq('task_id', task.id)
           .order('id')
         setFormBindings(data || [])

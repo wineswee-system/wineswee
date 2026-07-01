@@ -15,7 +15,7 @@ import { supabase } from '../lib/supabase'
  * 用法：
  *   <FormBindingsPicker value={form.required_forms} onChange={v => set('required_forms', v)} />
  */
-export default function FormBindingsPicker({ value = [], onChange, readonly = false, lockedKeys = [] }) {
+export default function FormBindingsPicker({ value = [], onChange, readonly = false, lockedKeys = [], isSuperAdmin = false }) {
   const [open, setOpen] = useState(false)
   const [options, setOptions] = useState([])
   const [query, setQuery] = useState('')
@@ -26,12 +26,14 @@ export default function FormBindingsPicker({ value = [], onChange, readonly = fa
 
   useEffect(() => {
     supabase.from('form_templates')
-      .select('id, name, scope')
+      .select('id, name, scope, super_admin_only')
       .eq('is_active', true)
       .in('scope', ['business_expense', 'business_non_expense'])
       .order('name')
       .then(({ data }) => {
-        const customForms = (data || []).map(t => ({
+        const customForms = (data || [])
+          .filter(t => isSuperAdmin || !t.super_admin_only)
+          .map(t => ({
           form_type: 'form_submission',
           form_template_id: t.id,
           label: t.name,

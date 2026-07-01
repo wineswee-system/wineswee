@@ -72,8 +72,7 @@ const COLOR_MAP = {
 
 export default function HRForms() {
   const navigate = useNavigate()
-  const { profile } = useAuth()
-  const isSuperAdmin = profile?.role === 'super_admin'
+  const { profile, hasPermission } = useAuth()
   const [customByCategory, setCustomByCategory] = useState({})
   useEffect(() => {
     // 只抓 scope='hr' 的自訂表單；business_expense/business_non_expense 已搬到「業務申請」
@@ -96,8 +95,8 @@ export default function HRForms() {
     })
   }, [])
 
-  const totalForms = CATEGORIES.reduce((s, c) => s + c.forms.filter(f => isSuperAdmin || !f.superAdminOnly).length, 0)
-    + Object.values(customByCategory).reduce((s, arr) => s + arr.filter(f => isSuperAdmin || !f.superAdminOnly).length, 0)
+  const totalForms = CATEGORIES.reduce((s, c) => s + c.forms.filter(f => hasPermission('nav.group.super_admin') || !f.superAdminOnly).length, 0)
+    + Object.values(customByCategory).reduce((s, arr) => s + arr.filter(f => hasPermission('nav.group.super_admin') || !f.superAdminOnly).length, 0)
 
   return (
     <div className="fade-in">
@@ -123,7 +122,7 @@ export default function HRForms() {
             <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{cat.desc}</div>
           </div>
           <div className="hr-forms-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
-            {[...cat.forms, ...(customByCategory[cat.key] || [])].filter(f => isSuperAdmin || !f.superAdminOnly).map((f) => {
+            {[...cat.forms, ...(customByCategory[cat.key] || [])].filter(f => hasPermission('nav.group.super_admin') || !f.superAdminOnly).map((f) => {
               const Icon = f.icon
               return (
                 <div key={f.name} className="card"

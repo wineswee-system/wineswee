@@ -12,8 +12,8 @@ import { toast } from '../../lib/toast'
 const ROLE_TYPES = ['業務', '倉管', '內勤採購', '跨部門']
 
 export default function Bonus() {
-  const { profile, role, hasPermission } = useAuth()
-  const canCompute = role?.name === 'admin' || role?.name === 'super_admin' || hasPermission('bonus.compute')
+  const { profile, hasPermission } = useAuth()
+  const canCompute = hasPermission('bonus.compute')
   const [tab, setTab] = useState('業務')
   const [records, setRecords] = useState([])
   const [settings, setSettings] = useState([])

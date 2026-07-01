@@ -17,9 +17,8 @@ const STATUS_BADGE = {
 }
 
 export default function OffRequests() {
-  const { profile, role, hasPermission } = useAuth()
+  const { profile, isManagerOrAbove, hasPermission } = useAuth()
   const canDeleteAll = hasPermission('hr_form.delete_all')
-  const isAdmin = ['super_admin','admin','manager'].includes(role?.name || profile?.role)
   const [list, setList] = useState([])
   const [loading, setLoading] = useState(true)
   const [detailRow, setDetailRow] = useState(null)
@@ -31,12 +30,12 @@ export default function OffRequests() {
       .is('deleted_at', null)
       .order('id', { ascending: false })
     if (profile?.organization_id) q = q.eq('organization_id', profile.organization_id)
-    if (!isAdmin && profile?.name) q = q.eq('employee', profile.name)
+    if (!isManagerOrAbove && profile?.name) q = q.eq('employee', profile.name)
     const { data } = await q
     setList(data || [])
     setLoading(false)
   }
-  useEffect(() => { load() }, [profile?.organization_id, profile?.name, isAdmin])
+  useEffect(() => { load() }, [profile?.organization_id, profile?.name, isManagerOrAbove])
 
   // Dashboard ApprovalCenter 跳過來時 ?focus=ID 自動開明細
   const [searchParams, setSearchParams] = useSearchParams()
@@ -82,7 +81,7 @@ export default function OffRequests() {
   if (loading) return <LoadingSpinner />
 
   const pending = list.filter(r => r.status === '待審核').length
-  const canApproveRow = (r) => isAdmin && r.status === '待審核' && r.employee !== profile?.name
+  const canApproveRow = (r) => isManagerOrAbove && r.status === '待審核' && r.employee !== profile?.name
 
   return (
     <div className="fade-in">

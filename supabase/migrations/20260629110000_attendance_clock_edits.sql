@@ -17,10 +17,12 @@ CREATE TABLE IF NOT EXISTS public.attendance_clock_edits (
 
 ALTER TABLE public.attendance_clock_edits ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "org staff can view clock edits" ON public.attendance_clock_edits;
 CREATE POLICY "org staff can view clock edits"
   ON public.attendance_clock_edits FOR SELECT
   USING (public.is_staff());
 
+DROP POLICY IF EXISTS "org staff can insert clock edits" ON public.attendance_clock_edits;
 CREATE POLICY "org staff can insert clock edits"
   ON public.attendance_clock_edits FOR INSERT
   WITH CHECK (public.is_staff());

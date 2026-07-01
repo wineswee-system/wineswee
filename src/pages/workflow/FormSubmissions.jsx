@@ -28,8 +28,7 @@ const STATUS_BADGE = {
 }
 
 export default function FormSubmissions() {
-  const { profile, role, hasPermission } = useAuth()
-  const isAdmin = ['super_admin','admin','manager'].includes(role?.name || profile?.role)
+  const { profile, isManagerOrAbove, hasPermission } = useAuth()
   const canDeleteAll = hasPermission('hr_form.delete_all')
   const { canApprove: canApproveByRpc } = usePendingApprovals()
   const navigate = useNavigate()
@@ -41,7 +40,7 @@ export default function FormSubmissions() {
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
   // 從某張模板的「查看紀錄」按鈕跳進來時，預設顯示「所有」tab；其他情境照舊
-  const [tab, setTab] = useState(templateFilter ? 'all' : (isAdmin ? 'review' : 'mine'))   // mine | review | all
+  const [tab, setTab] = useState(templateFilter ? 'all' : (isManagerOrAbove ? 'review' : 'mine'))   // mine | review | all
   const [detailRow, setDetailRow] = useState(null)
   const [detailChainSteps, setDetailChainSteps] = useState([])
   const [loadingChain, setLoadingChain] = useState(false)
@@ -455,7 +454,7 @@ export default function FormSubmissions() {
             </p>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            {templateFilter && isAdmin && (
+            {templateFilter && isManagerOrAbove && (
               <button className="btn btn-secondary"
                 onClick={() => setShowChainModal(true)}
                 title="設定簽核流程">
@@ -483,8 +482,8 @@ export default function FormSubmissions() {
       <div style={{ display: 'flex', gap: 0, border: '1px solid var(--border-medium)', borderRadius: 8, overflow: 'hidden', marginBottom: 16, maxWidth: 480 }}>
         {[
           { key: 'mine',   label: '📝 我的申請' },
-          ...(isAdmin ? [{ key: 'review', label: '🔍 待我審核' }] : []),
-          ...(isAdmin ? [{ key: 'all',    label: '📋 全部' }] : []),
+          ...(isManagerOrAbove ? [{ key: 'review', label: '🔍 待我審核' }] : []),
+          ...(isManagerOrAbove ? [{ key: 'all',    label: '📋 全部' }] : []),
         ].map(t => (
           <button key={t.key} type="button" onClick={() => setTab(t.key)} style={{
             padding: '8px 16px', border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer',
@@ -526,9 +525,9 @@ export default function FormSubmissions() {
                 // chain 中間關卡用 RPC 算「這關該不該給我簽」；沒設 chain 的單 admin 仍可一鍵核准
                 const canApprove = s.status === '申請中' && (
                   canApproveByRpc('form_submissions', s.id)
-                  || (!s.template?.approval_chain_id && isAdmin)
+                  || (!s.template?.approval_chain_id && isManagerOrAbove)
                 )
-                const canCancel = s.status === '申請中' && (s.applicant_id === profile?.id || isAdmin)
+                const canCancel = s.status === '申請中' && (s.applicant_id === profile?.id || isManagerOrAbove)
                 return (
                   <tr key={s.id} onClick={() => openDetail(s)} style={{ cursor: 'pointer' }} title="點擊查看簽核明細">
                     <td style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--text-muted)' }}>#{s.id}</td>

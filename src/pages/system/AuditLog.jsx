@@ -9,9 +9,9 @@ import { useDebouncedValue } from '../../lib/performanceUtils'
 const PAGE_SIZE = 50
 
 export default function AuditLog() {
-  const { profile, isAdmin, hasPermission } = useAuth()
+  const { profile, hasPermission } = useAuth()
   // 稽核日誌：admin 或被授予「操作紀錄(audit.view)」權限者（權限設定頁可分人）
-  const canViewAudit = isAdmin || hasPermission('audit.view')
+  const canViewAudit = hasPermission('audit.view')
   const [logs, setLogs] = useState([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -41,7 +41,7 @@ export default function AuditLog() {
     if (err) setError('資料載入失敗，請重新整理頁面')
     else { setLogs(data || []); setTotal(count || 0) }
     setLoading(false)
-  }, [profile?.organization_id, isAdmin, page, section, filters.action, filters.from, filters.to, debouncedSearch]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [profile?.organization_id, page, section, filters.action, filters.from, filters.to, debouncedSearch]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { fetchLogs() }, [fetchLogs])
   useEffect(() => { setPage(0); setExpanded(new Set()) }, [section, filters.action, filters.from, filters.to, debouncedSearch])

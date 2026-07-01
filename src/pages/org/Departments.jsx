@@ -18,8 +18,8 @@ const LEVELS = [
 ]
 
 export default function Departments() {
-  const { profile, role, hasPermission } = useAuth()
-  const canEditStructure = role?.name === 'admin' || role?.name === 'super_admin' || hasPermission('org.structure.edit')
+  const { profile, hasPermission } = useAuth()
+  const canEditStructure = hasPermission('org.structure.edit')
   const [departments, setDepartments] = useState([])
   const [employees, setEmployees] = useState([])
   const [sections, setSections] = useState([])

@@ -9,7 +9,8 @@ import { useDebouncedValue } from '../../lib/performanceUtils'
 const PAGE_SIZE = 50
 
 export default function Changelog() {
-  const { isSuperAdmin } = useAuth()
+  const { hasPermission } = useAuth()
+  const isSuperAdmin = hasPermission('nav.group.super_admin')
   const [logs, setLogs] = useState([])
   const [total, setTotal] = useState(0)
   const [tenants, setTenants] = useState([])

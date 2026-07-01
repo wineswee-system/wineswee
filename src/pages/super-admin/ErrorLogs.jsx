@@ -21,7 +21,8 @@ const PAGE_SIZE = 50
 const timeAgo = (ts) => _timeAgo(ts) || '-'
 
 export default function ErrorLogs() {
-  const { isSuperAdmin, profile } = useAuth()
+  const { hasPermission, profile } = useAuth()
+  const isSuperAdmin = hasPermission('nav.group.super_admin')
   const [logs, setLogs] = useState([])
   const [tenants, setTenants] = useState([])
   const [loading, setLoading] = useState(true)

@@ -28,8 +28,7 @@ function formatYM(y, m) {
 }
 
 export default function AttendanceDiffReport() {
-  const { profile } = useAuth()
-  const isAdmin = ['admin', 'super_admin'].includes(profile?.role)
+  const { profile, hasPermission } = useAuth()
 
   // 預設「上個月」
   const now = new Date()
@@ -99,7 +98,7 @@ export default function AttendanceDiffReport() {
   }
 
   const handleCommitWriteback = async () => {
-    if (!isAdmin) return
+    if (!hasPermission('system.admin')) return
     if (!confirm(
       `要把 ${ym} 的「排班 vs 打卡」差異結算寫回 attendance_records 嗎？\n\n` +
       `會把該月所有 attendance_records 的 late_minutes/is_late 先重置 0/false，` +
@@ -126,7 +125,7 @@ export default function AttendanceDiffReport() {
   }
 
   const handleSendNotifications = async () => {
-    if (!isAdmin) return
+    if (!hasPermission('system.admin')) return
     if (!confirm(`要對 ${ym} 所有「未通知」員工發送 LINE 提醒嗎？`)) return
     setTriggering(true)
     try {
@@ -160,12 +159,12 @@ export default function AttendanceDiffReport() {
             <button className="btn btn-secondary" onClick={load}>
               <RefreshCw size={14} /> 重新整理
             </button>
-            {isAdmin && (
+            {hasPermission('system.admin') && (
               <button className="btn btn-primary" onClick={handleSendNotifications} disabled={triggering || stats.pending === 0}>
                 <Send size={14} /> {triggering ? '送出中...' : `發 LINE 給 ${stats.pending} 人`}
               </button>
             )}
-            {isAdmin && (
+            {hasPermission('system.admin') && (
               <button
                 className="btn btn-secondary"
                 onClick={handleCommitWriteback}

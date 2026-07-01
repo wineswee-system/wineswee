@@ -33,7 +33,8 @@ const MAIN_TABS = [
 ]
 
 export default function EmployeeDetail({ employee, employees: allEmployees, stores, departments, onUpdate, onClose, clickY }) {
-  const { isAdmin, profile } = useAuth()
+  const { hasPermission, profile } = useAuth()
+  const isAdmin = hasPermission('org.employee.edit')
 
   // 重設此員工的 LIFF 薪資密碼（清 line_pin_hash，員工下次查薪資重新設定）
   const handleResetSalaryPin = async () => {

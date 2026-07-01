@@ -80,9 +80,9 @@ const SAMPLE_CSV = `${CSV_HEADER}
 3,30300,28801,788,2757`
 
 export default function LaborLawRates() {
-  const { profile, role, hasPermission } = useAuth()
-  // admin/super_admin 或被授予「勞健保級距編輯」權限者（權限設定頁可分人）
-  const isAdmin = ['super_admin','admin'].includes(role?.name || profile?.role) || hasPermission('insurance_rate.edit')
+  const { profile, hasPermission } = useAuth()
+  // 被授予「勞健保級距編輯」權限者（admin/super_admin 永遠有，權限設定頁可分人）
+  const isAdmin = hasPermission('insurance_rate.edit')
   const [year, setYear] = useState(new Date().getFullYear())
   const [laborBrackets, setLaborBrackets] = useState([])
   const [healthBrackets, setHealthBrackets] = useState([])

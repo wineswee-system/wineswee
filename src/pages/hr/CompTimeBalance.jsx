@@ -8,10 +8,8 @@ import SearchableSelect from '../../components/SearchableSelect'
 // 補休餘額管理
 // 列出每個員工目前 active comp_time_ledger 加總、最近到期、過期未結（理論上不存在，月結會自動清）
 export default function CompTimeBalance() {
-  const { profile, role } = useAuth()
-  const userRole = role?.name || profile?.role || 'store_staff'
-  const isStaff = userRole === 'store_staff'
-  const isManager = userRole === 'manager'
+  const { profile, isStoreStaff, isManager } = useAuth()
+  const isStaff = isStoreStaff
 
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])

@@ -23,7 +23,8 @@ const STATUSES = [
 ]
 
 export default function Organizations() {
-  const { isSuperAdmin, loading: authLoading, profileReady } = useAuth()
+  const { hasPermission, loading: authLoading, profileReady } = useAuth()
+  const isSuperAdmin = hasPermission('nav.group.super_admin')
   const [orgs, setOrgs] = useState([])
   const [companies, setCompanies] = useState([])
   const [stores, setStores] = useState([])

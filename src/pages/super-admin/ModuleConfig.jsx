@@ -33,7 +33,8 @@ const planModuleDefaults = {
 }
 
 export default function ModuleConfig() {
-  const { isSuperAdmin } = useAuth()
+  const { hasPermission } = useAuth()
+  const isSuperAdmin = hasPermission('nav.group.super_admin')
   const [tenants, setTenants] = useState([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState({})

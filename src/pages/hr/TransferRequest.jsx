@@ -30,12 +30,11 @@ const STATUS_BADGE = {
 }
 
 export default function TransferRequest() {
-  const { profile, role, hasPermission } = useAuth()
+  const { profile, isManagerOrAbove, hasPermission } = useAuth()
   const canDeleteAll = hasPermission('hr_form.delete_all')
   const { canApprove } = usePendingApprovals()
   const navigate = useNavigate()
   const returnNav = useReturnNav()
-  const isAdmin = ['super_admin','admin','manager'].includes(role?.name || profile?.role)
   const [list, setList] = useState([])
   const [search, setSearch] = useState('')
   const [employees, setEmployees] = useState([])
@@ -149,7 +148,7 @@ export default function TransferRequest() {
         old_store:stores!old_store_id(id,name),
         new_store:stores!new_store_id(id,name)`)
       .order('id', { ascending: false })
-    if (!isAdmin && profile?.id) q = q.eq('employee_id', profile.id)
+    if (!isManagerOrAbove && profile?.id) q = q.eq('employee_id', profile.id)
     const orgId = profile?.organization_id
     const [{ data: r }, { data: e }, { data: d }, { data: s }, chain, orgRes] = await Promise.all([
       q,
@@ -171,7 +170,7 @@ export default function TransferRequest() {
     setChainSteps(await loadChainStepsBatch([...new Set(uniqChainIds)]))
     setLoading(false)
   }
-  useEffect(() => { load() }, [profile?.id, isAdmin, profile?.organization_id])
+  useEffect(() => { load() }, [profile?.id, isManagerOrAbove, profile?.organization_id])
 
   // Dashboard ApprovalCenter 跳過來時 ?focus=ID 自動開明細
   const [searchParams, setSearchParams] = useSearchParams()
@@ -189,12 +188,12 @@ export default function TransferRequest() {
   const formattedEmpOptions = useMemo(() => empOptions(employees), [employees])
 
   const handleSubmit = async () => {
-    const empId = isAdmin ? form.employee_id : profile?.id
+    const empId = isManagerOrAbove ? form.employee_id : profile?.id
     // 必填：員工 / 異動類型 / 生效日 / 異動原因
-    const validateForm = isAdmin
+    const validateForm = isManagerOrAbove
       ? { employee_id: empId, transfer_type: form.transfer_type, effective_date: form.effective_date, reason: form.reason }
       : { transfer_type: form.transfer_type, effective_date: form.effective_date, reason: form.reason }
-    const validateKeys = isAdmin
+    const validateKeys = isManagerOrAbove
       ? ['employee_id', 'transfer_type', 'effective_date', 'reason']
       : ['transfer_type', 'effective_date', 'reason']
     if (!validateRequired(validateForm, validateKeys, setErrors)) return
@@ -309,7 +308,7 @@ export default function TransferRequest() {
             </p>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            {(role?.name === 'super_admin' || role?.name === 'admin') && (
+            {hasPermission('approval_chain.edit') && (
               <button className="btn btn-secondary" onClick={() => navigate('/process/settings/chains/edit?formType=transfer&label=人事異動')} title="設定人事異動簽核流程">
                 <Settings size={14} /> 簽核設定
               </button>
@@ -355,7 +354,7 @@ export default function TransferRequest() {
                 const s = STATUS_BADGE[r.status] || {}
                 const steps = chainSteps[r.approval_chain_id] || []
                 const myTurn = canIApprove(r)
-                const canCancel = r.status === '申請中' && (r.employee_id === profile?.id || isAdmin)
+                const canCancel = r.status === '申請中' && (r.employee_id === profile?.id || isManagerOrAbove)
                 const canEdit = ['申請中','已駁回','已退回'].includes(r.status) && r.employee_id === profile?.id
                 return (
                   <tr key={r.id} onClick={() => openDetail(r)} style={{ cursor: 'pointer' }} title="點擊查看簽核明細"

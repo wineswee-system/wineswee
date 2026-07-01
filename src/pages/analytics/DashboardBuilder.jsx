@@ -227,9 +227,9 @@ function WidgetContent({ widget, data }) {
 
 // ── Main component ──
 export default function DashboardBuilder() {
-  const { role } = useAuth()
+  const { isManagerOrAbove, hasPermission } = useAuth()
   // RBAC：只 admin / super_admin / manager 可編輯，其他角色僅瀏覽
-  const canEdit = ['super_admin', 'admin', 'manager'].includes(role?.name)
+  const canEdit = isManagerOrAbove || hasPermission('nav.group.analytics')
 
   const [widgets, setWidgets] = useState(() => {
     try {

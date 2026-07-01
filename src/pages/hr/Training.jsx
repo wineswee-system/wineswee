@@ -14,8 +14,8 @@ const ENROLL_STATUSES = ['已報名', '進行中', '已完成', '未通過']
 const emptyForm = { title: '', description: '', category: '一般', duration_hours: '1', instructor: '', max_enrollment: '30', status: '開課中' }
 
 export default function Training() {
-  const { profile, role, hasPermission } = useAuth()
-  const canManage = role?.name === 'admin' || role?.name === 'super_admin' || hasPermission('training.manage')
+  const { profile, hasPermission } = useAuth()
+  const canManage = hasPermission('training.manage')
   const orgId = profile?.organization_id
   const [courses, setCourses] = useState([])
   const [loading, setLoading] = useState(true)

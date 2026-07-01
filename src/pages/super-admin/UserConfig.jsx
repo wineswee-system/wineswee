@@ -13,7 +13,8 @@ const ROLE_COLORS = { super_admin: 'badge-danger', admin: 'badge-purple', manage
 const STATUS_OPTIONS = ['在職', '離職', '停用']
 
 export default function UserConfig() {
-  const { isSuperAdmin } = useAuth()
+  const { hasPermission } = useAuth()
+  const isSuperAdmin = hasPermission('nav.group.super_admin')
   const [tenants, setTenants] = useState([])
   const [employees, setEmployees] = useState([])
   const [loading, setLoading] = useState(true)

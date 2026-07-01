@@ -4,9 +4,9 @@ import ChainConfigModal from '../../../components/ChainConfigModal'
 // 商品調撥「申請」chain 設定頁
 // category='商品調撥-申請' 的 chain 才會顯示（倉↔門市、門市↔門市）
 export default function TransferApplyChains() {
-  const { profile, isAdmin, isSuperAdmin } = useAuth()
+  const { profile, hasPermission } = useAuth()
 
-  if (!(isAdmin || isSuperAdmin)) {
+  if (!hasPermission('approval_chain.edit')) {
     return (
       <div style={{ padding: 48, textAlign: 'center' }}>
         <h3 style={{ color: 'var(--accent-red)' }}>無權限</h3>

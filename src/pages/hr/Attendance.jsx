@@ -38,11 +38,9 @@ function ClockModeTags({ inMode, outMode }) {
 }
 
 export default function Attendance() {
-  const { profile, role, hasPermission } = useAuth()
+  const { profile, isStoreStaff, isManager, hasPermission } = useAuth()
   const { handleError } = useErrorHandler('hr')
-  const userRole = role?.name || profile?.role || 'store_staff'
-  const isStaff = userRole === 'store_staff'
-  const isManager = userRole === 'manager'
+  const isStaff = isStoreStaff
   const canEditClock = hasPermission('clock.correction_edit')
 
   const [records, setRecords] = useState([])

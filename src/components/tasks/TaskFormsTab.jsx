@@ -23,9 +23,8 @@ function navTo(b, bindings) {
 
 export default function TaskFormsTab({ task, formBindings, setFormBindings, superAdminOnlyTplIds = new Set() }) {
   const navigate = useNavigate()
-  const { profile } = useAuth()
-  const isSuperAdmin = profile?.role === 'super_admin'
-  const visibleBindings = isSuperAdmin
+  const { profile, hasPermission } = useAuth()
+  const visibleBindings = hasPermission('nav.group.super_admin')
     ? formBindings
     : formBindings.filter(b => !b.form_template_id || !superAdminOnlyTplIds.has(b.form_template_id))
   const [employees, setEmployees] = useState([])
@@ -174,7 +173,7 @@ export default function TaskFormsTab({ task, formBindings, setFormBindings, supe
           }))}
           onChange={handleChange}
           lockedKeys={formBindings.filter(b => b.form_id).map(b => `${b.form_type}-${b.form_template_id ?? 'null'}`)}
-          isSuperAdmin={isSuperAdmin}
+          isSuperAdmin={hasPermission('nav.group.super_admin')}
         />
       </div>
 

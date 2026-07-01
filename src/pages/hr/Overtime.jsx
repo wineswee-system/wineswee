@@ -38,7 +38,7 @@ function computeOvertimeHours(start, end, step = 0.5) {
 }
 
 export default function Overtime() {
-  const { profile, role, hasPermission } = useAuth()
+  const { profile, hasPermission } = useAuth()
   const canDeleteAll = hasPermission('hr_form.delete_all')
   const { canApprove } = usePendingApprovals()
   const chainGuard = useChainGuard({ formType: 'overtime', organizationId: profile?.organization_id })
@@ -400,7 +400,7 @@ export default function Overtime() {
             <p>加班時數申請與審核</p>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            {(role?.name === 'super_admin' || role?.name === 'admin') && (
+            {hasPermission('approval_chain.edit') && (
               <button className="btn btn-secondary" onClick={() => navigate('/process/settings/chains/edit?formType=overtime&label=加班')} title="設定加班簽核流程">
                 <Settings size={14} /> 簽核設定
               </button>

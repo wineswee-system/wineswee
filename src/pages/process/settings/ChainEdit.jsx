@@ -7,9 +7,8 @@ import ChainConfigModal from '../../../components/ChainConfigModal'
 // 各表單頁右上「⚙ 簽核設定」按鈕點下去會 navigate 到這裡（取代原本的 modal）
 // URL 範例：/process/settings/chains/edit?formType=expense&label=費用報銷&mode=single
 export default function ChainEdit() {
-  const { profile, role, hasPermission } = useAuth()
-  // 修：AuthContext 沒提供 isAdmin（原本 undefined → admin 被誤擋，只有 super_admin 進得去）
-  const canEditChain = role?.name === 'admin' || role?.name === 'super_admin' || hasPermission('approval_chain.edit')
+  const { profile, hasPermission } = useAuth()
+  const canEditChain = hasPermission('approval_chain.edit')
   const [params] = useSearchParams()
   const navigate = useNavigate()
 

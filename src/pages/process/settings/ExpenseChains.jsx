@@ -2,9 +2,9 @@ import { useAuth } from '../../../contexts/AuthContext'
 import ChainConfigModal from '../../../components/ChainConfigModal'
 
 export default function ExpenseChains() {
-  const { profile, isAdmin, isSuperAdmin } = useAuth()
+  const { profile, hasPermission } = useAuth()
 
-  if (!(isAdmin || isSuperAdmin)) {
+  if (!hasPermission('approval_chain.edit')) {
     return (
       <div style={{ padding: 48, textAlign: 'center' }}>
         <h3 style={{ color: 'var(--accent-red)' }}>無權限</h3>

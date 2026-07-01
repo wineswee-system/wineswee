@@ -44,7 +44,7 @@ import { HR_APPROVAL_TEMPLATE_NAMES } from '../../lib/workflowIntegration'
 const TRIGGER_DEPTH_LIMIT = 5
 
 export default function Workflows() {
-  const { profile, isAdmin, isSuperAdmin } = useAuth()
+  const { profile, hasPermission } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
   const currentUser = profile?.name || '管理員'
@@ -1266,7 +1266,7 @@ export default function Workflows() {
         inst={inst} instSteps={instTasks} stats={stats}
         employees={employees} stores={stores} checklists={checklists} projects={projects} lineGroups={lineGroups}
         approvalChains={approvalChains}
-        currentUser={currentUser} isAdmin={isAdmin} isSuperAdmin={isSuperAdmin}
+        currentUser={currentUser} canBypassApproval={hasPermission('system.admin')}
         currentEmpId={profile?.id}
         onChainApprove={handleChainApprove}
         showNotesModal={showNotesModal} notesStep={notesStep} notesText={notesText}

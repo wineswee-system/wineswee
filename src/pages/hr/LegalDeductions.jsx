@@ -35,8 +35,8 @@ const emptyForm = {
 }
 
 export default function LegalDeductions() {
-  const { profile, role, hasPermission } = useAuth()
-  const canEdit = role?.name === 'admin' || role?.name === 'super_admin' || hasPermission('legal_deduction.edit')
+  const { profile, hasPermission } = useAuth()
+  const canEdit = hasPermission('legal_deduction.edit')
   const [items, setItems] = useState([])
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])

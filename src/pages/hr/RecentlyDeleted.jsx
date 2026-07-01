@@ -37,9 +37,9 @@ function urgencyColor(days) {
 }
 
 export default function RecentlyDeleted() {
-  const { profile, role, hasPermission } = useAuth()
+  const { profile, isManagerOrAbove, hasPermission } = useAuth()
   // 控管者(admin/super_admin/manager) 或被授予「還原已刪除單據」者（權限設定頁可分人）
-  const isAdmin = ['super_admin', 'admin', 'manager'].includes(role?.name || profile?.role) || hasPermission('hr_form.restore')
+  const isAdmin = isManagerOrAbove || hasPermission('hr_form.restore')
 
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)

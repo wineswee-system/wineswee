@@ -5,23 +5,21 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 
 // ════════════════════════════════════════════════════════════════
 // /analytics/* RBAC gate
-//   · ANALYTICS_TIER_1（全部分析頁）：super_admin / admin / manager
-//   · ANALYTICS_TIER_2（只 POS/庫存等門市相關）：+ store_staff
-//   · 其他角色全擋
+//   · tier 1（全部分析頁）：perm 'analytics.tier_1'
+//     → 預設授予 admin / manager（super_admin 永遠通過）
+//   · tier 2（門市相關頁）：perm 'analytics.tier_2'
+//     → 預設授予 admin / manager / store_staff
+//   · 其他角色：在「系統設定 → 員工個別權限」手動授予
 // ════════════════════════════════════════════════════════════════
 
-const TIER_1_ROLES = ['super_admin', 'admin', 'manager']
-const TIER_2_ROLES = [...TIER_1_ROLES, 'store_staff']
-
 export default function AnalyticsRouteGuard({ children, tier = 1 }) {
-  const { role, profileReady } = useAuth()
+  const { hasPermission, profileReady } = useAuth()
 
   if (!profileReady) return <LoadingSpinner />
 
-  const allowed = tier === 2 ? TIER_2_ROLES : TIER_1_ROLES
-  const userRole = role?.name
+  const permCode = tier === 2 ? 'analytics.tier_2' : 'analytics.tier_1'
 
-  if (!allowed.includes(userRole)) {
+  if (!hasPermission(permCode)) {
     return (
       <div style={{
         padding: 48, textAlign: 'center',
@@ -39,9 +37,8 @@ export default function AnalyticsRouteGuard({ children, tier = 1 }) {
         </div>
         <h3 style={{ color: 'var(--text-primary)', marginBottom: 8 }}>權限不足</h3>
         <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 16 }}>
-          這個分析頁面僅限 {tier === 1 ? '主管以上' : '主管 / 門市人員'} 角色查看。
-          <br />
-          目前你的角色：<b>{userRole || '未設定'}</b>
+          這個分析頁面需要 <b>{permCode}</b> 權限。<br />
+          請聯絡管理員在「員工個別權限」中開通。
         </p>
         <Navigate to="/" replace />
       </div>

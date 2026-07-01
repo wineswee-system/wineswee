@@ -14,8 +14,8 @@ import { geocodeAddress } from '../../lib/geocoding'
 const EMPTY_FORM = { name: '', company: '', company_id: '', address: '', phone: '', manager: '', manager_id: '', status: '營運中', store_code: '', store_type: 'retail', city: '', lat: '', lng: '', clock_radius: 150, allowed_wifi: '', late_tolerance_minutes: 5, early_clock_minutes: 30, clock_in_method: 'any', section_id: '' }
 
 export default function Locations() {
-  const { role, hasPermission } = useAuth()
-  const canEditStructure = role?.name === 'admin' || role?.name === 'super_admin' || hasPermission('org.structure.edit')
+  const { hasPermission } = useAuth()
+  const canEditStructure = hasPermission('org.structure.edit')
   const [stores, setStores] = useState([])
   const [employees, setEmployees] = useState([])
   const [companies, setCompanies] = useState([])

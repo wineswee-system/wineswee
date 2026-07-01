@@ -30,15 +30,14 @@ const normalizeType = (t) => {
 }
 
 export default function PunchCorrection() {
-  const { profile, role, hasPermission } = useAuth()
+  const { profile, isStoreStaff, hasPermission } = useAuth()
   const canDeleteAll = hasPermission('hr_form.delete_all')
   const canEditClock = hasPermission('clock.correction_edit')
   const { canApprove } = usePendingApprovals()
   const chainGuard = useChainGuard({ formType: 'correction', organizationId: profile?.organization_id })
   const navigate = useNavigate()
   const returnNav = useReturnNav()
-  const userRole = role?.name || profile?.role || 'store_staff'
-  const isStaff = userRole === 'store_staff'
+  const isStaff = isStoreStaff
 
   const [corrections, setCorrections] = useState([])
   const [employees, setEmployees] = useState([])
@@ -339,7 +338,7 @@ export default function PunchCorrection() {
             <p>員工打卡異常補登審核</p>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            {(role?.name === 'super_admin' || role?.name === 'admin') && (
+            {hasPermission('approval_chain.edit') && (
               <button className="btn btn-secondary" onClick={() => navigate('/process/settings/chains/edit?formType=correction&label=補打卡')} title="設定補打卡簽核流程">
                 <Settings size={14} /> 簽核設定
               </button>

@@ -117,7 +117,7 @@ function FormListItem({ form, onSelect }) {
 
 // ── Main Component ─────────────────────────────────────────
 export default function Approvals() {
-  const { profile, isAdmin, isSuperAdmin } = useAuth()
+  const { profile, hasPermission } = useAuth()
   const currentUser = profile?.name || ''
   const currentPosition = profile?.position || ''
 
@@ -183,7 +183,7 @@ export default function Approvals() {
   // ── Tab buckets ────────────────────────────────────────
   const pendingForms = forms.filter(f => {
     if (f.status !== '待簽' && f.status !== '簽核中') return false
-    if (isAdmin || isSuperAdmin) return true
+    if (hasPermission('system.admin')) return true
     return (f.steps || []).some(s =>
       s.status === '待簽' &&
       (s.role === currentPosition || s.role === currentUser || s.approver === currentUser)
@@ -341,7 +341,7 @@ export default function Approvals() {
       return (
         step.role === currentPosition ||
         step.role === currentUser ||
-        isAdmin || isSuperAdmin
+        hasPermission('system.admin')
       )
     }
 

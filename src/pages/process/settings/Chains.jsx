@@ -4,9 +4,8 @@ import ChainConfigModal from '../../../components/ChainConfigModal'
 // 全 chain library 管理：卡片式列出整 org 所有 chain，可新增 / 編輯 / 刪除
 // UI 由 ChainConfigModal mode="library" + embedded 提供（跟 ExpenseChains 同套）
 export default function Chains() {
-  const { profile, role, hasPermission } = useAuth()
-  // 修：AuthContext 沒提供 isAdmin（原本 undefined → 只有 super_admin 進得去、admin 被誤擋）
-  const canEditChain = role?.name === 'admin' || role?.name === 'super_admin' || hasPermission('approval_chain.edit')
+  const { profile, hasPermission } = useAuth()
+  const canEditChain = hasPermission('approval_chain.edit')
 
   if (!canEditChain) {
     return (

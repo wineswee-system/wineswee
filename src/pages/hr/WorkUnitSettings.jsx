@@ -29,8 +29,8 @@ const LEAVE_STEP_OPTIONS = {
 }
 
 export default function WorkUnitSettings() {
-  const { role, hasPermission } = useAuth()
-  const canEditRule = role?.name === 'admin' || role?.name === 'super_admin' || hasPermission('schedule.rule_edit')
+  const { hasPermission } = useAuth()
+  const canEditRule = hasPermission('schedule.rule_edit')
   const [stores, setStores] = useState([])
   const [leaveSettings, setLeaveSettings] = useState([])  // [{store_id, leave_code, step, unit}]
   const [selectedStoreId, setSelectedStoreId] = useState('all')  // 'all' = 全公司

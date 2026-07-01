@@ -30,12 +30,11 @@ const STATUS_BADGE = {
 }
 
 export default function LeaveOfAbsence() {
-  const { profile, role, hasPermission } = useAuth()
+  const { profile, isManagerOrAbove, hasPermission } = useAuth()
   const canDeleteAll = hasPermission('hr_form.delete_all')
   const { canApprove } = usePendingApprovals()
   const navigate = useNavigate()
   const returnNav = useReturnNav()
-  const isAdmin = ['super_admin','admin','manager'].includes(role?.name || profile?.role)
   const [list, setList] = useState([])
   const [search, setSearch] = useState('')
   const [employees, setEmployees] = useState([])
@@ -116,7 +115,7 @@ export default function LeaveOfAbsence() {
     let q = supabase.from('leave_of_absence_requests')
       .select('*, employee:employees(id,name,name_en,department_id,position), approver:employees!approver_id(id,name,signature_url)')
       .order('id', { ascending: false })
-    if (!isAdmin && profile?.id) q = q.eq('employee_id', profile.id)
+    if (!isManagerOrAbove && profile?.id) q = q.eq('employee_id', profile.id)
     const orgId = profile?.organization_id
     const [{ data: r }, { data: e }, chain, orgRes] = await Promise.all([
       q,
@@ -134,7 +133,7 @@ export default function LeaveOfAbsence() {
     setChainSteps(await loadChainStepsBatch([...new Set(uniqChainIds)]))
     setLoading(false)
   }
-  useEffect(() => { load() }, [profile?.id, isAdmin, profile?.organization_id])
+  useEffect(() => { load() }, [profile?.id, isManagerOrAbove, profile?.organization_id])
 
   // Dashboard ApprovalCenter 跳過來時 ?focus=ID 自動開明細
   const [searchParams, setSearchParams] = useSearchParams()
@@ -149,11 +148,11 @@ export default function LeaveOfAbsence() {
   }, [list, searchParams]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSubmit = async () => {
-    const empId = isAdmin ? form.employee_id : profile?.id
-    const validateForm = isAdmin
+    const empId = isManagerOrAbove ? form.employee_id : profile?.id
+    const validateForm = isManagerOrAbove
       ? { employee_id: empId, start_date: form.start_date, planned_end_date: form.planned_end_date, reason_type: form.reason_type }
       : { start_date: form.start_date, planned_end_date: form.planned_end_date, reason_type: form.reason_type }
-    const validateKeys = isAdmin
+    const validateKeys = isManagerOrAbove
       ? ['employee_id', 'start_date', 'planned_end_date', 'reason_type']
       : ['start_date', 'planned_end_date', 'reason_type']
     if (!validateRequired(validateForm, validateKeys, setErrors)) return
@@ -264,7 +263,7 @@ export default function LeaveOfAbsence() {
             </p>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            {(role?.name === 'super_admin' || role?.name === 'admin') && (
+            {hasPermission('approval_chain.edit') && (
               <button className="btn btn-secondary" onClick={() => navigate('/process/settings/chains/edit?formType=loa&label=留停')} title="設定留停簽核流程">
                 <Settings size={14} /> 簽核設定
               </button>
@@ -305,7 +304,7 @@ export default function LeaveOfAbsence() {
                 const s = STATUS_BADGE[r.status] || {}
                 const steps = chainSteps[r.approval_chain_id] || []
                 const myTurn = canIApprove(r)
-                const canCancel = r.status === '申請中' && (r.employee_id === profile?.id || isAdmin)
+                const canCancel = r.status === '申請中' && (r.employee_id === profile?.id || isManagerOrAbove)
                 return (
                   <tr key={r.id} onClick={() => openDetail(r)} style={{ cursor: 'pointer' }} title="點擊查看簽核明細"
                     onMouseEnter={(ev) => ev.currentTarget.style.background = 'var(--bg-secondary)'}
@@ -398,8 +397,8 @@ export default function LeaveOfAbsence() {
 
       {showForm && (
         <Modal title={editingId ? '✏️ 編輯留停申請' : '新增留停申請'} onClose={() => { setShowForm(false); setErrors({}); setEditingId(null) }} onSubmit={handleSubmit} submitLabel={editingId ? '更新送出' : '送出申請'}>
-          <Field label={isAdmin ? '員工 *' : '員工'} error={errors.employee_id} errorMsg="請選擇員工">
-            {isAdmin ? (
+          <Field label={isManagerOrAbove ? '員工 *' : '員工'} error={errors.employee_id} errorMsg="請選擇員工">
+            {isManagerOrAbove ? (
               <SearchableSelect
                 value={form.employee_id}
                 onChange={(v) => { setForm(f => ({ ...f, employee_id: v || '' })); clearError('employee_id', setErrors) }}

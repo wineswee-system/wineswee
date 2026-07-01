@@ -13,7 +13,7 @@ const isActiveNow = (r) => r.is_active && r.effective_from <= today() && (!r.eff
 
 // 簽核代理：委託人不在時，由代理人代簽（代理期間 + 全簽核類型通用）
 export default function ApprovalDelegations() {
-  const { profile, isAdmin } = useAuth()
+  const { profile, hasPermission } = useAuth()
   const [rules, setRules] = useState([])
   const [employees, setEmployees] = useState([])
   const [loading, setLoading] = useState(true)
@@ -38,7 +38,7 @@ export default function ApprovalDelegations() {
   useEffect(() => { load() }, [profile?.organization_id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // 非 admin 只能設「自己為委託人」(把自己的簽核權讓出去)
-  const lockedDelegator = !isAdmin
+  const lockedDelegator = !hasPermission('approval_chain.edit')
 
   const add = async () => {
     const delegator = lockedDelegator ? profile?.id : Number(form.delegator_employee_id)

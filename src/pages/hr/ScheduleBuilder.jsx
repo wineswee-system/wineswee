@@ -26,8 +26,6 @@ export default function ScheduleBuilder() {
   const [calendarSubView, setCalendarSubView] = useState('month')
   const [publishing, setPublishing] = useState(false)
   const [publishStatusRows, setPublishStatusRows] = useState([])  // 整個 cycle 範圍的發布狀態
-  const isAdmin = ['admin', 'super_admin'].includes(authProfile?.role) || hasPermission('schedule.edit')
-
   // 儲存狀態 indicator — 給使用者看「✓ 已儲存」/「💾 儲存中...」/「⚠️ 失敗」
   // 預設 'saved' — 剛從 DB 載入的就是儲存狀態，使用者一進來就看得到「✓ 已儲存」
   const [saveStatus, setSaveStatus] = useState('saved')  // 'saving' | 'saved' | 'error'
@@ -198,7 +196,7 @@ pendingSavesRef.current++
   }
 
   const handleUnpublish = async () => {
-    if (!isAdmin) { toast.error('只有管理員可解鎖'); return }
+    if (!hasPermission('schedule.edit')) { toast.error('只有管理員可解鎖'); return }
     if (!(await confirm({ message: `確定解鎖此 cycle？\n\n${rangeStart} ~ ${rangeEnd}\n\n解鎖後 cell 可再次編輯。` }))) return
     setPublishing(true)
     const { data, error } = await supabase.rpc('unpublish_schedule_cycle', {
@@ -337,7 +335,7 @@ pendingSavesRef.current++
           </button>
         )}
         {isLocked ? (
-          isAdmin ? (
+          hasPermission('schedule.edit') ? (
             <button
               className="btn btn-secondary"
               style={{

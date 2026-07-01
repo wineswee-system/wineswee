@@ -85,12 +85,11 @@ const EMPTY_TMPL = {
 }
 
 export default function HeadcountRequest() {
-  const { profile, role, hasPermission } = useAuth()
+  const { profile, isManagerOrAbove, hasPermission } = useAuth()
   const canDeleteAll = hasPermission('hr_form.delete_all')
   const { canApprove } = usePendingApprovals()
   const navigate = useNavigate()
   const returnNav = useReturnNav()
-  const isAdmin = ['super_admin','admin','manager'].includes(role?.name || profile?.role)
 
   const [list, setList] = useState([])
   const [employees, setEmployees] = useState([])
@@ -190,7 +189,7 @@ export default function HeadcountRequest() {
       .select('*, employee:employees!employee_id(id,name,name_en,department_id,position), approver:employees!approver_id(id,name,signature_url), need_dept:departments!need_dept_id(id,name), applicant_dept:departments!applicant_dept_id(id,name), store:stores!store_id(id,name)')
       .is('deleted_at', null)
       .order('id', { ascending: false })
-    if (!isAdmin && profile?.id) q = q.eq('employee_id', profile.id)
+    if (!isManagerOrAbove && profile?.id) q = q.eq('employee_id', profile.id)
     const orgId = profile?.organization_id
     const [{ data: r }, { data: e }, { data: d }, { data: s }, chain, orgRes] = await Promise.all([
       q,
@@ -213,7 +212,7 @@ export default function HeadcountRequest() {
     setLoading(false)
   }
 
-  useEffect(() => { load(); loadTemplates() }, [profile?.id, isAdmin, profile?.organization_id]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); loadTemplates() }, [profile?.id, isManagerOrAbove, profile?.organization_id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Dashboard 跳轉 ?focus=ID 自動開明細
   const [searchParams, setSearchParams] = useSearchParams()
@@ -239,11 +238,11 @@ export default function HeadcountRequest() {
   }
 
   const handleSubmit = async () => {
-    const empId = isAdmin ? form.employee_id : profile?.id
-    const validateForm = isAdmin
+    const empId = isManagerOrAbove ? form.employee_id : profile?.id
+    const validateForm = isManagerOrAbove
       ? { employee_id: empId, job_title: form.job_title, headcount: form.headcount }
       : { job_title: form.job_title, headcount: form.headcount }
-    const validateKeys = isAdmin
+    const validateKeys = isManagerOrAbove
       ? ['employee_id', 'job_title', 'headcount']
       : ['job_title', 'headcount']
     if (!validateRequired(validateForm, validateKeys, setErrors)) return
@@ -437,12 +436,12 @@ export default function HeadcountRequest() {
             </p>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            {isAdmin && (
+            {isManagerOrAbove && (
               <button className="btn btn-secondary" onClick={() => { setShowTmplManager(true); setTmplEditMode(false) }}>
                 <BookOpen size={14} /> 範本管理
               </button>
             )}
-            {(role?.name === 'super_admin' || role?.name === 'admin') && (
+            {hasPermission('approval_chain.edit') && (
               <button className="btn btn-secondary"
                 onClick={() => navigate('/process/settings/chains/edit?formType=headcount&label=人力需求')}
                 title="設定人力需求簽核流程">
@@ -485,7 +484,7 @@ export default function HeadcountRequest() {
               {displayList.map(r => {
                 const s = STATUS_BADGE[r.status] || {}
                 const steps = chainSteps[r.approval_chain_id] || []
-                const canCancel = r.status === '申請中' && (r.employee_id === profile?.id || isAdmin)
+                const canCancel = r.status === '申請中' && (r.employee_id === profile?.id || isManagerOrAbove)
                 return (
                   <tr key={r.id} onClick={() => openDetail(r)} style={{ cursor: 'pointer' }} title="點擊查看簽核明細"
                     onMouseEnter={(ev) => ev.currentTarget.style.background = 'var(--bg-secondary)'}
@@ -650,8 +649,8 @@ export default function HeadcountRequest() {
           {/* 區塊 1：基本資訊 */}
           <SectionTitle>📋 基本資訊</SectionTitle>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label={isAdmin ? '申請人 *' : '申請人'} error={errors.employee_id} errorMsg="請選擇員工">
-              {isAdmin ? (
+            <Field label={isManagerOrAbove ? '申請人 *' : '申請人'} error={errors.employee_id} errorMsg="請選擇員工">
+              {isManagerOrAbove ? (
                 <SearchableSelect
                   value={form.employee_id}
                   onChange={(v) => { setForm(f => ({ ...f, employee_id: v || '' })); clearError('employee_id', setErrors) }}

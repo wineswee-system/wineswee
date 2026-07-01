@@ -20,10 +20,9 @@ const emptyLeaveForm = { code: '', extra_days: 0, notes: '' }
 const emptyBonusForm = { code: '', type: 'fixed', amount: 0, rate: 0, base: 'sales', cap: 0, period: 'monthly', notes: '' }
 
 export default function BenefitSettings() {
-  const { role, hasPermission } = useAuth()
+  const { hasPermission } = useAuth()
   const [tab, setTab] = useState('leave')
-  const isAdminRole = role?.name === 'admin' || role?.name === 'super_admin'
-  const canEditPolicy = isAdminRole || hasPermission(tab === 'leave' ? 'leave_type.edit' : 'bonus.compute')
+  const canEditPolicy = hasPermission(tab === 'leave' ? 'leave_type.edit' : 'bonus.compute')
   const [stores, setStores] = useState([])
   const [employees, setEmployees] = useState([])
   const [selectedStoreId, setSelectedStoreId] = useState(null) // null = 全公司

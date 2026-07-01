@@ -19,8 +19,8 @@ const STATUS_STYLES = {
 const EMPTY_FORM = { employee: '', start_date: '', end_date: '', mentor: '', notes: '' }
 
 export default function ProbationTracker() {
-  const { role, hasPermission } = useAuth()
-  const canEval = role?.name === 'admin' || role?.name === 'super_admin' || hasPermission('probation.evaluate')
+  const { hasPermission } = useAuth()
+  const canEval = hasPermission('probation.evaluate')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [records, setRecords] = useState([])

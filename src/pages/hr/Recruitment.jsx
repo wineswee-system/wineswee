@@ -436,8 +436,8 @@ function CandidatePanel({ c, interviews, allInterviews, jobs = [], evalTemplates
 
 // ──────────────────────────────────────────────
 export default function Recruitment() {
-  const { profile, role, hasPermission } = useAuth()
-  const canManage = role?.name === 'admin' || role?.name === 'super_admin' || hasPermission('recruit.manage')
+  const { profile, hasPermission } = useAuth()
+  const canManage = hasPermission('recruit.manage')
   const orgId = profile?.organization_id
   const [tab, setTab] = useState('jobs')
 

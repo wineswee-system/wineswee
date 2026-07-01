@@ -106,7 +106,7 @@ function QuickAddRow({ inst, employees, onDirectSave }) {
 export default function InstanceDetailView({
   inst, instSteps, stats, employees, stores, checklists, projects = [], lineGroups = [],
   approvalChains = [],
-  currentUser = '', isAdmin = false, isSuperAdmin = false,
+  currentUser = '', canBypassApproval = false,
   // Modal states
   showNotesModal, notesStep, notesText, setNotesText, setShowNotesModal, setNotesStep,
   showAddTaskModal, taskForm, setTaskForm, setShowAddTaskModal,
@@ -174,7 +174,7 @@ export default function InstanceDetailView({
   const currentProject = projects.find(p => p.id === inst.project_id)
 
   const canConfirm = (step) => {
-    if (isSuperAdmin || isAdmin) return true
+    if (canBypassApproval) return true
     if (step.confirmation_approver && step.confirmation_approver === currentUser) return true
     return false
   }

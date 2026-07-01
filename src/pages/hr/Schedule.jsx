@@ -49,12 +49,12 @@ function buildShiftTypes(dbShifts) {
 export default function Schedule() {
 
   const navigate = useNavigate()
-  const { role: authRole, profile: authProfile, hasPermission } = useAuth()
-  const userRole = authRole?.name || 'store_staff'
+  const { profile: authProfile, hasPermission, isManagerOrAbove } = useAuth()
+  const isAdmin = hasPermission('system.admin')
+  const isSuperAdmin = hasPermission('nav.group.super_admin')
   // 角色預設 OR 被授予對應權限（權限設定頁可分人）
-  const canEditSchedule = ['admin', 'super_admin', 'manager'].includes(userRole) || hasPermission('schedule.edit')
-  const canUseAISchedule = ['admin', 'super_admin', 'manager'].includes(userRole) || hasPermission('schedule.algo')
-  const isSuperAdmin = userRole === 'super_admin'
+  const canEditSchedule = isManagerOrAbove || hasPermission('schedule.edit')
+  const canUseAISchedule = isManagerOrAbove || hasPermission('schedule.algo')
 
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
@@ -298,8 +298,6 @@ export default function Schedule() {
   const lockedDates = new Set((activeDates || []).filter(d => lockedMonths.has(d.slice(0, 7))))
   // 當前畫面（cycle 可能跨月）碰到的月份，給狀態列「逐月鎖定/解鎖」用
   const viewMonths = [...new Set((activeDates || []).map(d => d.slice(0, 7)))].sort()
-  const isAdmin = ['admin', 'super_admin'].includes(userRole)
-
   // 我可排班的門市範圍：admin/super_admin → 全部；其他 → user_stores 指派 + 自己門市 +
   // 我擔任店長(stores.manager_id=我)的店。非 admin 不該排到不屬於自己的店。
   const scopedStoreIds = (() => {

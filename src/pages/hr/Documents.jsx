@@ -10,8 +10,8 @@ import { confirm } from '../../lib/confirm'
 const CATEGORIES = ['報告', '制度規章', '表單', '合約範本', '教育訓練', '其他']
 
 export default function Documents() {
-  const { profile, role, hasPermission } = useAuth()
-  const canDeleteDoc = role?.name === 'admin' || role?.name === 'super_admin' || hasPermission('doc.delete')
+  const { profile, hasPermission } = useAuth()
+  const canDeleteDoc = hasPermission('doc.delete')
   const orgId = profile?.organization_id
   const [docs, setDocs] = useState([])
   const [loading, setLoading] = useState(true)

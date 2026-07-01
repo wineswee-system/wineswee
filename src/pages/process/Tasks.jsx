@@ -31,7 +31,7 @@ import { confirm } from '../../lib/confirm'
 const normBucket = b => ({ General: '一般工作', Personal: '私人工作', Workflow: '工作流程', Project: '專案' }[b] || b || '一般工作')
 
 export default function Tasks() {
-  const { profile, isSuperAdmin } = useAuth()
+  const { profile, hasPermission } = useAuth()
   const { logAction, logFieldChange } = useAuditLog()
   const [tab, setTab] = useState('all')
   const [view, setView] = useState(() => localStorage.getItem('tasks_view') || 'list')
@@ -311,7 +311,7 @@ export default function Tasks() {
   // Filter
   const filtered = allItems.filter(t => {
     // 私人工作：只有本人或 super_admin 可見
-    if (t.bucket === '私人工作' && !isSuperAdmin && t.assignee_id !== profile?.id && t.assignee !== profile?.name) return false
+    if (t.bucket === '私人工作' && !hasPermission('nav.group.super_admin') && t.assignee_id !== profile?.id && t.assignee !== profile?.name) return false
     if (filterAssignee && t.assignee !== filterAssignee) return false
     if (filterStore && t.store !== filterStore) return false
     if (filterBucket && t.bucket !== filterBucket) return false
@@ -434,7 +434,7 @@ export default function Tasks() {
 
       {view === 'workload' && (
         <TaskWorkloadView
-          tasks={tasks.filter(t => !(t.bucket === '私人工作' && !isSuperAdmin && t.assignee_id !== profile?.id && t.assignee !== profile?.name))}
+          tasks={tasks.filter(t => !(t.bucket === '私人工作' && !hasPermission('nav.group.super_admin') && t.assignee_id !== profile?.id && t.assignee !== profile?.name))}
           employees={employees}
           onTaskClick={t => setSelectedTask(tasks.find(x => x.id === t.id) || t)}
         />

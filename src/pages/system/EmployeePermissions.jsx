@@ -164,11 +164,11 @@ function BatchActionPill({ label, accent, onOpen, onClose, disabled }) {
 }
 
 export default function EmployeePermissions() {
-  const { profile, role } = useAuth()
+  const { profile, hasPermission } = useAuth()
+  const isSuperAdmin = hasPermission('nav.group.super_admin')
   const orgId = profile?.organization_id
   // super_admin / admin 都可以用此頁；DB RPC 也對應放寬
-  const canManage = role?.name === 'super_admin' || role?.name === 'admin'
-  const isSuperAdmin = role?.name === 'super_admin'
+  const canManage = hasPermission('system.admin')
 
   const [employees, setEmployees] = useState([])
   const [search, setSearch] = useState('')

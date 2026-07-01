@@ -34,9 +34,8 @@ const daysToHours = (d) => Math.round(Number(d || 0) * 8)
 const hoursToHours = (h) => Math.round(Number(h || 0))
 
 export default function LeaveBalances() {
-  const { profile, role } = useAuth()
-  const userRole = role?.name || profile?.role || 'store_staff'
-  const isStaff = userRole === 'store_staff'
+  const { profile, isStoreStaff } = useAuth()
+  const isStaff = isStoreStaff
   const currentYear = new Date().getFullYear()
 
   const [employees, setEmployees]     = useState([])

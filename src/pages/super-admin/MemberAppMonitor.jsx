@@ -471,7 +471,8 @@ function _pointLabel(type) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function MemberAppMonitor() {
-  const { isSuperAdmin, profile } = useAuth()
+  const { hasPermission, profile } = useAuth()
+  const isSuperAdmin = hasPermission('nav.group.super_admin')
   const [tab, setTab] = useState('errors')
 
   if (!isSuperAdmin) {

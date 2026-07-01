@@ -102,20 +102,16 @@ const emptyForm = {
 export default function Salary() {
   // Role-based access
   const navigate = useNavigate()
-  const { profile, role, hasPermission } = useAuth()
+  const { profile, isStoreStaff, isManager, hasPermission } = useAuth()
   const orgId = profile?.organization_id
-  const userRole = role?.name || profile?.role || 'store_staff'
-  const isStaff = userRole === 'store_staff'
-  const isManager = userRole === 'manager'
-  const isAdmin = userRole === 'admin' || userRole === 'super_admin'
-  // 銀行帳號 / 代發薪：admin 或被授予「薪資發放」權限者（在權限設定頁可指定）
-  const canBank = isAdmin || hasPermission('salary.pay')
-  // 其餘按鈕也由「全縣設定 → 權限」細項控制（admin/super_admin 永遠有）
-  const canCompute = isAdmin || hasPermission('salary.compute')  // 批次計薪
-  const canEditSalary = isAdmin || hasPermission('salary.edit')  // 新增薪資 / 逐筆調整（薪資結構=修改薪資）
-  const canAudit = isAdmin || hasPermission('audit.view')        // 稽核（操作紀錄）
-  const canExport = isAdmin || hasPermission('salary.export')          // 匯出薪資報表 PDF
-  const canSendPayslip = isAdmin || hasPermission('salary.send_payslip') // 發送薪資條 LINE
+  const isStaff = isStoreStaff
+  // 各功能由「全縣設定 → 權限」細項控制（admin/super_admin 永遠有）
+  const canBank = hasPermission('salary.pay')               // 銀行帳號 / 代發薪
+  const canCompute = hasPermission('salary.compute')        // 批次計薪
+  const canEditSalary = hasPermission('salary.edit')        // 新增薪資 / 逐筆調整（薪資結構=修改薪資）
+  const canAudit = hasPermission('audit.view')              // 稽核（操作紀錄）
+  const canExport = hasPermission('salary.export')          // 匯出薪資報表 PDF
+  const canSendPayslip = hasPermission('salary.send_payslip') // 發送薪資條 LINE
 
   const [records, setRecords] = useState([])
   const [bonusRecords, setBonusRecords] = useState([])

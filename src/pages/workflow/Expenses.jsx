@@ -24,7 +24,7 @@ const CATEGORIES = ['交通', '住宿', '餐飲', '設備', '其他']
 const emptyItem = () => ({ name: '', qty: 1, unit_price: '', subtotal: 0 })
 
 export default function Expenses() {
-  const { profile, hasPermission, isAdmin } = useAuth()
+  const { profile, hasPermission } = useAuth()
   const canDeleteAll = hasPermission('hr_form.delete_all')
   const { canApprove } = usePendingApprovals()
   const navigate = useNavigate()
@@ -384,7 +384,7 @@ export default function Expenses() {
             <p>日常營運而週期性發生的常態支出</p>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            {(isAdmin || hasPermission('finance.edit')) && (
+            {hasPermission('finance.edit') && (
               <button className="btn btn-secondary" onClick={() => navigate('/process/settings/chains/edit?formType=expense&label=經常性費用報銷')} title="設定經常性費用報銷簽核流程">
                 <Settings size={14} /> 簽核設定
               </button>

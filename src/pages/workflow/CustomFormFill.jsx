@@ -52,8 +52,7 @@ export default function CustomFormFill({ templateId: propTemplateId, embedded: p
   // embedded 模式：prop 或 URL ?embedded=1（卡片型，不顯示頂部 nav）
   const isEmbedded = propEmbedded ?? (searchParams.get('embedded') === '1')
   const isModal = !!onClose  // 有 onClose 表示是 Modal 內 render
-  const { profile, role } = useAuth()
-  const isAdmin = ['super_admin','admin'].includes(role?.name)
+  const { profile, hasPermission } = useAuth()
   const [template, setTemplate] = useState(null)
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState({})
@@ -221,7 +220,7 @@ export default function CustomFormFill({ templateId: propTemplateId, embedded: p
             title="看這張表單已提交的紀錄">
             <FileText size={12} /> 查看紀錄
           </button>
-          {isAdmin && (
+          {hasPermission('hr_form.template_edit') && (
             <button className="btn btn-secondary"
               onClick={() => navigate(`/hr/form-builder?edit=${templateId}`)}
               style={{ width: 'auto', padding: '4px 12px', fontSize: 12, color: 'var(--accent-purple)' }}

@@ -29,8 +29,8 @@ const LEGAL_REASONS = [
 ]
 
 export default function Severance() {
-  const { profile, role, hasPermission } = useAuth()
-  const canExecute = role?.name === 'admin' || role?.name === 'super_admin' || hasPermission('severance.execute')
+  const { profile, hasPermission } = useAuth()
+  const canExecute = hasPermission('severance.execute')
   const [records, setRecords] = useState([])
   const [employees, setEmployees] = useState([])
   const [loading, setLoading] = useState(true)

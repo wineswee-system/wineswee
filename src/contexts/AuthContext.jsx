@@ -201,6 +201,9 @@ export function AuthProvider({ children }) {
     isAuthenticated: !!user,
     isAdmin: role?.name === 'admin' || role?.name === 'super_admin',
     isSuperAdmin: role?.name === 'super_admin',
+    isManager: role?.name === 'manager',
+    isManagerOrAbove: ['manager', 'admin', 'super_admin'].includes(role?.name),
+    isStoreStaff: role?.name === 'store_staff',
     hasPermission, signIn, signOut,
   }), [user, profile, organization, role, permissions, loading, profileReady, hasPermission, signIn, signOut])
 

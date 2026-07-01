@@ -116,7 +116,7 @@ export default function Sidebar() {
   const { totalPending } = usePendingApprovals()  // 我的待簽件數（給頂部紅點）
   const { mentionCount, markSeen } = useMentionCount()
   const [showNotifPanel, setShowNotifPanel] = useState(false)
-  const { profile, signOut, isSuperAdmin, hasPermission } = useAuth()
+  const { profile, signOut, hasPermission } = useAuth()
   const [activeGroup, setActiveGroup] = useState(() => routeToGroup(location.pathname))
   const [openMenus, setOpenMenus] = useState({})
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light')
@@ -376,7 +376,7 @@ export default function Sidebar() {
   }
 
   // Build all dropdown groups including super-admin
-  const showSuperAdmin = isSuperAdmin
+  const showSuperAdmin = hasPermission('nav.group.super_admin')
   const allGroups = showSuperAdmin
     ? [...roleFiltered, { key: 'super-admin', icon: Shield, label: '超管', color: '#ef4444' }]
     : roleFiltered

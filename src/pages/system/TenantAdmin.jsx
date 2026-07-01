@@ -18,7 +18,8 @@ const emptyForm = { name: '', tax_id: '', plan: '標準', max_users: 25, admin_e
 
 export default function TenantAdmin() {
   const { tenant: activeTenant, switchTenant } = useTenant()
-  const { isSuperAdmin } = useAuth()
+  const { hasPermission } = useAuth()
+  const isSuperAdmin = hasPermission('nav.group.super_admin')
   const [tenants, setTenants] = useState([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)

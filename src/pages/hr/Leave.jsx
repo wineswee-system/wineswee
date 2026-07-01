@@ -29,7 +29,7 @@ import LeaveFormModal from './components/LeaveFormModal'
 import LeavePolicyModal from './components/LeavePolicyModal'
 
 export default function Leave() {
-  const { profile, role, hasPermission } = useAuth()
+  const { profile, hasPermission } = useAuth()
   const canDeleteAll = hasPermission('hr_form.delete_all')
   const { canApprove } = usePendingApprovals()
   const chainGuard = useChainGuard({ formType: 'leave', organizationId: profile?.organization_id })
@@ -538,7 +538,7 @@ export default function Leave() {
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="btn btn-secondary" onClick={() => setShowPolicyModal(true)}><Info size={14} /> 法規說明</button>
-            {(role?.name === 'super_admin' || role?.name === 'admin') && (
+            {hasPermission('approval_chain.edit') && (
               <button className="btn btn-secondary" onClick={() => navigate('/process/settings/chains/edit?formType=leave&label=請假')} title="設定請假表單的簽核流程">
                 <Settings size={14} /> 簽核設定
               </button>

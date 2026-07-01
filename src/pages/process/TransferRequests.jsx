@@ -49,9 +49,8 @@ const emptyForm = () => ({
 })
 
 export default function TransferRequests() {
-  const { profile, role } = useAuth()
+  const { profile, hasPermission } = useAuth()
   const navigate = useNavigate()
-  const userRole = role?.name || profile?.role || 'store_staff'
 
   const [records, setRecords] = useState([])
   const [employees, setEmployees] = useState([])
@@ -309,7 +308,7 @@ export default function TransferRequests() {
             <p>跨門市 / 總倉↔門市商品調撥 — 申請 + 驗收兩階段</p>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            {(userRole === 'admin' || userRole === 'super_admin') && (
+            {hasPermission('approval_chain.edit') && (
               <>
                 <button className="btn btn-secondary" onClick={() => navigate('/process/settings/transfer-apply-chains')} title="管理「商品調撥-申請」簽核鏈（倉↔門市、門市↔門市）">
                   <Settings size={14} /> 申請簽核設定

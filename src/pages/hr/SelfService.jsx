@@ -8,7 +8,7 @@ import { empLabel } from '../../lib/empLabel'
 
 import { confirm } from '../../lib/confirm'
 export default function SelfService() {
-  const { profile, isSuperAdmin, isAdmin } = useAuth()
+  const { profile, hasPermission } = useAuth()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [employee, setEmployee] = useState(null)
@@ -72,7 +72,7 @@ export default function SelfService() {
 
   // 編輯權限：自己 or admin（用 String 比避免 number/string 型別差異）
   const canEditSignature = employee && (
-    String(employee.id) === String(profile?.id) || isSuperAdmin || isAdmin
+    String(employee.id) === String(profile?.id) || hasPermission('system.admin')
   )
 
   const handleSigUpload = async (file) => {
@@ -136,7 +136,7 @@ export default function SelfService() {
             <h2><span className="header-icon">👤</span> 員工自助服務</h2>
             <p>查看個人資料、出勤、薪資、請假紀錄</p>
           </div>
-          {(isSuperAdmin || isAdmin) && (
+          {hasPermission('system.admin') && (
             <div style={{ minWidth: 220 }}>
               <SearchableSelect
                 value={selectedEmpName}

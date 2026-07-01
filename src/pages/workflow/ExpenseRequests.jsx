@@ -61,7 +61,7 @@ const verb = (s, doc) => doc?.settleVerb === '驗收'
   : s
 export default function ExpenseRequests({ docType = 'expense' } = {}) {
   const DOC = DOC_CFG[docType] || DOC_CFG.expense
-  const { profile, isAdmin, hasPermission } = useAuth()
+  const { profile, hasPermission } = useAuth()
   const canDeleteAll = hasPermission('hr_form.delete_all')
   const { canApprove } = usePendingApprovals()
   const navigate = useNavigate()
@@ -822,7 +822,7 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
             <p>{DOC.subtitle}</p>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            {isAdmin && (
+            {hasPermission('approval_chain.edit') && (
               <>
                 <button className="btn btn-secondary" onClick={() => navigate(`/process/settings/chains/edit?formType=${DOC.chainFormType}&label=${DOC.chainLabel}&mode=amount_grouped`)} title={`設定${DOC.label}的金額分組簽核流程`}>
                   <Settings size={14} /> 申請簽核

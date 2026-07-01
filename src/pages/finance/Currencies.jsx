@@ -10,8 +10,8 @@ import { confirm } from '../../lib/confirm'
 const emptyForm = { code: '', name: '', symbol: '', decimals: '0', sort_order: '99', is_active: true }
 
 export default function Currencies() {
-  const { role, hasPermission } = useAuth()
-  const canEdit = role?.name === 'admin' || role?.name === 'super_admin' || hasPermission('finance.edit')
+  const { hasPermission } = useAuth()
+  const canEdit = hasPermission('finance.edit')
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)

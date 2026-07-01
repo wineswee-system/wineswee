@@ -309,11 +309,8 @@ function WorkflowProgressCard({ w, tasks, days, onJump, index }) {
 // 主元件
 // ──────────────────────────────────────────────
 export default function TeamDashboard() {
-  const { profile, role, hasPermission } = useAuth()
+  const { profile, isManager, isAdmin, hasPermission } = useAuth()
   const navigate = useNavigate()
-  const userRole = role?.name || 'office_staff'
-  const isManager = userRole === 'manager'
-  const isAdminPlus = ['admin', 'super_admin'].includes(userRole)
   // 儀表板分頁可見性（admin 可在權限頁逐人調；super_admin 永遠 true；
   // manager/admin/super_admin 角色預設已含 nav.dashboard.*）
   const canSeeHr = hasPermission('nav.dashboard.hr')
@@ -368,16 +365,16 @@ export default function TeamDashboard() {
   // ── 計算 scope（manager 鎖 store；admin 可選） ──
   const scopeStoreId = useMemo(() => {
     if (isManager) return profile?.store_id || null
-    if (isAdminPlus) return storeFilter || null  // null = 全公司
+    if (isAdmin) return storeFilter || null  // null = 全公司
     return null
-  }, [isManager, isAdminPlus, profile?.store_id, storeFilter])
+  }, [isManager, isAdmin, profile?.store_id, storeFilter])
 
   // ── 載 stores（admin 才需要） ──
   useEffect(() => {
-    if (!isAdminPlus || !orgId) return
+    if (!isAdmin || !orgId) return
     supabase.from('stores').select('id, name').eq('organization_id', orgId).order('name')
       .then(({ data }) => setStores(data || []))
-  }, [isAdminPlus, orgId])
+  }, [isAdmin, orgId])
 
   // ── 主資料載入 ──
   const loadAll = useCallback(async () => {
@@ -923,12 +920,12 @@ export default function TeamDashboard() {
           <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>
             {new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}
             {isManager && profile?.store && <> · {profile.store}</>}
-            {isAdminPlus && scopeStoreId && stores.find(s => s.id === scopeStoreId) && <> · {stores.find(s => s.id === scopeStoreId).name}</>}
+            {isAdmin && scopeStoreId && stores.find(s => s.id === scopeStoreId) && <> · {stores.find(s => s.id === scopeStoreId).name}</>}
           </div>
         </div>
 
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          {isAdminPlus && (
+          {isAdmin && (
             <select
               className="form-input"
               value={storeFilter || ''}
@@ -1288,7 +1285,7 @@ export default function TeamDashboard() {
        *     原因：全公司 N 十人 punch grid 是噪音；GM 想看誰異常，不是看誰正常
        */}
       {(() => {
-        const showAll = isManager || (isAdminPlus && scopeStoreId)
+        const showAll = isManager || (isAdmin && scopeStoreId)
         // 全公司視角時排除 'late'：未打卡有專屬 KPI（紅卡），點 KPI 可下鑽 /hr/attendance
         // 這邊只列「在班的特殊狀態」(休假/請假/加班中/出差)，避免 dashboard 被未打卡淹沒
         const visible = showAll

@@ -63,10 +63,10 @@ const parseCsvLine = (line) => {
 }
 
 export default function OvertimeExceptionImport() {
-  const { profile, role } = useAuth()
+  const { profile, hasPermission } = useAuth()
   const navigate = useNavigate()
 
-  const isAuthorized = ['admin', 'super_admin'].includes(role?.name)
+  const isAuthorized = hasPermission('system.admin')
   const orgId = profile?.organization_id
 
   const [month, setMonth] = useState(currentMonth())

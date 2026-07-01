@@ -72,12 +72,10 @@ const PosSelect = ({ value, onChange }) => (
 )
 
 export default function Employees() {
-  const { profile, role, hasPermission } = useAuth()
-  // 權限旗標（admin 角色預設已含這些碼；super_admin 由 hasPermission 自動 true）
-  const isAdmin = role?.name === 'admin' || role?.name === 'super_admin'
-  const canEditEmp = isAdmin || hasPermission('org.employee.edit')        // 新增 / 匯入員工
-  const canDeleteEmp = isAdmin || hasPermission('org.employee.delete')    // 離職 / 復職
-  const canEditStructure = isAdmin || hasPermission('org.structure.edit') // 部門 / 組織編輯
+  const { profile, hasPermission } = useAuth()
+  const canEditEmp = hasPermission('org.employee.edit')        // 新增 / 匯入員工
+  const canDeleteEmp = hasPermission('org.employee.delete')    // 離職 / 復職
+  const canEditStructure = hasPermission('org.structure.edit') // 部門 / 組織編輯
   const [offboardingFor, setOffboardingFor] = useState(null)  // { employee, date, reason }
   const [showProxyMgmt, setShowProxyMgmt] = useState(false)
   const [employees, setEmployees] = useState([])
@@ -474,7 +472,7 @@ export default function Employees() {
         }}>
           <Building2 size={14} /> 部門管理 ({departments.length})
         </button>
-        {isAdmin && (
+        {hasPermission('approval_chain.edit') && (
           <button onClick={() => setPageTab('delegations')} style={{
             padding: '8px 20px', borderRadius: 8, border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 13,
             display: 'flex', alignItems: 'center', gap: 6,
@@ -719,7 +717,7 @@ export default function Employees() {
       </>}
 
       {/* ══ 簽核代理 Tab ══ */}
-      {pageTab === 'delegations' && isAdmin && (
+      {pageTab === 'delegations' && hasPermission('approval_chain.edit') && (
         <div style={{ maxWidth: 860 }}>
           <div className="card" style={{ padding: 18, marginBottom: 16 }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent-blue)', marginBottom: 12 }}>＋ 新增代理規則</div>

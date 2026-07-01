@@ -39,7 +39,8 @@ function timeAgo(ts) {
 }
 
 export default function UserActivity() {
-  const { isSuperAdmin } = useAuth()
+  const { hasPermission } = useAuth()
+  const isSuperAdmin = hasPermission('nav.group.super_admin')
   const [logs, setLogs] = useState([])
   const [tenants, setTenants] = useState([])
   const [loading, setLoading] = useState(true)

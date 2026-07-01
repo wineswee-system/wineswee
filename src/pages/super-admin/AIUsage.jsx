@@ -86,7 +86,8 @@ function formatTokens(n) {
 }
 
 export default function AIUsage() {
-  const { isSuperAdmin } = useAuth()
+  const { hasPermission } = useAuth()
+  const isSuperAdmin = hasPermission('nav.group.super_admin')
   const [page, setPage] = useState(0)
   const [search, setSearch] = useState('')
   const [showFilters, setShowFilters] = useState(false)

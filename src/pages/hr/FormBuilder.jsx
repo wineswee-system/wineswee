@@ -34,9 +34,9 @@ const FIELD_TYPES = [
 const COLORS = ['cyan', 'blue', 'green', 'orange', 'red', 'purple', 'yellow']
 
 export default function FormBuilder() {
-  const { profile, role, hasPermission } = useAuth()
-  // admin/super_admin 或被授予「HR 表單範本」權限者
-  const isAdmin = ['super_admin','admin'].includes(role?.name || profile?.role) || hasPermission('hr_form.template_edit')
+  const { profile, hasPermission } = useAuth()
+  // 被授予「HR 表單範本」權限者（admin/super_admin 永遠有）
+  const isAdmin = hasPermission('hr_form.template_edit')
   const [templates, setTemplates] = useState([])
   const [chains, setChains] = useState([])
   const [loading, setLoading] = useState(true)

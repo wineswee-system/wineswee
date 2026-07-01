@@ -30,12 +30,11 @@ const STATUS_BADGE = {
 }
 
 export default function Resignation() {
-  const { profile, role, hasPermission } = useAuth()
+  const { profile, isManagerOrAbove, hasPermission } = useAuth()
   const canDeleteAll = hasPermission('hr_form.delete_all')
   const { canApprove } = usePendingApprovals()
   const navigate = useNavigate()
   const returnNav = useReturnNav()
-  const isAdmin = ['super_admin','admin','manager'].includes(role?.name || profile?.role)
   const [list, setList] = useState([])
   const [search, setSearch] = useState('')
   const [employees, setEmployees] = useState([])
@@ -116,7 +115,7 @@ export default function Resignation() {
     let q = supabase.from('resignation_requests')
       .select('*, employee:employees(id,name,name_en,department_id,position), approver:employees!approver_id(id,name,signature_url)')
       .order('id', { ascending: false })
-    if (!isAdmin && profile?.id) q = q.eq('employee_id', profile.id)
+    if (!isManagerOrAbove && profile?.id) q = q.eq('employee_id', profile.id)
     const orgId = profile?.organization_id
     const [{ data: r }, { data: e }, chain, orgRes] = await Promise.all([
       q,
@@ -135,7 +134,7 @@ export default function Resignation() {
     setChainSteps(await loadChainStepsBatch([...new Set(uniqChainIds)]))
     setLoading(false)
   }
-  useEffect(() => { load() }, [profile?.id, isAdmin, profile?.organization_id])
+  useEffect(() => { load() }, [profile?.id, isManagerOrAbove, profile?.organization_id])
 
   // Dashboard ApprovalCenter 跳過來時 ?focus=ID 自動開明細
   const [searchParams, setSearchParams] = useSearchParams()
@@ -150,12 +149,12 @@ export default function Resignation() {
   }, [list, searchParams]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSubmit = async () => {
-    const empId = isAdmin ? form.employee_id : profile?.id
+    const empId = isManagerOrAbove ? form.employee_id : profile?.id
     // 必填：員工 / 離職日 / 離職原因
-    const validateForm = isAdmin
+    const validateForm = isManagerOrAbove
       ? { employee_id: empId, planned_resign_date: form.planned_resign_date, reason: form.reason }
       : { planned_resign_date: form.planned_resign_date, reason: form.reason }
-    const validateKeys = isAdmin
+    const validateKeys = isManagerOrAbove
       ? ['employee_id', 'planned_resign_date', 'reason']
       : ['planned_resign_date', 'reason']
     if (!validateRequired(validateForm, validateKeys, setErrors)) return
@@ -253,7 +252,7 @@ export default function Resignation() {
 
   // 我是不是當前 step 的合法簽核人
   // 用 web_list_my_pending_approval_ids RPC 判定（chain step 動態解人 + 自己不能簽自己）
-  // 取代原本只看 target_emp_id 又 || isAdmin 的簡陋邏輯
+  // 取代原本只看 target_emp_id 又 || isManagerOrAbove 的簡陋邏輯
   const canIApprove = (req) => canApprove('resignation_requests', req.id)
   const displayList = search.trim() ? list.filter(r => [String(r.id), r.employee?.name, r.reason].some(f => (f||'').toLowerCase().includes(search.trim().toLowerCase()))) : list
 
@@ -270,7 +269,7 @@ export default function Resignation() {
             </p>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            {(role?.name === 'super_admin' || role?.name === 'admin') && (
+            {hasPermission('approval_chain.edit') && (
               <button className="btn btn-secondary" onClick={() => navigate('/process/settings/chains/edit?formType=resignation&label=離職')} title="設定離職簽核流程">
                 <Settings size={14} /> 簽核設定
               </button>
@@ -311,7 +310,7 @@ export default function Resignation() {
                 const s = STATUS_BADGE[r.status] || {}
                 const steps = chainSteps[r.approval_chain_id] || []
                 const myTurn = canIApprove(r)
-                const canCancel = r.status === '申請中' && (r.employee_id === profile?.id || isAdmin)
+                const canCancel = r.status === '申請中' && (r.employee_id === profile?.id || isManagerOrAbove)
                 return (
                   <tr key={r.id} onClick={() => openDetail(r)} style={{ cursor: 'pointer' }} title="點擊查看簽核明細"
                     onMouseEnter={(ev) => ev.currentTarget.style.background = 'var(--bg-secondary)'}
@@ -404,8 +403,8 @@ export default function Resignation() {
 
       {showForm && (
         <Modal title={editingId ? '✏️ 編輯離職申請' : '新增離職申請'} onClose={() => { setShowForm(false); setErrors({}); setEditingId(null) }} onSubmit={handleSubmit} submitLabel={editingId ? '更新送出' : '送出申請'}>
-          <Field label={isAdmin ? '員工 *' : '員工'} error={errors.employee_id} errorMsg="請選擇員工">
-            {isAdmin ? (
+          <Field label={isManagerOrAbove ? '員工 *' : '員工'} error={errors.employee_id} errorMsg="請選擇員工">
+            {isManagerOrAbove ? (
               <SearchableSelect
                 value={form.employee_id}
                 onChange={(v) => { setForm(f => ({ ...f, employee_id: v || '' })); clearError('employee_id', setErrors) }}

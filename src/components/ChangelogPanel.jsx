@@ -16,9 +16,9 @@ const PAGE_SIZE = 30
  *   currentUser — optional display name; enables "僅看我的" toggle
  */
 export default function ChangelogPanel({ tables, targetId, orgId: orgIdProp, currentUser }) {
-  const { profile, isSuperAdmin } = useAuth()
+  const { profile, hasPermission } = useAuth()
   // Non-super-admins always query their own org to prevent cross-tenant data exposure
-  const resolvedOrgId = isSuperAdmin ? orgIdProp : profile?.organization_id
+  const resolvedOrgId = hasPermission('nav.group.super_admin') ? orgIdProp : profile?.organization_id
 
   const [logs, setLogs] = useState([])
   const [total, setTotal] = useState(0)

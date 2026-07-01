@@ -7,7 +7,7 @@ import Modal, { Field } from '../../components/Modal'
 import { toast } from '../../lib/toast'
 
 const TYPE_LABEL = {
-  annual: '特休假', sick: '病假', personal: '事假', comp: '補休',
+  annual: '特休假', '補休': '補休', sick: '病假', personal: '事假',
   menstrual: '生理假', marriage: '婚假', bereavement: '喪假',
   official: '公假', maternity: '產假', paternity: '陪產假',
   parental: '育嬰假', family_care: '家庭照顧假', mental_health: '心理假',
@@ -25,7 +25,7 @@ const LEGAL_LIMITS = {
 const EVENT_BASED = new Set(['official', 'maternity', 'parental', 'occupational', 'unpaid'])
 
 const ANNUAL_TYPES = [
-  'annual', 'sick', 'personal', 'menstrual',
+  'annual', '補休', 'sick', 'personal', 'menstrual',
   'marriage', 'bereavement', 'official', 'maternity', 'paternity', 'unpaid',
   'family_care', 'mental_health', 'occupational', 'prenatal', 'parental',
 ]

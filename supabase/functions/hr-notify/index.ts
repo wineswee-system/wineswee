@@ -583,14 +583,13 @@ function buildTaskMentioned(details: {
       header: {
         type: "box", layout: "vertical", backgroundColor: "#2563EB", paddingAll: "14px",
         contents: [
-          { type: "text", text: `💬 有人提到您`, weight: "bold", color: "#FFFFFF", size: "md" },
+          { type: "text", text: `💬 ${details.author || '有人'} 提到您`, weight: "bold", color: "#FFFFFF", size: "md" },
         ],
       },
       body: {
         type: "box", layout: "vertical", paddingAll: "14px", spacing: "sm",
         contents: [
           row("任務", details.task_title || '（未命名）'),
-          row("提及者", details.author || '—'),
           ...(snippet ? [row("內容", snippet)] : []),
         ],
       },

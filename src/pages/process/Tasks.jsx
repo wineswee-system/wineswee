@@ -59,7 +59,7 @@ export default function Tasks() {
   const [filterWorkflow, setFilterWorkflow] = useState('')
   const [workflowDefs, setWorkflowDefs] = useState([])
   const [formSections, setFormSections] = useState([])
-  const [form, setForm] = useState({ title: '', workflow: '', assignee: '', due_date: '', planned_start: '', store: '', role: '', priority: '中', bucket: '一般工作', task_type: 'task', project_id: '', section_id: '', description: '', approval_mode: 'none', approval_chain_id: '', confirmation_approvers: [], confirmation_mode: 'parallel', required_forms: [] })
+  const [form, setForm] = useState({ title: '', workflow: '', assignee: '', due_date: '', planned_start: '', store_id: '', role: '', priority: '中', bucket: '一般工作', task_type: 'task', project_id: '', section_id: '', description: '', approval_mode: 'none', approval_chain_id: '', confirmation_approvers: [], confirmation_mode: 'parallel', required_forms: [] })
   const [pendingFiles, setPendingFiles] = useState([])
   const [selfFillQueue, setSelfFillQueue] = useState(null)  // 建立後「自己填」表單自動跳出佇列
   const [uploadingFiles, setUploadingFiles] = useState(false)
@@ -212,7 +212,7 @@ export default function Tasks() {
       assignee_id: empId,
       due_date: form.due_date || null,
       planned_start: form.planned_start || null,
-      store: form.store || null,
+      store_id: form.store_id || null,  // store 由 trigger tg_sync_task_assignee 反推
       role: form.role || null,
       priority: form.priority,
       bucket: form.bucket || null,
@@ -279,7 +279,7 @@ export default function Tasks() {
       }
       setTasks(prev => [data, ...prev])
       setShowModal(false)
-      setForm({ title: '', workflow: '', assignee: '', due_date: '', planned_start: '', store: '', role: '', priority: '中', bucket: '一般工作', task_type: 'task', project_id: '', section_id: '', description: '', approval_mode: 'none', approval_chain_id: '', confirmation_approvers: [], confirmation_mode: 'parallel', required_forms: [] })
+      setForm({ title: '', workflow: '', assignee: '', due_date: '', planned_start: '', store_id: '', role: '', priority: '中', bucket: '一般工作', task_type: 'task', project_id: '', section_id: '', description: '', approval_mode: 'none', approval_chain_id: '', confirmation_approvers: [], confirmation_mode: 'parallel', required_forms: [] })
     }
   }
 
@@ -700,9 +700,9 @@ export default function Tasks() {
           </Field>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Field label="門市／地點">
-              <select className="form-input" style={{ width: '100%' }} value={form.store} onChange={e => set('store', e.target.value)}>
+              <select className="form-input" style={{ width: '100%' }} value={form.store_id ?? ''} onChange={e => set('store_id', e.target.value ? Number(e.target.value) : '')}>
                 <option value="">— 選擇門市 —</option>
-                {stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </Field>
             <Field label="負責人" required error={!!formErrors.assignee} errorMsg={formErrors.assignee}>

@@ -53,7 +53,7 @@ export default function TaskModal({
   const [form, setForm] = useState({
     title: '', status: '未開始', priority: '中',
     assignee: '', assignee_id: null,
-    bucket: '一般工作', category: '', store: '',
+    bucket: '一般工作', category: '', store_id: '',
     planned_start: '', due_date: '', due_time: '', reminder_at: '',
     section_id: '', recurrence_rule: '', recurrence_until: '',
     notes: '', description: '',
@@ -119,7 +119,7 @@ export default function TaskModal({
       assignee_id: resolvedId,
       bucket: normBucket(task.bucket),
       category: task.category || '',
-      store: task.store || '',
+      store_id: task.store_id ?? '',
       planned_start: task.planned_start || '',
       due_date: task.due_date || '',
       due_time: task.due_time || '',
@@ -235,7 +235,7 @@ export default function TaskModal({
       assignee: form.assignee || null,
       bucket: form.bucket || null,
       category: form.category || null,
-      store: form.store || null,
+      store_id: form.store_id || null,  // store 由 trigger tg_sync_task_assignee 反推
       planned_start: form.planned_start || null,
       due_date: form.due_date || null,
       due_time: form.due_time || null,
@@ -454,10 +454,10 @@ export default function TaskModal({
                   </div>
                   <div>
                     <div style={labelStyle}>歸屬門市</div>
-                    <select className="form-input" style={{ width: '100%' }} value={form.store}
-                      onChange={e => setAndDirty('store', e.target.value)}>
+                    <select className="form-input" style={{ width: '100%' }} value={form.store_id ?? ''}
+                      onChange={e => setAndDirty('store_id', e.target.value ? Number(e.target.value) : null)}>
                       <option value="">未指定</option>
-                      {stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                      {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                     </select>
                   </div>
                 </div>

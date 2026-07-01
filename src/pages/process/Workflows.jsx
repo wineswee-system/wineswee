@@ -75,7 +75,7 @@ export default function Workflows() {
 
   // Modals
   const [showAddTaskModal, setShowAddTaskModal] = useState(false)
-  const [taskForm, setTaskForm] = useState({ title: '', assignee: '', store: '', planned_start: '', due_date: '', due_time: '17:00', required_forms: [] })
+  const [taskForm, setTaskForm] = useState({ title: '', assignee: '', store_id: '', planned_start: '', due_date: '', due_time: '17:00', required_forms: [] })
   const [showNotesModal, setShowNotesModal] = useState(false)
   const [notesStep, setNotesStep] = useState(null)
   const [notesText, setNotesText] = useState('')
@@ -315,7 +315,7 @@ export default function Workflows() {
           title: s.title, description: s.description || null,
           role: s.role || null,
           assignee: an, assignee_id: an ? (empByName.get(an) || null) : null,
-          store: sourceTask.store || null,
+          store_id: sourceTask.store_id || null,  // store 由 trigger 反推
           // 第 1 步「進行中」直接開工；後面用「待處理」（等前一步），不要 '待簽核'（那是有 chain 才用）
           status: i === 0 ? '進行中' : '待處理',
           started_at: i === 0 ? new Date().toISOString() : null,
@@ -456,7 +456,7 @@ export default function Workflows() {
       description: origTask.description || null,
       assignee: origTask.assignee || null,
       assignee_id: origTask.assignee_id || null,
-      store: origTask.store || null,
+      store_id: origTask.store_id || null,  // store 由 trigger 反推
       planned_start: origTask.planned_start || null,
       due_date: origTask.due_date || null,
       due_time: origTask.due_time || '17:00',
@@ -565,7 +565,8 @@ export default function Workflows() {
       description: taskForm.description || null,
       assignee: taskForm.assignee,
       assignee_id: empId,
-      store: taskForm.store || selectedInstance.store,
+      // store 由 trigger tg_sync_task_assignee 從 store_id 反推 → 只寫 store_id
+      store_id: taskForm.store_id || stores.find(s => s.name === selectedInstance.store)?.id || null,
       planned_start: taskForm.planned_start || null,
       due_date: taskForm.due_date || null,
       due_time: taskForm.due_time || '17:00',
@@ -628,7 +629,7 @@ export default function Workflows() {
           subFailures.push(`審批人員未掛上：${error.message}`)
         } else {
           for (const name of (taskForm.confirmation_approvers || [])) {
-            notifyApproval(name, taskForm.title, '請求審批', { store: taskForm.store || null }).catch(() => {})
+            notifyApproval(name, taskForm.title, '請求審批', { store: stores.find(s => s.id === taskForm.store_id)?.name || null }).catch(() => {})
           }
         }
       }
@@ -642,7 +643,7 @@ export default function Workflows() {
       }
 
       setShowAddTaskModal(false)
-      setTaskForm({ title: '', assignee: '', store: '', planned_start: '', due_date: '', due_time: '17:00', required_forms: [] })
+      setTaskForm({ title: '', assignee: '', store_id: '', planned_start: '', due_date: '', due_time: '17:00', required_forms: [] })
 
       if (subFailures.length > 0) {
         toast.error(`任務已建立，但有設定失敗：\n${subFailures.join('\n')}`)

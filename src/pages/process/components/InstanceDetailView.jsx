@@ -418,7 +418,7 @@ export default function InstanceDetailView({
           })}
         </div>
         <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={() => {
-          setTaskForm({ title: '', assignee: '', store: inst.store || '', planned_start: '', due_date: '', due_time: '17:00' })
+          setTaskForm({ title: '', assignee: '', store_id: stores.find(s => s.name === inst.store)?.id ?? '', planned_start: '', due_date: '', due_time: '17:00' })
           setShowAddTaskModal(true)
         }}><Plus size={13} /> 新增任務</button>
       </div>
@@ -694,7 +694,7 @@ export default function InstanceDetailView({
                     due_time: '17:00',
                     status: '未開始',
                     workflow_instance_id: inst.id,
-                    store: inst.store,
+                    store_id: stores.find(s => s.name === inst.store)?.id ?? null,
                     step_order: maxOrder + 1,
                   }
                   const { data, error } = await createTask(payload)
@@ -749,10 +749,10 @@ export default function InstanceDetailView({
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Field label="門市／地點">
               <select className="form-input" style={{ width: '100%' }}
-                value={taskForm.store}
-                onChange={e => setTaskForm(f => ({ ...f, store: e.target.value }))}>
+                value={taskForm.store_id ?? ''}
+                onChange={e => setTaskForm(f => ({ ...f, store_id: e.target.value ? Number(e.target.value) : '' }))}>
                 <option value="">請選擇</option>
-                {stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </Field>
             <Field label="負責人" required error={!!addTaskErrors.assignee} errorMsg={addTaskErrors.assignee}>

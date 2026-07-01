@@ -85,7 +85,7 @@ export default function TaskDetailPanel({
       status: task.status || '待簽核',
       priority: task.priority || '中',
       assignee: task.assignee || '',
-      store: task.store || '',
+      store_id: task.store_id ?? '',
       category: task.category || 'Workflow',
       planned_start: task.planned_start || '',
       due_date: task.due_date || '',
@@ -244,6 +244,8 @@ export default function TaskDetailPanel({
       ...form,
       title: titleDraft,
       assignee_id: employees.find(e => e.name === form.assignee)?.id ?? null,
+      // store 是 trigger 反正規化欄位（tg_sync_task_assignee 用 store_id 覆寫）→ 只寫 store_id
+      store_id: form.store_id || null,
       planned_start: form.planned_start || null,
       due_date: form.due_date || null,
       due_time: form.due_time || null,
@@ -253,6 +255,7 @@ export default function TaskDetailPanel({
       workflow_instance_id: form.workflow_instance_id || null,
       project_id: form.project_id || null,
     }
+    delete payload.store
     const { data, error: updateErr } = await updateTask(task.id, payload)
     if (updateErr) { toast.error('儲存失敗：' + updateErr.message); setSaving(false); return }
     if (data) {
@@ -458,10 +461,10 @@ export default function TaskDetailPanel({
                   </div>
                   <div>
                     <div style={labelStyle}>歸屬門市</div>
-                    <select className="form-input" style={{ width: '100%' }} value={form.store}
-                      onChange={e => setAndDirty('store', e.target.value)}>
+                    <select className="form-input" style={{ width: '100%' }} value={form.store_id ?? ''}
+                      onChange={e => setAndDirty('store_id', e.target.value ? Number(e.target.value) : null)}>
                       <option value="">未指定</option>
-                      {stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                      {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                     </select>
                   </div>
                 </div>

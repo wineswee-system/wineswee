@@ -37,11 +37,22 @@ export default function TaskDiscussionTab({ task, profile, attachments, setAttac
     if (!profile?.organization_id) return
     supabase
       .from('employees')
-      .select('id, name, stores(name)')
+      .select('id, name, store_id, store')
       .eq('organization_id', profile.organization_id)
       .eq('status', '在職')
       .order('name')
-      .then(({ data }) => { if (data) setColleagues(data) })
+      .then(async ({ data: emps }) => {
+        if (!emps) return
+        // 撈所有門市名稱，key by id，讓門市改名即時反映
+        const { data: stores } = await supabase
+          .from('stores')
+          .select('id, name')
+        const storeMap = Object.fromEntries((stores || []).map(s => [s.id, s.name]))
+        setColleagues(emps.map(e => ({
+          ...e,
+          storeName: (e.store_id && storeMap[e.store_id]) || e.store || '',
+        })))
+      })
   }, [profile?.organization_id])
 
   const filteredColleagues = mentionQuery !== null
@@ -191,7 +202,7 @@ export default function TaskDiscussionTab({ task, profile, attachments, setAttac
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                 >
                   <span style={{ fontWeight: 700 }}>{emp.name}</span>
-                  {(emp.stores?.name) && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{emp.stores.name}</span>}
+                  {emp.storeName && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{emp.storeName}</span>}
                 </div>
               ))}
               <div style={{ padding: '4px 12px', fontSize: 11, color: 'var(--text-muted)' }}>

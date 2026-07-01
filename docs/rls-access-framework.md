@@ -2,7 +2,7 @@
 
 > 目的:用「角色/職責 × 資料類別」的框架決定誰看得到什麼,**每張表歸一個類別、套該類別的固定規則**,
 > 不再逐表客製。新增表或新增人時,照框架歸類即可,避免越來越亂。
-> 最後更新 2026-06-18。
+> 最後更新 2026-07-02。
 
 ---
 
@@ -64,7 +64,11 @@ form_submissions, business_trips, certifications, education_records, employee_co
 family_members, foreign_worker_docs, foreign_worker_profiles, nhi_supplementary_records,
 position_history, store_audit_on_duty, store_bonus_employee, work_experiences,
 employee_assignments, accommodation_assignments, annual_bonus_tracker,
+**attendance_records**, **salary_records**, **leave_balances**,
 schedules(**讀**;寫見③)
+
+> ⚠️ `attendance_records` / `salary_records` / `leave_balances` 原有 `auth_<table>` USING(true)
+> catch-all policy，已於 `20260702100000` 清除並改套 `can_see_request(employee_id)`。
 
 ### ② 工作項目 — 純參與者 + admin
 tasks(指派/建立/同專案成員), projects(owner/成員), project_members(本人/同專案), workflow_instances(發起/目標/申請人)
@@ -74,6 +78,7 @@ schedules(**寫** = `can_manage_emp_store`), schedule_month_locks, shift_swaps,
 store_audits, store_bonus_monthly
 
 ### ④ 公司營運 — `org_visible`(讀同 org;寫 `is_staff` 或 org_visible)
+**employees**(SELECT 同 org 全員可見，排班/審核需要互查;INSERT/DELETE 限 admin;UPDATE 本人或 manager+),
 customers, skus, accounts, accounts_payable, accounts_receivable, suppliers, warehouses,
 bins, stock_levels, invoices, inbound_orders, inbound_items, outbound_orders, outbound_items,
 goods_receipts, journal_entries, journal_lines, sales_orders, sales_returns, quotations,

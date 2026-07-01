@@ -293,8 +293,8 @@ export default function Sidebar() {
     '/hr/labor-law-rates':   'nav.salary.law',
     '/hr/insurance-grade':   'nav.salary.law',
     // ── HR 表單（管理功能） ──
-    '/hr/forms/transfer':     'nav.schedule.basic',   // 人事異動：manager/office_staff+
-    '/hr/forms/headcount':    'nav.schedule.basic',   // 人力需求：manager/office_staff+
+    '/hr/forms/transfer':     'nav.talent',            // 人事異動：manager/admin+（人才管理功能）
+    '/hr/forms/headcount':    'nav.talent',            // 人力需求：manager/admin+（人才管理功能）
     '/hr/recently-deleted':   'nav.org.full',         // 最近刪除：manager/admin+
     // ── 人才發展 ──
     '/hr/recruitment':        'nav.talent',

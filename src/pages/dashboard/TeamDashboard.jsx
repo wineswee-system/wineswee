@@ -898,6 +898,17 @@ export default function TeamDashboard() {
 
   if (loading && team.length === 0) return <LoadingSpinner />
 
+  // manager 未指派門市 → RLS 此時只回傳自己，顯示空團隊無意義
+  if (isManager && !profile?.store_id) return (
+    <div style={{ padding: '80px 24px', textAlign: 'center', color: C.muted }}>
+      <AlertTriangle size={40} style={{ color: C.orange, marginBottom: 16 }} />
+      <h3 style={{ margin: '0 0 8px', color: 'var(--text-primary)' }}>尚未指派門市</h3>
+      <p style={{ fontSize: 14, maxWidth: 360, margin: '0 auto' }}>
+        你的帳號目前沒有關聯任何門市，無法顯示團隊儀表板。請聯繫 admin 在員工資料中設定所屬門市。
+      </p>
+    </div>
+  )
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       {/* ─── Header ─── */}

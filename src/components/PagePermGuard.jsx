@@ -45,9 +45,9 @@ export const PAGE_PERM = {
   '/hr/import':                               'nav.hr_form.builder',
   // 排班管理功能
   '/hr/schedule-xlsx-import':                 'nav.schedule.basic',
-  // HR 表單管理
-  '/hr/forms/transfer':                       'nav.schedule.basic',
-  '/hr/forms/headcount':                      'nav.schedule.basic',
+  // HR 表單管理（人事異動 / 人力需求 = 人才管理功能，排班權限不對等）
+  '/hr/forms/transfer':                       'nav.talent',
+  '/hr/forms/headcount':                      'nav.talent',
   '/hr/recently-deleted':                     'nav.org.full',
   // LMS 管理
   '/system/offer-letter-templates':           'nav.lms.admin',

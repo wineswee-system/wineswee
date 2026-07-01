@@ -297,10 +297,12 @@ export default function LeaveBalances() {
     }
   }
 
+  const bulkIsHour = bulkLeaveType === '補休'
   const handleBulkSubmit = async () => {
     if (!bulkSelectedIds.length) { toast.warning('請選擇員工'); return }
-    if (bulkDays === '' || isNaN(Number(bulkDays))) { toast.warning('請輸入天數'); return }
-    const days = Number(bulkDays)
+    if (bulkDays === '' || isNaN(Number(bulkDays))) { toast.warning(bulkIsHour ? '請輸入小時數' : '請輸入天數'); return }
+    // 補休輸入小時，存 leave_balances.total_days 時除以 8
+    const days = bulkIsHour ? Number(bulkDays) / 8 : Number(bulkDays)
     const orgId = profile?.organization_id
     try {
       setBulkSaving(true)
@@ -327,7 +329,9 @@ export default function LeaveBalances() {
         const { error } = await supabase.from('leave_balances').insert(toInsert)
         if (error) throw error
       }
-      toast.success(`已更新 ${bulkSelectedIds.length} 人的 ${TYPE_LABEL[bulkLeaveType]} (${days > 0 ? '+' : ''}${days} 天)`)
+      const displayVal = bulkIsHour ? Number(bulkDays) : days
+      const unit = bulkIsHour ? '小時' : '天'
+      toast.success(`已更新 ${bulkSelectedIds.length} 人的 ${TYPE_LABEL[bulkLeaveType]} (${displayVal > 0 ? '+' : ''}${displayVal} ${unit})`)
       setShowBulkModal(false)
       // reload
       const id = selectedEmpId
@@ -640,8 +644,9 @@ export default function LeaveBalances() {
                   {ANNUAL_TYPES.map(t => <option key={t} value={t}>{TYPE_LABEL[t] || t}</option>)}
                 </select>
               </Field>
-              <Field label="調整天數" required>
-                <input className="form-input" type="number" step="0.5" style={{ width: '100%' }} placeholder="正數加、負數扣"
+              <Field label={bulkIsHour ? '調整小時數' : '調整天數'} required>
+                <input className="form-input" type="number" step={bulkIsHour ? 1 : 0.5} style={{ width: '100%' }}
+                  placeholder={bulkIsHour ? '正數加、負數扣（小時）' : '正數加、負數扣'}
                   value={bulkDays} onChange={e => setBulkDays(e.target.value)} />
               </Field>
             </div>

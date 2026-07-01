@@ -42,7 +42,7 @@ BEGIN
          SELECT 1 FROM approval_chain_steps acs
           WHERE acs.chain_id = sa.approval_chain_id
             AND acs.step_order = sa.current_step
-            AND public._employee_matches_chain_step(emp.id, acs.id, sa.auditor_id)
+            AND public._employee_matches_chain_step(emp.id::int, acs.id::int, sa.auditor_id::int, FALSE)
        )) AS need_my_approve
     FROM store_audits sa
     WHERE sa.organization_id = emp.organization_id
@@ -58,7 +58,7 @@ BEGIN
               SELECT 1 FROM approval_chain_steps acs
                WHERE acs.chain_id = sa.approval_chain_id
                  AND acs.step_order = sa.current_step
-                 AND public._employee_matches_chain_step(emp.id, acs.id, sa.auditor_id)
+                 AND public._employee_matches_chain_step(emp.id::int, acs.id::int, sa.auditor_id::int, FALSE)
             ))
       )
     ORDER BY sa.audit_date DESC, sa.id DESC

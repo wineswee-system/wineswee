@@ -116,12 +116,13 @@ export default function Workflows() {
   const [deployForm, setDeployForm] = useState({ location: '', assignees: {} })
 
   useEffect(() => {
+    if (!profile?.organization_id) return
     Promise.all([
       getWorkflows(),
       getWorkflowInstances({ excludeTemplates: HR_APPROVAL_TEMPLATE_NAMES }),
       getTasks(),
       supabase.from('employees').select('id, name, name_en, dept, position, department_id, store, store_id, departments!department_id(name), stores!store_id(name)').eq('status', '在職').order('name'),
-      supabase.from('stores').select('*').order('name'),
+      supabase.from('stores').select('*').eq('organization_id', profile.organization_id).order('name'),
       supabase.from('checklists').select('*').order('id'),
       supabase.from('sop_templates').select('*').order('id'),
       supabase.from('departments').select('*').order('name'),
@@ -146,7 +147,7 @@ export default function Workflows() {
       console.error('Failed to load:', err)
       setError('資料載入失敗')
     }).finally(() => setLoading(false))
-  }, [])
+  }, [profile?.organization_id])
 
   // Live-sync: reflect task & workflow-instance changes from other users/tabs
   useRealtimeTasks(setAllTasks)

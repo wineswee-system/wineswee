@@ -89,7 +89,7 @@ export default function Tasks() {
     return Promise.all([
       getTasks(),
       supabase.from('employees').select('id, name, department_id, position, dept').eq('status', '在職').order('name'),
-      supabase.from('stores').select('*').order('name'),
+      supabase.from('stores').select('*').eq('organization_id', profile?.organization_id).order('name'),
       supabase.from('departments').select('id, name').order('name'),
       supabase.from('projects').select('id, name').order('name'),
       getCategories('task'),

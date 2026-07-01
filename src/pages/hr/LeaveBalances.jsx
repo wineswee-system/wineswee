@@ -60,6 +60,7 @@ export default function LeaveBalances() {
   const [bulkSearch, setBulkSearch]         = useState('')
   const [bulkLeaveType, setBulkLeaveType]   = useState('annual')
   const [bulkDays, setBulkDays]             = useState('')
+  const [bulkUnit, setBulkUnit]             = useState('day')   // 'day' | 'hour'
   const [bulkYear, setBulkYear]             = useState(currentYear)
   const [bulkSaving, setBulkSaving]         = useState(false)
 
@@ -297,12 +298,11 @@ export default function LeaveBalances() {
     }
   }
 
-  const bulkIsHour = bulkLeaveType === '補休'
   const handleBulkSubmit = async () => {
     if (!bulkSelectedIds.length) { toast.warning('請選擇員工'); return }
-    if (bulkDays === '' || isNaN(Number(bulkDays))) { toast.warning(bulkIsHour ? '請輸入小時數' : '請輸入天數'); return }
-    // 補休輸入小時，存 leave_balances.total_days 時除以 8
-    const days = bulkIsHour ? Number(bulkDays) / 8 : Number(bulkDays)
+    if (bulkDays === '' || isNaN(Number(bulkDays))) { toast.warning(bulkUnit === 'hour' ? '請輸入小時數' : '請輸入天數'); return }
+    // 小時模式存 total_days 時除以 8
+    const days = bulkUnit === 'hour' ? Number(bulkDays) / 8 : Number(bulkDays)
     const orgId = profile?.organization_id
     try {
       setBulkSaving(true)
@@ -329,8 +329,8 @@ export default function LeaveBalances() {
         const { error } = await supabase.from('leave_balances').insert(toInsert)
         if (error) throw error
       }
-      const displayVal = bulkIsHour ? Number(bulkDays) : days
-      const unit = bulkIsHour ? '小時' : '天'
+      const displayVal = Number(bulkDays)
+      const unit = bulkUnit === 'hour' ? '小時' : '天'
       toast.success(`已更新 ${bulkSelectedIds.length} 人的 ${TYPE_LABEL[bulkLeaveType]} (${displayVal > 0 ? '+' : ''}${displayVal} ${unit})`)
       setShowBulkModal(false)
       // reload
@@ -409,7 +409,7 @@ export default function LeaveBalances() {
             <div style={{ display: 'flex', gap: 8 }}>
               <button className="btn btn-ghost" onClick={() => {
                 setBulkSelectedIds([]); setBulkSearch(''); setBulkLeaveType('annual')
-                setBulkDays(''); setBulkYear(currentYear); setShowBulkModal(true)
+                setBulkDays(''); setBulkUnit('day'); setBulkYear(currentYear); setShowBulkModal(true)
               }} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <Users size={14} /> 批次調整天數
               </button>
@@ -644,10 +644,16 @@ export default function LeaveBalances() {
                   {ANNUAL_TYPES.map(t => <option key={t} value={t}>{TYPE_LABEL[t] || t}</option>)}
                 </select>
               </Field>
-              <Field label={bulkIsHour ? '調整小時數' : '調整天數'} required>
-                <input className="form-input" type="number" step={bulkIsHour ? 1 : 0.5} style={{ width: '100%' }}
-                  placeholder={bulkIsHour ? '正數加、負數扣（小時）' : '正數加、負數扣'}
-                  value={bulkDays} onChange={e => setBulkDays(e.target.value)} />
+              <Field label="調整數量" required>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <input className="form-input" type="number" step={bulkUnit === 'hour' ? 1 : 0.5}
+                    style={{ flex: 1 }} placeholder="正數加、負數扣"
+                    value={bulkDays} onChange={e => setBulkDays(e.target.value)} />
+                  <select className="form-input" style={{ width: 72 }} value={bulkUnit} onChange={e => setBulkUnit(e.target.value)}>
+                    <option value="day">天</option>
+                    <option value="hour">小時</option>
+                  </select>
+                </div>
               </Field>
             </div>
             <Field label={`選擇員工（已選 ${bulkSelectedIds.length} / ${employees.length}）`}>

@@ -37,7 +37,7 @@ export default function TaskDiscussionTab({ task, profile, attachments, setAttac
     if (!profile?.organization_id) return
     supabase
       .from('employees')
-      .select('id, name, store')
+      .select('id, name, stores(name)')
       .eq('organization_id', profile.organization_id)
       .eq('status', '在職')
       .order('name')
@@ -191,7 +191,7 @@ export default function TaskDiscussionTab({ task, profile, attachments, setAttac
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                 >
                   <span style={{ fontWeight: 700 }}>{emp.name}</span>
-                  {emp.store && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{emp.store}</span>}
+                  {(emp.stores?.name) && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{emp.stores.name}</span>}
                 </div>
               ))}
               <div style={{ padding: '4px 12px', fontSize: 11, color: 'var(--text-muted)' }}>

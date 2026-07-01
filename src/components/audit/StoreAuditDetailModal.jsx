@@ -83,7 +83,9 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
   // 統計
   const passed = items.filter(i => i.passed === true).length
   const failed = items.filter(i => i.passed === false).length
-  const pending = items.filter(i => i.passed === null).length
+  // △（partial）：不扣分，不算未評核
+  const partial = items.filter(i => i.partial === true).length
+  const pending = items.filter(i => i.passed === null && !i.partial).length
   const deducted = items.filter(i => i.passed === false).reduce((s, i) => s + (i.deduct_score || 0), 0)
 
   // ─── 草稿：編輯項目 ───
@@ -220,6 +222,7 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
         <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', background: 'var(--bg-secondary)', display: 'flex', gap: 16, fontSize: 13 }}>
           <span>共 {items.length} 項</span>
           <span style={{ color: 'var(--accent-green)' }}>✓ 合格 {passed}</span>
+          {partial > 0 && <span style={{ color: 'var(--accent-purple)' }}>△ {partial}</span>}
           <span style={{ color: 'var(--accent-red)' }}>✗ 不合格 {failed}</span>
           {pending > 0 && <span style={{ color: 'var(--accent-orange)' }}>未評核 {pending}</span>}
           <span style={{ marginLeft: 'auto', fontWeight: 700, color: deducted > 0 ? 'var(--accent-red)' : 'var(--text-secondary)' }}>
@@ -387,6 +390,7 @@ function ItemRow({ item, employees, editable, onChange }) {
   const empOpts = useMemo(() => empOptions(employees, { keyBy: 'id' }), [employees])
   const [uploading, setUploading] = useState(false)
   const failed = item.passed === false
+  const isPartial = item.partial === true
   const showRemark = item.category_code === '五' && item.item_no === 6
   const attachments = Array.isArray(item.attachments) ? item.attachments : []
 
@@ -418,7 +422,7 @@ function ItemRow({ item, employees, editable, onChange }) {
   return (
     <div style={{
       padding: '8px 4px', borderBottom: '1px solid var(--border)', fontSize: 13,
-      background: failed ? 'var(--accent-red-subtle)' : 'transparent',
+      background: failed ? 'var(--accent-red-subtle)' : isPartial ? 'var(--accent-purple-dim)' : 'transparent',
     }}>
       <div style={{ display: 'grid', gridTemplateColumns: '32px 1fr auto auto', gap: 8, alignItems: 'center' }}>
         <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>{item.item_no}</div>
@@ -446,7 +450,7 @@ function ItemRow({ item, employees, editable, onChange }) {
           {editable ? (
             <>
               <button
-                onClick={() => onChange({ passed: true })}
+                onClick={() => onChange({ passed: true, partial: false })}
                 style={{
                   padding: '4px 8px', fontSize: 11, borderRadius: 4, cursor: 'pointer', border: 'none',
                   background: item.passed === true ? 'var(--accent-green)' : 'var(--bg-primary)',
@@ -454,7 +458,18 @@ function ItemRow({ item, employees, editable, onChange }) {
                 }}
               >合格</button>
               <button
-                onClick={() => onChange({ passed: false })}
+                onClick={() => onChange({ passed: null, partial: true })}
+                style={{
+                  padding: '4px 8px', fontSize: 11, borderRadius: 4, cursor: 'pointer',
+                  border: isPartial ? '1.5px solid var(--accent-purple)' : 'none',
+                  background: isPartial ? 'var(--accent-purple)' : 'var(--bg-primary)',
+                  color: isPartial ? '#fff' : 'var(--text-muted)',
+                  fontWeight: 700, minWidth: 26,
+                }}
+                title="△（不扣分）"
+              >△</button>
+              <button
+                onClick={() => onChange({ passed: false, partial: false })}
                 style={{
                   padding: '4px 8px', fontSize: 11, borderRadius: 4, cursor: 'pointer', border: 'none',
                   background: item.passed === false ? 'var(--accent-red)' : 'var(--bg-primary)',
@@ -465,10 +480,19 @@ function ItemRow({ item, employees, editable, onChange }) {
           ) : (
             <span style={{
               padding: '3px 8px', borderRadius: 4, fontSize: 11, fontWeight: 700,
-              background: item.passed === true ? 'var(--accent-green-dim)' : item.passed === false ? 'var(--accent-red-dim)' : 'var(--bg-primary)',
-              color: item.passed === true ? 'var(--accent-green)' : item.passed === false ? 'var(--accent-red)' : 'var(--text-muted)',
+              background: item.passed === true ? 'var(--accent-green-dim)'
+                : item.passed === false ? 'var(--accent-red-dim)'
+                : isPartial ? 'var(--accent-purple-dim)'
+                : 'var(--bg-primary)',
+              color: item.passed === true ? 'var(--accent-green)'
+                : item.passed === false ? 'var(--accent-red)'
+                : isPartial ? 'var(--accent-purple)'
+                : 'var(--text-muted)',
             }}>
-              {item.passed === true ? '✓ 合格' : item.passed === false ? '✗ 不合格' : '—'}
+              {item.passed === true ? '✓ 合格'
+                : item.passed === false ? '✗ 不合格'
+                : isPartial ? '△'
+                : '—'}
             </span>
           )}
         </div>

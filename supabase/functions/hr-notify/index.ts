@@ -450,6 +450,8 @@ function buildTaskAutoStarted(details: {
   notes?: string;
   completed_tasks?: string[];
   bindings?: Array<{ label?: string; required_status?: string }>;
+  step_order?: number;
+  total_steps?: number;
   liff_id?: string | null;
 }) {
   const LC = {
@@ -493,6 +495,10 @@ function buildTaskAutoStarted(details: {
   if (infoLine) body.push({ type: 'text', text: infoLine, size: 'sm', color: LC.muted, wrap: true });
   if (details.initiated_by) body.push({ type: 'text', text: `發起人：${details.initiated_by}`, size: 'sm', color: LC.muted });
   if (details.workflow_name) body.push({ type: 'text', text: `流程：${details.workflow_name}`, size: 'sm', color: LC.muted });
+  if (details.total_steps != null) {
+    const stepNum = (details.step_order ?? 0) + 1;
+    body.push({ type: 'text', text: `步驟：第 ${stepNum} 步 / 共 ${details.total_steps} 步`, size: 'sm', color: LC.brand });
+  }
   if (Array.isArray(details.completed_tasks) && details.completed_tasks.length > 0) {
     body.push({ type: 'text', text: `前置已完成：${details.completed_tasks.join('、')}`, size: 'xs', color: LC.soft, wrap: true });
   }

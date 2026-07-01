@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { toast } from '../../lib/toast'
 import FormBindingsPicker from '../FormBindingsPicker'
 import SearchableSelect, { empOptions } from '../SearchableSelect'
 import FillFormModal from './FillFormModal'
 import SettlePickerModal from './SettlePickerModal'
-import { applyTypeFor, bindingFillPath } from './bindingFillUrl'
+import { applyTypeFor, bindingFillPath, bindingViewPath } from './bindingFillUrl'
 
 const STATUS_STYLE = {
   '未填':   { bg: 'var(--glass-light)',       color: 'var(--text-muted)',    icon: '⚪' },
@@ -20,6 +21,7 @@ function navTo(b, bindings) {
 }
 
 export default function TaskFormsTab({ task, formBindings, setFormBindings }) {
+  const navigate = useNavigate()
   const [employees, setEmployees] = useState([])
   const [pickerFor, setPickerFor] = useState(null)   // binding.id 目前展開選人的列
   const [busyId, setBusyId] = useState(null)         // 正在送指派 / 切模式的列
@@ -198,7 +200,15 @@ export default function TaskFormsTab({ task, formBindings, setFormBindings }) {
                     <div>
                       <div style={{ fontSize: 13, fontWeight: 600 }}>
                         {s.icon} {b.form_label}
-                        {b.form_id && <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--text-muted)' }}>#{b.form_id}</span>}
+                        {b.form_id && (() => {
+                          const vp = bindingViewPath(b)
+                          return vp
+                            ? <span onClick={e => { e.stopPropagation(); navigate(vp) }}
+                                style={{ marginLeft: 6, fontSize: 11, color: 'var(--accent-cyan)', cursor: 'pointer', textDecoration: 'underline' }}>
+                                #{b.form_id}
+                              </span>
+                            : <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--text-muted)' }}>#{b.form_id}</span>
+                        })()}
                       </div>
                       <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
                         完成條件：{b.required_status}

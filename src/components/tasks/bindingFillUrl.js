@@ -27,6 +27,26 @@ export function bindingFillPath(b, bindings = []) {
     : `/process/forms/custom/${b.form_template_id}?binding_id=${b.id}`
 }
 
+// 查看已填單的路徑（form_id 已有時）
+export function bindingViewPath(b) {
+  if (!b.form_id) return null
+  if (b.form_type === 'expense_request' || b.form_type === 'expense_apply')
+    return `/process/expense-requests?focus=${b.form_id}`
+  if (b.form_type === 'expense_settle')
+    return `/process/expense-requests?focus=${b.form_id}`
+  if (b.form_type === 'expense')
+    return `/process/expenses?focus=${b.form_id}`
+  if (b.form_type === 'store_audit')
+    return `/process/store-audits?focus=${b.form_id}`
+  if (b.form_type === 'goods_transfer' || b.form_type === 'goods_transfer_apply' || b.form_type === 'goods_transfer_receipt')
+    return `/process/transfer-requests?focus=${b.form_id}`
+  if (b.form_type === 'order_request' || b.form_type === 'order_apply' || b.form_type === 'order_settle')
+    return `/process/order-requests?focus=${b.form_id}`
+  if (b.form_type === 'form_submission')
+    return `/process/form-submissions?focus=${b.form_id}`
+  return null
+}
+
 // 同一路徑加上 embedded 旗標（iframe 用）。
 export function embeddedFillPath(b, bindings = []) {
   const p = bindingFillPath(b, bindings)

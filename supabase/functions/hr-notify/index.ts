@@ -1527,12 +1527,14 @@ serve(async (req) => {
       let enriched = { ...details, liff_id: acct?.liffId || null };
       if (details?.task_id && !details?.due_date) {
         const { data: task } = await db.from("tasks")
-          .select("id, title, due_date, due_time, description, notes, store, assignee, workflow_instance_id")
+          .select("id, title, due_date, due_time, description, notes, store, assignee, workflow_instance_id, created_by")
           .eq("id", details.task_id).maybeSingle();
         if (task) {
           // 抓 workflow_instance template_name + created_by（發起人）
           let workflowName: string | undefined = details.workflow_name;
-          let initiatedBy: string | undefined = details.initiated_by;
+          // 優先：tasks.created_by（任務直接建立者）
+          // fallback：workflow_instances.created_by（流程發起人）
+          let initiatedBy: string | undefined = details.initiated_by || task.created_by || undefined;
           if (task.workflow_instance_id) {
             const { data: inst } = await db.from("workflow_instances")
               .select("template_name, created_by").eq("id", task.workflow_instance_id).maybeSingle();

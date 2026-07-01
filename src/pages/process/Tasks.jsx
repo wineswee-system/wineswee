@@ -220,6 +220,7 @@ export default function Tasks() {
       confirmation_mode: form.approval_mode === 'people' ? (form.confirmation_mode || 'parallel') : null,
       status: '待處理',
       organization_id: profile?.organization_id || null,
+      created_by: profile?.name || null,
     })
     if (data) {
       // 指定人員模式 → 寫 task_confirmations

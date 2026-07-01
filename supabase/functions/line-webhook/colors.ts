@@ -71,6 +71,7 @@ export const REQUEST_TYPE_COLORS: Record<string, { header: string; subtitle: str
   off_request:     { header: COLOR_OFF_REQUEST, subtitle: TEXT_DIM_OFF_REQUEST, emoji: "🌴", label: "希望休申請" },
   form_submission: { header: COLOR_NEUTRAL,     subtitle: TEXT_DIM_APPROVAL,    emoji: "📋", label: "自訂表單"   },
   goods_transfer:  { header: COLOR_WARNING,     subtitle: TEXT_DIM_WARNING,     emoji: "📦", label: "商品調撥"   },
+  store_audit:     { header: COLOR_NEUTRAL,     subtitle: TEXT_DIM_APPROVAL,    emoji: "✅", label: "門市稽核"   },
   // HR B 類 chain（走 hr_chain_approve）— 對齊 _push_hr_chain_flex palette
   resignation:     { header: COLOR_NEUTRAL,     subtitle: TEXT_DIM_APPROVAL,    emoji: "📤", label: "離職申請"   },
   transfer:        { header: COLOR_NEUTRAL,     subtitle: TEXT_DIM_APPROVAL,    emoji: "🔄", label: "異動申請"   },

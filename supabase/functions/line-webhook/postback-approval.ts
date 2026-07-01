@@ -128,7 +128,7 @@ const handleApprove: PostbackHandler = async (params, ctx) => {
   if (rt === "off_request") {
     return [txt(`✅ ${result.date ?? ""} 的希望休已核准（#${id}）`)];
   }
-  return [txt(`✅ ${applicantName} 的${palette.label}已${status === "已核銷" ? "核銷" : "核准"}（#${id}）${nextHint}`)];
+  return [txt(`✅ ${applicantName} 的${palette?.label ?? "申請"}已${status === "已核銷" ? "核銷" : "核准"}（#${id}）${nextHint}`)];
 };
 
 // ── Push helper: notify next approvers with rich card ────────────────────────

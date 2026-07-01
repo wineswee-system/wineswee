@@ -68,6 +68,21 @@ export default function TaskDetailPanel({
   const [allProjects, setAllProjects] = useState([])
   const [allWorkflowInstances, setAllWorkflowInstances] = useState([])
 
+  // 表單 tab 可見性：任務負責人 / 流程負責人 / 專案負責人 / admin / super_admin
+  const canSeeForms = (() => {
+    const myId = profile?.id
+    return (
+      ['admin', 'super_admin'].includes(profile?.role)
+      || task?.assignee_id === myId
+      || instance?.started_by_id === myId
+      || (task?.project_id != null && allProjects.find(p => p.id === task.project_id)?.owner_id === myId)
+    )
+  })()
+
+  useEffect(() => {
+    if (!canSeeForms && activeTab === 'forms') setActiveTab('basic')
+  }, [canSeeForms, activeTab])
+
   // InputModal state
   const [inputModal, setInputModal] = useState({ open: false, title: '', label: '', placeholder: '', required: true, onConfirm: null })
   const openInput = (title, label, onConfirm, { placeholder = '', required = true } = {}) =>
@@ -106,7 +121,7 @@ export default function TaskDetailPanel({
       safe(supabase.from('task_form_bindings').select('*').eq('task_id', task.id).order('id')),
       safe(supabase.from('sop_templates').select('id, name, steps').order('id')),
       safe(supabase.from('workflow_instances').select('id, template_name, status, started_at, store').eq('triggered_by_task_id', task.id).order('started_at', { ascending: false })),
-      safe(supabase.from('projects').select('id, name').order('name')),
+      safe(supabase.from('projects').select('id, name, owner_id').order('name')),
       safe(supabase.from('workflow_instances').select('id, template_name, status').order('id')),
     ]).then(([c, a, cl, d, ac, af, tc, bindings, tpl, trig, proj, wfAll]) => {
       setComments(c.data || [])
@@ -373,7 +388,7 @@ export default function TaskDetailPanel({
         }}>
           {[
               { id: 'basic',       label: '基本' },
-              { id: 'forms',       label: formBindings.length > 0 ? `表單 (${formBindings.length})` : '表單' },
+              ...(canSeeForms ? [{ id: 'forms', label: formBindings.length > 0 ? `表單 (${formBindings.length})` : '表單' }] : []),
               { id: 'relations',   label: '關聯' },
               { id: 'approval',    label: '簽核' },
               { id: 'attachments', label: `附件 (${attachments.length})` },
@@ -397,7 +412,7 @@ export default function TaskDetailPanel({
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
 
           {/* ═══ 表單 Tab ═══ */}
-          {activeTab === 'forms' && (
+          {activeTab === 'forms' && canSeeForms && (
             <TaskFormsTab
               task={task}
               formBindings={formBindings}

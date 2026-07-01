@@ -200,10 +200,44 @@ function buildOtNotification(type: "approved" | "rejected", details: {
 }
 
 // ── 4. 補打結果 → 通知申請人 ────────────────────────────────
-function buildCorrectionNotification(type: "approved" | "rejected", details: {
+function buildCorrectionNotification(type: "approved" | "rejected" | "step_assigned", details: {
   correction_type?: string; requested_clock_in?: string;
   requested_clock_out?: string; rejection_reason?: string;
+  applicant_name?: string; step_label?: string; reason?: string;
+  request_id?: number; liff_id?: string | null;
 }) {
+  if (type === "step_assigned") {
+    const typeLabel: Record<string, string> = {
+      clock_in: "更正上班", clock_out: "更正下班", both: "上下班均更正", missing: "補登打卡",
+    };
+    const label = typeLabel[details.correction_type || ""] || "補打卡";
+    const bodyContents: object[] = [
+      ...(details.applicant_name ? [row("申請人", details.applicant_name)] : []),
+      row("類型", label),
+      ...(details.requested_clock_in ? [row("補登時間", new Date(details.requested_clock_in).toLocaleString("zh-TW", { timeZone: "Asia/Taipei", hour12: false }))] : []),
+      ...(details.reason ? [row("原因", details.reason)] : []),
+      ...(details.step_label ? [row("關卡", details.step_label)] : []),
+    ];
+    const liffUrl = details.liff_id && details.request_id
+      ? `https://liff.line.me/${details.liff_id}?to=${encodeURIComponent(`/approve?type=correction&id=${details.request_id}`)}`
+      : null;
+    const footer: object[] = liffUrl ? [{
+      type: "button", style: "primary", color: "#4A90D9", height: "sm",
+      action: { type: "uri", label: "前往簽核", uri: liffUrl },
+    }] : [];
+    return {
+      type: "flex", altText: `📋 補打卡申請待簽核`,
+      contents: {
+        type: "bubble", size: "kilo",
+        header: {
+          type: "box", layout: "vertical", backgroundColor: "#2B6CB0", paddingAll: "14px",
+          contents: [{ type: "text", text: "📋 補打卡申請待簽核", weight: "bold", color: "#FFFFFF", size: "md" }],
+        },
+        body: { type: "box", layout: "vertical", paddingAll: "14px", spacing: "sm", contents: bodyContents },
+        ...(footer.length ? { footer: { type: "box", layout: "vertical", paddingAll: "12px", contents: footer } } : {}),
+      },
+    };
+  }
   const isApproved = type === "approved";
   const icon = isApproved ? "✅" : "❌";
   const statusText = isApproved ? "已核准" : "已拒絕";
@@ -1414,7 +1448,8 @@ serve(async (req) => {
 
     // ── All remaining: send to the employee_id ──
     // 需要 liff_id 建 LIFF URL 的 type 走 resolveLineAccount
-    const needsLiff = type === "task_auto_started"
+    const needsLiff = type === "correction_step_assigned"
+      || type === "task_auto_started"
       || type === "task_with_bindings_assigned"
       || type === "form_binding_fill_assigned"
       || type === "approval_delegated"
@@ -1446,6 +1481,8 @@ serve(async (req) => {
       message = buildOtNotification("approved", details);
     } else if (type === "ot_rejected") {
       message = buildOtNotification("rejected", details);
+    } else if (type === "correction_step_assigned") {
+      message = buildCorrectionNotification("step_assigned", { ...details, liff_id: acct?.liffId || null });
     } else if (type === "correction_approved") {
       message = buildCorrectionNotification("approved", details);
     } else if (type === "correction_rejected") {

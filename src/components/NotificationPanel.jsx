@@ -26,9 +26,15 @@ export default function NotificationPanel({ onClose, markSeen }) {
     return () => document.removeEventListener('mousedown', handler)
   }, [onClose])
 
-  const goToTask = (taskId) => {
+  const goToTask = (m) => {
     onClose()
-    navigate(`/process/tasks?task=${taskId}`)
+    if (m.project_id) {
+      navigate(`/process/projects?project=${m.project_id}`)
+    } else if (m.workflow_instance_id) {
+      navigate(`/process/workflows?focus=${m.workflow_instance_id}`)
+    } else {
+      navigate(`/process/tasks?task=${m.task_id}`)
+    }
   }
 
   return (
@@ -57,7 +63,7 @@ export default function NotificationPanel({ onClose, markSeen }) {
         ) : mentions.map(m => (
           <div
             key={m.mention_id}
-            onClick={() => goToTask(m.task_id)}
+            onClick={() => goToTask(m)}
             style={{
               padding: '10px 16px', cursor: 'pointer',
               borderBottom: '1px solid var(--border-subtle)',

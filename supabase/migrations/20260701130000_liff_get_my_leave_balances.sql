@@ -3,6 +3,8 @@
 -- idempotent
 -- 2026-07-01
 
+DROP FUNCTION IF EXISTS public.liff_get_my_leave_balances(text, int);
+
 CREATE OR REPLACE FUNCTION public.liff_get_my_leave_balances(
   p_line_user_id text,
   p_year         int DEFAULT NULL

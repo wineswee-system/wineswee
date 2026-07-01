@@ -440,6 +440,7 @@ function buildTaskAutoStarted(details: {
   task_id?: number;
   task_title?: string;
   assignee_name?: string;
+  initiated_by?: string;  // 流程發起人（可能與負責人不同）
   department?: string;
   store?: string;
   workflow_name?: string;
@@ -490,6 +491,7 @@ function buildTaskAutoStarted(details: {
     },
   ];
   if (infoLine) body.push({ type: 'text', text: infoLine, size: 'sm', color: LC.muted, wrap: true });
+  if (details.initiated_by) body.push({ type: 'text', text: `發起人：${details.initiated_by}`, size: 'sm', color: LC.muted });
   if (details.workflow_name) body.push({ type: 'text', text: `流程：${details.workflow_name}`, size: 'sm', color: LC.muted });
   if (Array.isArray(details.completed_tasks) && details.completed_tasks.length > 0) {
     body.push({ type: 'text', text: `前置已完成：${details.completed_tasks.join('、')}`, size: 'xs', color: LC.soft, wrap: true });
@@ -1528,12 +1530,14 @@ serve(async (req) => {
           .select("id, title, due_date, due_time, description, notes, store, assignee, workflow_instance_id")
           .eq("id", details.task_id).maybeSingle();
         if (task) {
-          // 抓 workflow_instance template_name
+          // 抓 workflow_instance template_name + created_by（發起人）
           let workflowName: string | undefined = details.workflow_name;
-          if (!workflowName && task.workflow_instance_id) {
+          let initiatedBy: string | undefined = details.initiated_by;
+          if (task.workflow_instance_id) {
             const { data: inst } = await db.from("workflow_instances")
-              .select("template_name").eq("id", task.workflow_instance_id).maybeSingle();
-            workflowName = inst?.template_name || undefined;
+              .select("template_name, created_by").eq("id", task.workflow_instance_id).maybeSingle();
+            if (!workflowName) workflowName = inst?.template_name || undefined;
+            if (!initiatedBy) initiatedBy = inst?.created_by || undefined;
           }
           // 抓 employee dept
           const { data: emp } = await db.from("employees")
@@ -1550,6 +1554,7 @@ serve(async (req) => {
             assignee_name: emp?.name || task.assignee,
             department: emp?.dept,
             workflow_name: workflowName,
+            initiated_by: initiatedBy,
           };
         }
       }

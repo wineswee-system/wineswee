@@ -15,12 +15,33 @@ import type { ApprovalRequestType } from './types.ts';
 // 純文字訊息（單行）— 用於替代大張結果卡，減少版面浪費
 function txt(s: string) { return { type: "text", text: s }; }
 
+// ── HR B 類 chain：rt → hr_chain_approve 的 p_table + 實表名 ──────────────────
+// 這四種走 hr_chain_approve（用 employee_id 簽核），非 liff_approve_request。
+// 對齊 LIFF Approve.jsx 的 HR_CHAIN_TABLE_MAP。
+const HR_CHAIN_PTABLE: Record<string, string> = {
+  resignation: "resignation",
+  transfer:    "transfer",
+  loa:         "loa",
+  headcount:   "headcount",
+};
+const HR_CHAIN_REAL_TABLE: Record<string, string> = {
+  resignation: "resignation_requests",
+  transfer:    "personnel_transfer_requests",
+  loa:         "leave_of_absence_requests",
+  headcount:   "headcount_requests",
+};
+function isHrChainType(rt: string): boolean {
+  return Object.prototype.hasOwnProperty.call(HR_CHAIN_PTABLE, rt);
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function parseRequestType(s: string | undefined): ApprovalRequestType | null {
   const valid: ApprovalRequestType[] = [
     "leave", "overtime", "trip", "expense", "expense_request", "expense_settle",
     "correction", "cover", "off_request", "form_submission", "goods_transfer",
+    // HR B 類 chain（走 hr_chain_approve）
+    "resignation", "transfer", "loa", "headcount",
   ];
   return (valid as string[]).includes(s ?? "") ? (s as ApprovalRequestType) : null;
 }
@@ -38,7 +59,9 @@ const handleApprove: PostbackHandler = async (params, ctx) => {
   const palette = REQUEST_TYPE_COLORS[rt];
 
   // 呼叫對應 RPC：off_request 走 liff_approve_off_request、
-  // goods_transfer 走 liff_approve_transfer、其他走 liff_approve_request
+  // goods_transfer 走 liff_approve_transfer、
+  // HR B 類（離職/異動/留停/人力需求）走 hr_chain_approve（用 employee_id）、
+  // 其他走 liff_approve_request
   let data: any, error: any;
   if (rt === "off_request") {
     ({ data, error } = await ctx.db.rpc("liff_approve_off_request", {
@@ -47,6 +70,14 @@ const handleApprove: PostbackHandler = async (params, ctx) => {
   } else if (rt === "goods_transfer") {
     ({ data, error } = await ctx.db.rpc("liff_approve_transfer", {
       p_line_user_id: ctx.userId, p_id: id, p_action: "approve", p_reason: null,
+    }));
+  } else if (isHrChainType(rt)) {
+    if (!ctx.lineUser?.employee_id) {
+      return [txt("❌ 你的 LINE 還沒綁員工，請先 /註冊 姓名")];
+    }
+    ({ data, error } = await ctx.db.rpc("hr_chain_approve", {
+      p_table: HR_CHAIN_PTABLE[rt], p_id: id,
+      p_approver_id: ctx.lineUser.employee_id, p_action: "approve", p_reason: null,
     }));
   } else {
     ({ data, error } = await ctx.db.rpc("liff_approve_request", {
@@ -143,32 +174,48 @@ const handleReject: PostbackHandler = async (params, ctx) => {
 
   const palette = REQUEST_TYPE_COLORS[rt];
 
-  // 先確認該單仍在「待審核」/「申請中」（避免使用者按到舊卡）
-  const tableMap: Record<ApprovalRequestType, string> = {
-    leave: "leave_requests", overtime: "overtime_requests", trip: "business_trips",
-    expense: "expenses", expense_request: "expense_requests",
-    expense_settle: "expense_requests",
-    correction: "clock_corrections", cover: "shift_cover_requests",
-    off_request: "off_requests",
-    form_submission: "form_submissions",
-    goods_transfer: "goods_transfer_requests",
-  };
-  // 不同類型查不同欄位（goods_transfer 用 applicant_name；其他用 employee）
-  const nameCol = rt === "goods_transfer" ? "applicant_name" : "employee";
-  const { data: rec } = await ctx.db.from(tableMap[rt]).select(`status, ${nameCol}`).eq("id", id).maybeSingle();
-  if (!rec) return [txt(`❌ 找不到 #${id}（可能已刪除）`)];
-  // expense_settle 期待狀態是「待核銷」；goods_transfer 期待「申請審核中」或「驗收審核中」；其他「待審核/申請中」
-  const validStatus = rt === "expense_settle"
-    ? rec.status === "待核銷"
-    : rt === "goods_transfer"
-    ? (rec.status === "申請審核中" || rec.status === "驗收審核中")
-    : (rec.status === "待審核" || rec.status === "申請中");
-  if (!validStatus) {
-    return [txt(`⚠️ 此單已是「${rec.status}」狀態，不能再駁回`)];
+  // 先確認該單仍在待審狀態（避免使用者按到舊卡），並取申請人名
+  let applicantName = "員工";
+  if (isHrChainType(rt)) {
+    // HR B 類：表用 employee_id（無 text 名字欄），待審狀態為「申請中」
+    const { data: rec } = await ctx.db.from(HR_CHAIN_REAL_TABLE[rt])
+      .select("status, employee_id").eq("id", id).maybeSingle();
+    if (!rec) return [txt(`❌ 找不到 #${id}（可能已刪除）`)];
+    if ((rec as any).status !== "申請中") {
+      return [txt(`⚠️ 此單已是「${(rec as any).status}」狀態，不能再駁回`)];
+    }
+    const empId = (rec as any).employee_id;
+    if (empId) {
+      const { data: emp } = await ctx.db.from("employees").select("name").eq("id", empId).maybeSingle();
+      applicantName = (emp as any)?.name ?? "員工";
+    }
+  } else {
+    const tableMap: Record<string, string> = {
+      leave: "leave_requests", overtime: "overtime_requests", trip: "business_trips",
+      expense: "expenses", expense_request: "expense_requests",
+      expense_settle: "expense_requests",
+      correction: "clock_corrections", cover: "shift_cover_requests",
+      off_request: "off_requests",
+      form_submission: "form_submissions",
+      goods_transfer: "goods_transfer_requests",
+    };
+    // 不同類型查不同欄位（goods_transfer 用 applicant_name；其他用 employee）
+    const nameCol = rt === "goods_transfer" ? "applicant_name" : "employee";
+    const { data: rec } = await ctx.db.from(tableMap[rt]).select(`status, ${nameCol}`).eq("id", id).maybeSingle();
+    if (!rec) return [txt(`❌ 找不到 #${id}（可能已刪除）`)];
+    // expense_settle 期待狀態是「待核銷」；goods_transfer 期待「申請審核中」或「驗收審核中」；其他「待審核/申請中」
+    const validStatus = rt === "expense_settle"
+      ? rec.status === "待核銷"
+      : rt === "goods_transfer"
+      ? (rec.status === "申請審核中" || rec.status === "驗收審核中")
+      : (rec.status === "待審核" || rec.status === "申請中");
+    if (!validStatus) {
+      return [txt(`⚠️ 此單已是「${rec.status}」狀態，不能再駁回`)];
+    }
+    applicantName = (rec as any).applicant_name ?? (rec as any).employee ?? "員工";
   }
 
   // 寫 pending action — 下一段使用者打的文字會被當駁回原因
-  const applicantName = (rec as any).applicant_name ?? (rec as any).employee ?? "員工";
   await setPending(ctx, {
     action: "approval_reject_reason",
     request_type: rt,

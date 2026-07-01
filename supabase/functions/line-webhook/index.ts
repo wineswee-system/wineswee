@@ -360,7 +360,10 @@ serve(async (req) => {
         if (!reason) {
           resultMsg = text("⚠️ 駁回原因不能空白，請重新點 [❌ 駁回]");
         } else {
-          // off_request → liff_approve_off_request；goods_transfer → liff_approve_transfer；其他 → liff_approve_request
+          // off_request → liff_approve_off_request；goods_transfer → liff_approve_transfer；
+          // HR B 類（resignation/transfer/loa/headcount）→ hr_chain_approve（用 employee_id）；
+          // 其他 → liff_approve_request
+          const HR_CHAIN_RT = ["resignation", "transfer", "loa", "headcount"];
           let data: any, error: any;
           if (pending.request_type === "off_request") {
             ({ data, error } = await db.rpc("liff_approve_off_request", {
@@ -370,6 +373,15 @@ serve(async (req) => {
             ({ data, error } = await db.rpc("liff_approve_transfer", {
               p_line_user_id: lineUserId, p_id: pending.request_id, p_action: "reject", p_reason: reason,
             }));
+          } else if (HR_CHAIN_RT.includes(pending.request_type)) {
+            if (!lineUser.employee_id) {
+              data = { ok: false, error: "EMPLOYEE_NOT_FOUND" };
+            } else {
+              ({ data, error } = await db.rpc("hr_chain_approve", {
+                p_table: pending.request_type, p_id: pending.request_id,
+                p_approver_id: lineUser.employee_id, p_action: "reject", p_reason: reason,
+              }));
+            }
           } else {
             ({ data, error } = await db.rpc("liff_approve_request", {
               p_line_user_id: lineUserId, p_type: pending.request_type, p_id: pending.request_id, p_action: "reject", p_reason: reason,

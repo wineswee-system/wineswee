@@ -17,7 +17,12 @@ export type ApprovalRequestType =
   | "cover"
   | "off_request"
   | "form_submission"
-  | "goods_transfer";
+  | "goods_transfer"
+  // HR B 類 chain（走 hr_chain_approve，非 liff_approve_request）
+  | "resignation"
+  | "transfer"
+  | "loa"
+  | "headcount";
 
 // ── Pending Action types ────────────────────────────────────────────────────
 

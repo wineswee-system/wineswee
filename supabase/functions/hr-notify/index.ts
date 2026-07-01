@@ -1566,6 +1566,14 @@ serve(async (req) => {
           };
         }
       }
+      // 補抓 task_form_bindings（不論 enrichment 有沒有跑，都需要）
+      if (enriched.task_id && !Array.isArray(enriched.bindings)) {
+        const { data: bRows } = await db.from("task_form_bindings")
+          .select("form_label, required_status").eq("task_id", enriched.task_id).order("id");
+        if (bRows?.length) {
+          enriched.bindings = bRows.map((b: any) => ({ label: b.form_label, required_status: b.required_status }));
+        }
+      }
       message = buildTaskAutoStarted(enriched);
     } else if (type === "task_with_bindings_assigned") {
       message = buildTaskWithBindingsAssigned({ ...details, liff_id: acct?.liffId || null });

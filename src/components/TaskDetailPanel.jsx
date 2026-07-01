@@ -69,20 +69,9 @@ export default function TaskDetailPanel({
   const [allWorkflowInstances, setAllWorkflowInstances] = useState([])
   const [superAdminOnlyTplIds, setSuperAdminOnlyTplIds] = useState(new Set())
 
-  // 表單 tab 可見性：任務負責人 / 流程負責人 / 專案負責人 / admin / super_admin
-  const canSeeForms = (() => {
-    const myId = profile?.id
-    return (
-      ['admin', 'super_admin'].includes(profile?.role)
-      || task?.assignee_id === myId
-      || instance?.started_by_id === myId
-      || (task?.project_id != null && allProjects.find(p => p.id === task.project_id)?.owner_id === myId)
-    )
-  })()
-
-  useEffect(() => {
-    if (!canSeeForms && activeTab === 'forms') setActiveTab('basic')
-  }, [canSeeForms, activeTab])
+  // 表單 tab：能看到這個 task 的人都能看（RLS 已擋過）
+  // super_admin_only 的表單在 TaskFormsTab 內層過濾
+  const canSeeForms = true
 
   // InputModal state
   const [inputModal, setInputModal] = useState({ open: false, title: '', label: '', placeholder: '', required: true, onConfirm: null })

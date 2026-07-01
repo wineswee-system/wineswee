@@ -67,6 +67,7 @@ export default function TaskDetailPanel({
   // Basic tab dropdowns
   const [allProjects, setAllProjects] = useState([])
   const [allWorkflowInstances, setAllWorkflowInstances] = useState([])
+  const [superAdminOnlyTplIds, setSuperAdminOnlyTplIds] = useState(new Set())
 
   // 表單 tab 可見性：任務負責人 / 流程負責人 / 專案負責人 / admin / super_admin
   const canSeeForms = (() => {
@@ -118,7 +119,7 @@ export default function TaskDetailPanel({
       safe(getApprovalChains()),
       safe(getApprovalFormByTask(task.id)),
       safe(getTaskConfirmations(task.id)),
-      safe(supabase.from('task_form_bindings').select('*, form_templates(super_admin_only)').eq('task_id', task.id).order('id')),
+      safe(supabase.from('task_form_bindings').select('*').eq('task_id', task.id).order('id')),
       safe(supabase.from('sop_templates').select('id, name, steps').order('id')),
       safe(supabase.from('workflow_instances').select('id, template_name, status, started_at, store').eq('triggered_by_task_id', task.id).order('started_at', { ascending: false })),
       safe(supabase.from('projects').select('id, name, owner_id').order('name')),
@@ -160,6 +161,12 @@ export default function TaskDetailPanel({
     }).catch(() => {})
   }, [task?.id])
 
+  // 一次性抓 super_admin_only template id 清單（不靠 FK join，直接獨立 query）
+  useEffect(() => {
+    supabase.from('form_templates').select('id').eq('super_admin_only', true)
+      .then(({ data }) => setSuperAdminOnlyTplIds(new Set((data || []).map(t => t.id))))
+  }, [])
+
   // Realtime: sync 填寫狀態 when DB binding status changes (e.g. after employee submits form or approval finishes)
   useEffect(() => {
     if (!task?.id) return
@@ -173,7 +180,7 @@ export default function TaskDetailPanel({
       }, async () => {
         const { data } = await supabase
           .from('task_form_bindings')
-          .select('*, form_templates(super_admin_only)')
+          .select('*')
           .eq('task_id', task.id)
           .order('id')
         setFormBindings(data || [])
@@ -417,6 +424,7 @@ export default function TaskDetailPanel({
               task={task}
               formBindings={formBindings}
               setFormBindings={setFormBindings}
+              superAdminOnlyTplIds={superAdminOnlyTplIds}
             />
           )}
 

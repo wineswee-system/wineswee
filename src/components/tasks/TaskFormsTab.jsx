@@ -21,13 +21,13 @@ function navTo(b, bindings) {
   if (u) window.open(u, '_blank')
 }
 
-export default function TaskFormsTab({ task, formBindings, setFormBindings }) {
+export default function TaskFormsTab({ task, formBindings, setFormBindings, superAdminOnlyTplIds = new Set() }) {
   const navigate = useNavigate()
   const { profile } = useAuth()
   const isSuperAdmin = profile?.role === 'super_admin'
   const visibleBindings = isSuperAdmin
     ? formBindings
-    : formBindings.filter(b => !b.form_templates?.super_admin_only)
+    : formBindings.filter(b => !b.form_template_id || !superAdminOnlyTplIds.has(b.form_template_id))
   const [employees, setEmployees] = useState([])
   const [pickerFor, setPickerFor] = useState(null)   // binding.id 目前展開選人的列
   const [busyId, setBusyId] = useState(null)         // 正在送指派 / 切模式的列

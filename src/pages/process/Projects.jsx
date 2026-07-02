@@ -308,6 +308,9 @@ export default function Projects() {
       }
     } else {
       payload.owner = payload.owner || profile?.name || ''
+      // ★ 必設 owner_id：projects_sel RLS 靠 owner_id=current_employee_id() 讓非 admin 讀回自己建的專案
+      //   （少了它 → insert 過但 select 讀不回 → .single() 噴錯，office_staff 建立失敗）
+      payload.owner_id = payload.owner_id || profile?.id || null
       const { data, error } = await supabase.from('projects').insert(payload).select().single()
       if (error) { toast.error('建立失敗，請稍後再試'); return }
       if (data) {

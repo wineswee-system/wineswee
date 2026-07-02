@@ -88,6 +88,7 @@ export default function ProfileTabContent({
           <SectionTitle icon="📱" text="聯絡方式" />
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <div><div style={L}>工作電話</div><input className="form-input" style={{ width: '100%' }} value={form.phone || ''} onChange={e => set('phone', e.target.value)} /></div>
+            <div><div style={L}>Email</div><input type="email" className="form-input" style={{ width: '100%' }} value={form.email || ''} onChange={e => set('email', e.target.value)} placeholder="name@example.com" /></div>
           </div>
 
           <SectionTitle icon="🚨" text="緊急聯絡人" />

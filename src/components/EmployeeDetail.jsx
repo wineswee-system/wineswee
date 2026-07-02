@@ -571,6 +571,7 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
             <QuickInfo icon="🏢" value={employee.dept || '未指派'} />
             {employee.join_date && <QuickInfo icon="📅" value={`到職 ${employee.join_date}`} />}
             {employee.phone && <QuickInfo icon="📱" value={employee.phone} />}
+            {employee.email && <QuickInfo icon="✉️" value={employee.email} />}
           </div>
 
           {/* ── Main tab bar ── */}

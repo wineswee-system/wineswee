@@ -1,10 +1,13 @@
 -- 計薪：行政的「應上下班時間 + 遲到/早退寬限」改讀該員工門市的設定
 -- 2026-07-02
 -- 基底 = live db-drift 快照原封不動抽出（含週末不算/請假排除/early_leave_records 等 live 邏輯），
--- 只改 4 處寫死值：
---   ast admin fallback 540(09:00) → COALESCE(v_office_start_min,540)
---   ae  admin fallback clamp      → COALESCE(v_office_end_min, clamp)
---   grace admin 30                → v_admin_grace（讀門市 late_tolerance_minutes）
+-- 行政（admin）三參數改讀門市（威耀總部 09:00-18:00 + 遲到容許），且「應下班保持浮動」：
+--   應上班 ast   = office_hours_start（或 fallback 09:00）
+--   應下班 ae    = clamp(打卡 + span, office_end, office_end + 遲到容許)  ← 浮動！
+--                  span = office_end − office_start（09:00-18:00 = 9h）
+--                  例：9:15 上班 → 18:15 應下班；封頂 = 下班時間 + 遲到容許（18:00+30=18:30）
+--   遲到/早退寬限 grace = late_tolerance_minutes
+--   沒開固定辦公時間 → fallback 09:00/18:00（span 540）。
 -- 門市員工（非 admin）維持：無寬限(0)、看班表、沒班表不算 —— 完全不動。
 -- preview / generate 都共用此函式，改一支兩邊生效。idempotent。
 
@@ -28,9 +31,12 @@ DECLARE
   v_is_piece       boolean;
   v_is_ptlike      boolean;
   -- 行政固定辦公時間 + 遲到/早退寬限（讀該員工門市；沒開固定辦公時間 → NULL 走 fallback）
-  v_office_start_min numeric;   -- 應上班（分鐘離午夜）；NULL → fallback 540(09:00)
-  v_office_end_min   numeric;   -- 應下班（分鐘離午夜）；NULL → fallback clamp(打卡+9h,18:00~18:30)
+  v_office_start_min numeric;   -- office_hours_start（分鐘）；NULL=沒開固定辦公時間
+  v_office_end_min   numeric;   -- office_hours_end（分鐘）；NULL=沒開固定辦公時間
   v_admin_grace      numeric := 30;  -- 行政遲到/早退寬限；讀門市 late_tolerance_minutes
+  v_start_base       numeric;   -- 應上班（分鐘）= office_start 或 fallback 540(09:00)
+  v_end_base         numeric;   -- 浮動下限（分鐘）= office_end 或 fallback 1080(18:00)
+  v_span             numeric;   -- 工時 span = end_base − start_base（含休息，浮動用）
   -- 出勤
   v_hours          numeric := 0;
   v_holiday_hours  numeric := 0;
@@ -144,6 +150,11 @@ BEGIN
   INTO v_office_start_min, v_office_end_min, v_admin_grace
   FROM stores st WHERE st.id = v_store_id;
   v_admin_grace := COALESCE(v_admin_grace, 30);
+  -- 浮動基準：有開固定辦公時間 → 用設定；否則 fallback 09:00–18:00。
+  --   應下班 = clamp(打卡 + span, end_base, end_base + 遲到容許) → 保持浮動、上限=下班+寬限。
+  v_start_base := COALESCE(v_office_start_min, 540);    -- 09:00
+  v_end_base   := COALESCE(v_office_end_min, 1080);     -- 18:00
+  v_span       := v_end_base - v_start_base;            -- 09:00–18:00 = 540(9h 含休息)
 
   -- ── 出勤聚合（遲到容忍依「打卡當下門市」late_tolerance_minutes，0/缺 → 5;對齊前端）──
   SELECT
@@ -176,10 +187,10 @@ BEGIN
                   AND EXTRACT(EPOCH FROM ar.clock_out::time) < EXTRACT(EPOCH FROM ar.clock_in::time)
                  THEN 1440 ELSE 0 END AS cot,
         COALESCE(EXTRACT(EPOCH FROM s.actual_start::time)/60.0,
-                 CASE WHEN COALESCE(v_emp_category,'')='admin' THEN COALESCE(v_office_start_min, 540) ELSE NULL END) AS ast,
+                 CASE WHEN COALESCE(v_emp_category,'')='admin' THEN v_start_base ELSE NULL END) AS ast,
         COALESCE(EXTRACT(EPOCH FROM s.actual_end::time)/60.0,
                  CASE WHEN COALESCE(v_emp_category,'')='admin'
-                      THEN COALESCE(v_office_end_min, LEAST(GREATEST(EXTRACT(EPOCH FROM ar.clock_in::time)/60.0 + 540, 1080), 1110))
+                      THEN LEAST(GREATEST(EXTRACT(EPOCH FROM ar.clock_in::time)/60.0 + v_span, v_end_base), v_end_base + v_admin_grace)
                       ELSE NULL END) AS ae,
         CASE WHEN COALESCE(v_emp_category,'')='admin' THEN v_admin_grace ELSE 0 END AS grace,
         (ar.clock_out IS NOT NULL) AS has_out,
@@ -603,7 +614,7 @@ BEGIN
         FROM (
           SELECT ar.date AS dt,
             EXTRACT(EPOCH FROM ar.clock_in::time)/60.0 AS ci,
-            COALESCE(EXTRACT(EPOCH FROM s.actual_start::time)/60.0, CASE WHEN COALESCE(v_emp_category,'')='admin' THEN COALESCE(v_office_start_min, 540) ELSE NULL END) AS ast,
+            COALESCE(EXTRACT(EPOCH FROM s.actual_start::time)/60.0, CASE WHEN COALESCE(v_emp_category,'')='admin' THEN v_start_base ELSE NULL END) AS ast,
             CASE WHEN COALESCE(v_emp_category,'')='admin' THEN v_admin_grace ELSE 0 END AS grace
           FROM attendance_records ar
           LEFT JOIN schedules s ON s.employee_id=ar.employee_id AND s.date=ar.date
@@ -621,8 +632,8 @@ BEGIN
           SELECT ar.date AS dt,
             EXTRACT(EPOCH FROM ar.clock_in::time)/60.0 AS ci,
             (EXTRACT(EPOCH FROM ar.clock_out::time)/60.0) + CASE WHEN ar.clock_out IS NOT NULL AND EXTRACT(EPOCH FROM ar.clock_out::time)<EXTRACT(EPOCH FROM ar.clock_in::time) THEN 1440 ELSE 0 END AS cot,
-            COALESCE(EXTRACT(EPOCH FROM s.actual_start::time)/60.0, CASE WHEN COALESCE(v_emp_category,'')='admin' THEN COALESCE(v_office_start_min, 540) ELSE NULL END) AS ast,
-            COALESCE(EXTRACT(EPOCH FROM s.actual_end::time)/60.0, CASE WHEN COALESCE(v_emp_category,'')='admin' THEN COALESCE(v_office_end_min, LEAST(GREATEST(EXTRACT(EPOCH FROM ar.clock_in::time)/60.0+540,1080),1110)) ELSE NULL END) AS ae,
+            COALESCE(EXTRACT(EPOCH FROM s.actual_start::time)/60.0, CASE WHEN COALESCE(v_emp_category,'')='admin' THEN v_start_base ELSE NULL END) AS ast,
+            COALESCE(EXTRACT(EPOCH FROM s.actual_end::time)/60.0, CASE WHEN COALESCE(v_emp_category,'')='admin' THEN LEAST(GREATEST(EXTRACT(EPOCH FROM ar.clock_in::time)/60.0+v_span,v_end_base),v_end_base + v_admin_grace) ELSE NULL END) AS ae,
             (ar.clock_out IS NOT NULL) AS has_out,
         EXISTS (SELECT 1 FROM public.early_leave_records elr WHERE elr.employee_id = ar.employee_id AND elr.date = ar.date) AS has_el
           FROM attendance_records ar

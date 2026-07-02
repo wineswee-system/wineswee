@@ -255,7 +255,11 @@ export default function Sidebar() {
     project:   'nav.project.work',   // 有專案工作就能看到 group
     analytics: 'nav.group.analytics',
   }
+  // 物流調度 / 通訊協作：新模組，暫時只開放 super_admin（不吃 GROUP_REQUIRES / dispatch.view）
+  const SUPER_ADMIN_ONLY_GROUPS = new Set(['dispatch', 'comms'])
+  const isSuperAdmin = profile?.role === 'super_admin'
   const roleFiltered = majorGroups.filter(g => {
+    if (SUPER_ADMIN_ONLY_GROUPS.has(g.key)) return isSuperAdmin
     const required = GROUP_REQUIRES[g.key]
     if (!required) return true
     return hasPermission(required)

@@ -33,8 +33,8 @@ export const DEFS = [
   { basePath: '/lms',           perm: null,                   load: () => import('./LMSModule') },
   { basePath: '/reservations',  perm: null,    alsoBase: true, load: () => import('./ReservationModule') },
   { basePath: '/super-admin',   perm: null,    superAdminOnly: true, load: () => import('./SuperAdminModule') },
-  { basePath: '/comms',         perm: null,    alsoBase: true,       load: () => import('./CommsModule') },
-  { basePath: '/dispatch',      perm: 'dispatch.view', alsoBase: true, load: () => import('./DispatchModule') },
+  { basePath: '/comms',         perm: null,    alsoBase: true, superAdminOnly: true, load: () => import('./CommsModule') },
+  { basePath: '/dispatch',      perm: 'dispatch.view', alsoBase: true, superAdminOnly: true, load: () => import('./DispatchModule') },
 ]
 
 export const ALL_MODULES = DEFS.map(({ load, ...rest }) => ({

@@ -28,7 +28,9 @@ export function renderModule(m, { canAccess, canAccessWithPerm, isSuperAdmin }) 
   if (m.alsoBase) {
     routes.push(
       <Route key={m.basePath} path={m.basePath}
-        element={hasAccess(m.perm) ? guarded : blocked} />
+        element={m.superAdminOnly
+          ? (isSuperAdmin ? guarded : blocked)
+          : (hasAccess(m.perm) ? guarded : blocked)} />
     )
   }
 

@@ -272,6 +272,9 @@ serve(async (req: Request) => {
             .from('attendance_records').select('*')
             .eq('employee_id', emp.id).eq('date', yesterdayStr0)
             .not('clock_in', 'is', null).is('clock_out', null)
+            // 取最新一筆 — 昨天若有多筆未下班孤兒，maybeSingle 會 throw → 退回開新上班
+            // 又生一筆。改 order+limit(1) 確保永遠只補一筆、不會漏轉。
+            .order('id', { ascending: false }).limit(1)
             .maybeSingle()
         : { data: null }
       if (yOpen) {

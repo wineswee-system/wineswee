@@ -453,7 +453,8 @@ export default function Projects() {
     if (!(await confirm({ title: '刪除專案', message: `確定刪除此專案？所有相關流程與任務的連結將解除，資料會移入回收暫存區備份（可供復原）。此操作無法立即復原。`, confirmLabel: '確認刪除', danger: true }))) return
     const proj = projects.find(p => p.id === id)
     if (proj) {
-      await drainEntity({
+      // 回收桶備份為盡力而為（deletion_drain 可能限 admin 寫）——失敗不擋刪除
+      try { await drainEntity({
         entityType: 'project',
         entityId: id,
         entityName: proj.name,
@@ -461,9 +462,10 @@ export default function Projects() {
         relatedData: null,
         deletedBy: profile?.name || '管理員',
         organizationId: profile?.organization_id || null,
-      })
+      }) } catch { /* best-effort backup */ }
     }
-    await supabase.from('projects').delete().eq('id', id)
+    const { error: delErr } = await supabase.from('projects').delete().eq('id', id)
+    if (delErr) { toast.error('刪除失敗：' + delErr.message); return }
     if (proj) await logAction('刪除', 'projects', id, `pj-${String(id).padStart(6, '0')} ${proj.name}`)
     setProjects(prev => prev.filter(p => p.id !== id))
     if (selected?.id === id) setSelected(null)

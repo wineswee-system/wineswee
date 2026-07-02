@@ -280,7 +280,7 @@ export default function Sidebar() {
     '/hr/clock-rules':            'nav.schedule.config',  // admin/super_admin
     '/hr/attendance-diff-report': 'nav.schedule.basic',   // manager+
     '/hr/import':                 'nav.hr_form.builder',  // manager/admin（批次匯入）
-    '/hr/schedule':               'nav.schedule.basic',
+    '/hr/schedule':               'schedule.edit',        // 排班選單＝能排班的人才看得到（含儲備幹部；被 revoke 的職能主管自動隱藏，不影響打卡核對/國定假日/匯入/LMS）
     '/hr/holidays':               'nav.schedule.basic',
     '/hr/schedule-rules':         'nav.schedule.config',
     '/hr/work-unit-settings':     'nav.schedule.config',

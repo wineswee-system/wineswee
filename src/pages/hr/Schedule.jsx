@@ -51,12 +51,16 @@ function buildShiftTypes(dbShifts) {
 export default function Schedule() {
 
   const navigate = useNavigate()
-  const { profile: authProfile, hasPermission, isManagerOrAbove } = useAuth()
+  const { profile: authProfile, hasPermission } = useAuth()
   const isAdmin = hasPermission('system.admin')
   const isSuperAdmin = hasPermission('nav.group.super_admin')
-  // 角色預設 OR 被授予對應權限（權限設定頁可分人）
-  const canEditSchedule = isManagerOrAbove || hasPermission('schedule.edit')
-  const canUseAISchedule = isManagerOrAbove || hasPermission('schedule.algo')
+  // 排班權限吃「權限碼」而非靠 manager 角色自動給：manager 角色預設就帶 schedule.edit/algo，
+  // 但可用 employee_permissions=revoke 個別關掉（如職能部門主管不排班），
+  // 儲備幹部則用 position_permissions 對職位授權開通（可排自己門市）。
+  const canEditSchedule = isAdmin || isSuperAdmin || hasPermission('schedule.edit')
+  const canUseAISchedule = isAdmin || isSuperAdmin || hasPermission('schedule.algo')
+  // 可排「全部門市」：admin/super_admin，或被授予 schedule.view_all（如營運部經理）
+  const canScheduleAllStores = isAdmin || isSuperAdmin || hasPermission('schedule.view_all')
 
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
@@ -305,8 +309,9 @@ export default function Schedule() {
   const lockedDates = new Set((activeDates || []).filter(d => lockedMonths.has(d.slice(0, 7))))
   // 當前畫面（cycle 可能跨月）碰到的月份，給狀態列「逐月鎖定/解鎖」用
   const viewMonths = [...new Set((activeDates || []).map(d => d.slice(0, 7)))].sort()
-  // 我可排班的門市範圍：admin/super_admin → 全部；其他 → user_stores 指派 + 自己門市 +
-  // 我擔任店長(stores.manager_id=我)的店。非 admin 不該排到不屬於自己的店。
+  // 我可排班的門市範圍：admin/super_admin 或有 schedule.view_all(如營運部經理) → 全部；
+  // 其他 → user_stores 指派 + 自己門市 + 我擔任店長(stores.manager_id=我)的店 + 我督導的課的店。
+  // 非全店權限者不該排到不屬於自己的店（儲備幹部只會拿到自己門市）。
   const scopedStoreIds = (() => {
     const ids = new Set(myStoreIds)
     if (authProfile?.store_id) ids.add(authProfile.store_id)
@@ -316,14 +321,14 @@ export default function Schedule() {
     })
     return ids
   })()
-  const scopedLocations = isAdmin ? locations : locations.filter(l => scopedStoreIds.has(l.id))
+  const scopedLocations = canScheduleAllStores ? locations : locations.filter(l => scopedStoreIds.has(l.id))
 
-  // 進場「先選門市才載」：只有「非 admin 且剛好只有一間店」才自動選（省得他選），
-  // 其餘(admin / 多店督導)維持 null → 顯示「請先選擇門市」，避免一進去就載/渲染全部。
+  // 進場「先選門市才載」：只有「非全店權限且剛好只有一間店」才自動選（省得他選），
+  // 其餘(全店 / 多店督導)維持 null → 顯示「請先選擇門市」，避免一進去就載/渲染全部。
   useEffect(() => {
     if (storeFilter !== null) return
-    if (!isAdmin && scopedLocations.length === 1) setStoreFilter(scopedLocations[0].name)
-  }, [isAdmin, storeFilter, locations, myStoreIds, mySectionIds, authProfile?.store_id, authProfile?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (!canScheduleAllStores && scopedLocations.length === 1) setStoreFilter(scopedLocations[0].name)
+  }, [canScheduleAllStores, storeFilter, locations, myStoreIds, mySectionIds, authProfile?.store_id, authProfile?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const reloadMonthLocks = async () => {
     if (!currentStore) return

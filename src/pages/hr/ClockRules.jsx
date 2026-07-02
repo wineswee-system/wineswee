@@ -141,8 +141,9 @@ export default function ClockRules() {
       allowed_wifi:               form.allowed_wifi
                                     ? form.allowed_wifi.split(',').map(s => s.trim()).filter(Boolean)
                                     : null,
-      late_tolerance_minutes:     parseInt(form.late_tolerance_minutes) || 5,
-      early_clock_minutes:        parseInt(form.early_clock_minutes)    || 30,
+      // 0 是合法值（無寬限）→ 不能用 || 5（0 falsy 會被吃成 5）；空字串才給預設
+      late_tolerance_minutes:     Number.isNaN(parseInt(form.late_tolerance_minutes, 10)) ? 5 : parseInt(form.late_tolerance_minutes, 10),
+      early_clock_minutes:        Number.isNaN(parseInt(form.early_clock_minutes, 10)) ? 30 : parseInt(form.early_clock_minutes, 10),
       has_office_hours:           form.has_office_hours,
       office_hours_start:         form.has_office_hours ? form.office_hours_start : null,
       office_hours_end:           form.has_office_hours ? form.office_hours_end   : null,

@@ -142,14 +142,14 @@ BEGIN
 
   -- ── 行政固定辦公時間 + 遲到寬限（讀該員工門市設定；接「打卡規則設定」UI）──
   --   有開「固定辦公時間」(has_office_hours) → 用 office_hours_start/end；否則 NULL 走 fallback。
-  --   遲到/早退寬限 → late_tolerance_minutes（0/缺 → 5；門市非 admin 仍固定 0，不吃此值）。
+  --   遲到/早退寬限 → late_tolerance_minutes（0 是合法值=無寬限，只有查無門市/NULL 才 fallback 30）。
   SELECT
     CASE WHEN st.has_office_hours THEN EXTRACT(EPOCH FROM st.office_hours_start::time)/60.0 END,
     CASE WHEN st.has_office_hours THEN EXTRACT(EPOCH FROM st.office_hours_end::time)/60.0 END,
-    COALESCE(NULLIF(st.late_tolerance_minutes,0),5)
+    st.late_tolerance_minutes
   INTO v_office_start_min, v_office_end_min, v_admin_grace
   FROM stores st WHERE st.id = v_store_id;
-  v_admin_grace := COALESCE(v_admin_grace, 30);
+  v_admin_grace := COALESCE(v_admin_grace, 30);  -- 查無門市/NULL → 30；門市設 0 則保留 0
   -- 浮動基準：有開固定辦公時間 → 用設定；否則 fallback 09:00–18:00。
   --   應下班 = clamp(打卡 + span, end_base, end_base + 遲到容許) → 保持浮動、上限=下班+寬限。
   v_start_base := COALESCE(v_office_start_min, 540);    -- 09:00

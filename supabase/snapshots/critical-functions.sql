@@ -112,6 +112,13 @@ DECLARE
   v_emp_category   text;
   v_is_piece       boolean;
   v_is_ptlike      boolean;
+  -- 行政固定辦公時間 + 遲到/早退寬限（讀該員工門市；沒開固定辦公時間 → NULL 走 fallback）
+  v_office_start_min numeric;   -- office_hours_start（分鐘）；NULL=沒開固定辦公時間
+  v_office_end_min   numeric;   -- office_hours_end（分鐘）；NULL=沒開固定辦公時間
+  v_admin_grace      numeric := 30;  -- 行政遲到/早退寬限；讀門市 late_tolerance_minutes
+  v_start_base       numeric;   -- 應上班（分鐘）= office_start 或 fallback 540(09:00)
+  v_end_base         numeric;   -- 浮動下限（分鐘）= office_end 或 fallback 1080(18:00)
+  v_span             numeric;   -- 工時 span = end_base − start_base（含休息，浮動用）
   -- 出勤
   v_hours          numeric := 0;
   v_holiday_hours  numeric := 0;
@@ -196,6 +203,12 @@ DECLARE
   v_prorated_laborE numeric; v_prorated_pensionE numeric;
   v_ins_delta      numeric;
   v_ot_ovt_for_net numeric;
+  -- B2: 離職特休結清 + 二代健保補充保費
+  v_is_final       boolean := false;
+  v_unused_days    numeric := 0;
+  v_unused_payout  numeric := 0;
+  v_nhi_supp       numeric := 0;
+  v_nhi_breakdown  jsonb := '[]'::jsonb;
 BEGIN
   SELECT * INTO v_emp FROM employees WHERE id = p_emp_id;
   IF v_emp.id IS NULL THEN RETURN NULL; END IF;
@@ -208,6 +221,22 @@ BEGIN
 
   -- ── 員工所屬門市 id（給政策獎金 specificity 用）──
   SELECT id INTO v_store_id FROM stores WHERE name = v_emp.store LIMIT 1;
+
+  -- ── 行政固定辦公時間 + 遲到寬限（讀該員工門市設定；接「打卡規則設定」UI）──
+  --   有開「固定辦公時間」(has_office_hours) → 用 office_hours_start/end；否則 NULL 走 fallback。
+  --   遲到/早退寬限 → late_tolerance_minutes（0/缺 → 5；門市非 admin 仍固定 0，不吃此值）。
+  SELECT
+    CASE WHEN st.has_office_hours THEN EXTRACT(EPOCH FROM st.office_hours_start::time)/60.0 END,
+    CASE WHEN st.has_office_hours THEN EXTRACT(EPOCH FROM st.office_hours_end::time)/60.0 END,
+    COALESCE(NULLIF(st.late_tolerance_minutes,0),5)
+  INTO v_office_start_min, v_office_end_min, v_admin_grace
+  FROM stores st WHERE st.id = v_store_id;
+  v_admin_grace := COALESCE(v_admin_grace, 30);
+  -- 浮動基準：有開固定辦公時間 → 用設定；否則 fallback 09:00–18:00。
+  --   應下班 = clamp(打卡 + span, end_base, end_base + 遲到容許) → 保持浮動、上限=下班+寬限。
+  v_start_base := COALESCE(v_office_start_min, 540);    -- 09:00
+  v_end_base   := COALESCE(v_office_end_min, 1080);     -- 18:00
+  v_span       := v_end_base - v_start_base;            -- 09:00–18:00 = 540(9h 含休息)
 
   -- ── 出勤聚合（遲到容忍依「打卡當下門市」late_tolerance_minutes，0/缺 → 5;對齊前端）──
   SELECT
@@ -230,7 +259,7 @@ BEGIN
   IF NOT v_is_piece THEN
     SELECT
       COALESCE(SUM(GREATEST(0, ci - ast - grace)) FILTER (WHERE ast IS NOT NULL),0),
-      COALESCE(SUM(GREATEST(0, (ae + CASE WHEN ae <= ast THEN 1440 ELSE 0 END) - cot)) FILTER (WHERE ae IS NOT NULL AND has_out),0)
+      COALESCE(SUM(GREATEST(0, (ae + CASE WHEN ae <= ast THEN 1440 ELSE 0 END) - cot)) FILTER (WHERE ae IS NOT NULL AND has_out AND NOT has_el),0)
       INTO v_late_mins, v_early_mins
     FROM (
       SELECT
@@ -240,17 +269,22 @@ BEGIN
                   AND EXTRACT(EPOCH FROM ar.clock_out::time) < EXTRACT(EPOCH FROM ar.clock_in::time)
                  THEN 1440 ELSE 0 END AS cot,
         COALESCE(EXTRACT(EPOCH FROM s.actual_start::time)/60.0,
-                 CASE WHEN COALESCE(v_emp_category,'')='admin' THEN 540 ELSE NULL END) AS ast,
+                 CASE WHEN COALESCE(v_emp_category,'')='admin' THEN v_start_base ELSE NULL END) AS ast,
         COALESCE(EXTRACT(EPOCH FROM s.actual_end::time)/60.0,
                  CASE WHEN COALESCE(v_emp_category,'')='admin'
-                      THEN LEAST(GREATEST(EXTRACT(EPOCH FROM ar.clock_in::time)/60.0 + 540, 1080), 1110)
+                      THEN LEAST(GREATEST(EXTRACT(EPOCH FROM ar.clock_in::time)/60.0 + v_span, v_end_base), v_end_base + v_admin_grace)
                       ELSE NULL END) AS ae,
-        CASE WHEN COALESCE(v_emp_category,'')='admin' THEN 30 ELSE 0 END AS grace,
-        (ar.clock_out IS NOT NULL) AS has_out
+        CASE WHEN COALESCE(v_emp_category,'')='admin' THEN v_admin_grace ELSE 0 END AS grace,
+        (ar.clock_out IS NOT NULL) AS has_out,
+        EXISTS (SELECT 1 FROM public.early_leave_records elr WHERE elr.employee_id = ar.employee_id AND elr.date = ar.date) AS has_el
       FROM attendance_records ar
       LEFT JOIN schedules s ON s.employee_id = ar.employee_id AND s.date = ar.date
+      LEFT JOIN holidays hh ON hh.date = ar.date
       WHERE ar.employee_id = p_emp_id AND ar.date >= v_mstart AND ar.date <= v_mend
         AND ar.clock_in IS NOT NULL
+        -- 國定假日 / 行政遇週末 → 沒正常班，不算遲到早退
+        AND NOT (COALESCE(hh.is_workday = false, false)
+                 OR (COALESCE(v_emp_category,'') = 'admin' AND EXTRACT(DOW FROM ar.date) IN (0,6)))
         -- 排除「有核准請假」的日子：請假提早走/晚到不該再扣早退/遲到（避免跟請假扣重複）
         AND NOT EXISTS (
           SELECT 1 FROM leave_requests lr
@@ -458,9 +492,24 @@ BEGIN
     v_insured := v_base_for_ins;
   END IF;
 
+  -- ── B2: 離職特休結清（離職當月把沒休完特休折現,計入 gross；對齊入帳 generate_payroll）──
+  v_is_final := (v_emp.status = '離職');
+  IF v_is_final THEN
+    SELECT COALESCE(SUM(GREATEST(total_days + carry_over_days - used_days, 0)),0)
+      INTO v_unused_days
+    FROM leave_balances
+    WHERE employee_id = p_emp_id AND year = v_year
+      AND leave_type IN ('特休','annual','特別休假');
+    IF NOT v_is_hourly THEN
+      v_unused_payout := ceil(v_unused_days * (v_base_salary / NULLIF(v_total_days,0)));
+    ELSE
+      v_unused_payout := ceil(v_unused_days * v_hourly_rate * 8);
+    END IF;
+  END IF;
+
   -- ── calculateNetSalary ──
   v_ot_ovt_for_net := v_overtime_pay + v_eff_role + v_eff_night + v_eff_cross + v_eff_meal + v_eff_transp + v_eff_attb + v_eff_otherc;
-  v_gross := v_eff_base + v_ot_ovt_for_net + v_policy_bonus;
+  v_gross := v_eff_base + v_ot_ovt_for_net + v_policy_bonus + v_unused_payout;
 
   -- 勞保
   IF v_emp.labor_insurance IS NOT FALSE THEN
@@ -480,13 +529,48 @@ BEGIN
   END IF;
   v_health_emp := COALESCE(v_health_emp,0); v_health_er := COALESCE(v_health_er,0);
 
+  -- ── B2: 二代健保補充保費（門檻用覈實投保 v_health_insured；讀 annual_bonus_tracker 唯讀）──
+  IF v_health_insured > 0 THEN
+    -- 加班費超過投保金額 → 超額 ×2.11%
+    IF v_overtime_pay > v_health_insured THEN
+      v_nhi_supp := v_nhi_supp + floor((v_overtime_pay - v_health_insured) * 0.0211);
+      v_nhi_breakdown := v_nhi_breakdown || jsonb_build_object(
+        'category','加班費超額','income',v_overtime_pay,'exempt',v_health_insured,
+        'taxable',v_overtime_pay - v_health_insured,'rate',0.0211,
+        'premium',floor((v_overtime_pay - v_health_insured) * 0.0211));
+    END IF;
+    -- 高額獎金累計 > 4 倍投保 → 超過 ×2.11%（獎金=全勤獎金,對齊入帳）
+    DECLARE
+      v_bonus numeric := v_eff_attb;
+      v_4x    numeric := v_health_insured * 4;
+      v_prev  numeric := 0;
+      v_newc  numeric;
+      v_taxb  numeric := 0;
+    BEGIN
+      IF v_bonus > 0 THEN
+        SELECT cumulative_bonus INTO v_prev FROM annual_bonus_tracker
+         WHERE employee_id = p_emp_id AND year = v_year;
+        v_prev := COALESCE(v_prev,0);
+        v_newc := v_prev + v_bonus;
+        IF v_newc > v_4x AND v_prev < v_4x THEN v_taxb := v_newc - v_4x;
+        ELSIF v_prev >= v_4x THEN v_taxb := v_bonus; END IF;
+        IF v_taxb > 0 THEN
+          v_nhi_supp := v_nhi_supp + floor(v_taxb * 0.0211);
+          v_nhi_breakdown := v_nhi_breakdown || jsonb_build_object(
+            'category','高額獎金累計','income',v_bonus,'cumulative',v_newc,
+            'threshold_4x',v_4x,'taxable',v_taxb,'rate',0.0211,'premium',floor(v_taxb*0.0211));
+        END IF;
+      END IF;
+    END;
+  END IF;
+
   -- 勞退（以 effBase 計）
   v_wage_grade  := LEAST(v_eff_base, 150000);
   v_pension_er  := round(v_wage_grade * 0.06);
   v_pension_self := round(v_wage_grade * LEAST(GREATEST(v_vol_rate,0),0.06));
 
   v_total_deduct := v_labor_emp + v_health_emp + v_pension_self + 0
-                  + (v_absence_deduct + v_late_deduction + v_early_deduction + v_legal_total);
+                  + (v_absence_deduct + v_late_deduction + v_early_deduction + v_legal_total + v_nhi_supp);
   v_net := ceil(v_gross - v_total_deduct);
 
   -- ── partial month 保險 prorate（calculateInServiceDays）──
@@ -556,6 +640,11 @@ BEGIN
     'earlyLeaveDeduction', v_early_deduction,
     'earlyLeaveMinutes', v_early_mins,
     'legal_deduction', v_legal_total,
+    'nhi_supplementary', v_nhi_supp,
+    'nhi_supplementary_breakdown', v_nhi_breakdown,
+    'unused_leave_payout', v_unused_payout,
+    'unused_leave_days', v_unused_days,
+    'is_final_settlement', v_is_final,
     'health_ins_dependents', v_dependents,
     'pension_self_pct', COALESCE(v_emp.labor_pension_self_rate,0),
     'in_service_days', v_in_service,
@@ -607,28 +696,33 @@ BEGIN
         FROM (
           SELECT ar.date AS dt,
             EXTRACT(EPOCH FROM ar.clock_in::time)/60.0 AS ci,
-            COALESCE(EXTRACT(EPOCH FROM s.actual_start::time)/60.0, CASE WHEN COALESCE(v_emp_category,'')='admin' THEN 540 ELSE NULL END) AS ast,
-            CASE WHEN COALESCE(v_emp_category,'')='admin' THEN 30 ELSE 0 END AS grace
+            COALESCE(EXTRACT(EPOCH FROM s.actual_start::time)/60.0, CASE WHEN COALESCE(v_emp_category,'')='admin' THEN v_start_base ELSE NULL END) AS ast,
+            CASE WHEN COALESCE(v_emp_category,'')='admin' THEN v_admin_grace ELSE 0 END AS grace
           FROM attendance_records ar
           LEFT JOIN schedules s ON s.employee_id=ar.employee_id AND s.date=ar.date
+          LEFT JOIN holidays hh ON hh.date=ar.date
           WHERE ar.employee_id=p_emp_id AND ar.date>=v_mstart AND ar.date<=v_mend AND ar.clock_in IS NOT NULL AND NOT v_is_piece
+            AND NOT (COALESCE(hh.is_workday = false, false) OR (COALESCE(v_emp_category,'') = 'admin' AND EXTRACT(DOW FROM ar.date) IN (0,6)))
             AND NOT EXISTS (SELECT 1 FROM leave_requests lr WHERE lr.employee_id=ar.employee_id AND lr.status='已核准' AND ar.date BETWEEN lr.start_date AND COALESCE(lr.end_date,lr.start_date))
         ) y WHERE y.ast IS NOT NULL
       ) q WHERE lm > 0), '[]'::jsonb),
     '_early_rows', COALESCE((
       SELECT jsonb_agg(jsonb_build_object('date', dt, 'early_minutes', round(em)) ORDER BY dt)
       FROM (
-        SELECT y.dt, CASE WHEN y.ae IS NOT NULL AND y.has_out THEN GREATEST(0, (y.ae + CASE WHEN y.ae<=y.ast THEN 1440 ELSE 0 END) - y.cot) ELSE 0 END AS em
+        SELECT y.dt, CASE WHEN y.ae IS NOT NULL AND y.has_out AND NOT y.has_el THEN GREATEST(0, (y.ae + CASE WHEN y.ae<=y.ast THEN 1440 ELSE 0 END) - y.cot) ELSE 0 END AS em
         FROM (
           SELECT ar.date AS dt,
             EXTRACT(EPOCH FROM ar.clock_in::time)/60.0 AS ci,
             (EXTRACT(EPOCH FROM ar.clock_out::time)/60.0) + CASE WHEN ar.clock_out IS NOT NULL AND EXTRACT(EPOCH FROM ar.clock_out::time)<EXTRACT(EPOCH FROM ar.clock_in::time) THEN 1440 ELSE 0 END AS cot,
-            COALESCE(EXTRACT(EPOCH FROM s.actual_start::time)/60.0, CASE WHEN COALESCE(v_emp_category,'')='admin' THEN 540 ELSE NULL END) AS ast,
-            COALESCE(EXTRACT(EPOCH FROM s.actual_end::time)/60.0, CASE WHEN COALESCE(v_emp_category,'')='admin' THEN LEAST(GREATEST(EXTRACT(EPOCH FROM ar.clock_in::time)/60.0+540,1080),1110) ELSE NULL END) AS ae,
-            (ar.clock_out IS NOT NULL) AS has_out
+            COALESCE(EXTRACT(EPOCH FROM s.actual_start::time)/60.0, CASE WHEN COALESCE(v_emp_category,'')='admin' THEN v_start_base ELSE NULL END) AS ast,
+            COALESCE(EXTRACT(EPOCH FROM s.actual_end::time)/60.0, CASE WHEN COALESCE(v_emp_category,'')='admin' THEN LEAST(GREATEST(EXTRACT(EPOCH FROM ar.clock_in::time)/60.0+v_span,v_end_base),v_end_base + v_admin_grace) ELSE NULL END) AS ae,
+            (ar.clock_out IS NOT NULL) AS has_out,
+        EXISTS (SELECT 1 FROM public.early_leave_records elr WHERE elr.employee_id = ar.employee_id AND elr.date = ar.date) AS has_el
           FROM attendance_records ar
           LEFT JOIN schedules s ON s.employee_id=ar.employee_id AND s.date=ar.date
+          LEFT JOIN holidays hh ON hh.date=ar.date
           WHERE ar.employee_id=p_emp_id AND ar.date>=v_mstart AND ar.date<=v_mend AND ar.clock_in IS NOT NULL AND NOT v_is_piece
+            AND NOT (COALESCE(hh.is_workday = false, false) OR (COALESCE(v_emp_category,'') = 'admin' AND EXTRACT(DOW FROM ar.date) IN (0,6)))
             AND NOT EXISTS (SELECT 1 FROM leave_requests lr WHERE lr.employee_id=ar.employee_id AND lr.status='已核准' AND ar.date BETWEEN lr.start_date AND COALESCE(lr.end_date,lr.start_date))
         ) y
       ) q WHERE em > 0), '[]'::jsonb)
@@ -636,23 +730,54 @@ BEGIN
 END $function$
 ;
 
--- ═══════════ _employee_matches_chain_step(p_emp_id integer, p_step_id integer, p_applicant_emp_id integer) ═══════════
-CREATE OR REPLACE FUNCTION public._employee_matches_chain_step(p_emp_id integer, p_step_id integer, p_applicant_emp_id integer DEFAULT NULL::integer)
+-- ═══════════ _employee_matches_chain_step(p_emp_id bigint, p_step_id integer, p_applicant_emp_id integer, p_via_delegation boolean) ═══════════
+CREATE OR REPLACE FUNCTION public._employee_matches_chain_step(p_emp_id bigint, p_step_id integer, p_applicant_emp_id integer DEFAULT NULL::integer, p_via_delegation boolean DEFAULT false)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  SELECT public._employee_matches_chain_step(
+    p_emp_id::integer, p_step_id, p_applicant_emp_id, p_via_delegation
+  );
+$function$
+;
+
+-- ═══════════ _employee_matches_chain_step(p_emp_id integer, p_step_id integer, p_applicant_emp_id integer, p_via_delegation boolean) ═══════════
+CREATE OR REPLACE FUNCTION public._employee_matches_chain_step(p_emp_id integer, p_step_id integer, p_applicant_emp_id integer DEFAULT NULL::integer, p_via_delegation boolean DEFAULT false)
  RETURNS boolean
  LANGUAGE plpgsql
  STABLE SECURITY DEFINER
  SET search_path TO 'public'
 AS $function$
 DECLARE
-  v_step approval_chain_steps;
-  v_emp  employees;
-  v_app  employees;
+  v_step  approval_chain_steps;
+  v_emp   employees;
+  v_app   employees;
+  v_l1_id INT;
 BEGIN
   SELECT * INTO v_step FROM approval_chain_steps WHERE id = p_step_id;
   IF v_step.id IS NULL THEN RETURN FALSE; END IF;
 
   SELECT * INTO v_emp FROM employees WHERE id = p_emp_id AND status = '在職';
   IF v_emp.id IS NULL THEN RETURN FALSE; END IF;
+
+  -- ★ 代簽：若 p_emp 是某人的 active 代理人，且委託人滿足此關 → 通過。
+  --   p_via_delegation=TRUE 時跳過（只展開一層，防遞迴）。
+  IF NOT p_via_delegation THEN
+    IF EXISTS (
+      SELECT 1 FROM approval_delegation_rules dr
+       WHERE dr.delegate_employee_id = p_emp_id
+         AND dr.is_active
+         AND CURRENT_DATE >= dr.effective_from
+         AND (dr.effective_to IS NULL OR CURRENT_DATE <= dr.effective_to)
+         AND public._employee_matches_chain_step(
+               dr.delegator_employee_id, p_step_id, p_applicant_emp_id, TRUE
+             )
+    ) THEN
+      RETURN TRUE;
+    END IF;
+  END IF;
 
   IF v_step.target_type = 'fixed_emp' THEN
     RETURN v_step.target_emp_id = p_emp_id;
@@ -670,6 +795,23 @@ BEGIN
     RETURN COALESCE(v_app.supervisor_id, v_app.reporting_to) = p_emp_id;
   END IF;
 
+  -- ★ L2：申請人直屬主管的上級
+  IF v_step.target_type = 'applicant_supervisor_l2' AND v_app.id IS NOT NULL THEN
+    SELECT COALESCE(supervisor_id, reporting_to) INTO v_l1_id
+      FROM employees WHERE id = COALESCE(v_app.supervisor_id, v_app.reporting_to);
+    RETURN v_l1_id IS NOT NULL AND v_l1_id = p_emp_id;
+  END IF;
+
+  -- ★ L3：申請人直屬主管的上級的上級
+  IF v_step.target_type = 'applicant_supervisor_l3' AND v_app.id IS NOT NULL THEN
+    SELECT COALESCE(supervisor_id, reporting_to) INTO v_l1_id
+      FROM employees WHERE id = COALESCE(v_app.supervisor_id, v_app.reporting_to);
+    IF v_l1_id IS NULL THEN RETURN FALSE; END IF;
+    SELECT COALESCE(supervisor_id, reporting_to) INTO v_l1_id
+      FROM employees WHERE id = v_l1_id;
+    RETURN v_l1_id IS NOT NULL AND v_l1_id = p_emp_id;
+  END IF;
+
   IF v_step.target_type = 'applicant_dept_manager' AND v_app.id IS NOT NULL THEN
     RETURN EXISTS (SELECT 1 FROM departments d
                     WHERE d.id = v_app.department_id AND d.manager_id = p_emp_id);
@@ -679,7 +821,6 @@ BEGIN
   ELSIF v_step.target_type = 'applicant_store_supervisor' AND v_app.id IS NOT NULL THEN
     RETURN (v_emp.store_id = v_app.store_id AND v_emp.position = '督導');
   ELSIF v_step.target_type = 'applicant_section_supervisor' AND v_app.id IS NOT NULL THEN
-    -- ★ 加 self-fallback：門市課別督導 = 我，或（課別解不出督導 AND 我是申請人本人 AND 我本身是某課督導）
     RETURN (
       EXISTS (SELECT 1 FROM stores s
                 JOIN department_sections ds ON ds.id = s.section_id
@@ -720,6 +861,7 @@ DECLARE
   v_snap  public.request_chain_snapshots;
   v_emp   employees;
   v_app   employees;
+  v_l1_id INT;
 BEGIN
   SELECT * INTO v_snap
     FROM public.request_chain_snapshots
@@ -743,6 +885,23 @@ BEGIN
     RETURN COALESCE(v_app.supervisor_id, v_app.reporting_to) = p_emp_id;
   END IF;
 
+  -- ★ L2
+  IF v_snap.target_type = 'applicant_supervisor_l2' AND v_app.id IS NOT NULL THEN
+    SELECT COALESCE(supervisor_id, reporting_to) INTO v_l1_id
+      FROM employees WHERE id = COALESCE(v_app.supervisor_id, v_app.reporting_to);
+    RETURN v_l1_id IS NOT NULL AND v_l1_id = p_emp_id;
+  END IF;
+
+  -- ★ L3
+  IF v_snap.target_type = 'applicant_supervisor_l3' AND v_app.id IS NOT NULL THEN
+    SELECT COALESCE(supervisor_id, reporting_to) INTO v_l1_id
+      FROM employees WHERE id = COALESCE(v_app.supervisor_id, v_app.reporting_to);
+    IF v_l1_id IS NULL THEN RETURN FALSE; END IF;
+    SELECT COALESCE(supervisor_id, reporting_to) INTO v_l1_id
+      FROM employees WHERE id = v_l1_id;
+    RETURN v_l1_id IS NOT NULL AND v_l1_id = p_emp_id;
+  END IF;
+
   IF v_snap.target_type = 'applicant_dept_manager' AND v_app.id IS NOT NULL THEN
     RETURN EXISTS (SELECT 1 FROM departments d
                     WHERE d.id = v_app.department_id AND d.manager_id = p_emp_id);
@@ -758,7 +917,7 @@ BEGIN
   END IF;
 
   IF v_snap.target_type = 'applicant_section_supervisor' AND v_app.id IS NOT NULL THEN
-    -- ★ 加 self-fallback（與 resolve_snapshot_step_approvers 一致）
+    -- self-fallback（20260612190000）
     RETURN (
       EXISTS (SELECT 1 FROM stores s
                 JOIN department_sections ds ON ds.id = s.section_id
@@ -899,20 +1058,20 @@ CREATE OR REPLACE FUNCTION public.classify_overtime_category_v2(p_date date, p_e
  STABLE
 AS $function$
 DECLARE
-  v_is_holiday BOOLEAN;
-  v_shift      TEXT;
-  v_dow        INT;
+  v_is_holiday   BOOLEAN;
+  v_shift        TEXT;
+  v_dow          INT;
+  v_emp_category TEXT;
 BEGIN
   IF p_date IS NULL THEN
     RETURN NULL;
   END IF;
 
-  -- 1. 國定假日優先（不論其他）
+  -- 1. 國定假日（月曆）最高優先，對所有人一律 holiday
   SELECT EXISTS (
     SELECT 1 FROM public.holidays
     WHERE date = p_date AND COALESCE(is_workday, false) = false
   ) INTO v_is_holiday;
-
   IF v_is_holiday THEN
     RETURN 'holiday';
   END IF;
@@ -926,22 +1085,32 @@ BEGIN
        AND s.date = p_date
      LIMIT 1;
 
-    IF v_shift = '例假' THEN
+    IF v_shift = '國定假' THEN
+      RETURN 'holiday';
+    ELSIF v_shift = '例假' THEN
       RETURN 'weekly_off';
     ELSIF v_shift IN ('休', '休息') THEN
       RETURN 'restday';
     END IF;
+
+    -- 員工類型：只有「行政(admin)」固定週一~五，才用 DOW 推休息日/例假
+    SELECT ss.employment_category INTO v_emp_category
+      FROM public.salary_structures ss
+     WHERE ss.employee_id = p_employee_id
+     LIMIT 1;
   END IF;
 
-  -- 3. fallback 依 DOW
-  v_dow := EXTRACT(DOW FROM p_date)::INT;
-  IF v_dow = 0 THEN
-    RETURN 'weekly_off';
-  ELSIF v_dow = 6 THEN
-    RETURN 'restday';
-  ELSE
-    RETURN 'weekday';
+  -- 3. 行政 → DOW fallback；門市正職/PT(四週變形)沒班表休息標示 → 一律 weekday
+  IF COALESCE(v_emp_category, '') = 'admin' THEN
+    v_dow := EXTRACT(DOW FROM p_date)::INT;
+    IF v_dow = 0 THEN
+      RETURN 'weekly_off';
+    ELSIF v_dow = 6 THEN
+      RETURN 'restday';
+    END IF;
   END IF;
+
+  RETURN 'weekday';
 END $function$
 ;
 
@@ -1473,7 +1642,8 @@ BEGIN
       (ss.id IS NULL)                             AS no_salary_structure
     FROM employees e
     LEFT JOIN salary_structures ss ON ss.employee_id = e.id
-    WHERE (e.join_date IS NULL OR e.join_date <= v_month_end)
+    WHERE (e.in_payroll IS NOT FALSE)             -- 編制外員工不納入薪資計算
+      AND (e.join_date IS NULL OR e.join_date <= v_month_end)
       AND (
         e.status = '在職'
         OR (e.status = '離職'
@@ -1818,7 +1988,7 @@ BEGIN
         END IF;
       END IF;
 
-      v_income_tax := public._calc_monthly_withholding(v_gross);
+      v_income_tax := 0;  -- 所得稅不代扣（老闆政策 2026-06-25）
 
       -- ── Insurance（toggle + 動態級距）──
       DECLARE
@@ -2458,13 +2628,14 @@ CREATE OR REPLACE FUNCTION public.get_payroll_transfer_file(p_period text, p_org
 AS $function$
 DECLARE v_result json;
 BEGIN
-  IF auth.uid() IS NOT NULL AND NOT public.can_manage_bank() THEN
+  IF auth.uid() IS NOT NULL AND current_employee_role() NOT IN ('admin','super_admin') THEN
     RAISE EXCEPTION 'NOT_AUTHORIZED';
   END IF;
 
   SELECT COALESCE(json_agg(json_build_object(
     'employee_number', e.employee_number,
     'name',            sr.employee,
+    'id_number',       e.id_number,
     'bank_code',       ba.bank_code,
     'bank_branch',     ba.bank_branch,
     'bank_account',    ba.bank_account,
@@ -2473,9 +2644,12 @@ BEGIN
   ) ORDER BY e.employee_number NULLS LAST, sr.employee), '[]'::json)
   INTO v_result
   FROM salary_records sr
-  LEFT JOIN employees e ON e.name = sr.employee AND e.organization_id = p_org
-  LEFT JOIN employee_bank_accounts ba ON ba.employee_id = e.id
-  WHERE sr.organization_id = p_org AND sr.month = p_period;
+  LEFT JOIN employees e
+    ON e.name = sr.employee AND e.organization_id = p_org
+  LEFT JOIN employee_bank_accounts ba
+    ON ba.employee_id = e.id
+  WHERE sr.organization_id = p_org
+    AND sr.month = p_period;
 
   RETURN v_result;
 END $function$
@@ -2711,6 +2885,10 @@ DECLARE
   -- snapshot
   v_has_snapshot  BOOLEAN;
   v_snap_matches  BOOLEAN;
+  v_snap_rt       TEXT;
+  -- skip-if-no-approver
+  v_effective_step INT;
+  v_step_skipped   BOOLEAN;
   -- extra step
   v_pending_extra INT;
 BEGIN
@@ -2760,31 +2938,28 @@ BEGIN
     reject_status  := '已退回';
 
     IF v_chain_id IS NOT NULL THEN
-      -- snapshot 優先
-      v_snap_matches := FALSE;
+      -- snapshot 優先（leave / overtime / trip / correction）
+      v_has_snapshot := FALSE;
       IF p_type IN ('leave','overtime','trip','correction') THEN
-        DECLARE v_snap_rt TEXT := CASE p_type
+        v_snap_rt := CASE p_type
           WHEN 'leave'      THEN 'leave_request'
           WHEN 'overtime'   THEN 'overtime_request'
           WHEN 'trip'       THEN 'trip'
           WHEN 'correction' THEN 'correction'
         END;
-        BEGIN
-          SELECT EXISTS(
-            SELECT 1 FROM public.request_chain_snapshots
-             WHERE request_type = v_snap_rt AND request_id = p_id
-          ) INTO v_has_snapshot;
-          IF v_has_snapshot THEN
-            SELECT public._employee_matches_snapshot_step(
-              emp.id,
-              v_snap_rt, p_id, v_cur_step, v_app_emp_id
-            ) INTO v_snap_matches;
-            IF NOT v_snap_matches THEN
-              RETURN json_build_object('ok', false, 'error', 'NOT_YOUR_TURN',
-                'source', 'snapshot', 'current_step', v_cur_step);
-            END IF;
+        SELECT EXISTS(
+          SELECT 1 FROM public.request_chain_snapshots
+           WHERE request_type = v_snap_rt AND request_id = p_id
+        ) INTO v_has_snapshot;
+        IF v_has_snapshot THEN
+          SELECT public._employee_matches_snapshot_step(
+            emp.id, v_snap_rt, p_id, v_cur_step, v_app_emp_id
+          ) INTO v_snap_matches;
+          IF NOT v_snap_matches THEN
+            RETURN json_build_object('ok', false, 'error', 'NOT_YOUR_TURN',
+              'source', 'snapshot', 'current_step', v_cur_step);
           END IF;
-        END;
+        END IF;
       END IF;
 
       IF NOT v_has_snapshot THEN
@@ -2818,16 +2993,40 @@ BEGIN
         RETURN json_build_object('ok', true, 'status', approve_status, 'event','approved', 'is_last_step', true,
           'applicant', json_build_object('emp_id', v_app_emp_id, 'name', v_app_name));
       ELSE
-        EXECUTE format('UPDATE %I SET current_step=current_step+1 WHERE id=$1', v_table_name) USING p_id;
+        -- ── advance，自動跳過 auto_skipped 步 ──
+        v_effective_step := v_cur_step + 1;
+
+        IF v_snap_rt IS NOT NULL THEN
+          LOOP
+            EXIT WHEN v_effective_step >= v_total_steps;
+            SELECT COALESCE(rcs.auto_skipped, false) INTO v_step_skipped
+              FROM public.request_chain_snapshots rcs
+             WHERE rcs.request_type = v_snap_rt
+               AND rcs.request_id   = p_id
+               AND rcs.step_order   = v_effective_step;
+            EXIT WHEN NOT COALESCE(v_step_skipped, false);
+            v_effective_step := v_effective_step + 1;
+          END LOOP;
+        END IF;
+
+        -- 所有剩餘步驟都被跳過 → 直接核准
+        IF v_effective_step >= v_total_steps THEN
+          EXECUTE format('UPDATE %I SET status=$1, current_step=$2, approved_by=$3 WHERE id=$4', v_table_name)
+            USING approve_status, v_effective_step, emp.name, p_id;
+          RETURN json_build_object('ok', true, 'status', approve_status, 'event', 'approved', 'is_last_step', true,
+            'applicant', json_build_object('emp_id', v_app_emp_id, 'name', v_app_name));
+        END IF;
+
+        EXECUTE format('UPDATE %I SET current_step=$1 WHERE id=$2', v_table_name) USING v_effective_step, p_id;
         SELECT * INTO v_next_step FROM approval_chain_steps
-         WHERE chain_id = v_chain_id AND step_order = v_cur_step + 1;
+         WHERE chain_id = v_chain_id AND step_order = v_effective_step;
         SELECT array_agg(e.id) INTO v_next_approver_ids FROM employees e
          WHERE e.status='在職' AND e.organization_id = v_app_org
            AND public._employee_matches_chain_step(e.id, v_next_step.id, v_app_emp_id);
         SELECT json_agg(json_build_object('emp_id', id, 'name', name)) INTO v_next_approvers
           FROM employees WHERE id = ANY(COALESCE(v_next_approver_ids, ARRAY[]::INT[]));
         RETURN json_build_object('ok', true, 'status','簽核中', 'event','advanced',
-          'advanced_to_step', v_cur_step + 1, 'is_last_step', false,
+          'advanced_to_step', v_effective_step, 'is_last_step', false,
           'next_approvers', COALESCE(v_next_approvers, '[]'::json),
           'applicant', json_build_object('emp_id', v_app_emp_id, 'name', v_app_name));
       END IF;
@@ -2911,7 +3110,6 @@ BEGIN
   END IF;
 
   -- ════ expense_settle（核銷）走 settle_chain + snapshot ════
-
   IF p_type = 'expense_settle' THEN
     SELECT * INTO v_er FROM expense_requests WHERE id = p_id;
     IF v_er.id IS NULL OR v_er.status <> '待核銷' THEN
@@ -2924,7 +3122,6 @@ BEGIN
       RETURN json_build_object('ok', false, 'error', 'NO_CHAIN_ATTACHED');
     END IF;
 
-    -- ★ 加簽守衛（對齊 expense_settle_step_advance 的邏輯）
     SELECT id INTO v_pending_extra
       FROM public.approval_extra_steps
      WHERE source_table = 'expense_settles'
@@ -2936,7 +3133,6 @@ BEGIN
       RETURN json_build_object('ok', false, 'error', 'PENDING_EXTRA_STEP', 'extra_step_id', v_pending_extra);
     END IF;
 
-    -- ★ snapshot 優先 step 比對
     SELECT EXISTS (
       SELECT 1 FROM public.request_chain_snapshots
        WHERE request_type = 'expense_settle' AND request_id = p_id
@@ -2951,7 +3147,6 @@ BEGIN
           'source', 'snapshot', 'current_step', v_er.settle_current_step);
       END IF;
     ELSE
-      -- fallback live chain
       SELECT * INTO v_step FROM approval_chain_steps
        WHERE chain_id = v_er.settle_chain_id AND step_order = v_er.settle_current_step;
       IF v_step.id IS NULL THEN
@@ -3375,6 +3570,7 @@ AS $function$
 DECLARE
   v_year   INT  := split_part(p_period,'-',1)::int;
   v_month  INT  := split_part(p_period,'-',2)::int;
+  v_mstart date := make_date(v_year, v_month, 1);
   v_mend   date := (make_date(v_year, v_month, 1) + interval '1 month - 1 day')::date;
   v_result json;
 BEGIN
@@ -3382,10 +3578,16 @@ BEGIN
     INTO v_result
   FROM employees e
   WHERE e.organization_id = p_org
-    -- 員工範圍對齊前端 Salary.jsx：在職 + 近一個月內離職（相對今日，非計薪月）
-    AND ( e.status = '在職'
-       OR (e.status = '離職' AND e.resign_date >= (date_trunc('month', current_date) - interval '1 month')::date) )
+    AND (e.in_payroll IS NOT FALSE)   -- 編制外員工不納入薪資計算
+    -- 到職<=月底 且 (在職 或 當月離職)，以計薪月份為準、非相對今天
     AND (e.join_date IS NULL OR e.join_date <= v_mend)
+    AND (
+      e.status = '在職'
+      OR (e.status = '離職'
+          AND e.resign_date IS NOT NULL
+          AND e.resign_date >= v_mstart
+          AND e.resign_date <= v_mend)
+    )
     AND (
       p_store_filter IS NULL
       OR e.store = p_store_filter
@@ -3449,7 +3651,7 @@ BEGIN
 
   IF v_app.id IS NULL THEN RETURN; END IF;
 
-  -- ─────── applicant_* ───────
+  -- ─────── applicant_supervisor L1/L2/L3 ───────
   IF v_snap.target_type = 'applicant_supervisor' THEN
     v_target_emp_id := COALESCE(v_app.supervisor_id, v_app.reporting_to);
     IF v_target_emp_id IS NOT NULL THEN
@@ -3462,6 +3664,45 @@ BEGIN
     RETURN;
   END IF;
 
+  -- ★ L2
+  IF v_snap.target_type = 'applicant_supervisor_l2' THEN
+    v_target_emp_id := COALESCE(v_app.supervisor_id, v_app.reporting_to);
+    IF v_target_emp_id IS NOT NULL THEN
+      SELECT COALESCE(e.supervisor_id, e.reporting_to) INTO v_target_emp_id
+        FROM employees e WHERE e.id = v_target_emp_id;
+      IF v_target_emp_id IS NOT NULL THEN
+        RETURN QUERY
+          SELECT e.id, e.name,
+            (SELECT lt.line_user_id FROM _employee_line_target(e.id) lt LIMIT 1),
+            (SELECT lt.channel_code  FROM _employee_line_target(e.id) lt LIMIT 1)
+          FROM employees e WHERE e.id = v_target_emp_id AND e.status = '在職';
+      END IF;
+    END IF;
+    RETURN;
+  END IF;
+
+  -- ★ L3
+  IF v_snap.target_type = 'applicant_supervisor_l3' THEN
+    v_target_emp_id := COALESCE(v_app.supervisor_id, v_app.reporting_to);
+    IF v_target_emp_id IS NOT NULL THEN
+      SELECT COALESCE(e.supervisor_id, e.reporting_to) INTO v_target_emp_id
+        FROM employees e WHERE e.id = v_target_emp_id;
+      IF v_target_emp_id IS NOT NULL THEN
+        SELECT COALESCE(e.supervisor_id, e.reporting_to) INTO v_target_emp_id
+          FROM employees e WHERE e.id = v_target_emp_id;
+        IF v_target_emp_id IS NOT NULL THEN
+          RETURN QUERY
+            SELECT e.id, e.name,
+              (SELECT lt.line_user_id FROM _employee_line_target(e.id) lt LIMIT 1),
+              (SELECT lt.channel_code  FROM _employee_line_target(e.id) lt LIMIT 1)
+            FROM employees e WHERE e.id = v_target_emp_id AND e.status = '在職';
+        END IF;
+      END IF;
+    END IF;
+    RETURN;
+  END IF;
+
+  -- ─────── 其餘 applicant_* ───────
   IF v_snap.target_type = 'applicant_dept_manager' AND v_app.department_id IS NOT NULL THEN
     SELECT d.manager_id INTO v_target_emp_id FROM departments d WHERE d.id = v_app.department_id;
     IF v_target_emp_id IS NOT NULL THEN
@@ -3498,7 +3739,6 @@ BEGIN
     RETURN;
   END IF;
 
-  -- applicant_section_supervisor（含 self-fallback — 課督導/經理自己申請時回傳自己）
   IF v_snap.target_type = 'applicant_section_supervisor' THEN
     IF v_app.store_id IS NOT NULL THEN
       SELECT s.section_id INTO v_section_id FROM stores s WHERE s.id = v_app.store_id;
@@ -3511,17 +3751,8 @@ BEGIN
               (SELECT lt.line_user_id FROM _employee_line_target(e.id) lt LIMIT 1),
               (SELECT lt.channel_code  FROM _employee_line_target(e.id) lt LIMIT 1)
             FROM employees e WHERE e.id = v_target_emp_id AND e.status = '在職';
-          RETURN;
         END IF;
       END IF;
-    END IF;
-    -- ★ self-fallback：申請人本身是課督導 → 回傳自己
-    IF EXISTS (SELECT 1 FROM department_sections WHERE supervisor_id = v_app.id) THEN
-      RETURN QUERY
-        SELECT e.id, e.name,
-          (SELECT lt.line_user_id FROM _employee_line_target(e.id) lt LIMIT 1),
-          (SELECT lt.channel_code  FROM _employee_line_target(e.id) lt LIMIT 1)
-        FROM employees e WHERE e.id = v_app.id AND e.status = '在職';
     END IF;
     RETURN;
   END IF;
@@ -3564,7 +3795,7 @@ BEGIN
     RETURN;
   END IF;
 
-  -- ─────── 商品調撥 dynamic target ───────
+  -- ─────── 商品調撥 5 個 dynamic target ───────
   IF v_snap.target_type IN ('transfer_in_store_manager', 'transfer_out_store_manager') THEN
     v_store_id := public._goods_transfer_target_store(p_request_id,
       CASE v_snap.target_type WHEN 'transfer_in_store_manager' THEN 'to' ELSE 'from' END);
@@ -3622,12 +3853,19 @@ CREATE OR REPLACE FUNCTION public.restore_request(p_table text, p_id integer)
  RETURNS void
  LANGUAGE plpgsql
  SECURITY DEFINER
+ SET search_path TO 'public'
 AS $function$
 DECLARE
   v_caller_org INT;
   v_record_org INT;
   v_emp_id     INT;
 BEGIN
+  -- ★ 權限 guard：控管者或被授予「還原已刪除單據」者（補原本只檢查 org 的洞）
+  IF NOT (current_employee_role() IN ('admin','super_admin','manager')
+          OR public.current_user_can('hr_form.restore')) THEN
+    RAISE EXCEPTION 'restore_request: permission denied (need hr_form.restore)';
+  END IF;
+
   SELECT organization_id INTO v_caller_org
   FROM public.employees
   WHERE auth_user_id = auth.uid()

@@ -775,7 +775,7 @@ begin
     'email_mailboxes','email_accounts','email_folders','email_threads',
     'email_messages','email_drafts','email_attachments','email_labels',
     'email_categories','email_label_rules','email_entity_links',
-    'email_skills','email_skill_runs','email_templates','email_signatures',
+    'email_skills','email_templates','email_signatures',
     'email_ooo_settings','calendar_accounts','calendar_calendars','calendar_events',
     'booking_pages','booking_appointments','contact_accounts','contacts',
     'contacts_staging','contact_field_maps','comms_access_log',
@@ -801,7 +801,7 @@ begin
   foreach t in array array[
     'email_mailbox_members','email_thread_labels','email_thread_categories',
     'calendar_event_attendees','booking_page_team_members',
-    'contact_group_members','contact_merge_log'
+    'contact_group_members','contact_merge_log','email_skill_runs'
   ] loop
     execute format(
       'create policy "comms_%s_auth" on %I for all to authenticated using (true)',

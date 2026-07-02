@@ -1,12 +1,24 @@
 // Browser-side thermal label generator using native window.print().
 // Replace printLabel() with WebSocket/USB HID call for ZPL thermal printers.
 
+// Escape user-controlled fields before interpolating into the label HTML.
+// Without this, a crafted recipient/address (e.g. `<img src=x onerror=...>`) runs
+// script in the same-origin print window and can steal the printing user's session.
+function esc(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
 export function generateLabelHTML(job) {
-  const carrierName = job.carrier_configs?.name ?? '—'
-  const destination = job.shipments?.destination ?? ''
-  const recipient = job.shipments?.recipient ?? ''
-  const recipientPhone = job.shipments?.recipient_phone ?? ''
-  const code = job.tracking_number ?? job.job_number
+  const carrierName = esc(job.carrier_configs?.name ?? '—')
+  const destination = esc(job.shipments?.destination ?? '')
+  const recipient = esc(job.shipments?.recipient ?? '')
+  const recipientPhone = esc(job.shipments?.recipient_phone ?? '')
+  const code = esc(job.tracking_number ?? job.job_number)
 
   return `<!DOCTYPE html><html><head><style>
     body{margin:0;font-family:monospace;font-size:12px}
@@ -22,7 +34,7 @@ export function generateLabelHTML(job) {
     <div class="field"><label>電話</label>${recipientPhone}</div>
     <div class="field"><label>地址</label>${destination}</div>
     <div class="barcode">${code}</div>
-    <div class="sub">${job.job_number}</div>
+    <div class="sub">${esc(job.job_number)}</div>
   </div>
   <script>window.onload=()=>{window.print();setTimeout(()=>window.close(),500)}<\/script>
   </body></html>`

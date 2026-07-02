@@ -150,6 +150,8 @@ serve(async (req) => {
     let sent = 0
     let failed = 0
     let skipped = 0
+    // per-member 結果（供呼叫端精準標記，如 survey_invitations）
+    const results: { memberId: number | null; status: 'sent' | 'failed' | 'skipped_no_binding' }[] = []
 
     // 分流：未綁定 vs 可發送
     const bound: { id: number; name: string; lineUserId: string; orgId: number | null }[] = []
@@ -158,6 +160,7 @@ serve(async (req) => {
       if (!m || !m.line_user_id) {
         skipped++
         logs.push(makeLog(m?.id ?? null, m?.organization_id ?? null, '', 'skipped_no_binding', '會員未綁定 LINE', ''))
+        results.push({ memberId: m?.id ?? (Number(rawId) || null), status: 'skipped_no_binding' })
         continue
       }
       bound.push({ id: m.id, name: m.name || '', lineUserId: m.line_user_id, orgId: m.organization_id })
@@ -178,10 +181,12 @@ serve(async (req) => {
             sent++
             logs.push(makeLog(m.id, m.orgId, m.lineUserId, 'sent', null,
               template.type === 'text' ? (message as { text: string }).text : (template.altText || '')))
+            results.push({ memberId: m.id, status: 'sent' })
           } catch (err) {
             failed++
             logs.push(makeLog(m.id, m.orgId, m.lineUserId, 'failed', (err as Error).message,
               template.type === 'text' ? (template.text || '') : (template.altText || '')))
+            results.push({ memberId: m.id, status: 'failed' })
           }
         }
       } else {
@@ -196,10 +201,16 @@ serve(async (req) => {
               messages: [message],
             })
             sent += chunk.length
-            for (const m of chunk) logs.push(makeLog(m.id, m.orgId, m.lineUserId, 'sent', null, bodyText))
+            for (const m of chunk) {
+              logs.push(makeLog(m.id, m.orgId, m.lineUserId, 'sent', null, bodyText))
+              results.push({ memberId: m.id, status: 'sent' })
+            }
           } catch (err) {
             failed += chunk.length
-            for (const m of chunk) logs.push(makeLog(m.id, m.orgId, m.lineUserId, 'failed', (err as Error).message, bodyText))
+            for (const m of chunk) {
+              logs.push(makeLog(m.id, m.orgId, m.lineUserId, 'failed', (err as Error).message, bodyText))
+              results.push({ memberId: m.id, status: 'failed' })
+            }
           }
         }
       }
@@ -211,7 +222,7 @@ serve(async (req) => {
       if (logErr) console.error('[crm-line-send] message_logs insert failed:', logErr.message)
     }
 
-    return json({ sent, failed, skipped })
+    return json({ sent, failed, skipped, results })
   } catch (err) {
     return json({ error: (err as Error).message }, 500)
   }

@@ -208,6 +208,21 @@ export const getSurveyInvitations = (surveyId, { status } = {}) => {
   return q
 }
 
+// 到期待發送的 LINE 邀請（status=pending 且 send_after 已到）
+// 供 lineSender.dispatchDueLineSurveyInvitations 使用
+export const getDueLineSurveyInvitations = (surveyId) =>
+  supabase.from('survey_invitations')
+    .select('id, member_id, token, expires_at')
+    .eq('survey_id', surveyId)
+    .eq('status', 'pending')
+    .lte('send_after', new Date().toISOString())
+    .order('created_at', { ascending: true })
+
+export const markSurveyInvitationsSent = (ids) =>
+  supabase.from('survey_invitations')
+    .update({ status: 'sent', sent_at: new Date().toISOString() })
+    .in('id', ids)
+
 // ── Survey Results ─────────────────────────────────────────
 export const getSurveyResults = (surveyId) =>
   supabase.from('survey_responses')

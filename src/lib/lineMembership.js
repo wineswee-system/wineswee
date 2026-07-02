@@ -1,7 +1,5 @@
-import { supabase } from './supabase'
 import { logger } from './logger'
-
-const LIFF_ID = import.meta.env.VITE_LIFF_ID
+import { sendLineToMembers, memberLiffUrl } from './comms/lineSender'
 
 // Hex colors for LINE Flex Message payloads — cannot use CSS vars in external API JSON
 const LC = {
@@ -13,32 +11,28 @@ const LC = {
   dark:    '#111827',
 }
 
-async function resolveMemberLineId(memberId) {
-  const { data } = await supabase
-    .from('members')
-    .select('line_user_id, name')
-    .eq('id', memberId)
-    .maybeSingle()
-  return { lineUserId: data?.line_user_id ?? null, name: data?.name ?? '' }
-}
-
-function memberLiffUrl(path = '/') {
-  if (!LIFF_ID) return `${typeof window !== 'undefined' ? window.location.origin : ''}/liff${path}`
-  return `https://liff.line.me/${LIFF_ID}?to=${encodeURIComponent(path)}`
-}
-
-async function pushToMember(memberId, messages) {
-  const { lineUserId } = await resolveMemberLineId(memberId)
-  if (!lineUserId) {
-    logger.warn('[LINE-member] No line_user_id', { memberId })
-    return { ok: false, reason: 'no_line_user_id' }
-  }
+/**
+ * 會員 LINE 推播 — 走 crm-line-send edge function（CRM 會員頻道）。
+ * 綁定解析（members.line_user_id）與 message_logs 紀錄都在後端完成；
+ * 未綁定會回 skipped，不會誤用員工頻道。
+ */
+async function pushToMember(memberId, messages, kind = 'membership') {
+  const msg = messages?.[0]
+  if (!msg) return { ok: false, error: 'empty message' }
+  const template = msg.type === 'flex'
+    ? { type: 'flex', altText: msg.altText, contents: msg.contents }
+    : { type: 'text', text: msg.text }
   try {
-    const { data, error } = await supabase.functions.invoke('member-push', {
-      body: { to: lineUserId, messages },
+    const { sent, skipped } = await sendLineToMembers({
+      memberIds: [memberId],
+      template,
+      context: { kind },
     })
-    if (error) throw error
-    return data || { ok: true }
+    if (skipped > 0) {
+      logger.warn('[LINE-member] 會員未綁定 LINE，略過', { memberId, kind })
+      return { ok: false, reason: 'no_line_user_id' }
+    }
+    return { ok: sent > 0 }
   } catch (err) {
     logger.error('[LINE-member] Push error', { memberId, err: err?.message })
     return { ok: false, error: err?.message }

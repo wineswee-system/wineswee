@@ -38,6 +38,16 @@ serve(async (req) => {
   const LINE_CHANNEL_ID = Deno.env.get('LINE_LOGIN_CHANNEL_ID') || ''
   const LINE_CHANNEL_SECRET = Deno.env.get('LINE_LOGIN_CHANNEL_SECRET') || ''
 
+  // Allowlist of origins the flow may redirect back to. The magic-link token_hash
+  // is delivered to this origin, so an unvalidated value = account takeover.
+  // Configure extra origins via: supabase secrets set ALLOWED_ORIGINS=https://a.com,https://b.com
+  const ALLOWED_ORIGINS = [
+    DEFAULT_SITE_URL,
+    ...(Deno.env.get('ALLOWED_ORIGINS') || '').split(',').map((s) => s.trim()).filter(Boolean),
+  ]
+  const safeSiteUrl = (candidate: string | null | undefined): string =>
+    candidate && ALLOWED_ORIGINS.includes(candidate) ? candidate : DEFAULT_SITE_URL
+
   if (!LINE_CHANNEL_ID || !LINE_CHANNEL_SECRET) {
     return new Response(null, {
       status: 302,
@@ -68,8 +78,9 @@ serve(async (req) => {
 
   // ── Step 1: Redirect to LINE Login ──
   if (action === 'authorize') {
-    // Embed the caller's origin in state so callback can redirect back to the right host
-    const siteUrlParam = url.searchParams.get('site_url') || DEFAULT_SITE_URL
+    // Embed the caller's origin in state so callback can redirect back to the right host.
+    // Only an allowlisted origin is honored — otherwise fall back to the configured SITE_URL.
+    const siteUrlParam = safeSiteUrl(url.searchParams.get('site_url'))
     const state = btoa(JSON.stringify({ nonce: crypto.randomUUID(), site_url: siteUrlParam }))
     const lineAuthUrl = `https://access.line.me/oauth2/v2.1/authorize?` +
       `response_type=code` +
@@ -88,11 +99,12 @@ serve(async (req) => {
   if (action === 'callback') {
     const code = url.searchParams.get('code')
     const stateParam = url.searchParams.get('state') || ''
-    // Recover the caller's origin from state; fall back to the env-configured SITE_URL
+    // Recover the caller's origin from state; validate against the allowlist so a
+    // forged state cannot redirect the token_hash to an attacker-controlled domain.
     let SITE_URL = DEFAULT_SITE_URL
     try {
       const stateData = JSON.parse(atob(stateParam))
-      if (stateData.site_url) SITE_URL = stateData.site_url
+      SITE_URL = safeSiteUrl(stateData.site_url)
     } catch { /* use DEFAULT_SITE_URL */ }
 
     if (!code) {
@@ -142,7 +154,11 @@ serve(async (req) => {
       const displayName = profile.displayName || ''
       const pictureUrl = profile.pictureUrl || null
 
-      // ── Find matching employee: prior link → email → display name ──
+      // ── Find matching employee: prior link → verified email ONLY ──
+      // Display-name matching was removed: LINE display names are attacker-controlled,
+      // so matching employees.name/name_en against them allowed identity forgery
+      // (set your LINE display name to a known employee's name → log in as them).
+      // Unlinked users fall through to the line_users upsert below for manual HR linking.
       let employee: any = null
       const { data: ela } = await supabase
         .from('employee_line_accounts')
@@ -154,14 +170,6 @@ serve(async (req) => {
 
       if (!employee && email) {
         const { data } = await supabase.from('employees').select('*').eq('email', email).maybeSingle()
-        employee = data
-      }
-      if (!employee) {
-        const { data } = await supabase.from('employees').select('*').eq('name', displayName).maybeSingle()
-        employee = data
-      }
-      if (!employee) {
-        const { data } = await supabase.from('employees').select('*').eq('name_en', displayName).maybeSingle()
         employee = data
       }
 

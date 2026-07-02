@@ -32,40 +32,61 @@ function createPdf(jsPDF, title, subtitle) {
   return doc
 }
 
-// Export attendance records
-export async function exportAttendancePdf(records, filters = {}) {
-  const { jsPDF, autoTable } = await loadPdfLibs()
-  const doc = createPdf(jsPDF, 'Attendance Report', `Date: ${filters.date || 'All'} | Dept: ${filters.dept || 'All'}`)
-
-  const head = [['#', 'Employee', 'Date', 'Clock In', 'Clock Out', 'Hours', 'Status']]
-  const body = records.map((r, i) => [
-    i + 1,
-    r.employee || '-',
-    r.date || '-',
-    r.clock_in || '-',
-    r.clock_out || '-',
-    r.hours ? `${r.hours}h` : '-',
-    r.status || '-',
-  ])
-
-  autoTable(doc, {
-    startY: 36,
-    head,
-    body,
-    theme: 'grid',
-    headStyles: { fillColor: [14, 116, 144], fontSize: 9 },
-    bodyStyles: { fontSize: 8 },
-    alternateRowStyles: { fillColor: [245, 247, 250] },
-  })
-
+// Export attendance records — 改用 HTML + window.print（jsPDF 沒嵌中文字型會亂碼，
+// 比照 printSignOff 的做法，用系統中文字型，中文正常，讓使用者列印 / 另存 PDF）
+export function exportAttendancePdf(records, filters = {}) {
+  const esc = (s) => s == null ? '' : String(s).replace(/[<>&"']/g, c => (
+    { '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' }[c]
+  ))
   const normal = records.filter(r => r.status === '正常').length
   const late = records.filter(r => r.status === '遲到').length
-  const y = doc.lastAutoTable.finalY + 10
-  doc.setFontSize(9)
-  doc.setTextColor(80)
-  doc.text(`Total: ${records.length} | Normal: ${normal} | Late: ${late}`, 14, y)
+  const rows = records.map((r, i) => `
+    <tr>
+      <td class="c">${i + 1}</td>
+      <td>${esc(r.employee) || '-'}</td>
+      <td class="c">${esc(r.date) || '-'}</td>
+      <td class="c">${esc(r.clock_in) || '-'}</td>
+      <td class="c">${esc(r.clock_out) || '-'}</td>
+      <td class="c">${r.hours ? esc(r.hours) + 'h' : '-'}</td>
+      <td class="c">${esc(r.status) || '-'}</td>
+    </tr>`).join('')
 
-  doc.save(`attendance-report-${filters.date || 'all'}.pdf`)
+  const html = `<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8">
+<title>打卡追蹤報表</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: "Microsoft JhengHei","PingFang TC","Noto Sans TC","Heiti TC",sans-serif; margin: 24px; color: #1a1a1a; }
+  h1 { font-size: 20px; margin: 0 0 4px; color: #0e7490; }
+  .sub { font-size: 13px; color: #666; margin-bottom: 16px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { background: #0e7490; color: #fff; padding: 8px 10px; text-align: left; font-weight: 600; white-space: nowrap; }
+  td { padding: 6px 10px; border-bottom: 1px solid #e5e7eb; }
+  td.c, th.c { text-align: center; }
+  tr:nth-child(even) td { background: #f5f7fa; }
+  .summary { margin-top: 16px; font-size: 13px; color: #333; font-weight: 600; }
+  .toolbar { margin-bottom: 16px; }
+  .toolbar button { padding: 8px 20px; border-radius: 6px; border: none; background: #0e7490; color: #fff; font-size: 14px; cursor: pointer; }
+  @media print { .toolbar { display: none; } body { margin: 0; } }
+</style></head>
+<body>
+  <div class="toolbar"><button onclick="window.print()">🖨 列印 / 另存 PDF</button></div>
+  <h1>打卡追蹤報表</h1>
+  <div class="sub">期間：${esc(filters.date || filters.month || '全部')}　｜　部門：${esc(filters.dept || '全部')}　｜　產生時間：${new Date().toLocaleString('zh-TW')}</div>
+  <table>
+    <thead><tr>
+      <th class="c">#</th><th>員工</th><th class="c">日期</th>
+      <th class="c">上班</th><th class="c">下班</th><th class="c">工時</th><th class="c">狀態</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>
+  <div class="summary">共 ${records.length} 筆　｜　正常 ${normal}　｜　遲到 ${late}</div>
+</body></html>`
+
+  const w = window.open('', '_blank', 'width=1000,height=1200')
+  if (!w) { toast.error('無法開啟新視窗，請允許彈出視窗權限'); return }
+  w.document.open()
+  w.document.write(html)
+  w.document.close()
 }
 
 // Export salary records

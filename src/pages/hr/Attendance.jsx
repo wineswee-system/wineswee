@@ -266,7 +266,7 @@ export default function Attendance() {
             <h2><span className="header-icon">⏰</span> 打卡追蹤</h2>
             <p>員工每日出缺勤即時追蹤（含 GPS 地點 / WiFi IP 驗證）</p>
           </div>
-          <button className="btn btn-secondary" onClick={() => exportAttendancePdf(filtered, { dept: deptFilter })}><Download size={14} /> 匯出 PDF</button>
+          <button className="btn btn-secondary" onClick={() => exportAttendancePdf(filtered, { dept: deptFilter, month: monthFilter })}><Download size={14} /> 匯出 PDF</button>
         </div>
       </div>
 

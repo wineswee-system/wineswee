@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { Search, Download, MapPin, Wifi, Clock, CalendarCheck } from 'lucide-react'
+import { Search, Download, MapPin, Clock, CalendarCheck } from 'lucide-react'
 import { getAttendance, serverClockIn, getActiveEmployees, getDepartments, getStores } from '../../lib/db'
 import { exportAttendancePdf } from '../../lib/exportPdf'
 import { validateClockIn } from '../../lib/clockInValidator'
@@ -357,7 +357,7 @@ export default function Attendance() {
           )}
           {/* Virtual table header */}
           <div style={{ display: 'grid', gridTemplateColumns: '140px 100px 100px 85px 85px 60px 120px 145px 85px 110px 1fr', background: 'var(--bg-tertiary)', borderBottom: '1px solid var(--border-medium)', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>
-            {['員工', '部門', '日期', '上班打卡', '下班打卡', '工時', '打卡地點', 'IP 位址', '狀態', '模式', '操作'].map(h => (
+            {['員工', '部門', '日期', '上班打卡', '下班打卡', '工時', '打卡地點', '經緯度', '狀態', '模式', '操作'].map(h => (
               <div key={h} style={{ padding: '10px 8px' }}>{h}</div>
             ))}
           </div>
@@ -378,8 +378,21 @@ export default function Attendance() {
                     <div style={{ padding: '4px 8px', fontSize: 13 }}>{r.clock_out || '-'}</div>
                     <div style={{ padding: '4px 8px', fontSize: 13 }}>{!isNotClocked && r.hours > 0 ? `${r.hours}h` : '-'}</div>
                     <div style={{ padding: '4px 8px' }}>{isNotClocked ? <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>-</span> : locationBadge(r)}</div>
-                    <div style={{ padding: '4px 8px', fontSize: 11, fontFamily: 'monospace', color: 'var(--text-secondary)' }}>
-                      {!isNotClocked && r.clock_in_ip ? <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Wifi size={10} /> {r.clock_in_ip}</span> : '-'}
+                    <div style={{ padding: '4px 8px', fontSize: 10, fontFamily: 'monospace', color: 'var(--text-secondary)' }}>
+                      {!isNotClocked && r.clock_in_lat != null && r.clock_in_lng != null ? (
+                        <a
+                          href={`https://www.google.com/maps?q=${r.clock_in_lat},${r.clock_in_lng}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="在 Google 地圖開啟打卡位置"
+                          style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--accent-blue)', textDecoration: 'none' }}
+                        >
+                          <MapPin size={10} style={{ flexShrink: 0 }} />
+                          <span style={{ lineHeight: 1.3 }}>
+                            {Number(r.clock_in_lat).toFixed(5)}<br />{Number(r.clock_in_lng).toFixed(5)}
+                          </span>
+                        </a>
+                      ) : '-'}
                     </div>
                     <div style={{ padding: '4px 8px' }}>
                       {isNotClocked

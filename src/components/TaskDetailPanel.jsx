@@ -832,6 +832,7 @@ function SubtasksTab({ task, linkedChecklists, checklistItemsMap, setChecklistIt
         parent_task_id: task.id,
         store: task.store,
         organization_id: task.organization_id,
+        created_by_emp_id: profile?.id || null,   // tasks_sel RLS
       }).select().single()
       if (error) { toast.error('新增子任務失敗：' + error.message); return }
       setChildTasks(prev => [...prev, data])

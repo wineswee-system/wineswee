@@ -500,6 +500,9 @@ export default function Projects() {
     const { data: newWf, error } = await createWorkflowInstance({
       template_name: newWfForm.template_name,
       status: '進行中',
+      // workflow_instances_sel RLS 要 started_by_id/applicant_emp_id=本人 非 admin 才讀得回
+      started_by_id: profile?.id || null,
+      applicant_emp_id: profile?.id || null,
       started_by: newWfForm.assignee || profile?.name || '',
       assignee: newWfForm.assignee || null,
       store: newWfForm.store || null,
@@ -707,6 +710,8 @@ export default function Projects() {
           template_name: wf.name,
           status: '進行中',
           started_by: wfOwner,
+          started_by_id: profile?.id || null,
+          applicant_emp_id: profile?.id || null,
           store: wfStore,
           due_date: wfDueDate,
           project_id: project.id,

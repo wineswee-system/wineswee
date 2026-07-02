@@ -225,6 +225,7 @@ export default function Tasks() {
       status: '待處理',
       organization_id: profile?.organization_id || null,
       created_by: profile?.name || null,
+      created_by_emp_id: profile?.id || null,   // tasks_sel RLS：讀得回自己建的（發別人也是）
     })
     if (data) {
       // 指定人員模式 → 寫 task_confirmations
@@ -605,6 +606,7 @@ export default function Tasks() {
           onDuplicate={async t => {
             const { data } = await import('../../lib/db').then(m => m.createTask({
               ...t, id: undefined, title: `${t.title} (複製)`, created_at: undefined, updated_at: undefined,
+              created_by_emp_id: profile?.id || null,   // tasks_sel RLS：讀得回複本
             }))
             if (data) setTasks(prev => [...prev, data])
           }}
@@ -664,6 +666,7 @@ export default function Tasks() {
               workflow: orig.workflow || null,
               recurrence_rule: orig.recurrence_rule || null,
               organization_id: profile?.organization_id || null,
+              created_by_emp_id: profile?.id || null,   // tasks_sel RLS：讀得回複本
               approval_chain_id: orig.approval_chain_id || null,
               confirmation_required: orig.confirmation_required || false,
               confirmation_mode: orig.confirmation_mode || null,

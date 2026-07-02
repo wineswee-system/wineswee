@@ -163,6 +163,8 @@ export default function SOPTemplates() {
         store: loc,
         status: '進行中',
         started_by: currentUser,
+        started_by_id: profile?.id || null,
+        applicant_emp_id: profile?.id || null,
         organization_id: profile?.organization_id || null,
       }).select().single()
       if (instErr) throw instErr
@@ -186,6 +188,8 @@ export default function SOPTemplates() {
           status: i === 0 ? '進行中' : '待處理',
           started_at: i === 0 ? new Date().toISOString() : null,
           due_date: '',
+          organization_id: profile?.organization_id || null,
+          created_by_emp_id: profile?.id || null,
         })
         if (error) throw error
         if (data) results.push(data)

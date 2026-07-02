@@ -644,6 +644,7 @@ export default function DeployWizard({ template, stores, employees, departments,
           bucket: '工作流程',
           category: '工作流程',
           organization_id: profile?.organization_id || null,
+          created_by_emp_id: profile?.id || null,   // tasks_sel RLS
           checklist_id: step.checklist_id || null,
           approval_chain_id: step.approval_chain_id || null,
           trigger_template_id_on_complete: step.trigger_template_id || null,

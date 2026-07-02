@@ -10,6 +10,7 @@ import {
 import { supabase } from '../../lib/supabase'
 import { notifyTaskAssignee } from '../../lib/lineNotify'
 import { toast } from '../../lib/toast'
+import { useAuth } from '../../contexts/AuthContext'
 const labelStyle = { fontSize: 13, fontWeight: 700, color: 'var(--accent-blue)', marginBottom: 6, marginTop: 18 }
 const sectionStyle = {
   padding: '16px 20px', marginBottom: 12, borderRadius: 10,
@@ -28,6 +29,7 @@ export default function TaskRelationsTab({
   form = {}, setAndDirty = () => {},
   allWorkflowInstances = [], allProjects = [],
 }) {
+  const { profile } = useAuth()
   const [triggerTemplateId, setTriggerTemplateId] = useState('')
   const [triggering, setTriggering] = useState(false)
 
@@ -95,6 +97,9 @@ export default function TaskRelationsTab({
         store: task.store || null,
         status: '進行中',
         started_by: task.assignee || '系統',
+        started_by_id: profile?.id || null,
+        applicant_emp_id: profile?.id || null,
+        organization_id: task.organization_id || null,
         triggered_by_task_id: task.id,
         started_at: new Date().toISOString(),
       })
@@ -116,6 +121,7 @@ export default function TaskRelationsTab({
           category: 'Workflow',
           priority: s.priority || '中',
           organization_id: task.organization_id || null,
+          created_by_emp_id: profile?.id || null,   // tasks_sel RLS
         }))
         const { data: createdTasks } = await supabase.from('tasks').insert(taskRows).select()
         // 第一步（進行中）才推；未開始的後續步驟等 cascade 由 DB trigger 推

@@ -259,35 +259,46 @@ serve(async (req: Request) => {
 
       // ★ 跨午夜容錯（後端根治，不靠前端版本/快取）：
       //   若「昨天」有一筆已上班、未下班的班 → 這次打卡其實是要打下班（夜班跨午夜）。
-      //   一律轉成前一班的下班，不開新上班。避免舊快取跨午夜誤顯示「上班」→
+      //   轉成前一班的下班，不開新上班。避免舊快取跨午夜誤顯示「上班」→
       //   把昨天的班丟成孤兒(0h) + 今天又生一筆空上班。
+      //
+      //   ★★ 關鍵守衛：只在「凌晨換日線(6點)之前」才這樣做（對齊前端 workDay 6 點制）。
+      //   6 點後打卡 = 新的一天上班，絕不能誤轉成昨天下班 —— 否則「昨天忘打下班、
+      //   今天早上正常上班」的人會被吃掉今天的上班、工時還算成 0/24h。
       const yesterdayStr0 = new Date(taiwanNow.getTime() - 24 * 60 * 60 * 1000)
         .toISOString().slice(0, 10)
-      const { data: yOpen } = await supabase
-        .from('attendance_records').select('*')
-        .eq('employee_id', emp.id).eq('date', yesterdayStr0)
-        .not('clock_in', 'is', null).is('clock_out', null)
-        .maybeSingle()
+      const { data: yOpen } = hours24 < 6
+        ? await supabase
+            .from('attendance_records').select('*')
+            .eq('employee_id', emp.id).eq('date', yesterdayStr0)
+            .not('clock_in', 'is', null).is('clock_out', null)
+            .maybeSingle()
+        : { data: null }
       if (yOpen) {
         const [yInH, yInM] = (yOpen.clock_in as string).split(':').map(Number)
         let yWorked = currentMinutes - (yInH * 60 + yInM)
         if (yWorked < 0) yWorked += 1440
-        const yNet = yWorked - getRestMinutes(yWorked / 60)
-        const { data: yData, error: yErr } = await supabase.from('attendance_records')
-          .update({
-            clock_out:      timeStr,
-            clock_out_time: now.toISOString(),
-            total_hours:    parseFloat((yNet / 60).toFixed(2)),
-            clock_out_mode: clockMode,
-            ...(clockMode === 'outing' ? { status: '外出' } : {}),
-          }).eq('id', yOpen.id).select().single()
-        if (yErr) throw yErr
-        return jsonResp({
-          success: true,
-          record: yData,
-          // 前端只讀 reminder 欄 → 借它顯示提示
-          reminder: `偵測到 ${yesterdayStr0} 尚未打下班，已為你補打下班（${timeStr}）`,
-        })
+        // sanity：正常夜班跨午夜工時應在合理範圍。> 16h 視為異常（多半是昨天
+        //   一早上班就忘了打下班），不自動補下班以免算出離譜工時 —— 跳過、讓它
+        //   走下方正常開新上班，昨天孤兒留給人工/報表處理。
+        if (yWorked <= 16 * 60) {
+          const yNet = yWorked - getRestMinutes(yWorked / 60)
+          const { data: yData, error: yErr } = await supabase.from('attendance_records')
+            .update({
+              clock_out:      timeStr,
+              clock_out_time: now.toISOString(),
+              total_hours:    parseFloat((yNet / 60).toFixed(2)),
+              clock_out_mode: clockMode,
+              ...(clockMode === 'outing' ? { status: '外出' } : {}),
+            }).eq('id', yOpen.id).select().single()
+          if (yErr) throw yErr
+          return jsonResp({
+            success: true,
+            record: yData,
+            // 前端只讀 reminder 欄 → 借它顯示提示
+            reminder: `偵測到 ${yesterdayStr0} 尚未打下班，已為你補打下班（${timeStr}）`,
+          })
+        }
       }
 
       const { data, error } = await supabase.from('attendance_records').insert({

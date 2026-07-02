@@ -27,8 +27,9 @@ export const createTasksBatch = (rows) =>
 export const updateTask = (id, data) =>
   supabase.from('tasks').update(data).eq('id', id).select().single()
 
+// 帶 .select()：回傳實際被刪的列，呼叫端可判斷是否真的刪到（RLS 靜默過濾會回 0 列而非 error）
 export const deleteTask = (id) =>
-  supabase.from('tasks').delete().eq('id', id)
+  supabase.from('tasks').delete().eq('id', id).select('id')
 
 export const getTaskDependencies = (taskId) =>
   supabase.from('task_dependencies').select('*').or(`task_id.eq.${taskId},depends_on_task_id.eq.${taskId}`)

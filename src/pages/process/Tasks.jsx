@@ -163,8 +163,13 @@ export default function Tasks() {
   const handleDeleteTask = async (id) => {
     if (!(await confirm({ message: '確定刪除此任務？' }))) return
     const oldTask = tasks.find(t => t.id === id)
-    const { error } = await deleteTask(id)
+    const { data, error } = await deleteTask(id)
     if (error) { toast.error('刪除失敗：' + error.message); return }
+    // .select() 回傳實際刪到的列；0 列＝RLS 靜默擋掉（權限/範圍），不能假性從畫面移除
+    if (!data || data.length === 0) {
+      toast.error('刪除未生效：可能沒有權限，或請重新整理後再試')
+      return
+    }
     setTasks(prev => prev.filter(t => t.id !== id))
     logAction('刪除', 'tasks', id, oldTask?.title)
   }

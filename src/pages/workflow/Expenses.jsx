@@ -70,9 +70,10 @@ export default function Expenses() {
     setUploading(true)
     const urls = []
     try {
-      for (const { file } of attachFiles) {
+      for (const [i, { file }] of attachFiles.entries()) {
         const ext = (file.name.split('.').pop() || 'bin').toLowerCase()
-        const path = `emp-${empId || 'unknown'}/${expenseId}-${Date.now()}.${ext}`
+        // 帶迴圈索引 i：同一次多檔上傳時 Date.now() 可能同毫秒，只用時間戳 + upsert 會互相覆蓋
+        const path = `emp-${empId || 'unknown'}/${expenseId}-${Date.now()}-${i}.${ext}`
         const { error } = await supabase.storage.from('expense-receipts').upload(path, file, {
           cacheControl: '3600', upsert: true,
         })
@@ -180,9 +181,10 @@ export default function Expenses() {
       if (attachFiles.length > 0) {
         const empRow = employees.find(e2 => e2.name === form.employee)
         const newUrls = []
-        for (const { file } of attachFiles) {
+        for (const [i, { file }] of attachFiles.entries()) {
           const ext = (file.name.split('.').pop() || 'bin').toLowerCase()
-          const path = `emp-${empRow?.id || 'unknown'}/${editingId}-${Date.now()}.${ext}`
+          // 帶迴圈索引 i：避免同毫秒 + upsert 互相覆蓋（多檔才會踩到）
+          const path = `emp-${empRow?.id || 'unknown'}/${editingId}-${Date.now()}-${i}.${ext}`
           const { error: upErr } = await supabase.storage.from('expense-receipts').upload(path, file, { cacheControl: '3600', upsert: true })
           if (!upErr) {
             const { data: urlData } = supabase.storage.from('expense-receipts').getPublicUrl(path)

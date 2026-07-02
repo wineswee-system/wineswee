@@ -14,7 +14,7 @@ import { geocodeAddress } from '../../lib/geocoding'
 const EMPTY_FORM = { name: '', company: '', company_id: '', address: '', phone: '', manager: '', manager_id: '', status: '營運中', store_code: '', store_type: 'retail', city: '', lat: '', lng: '', clock_radius: 150, allowed_wifi: '', late_tolerance_minutes: 5, early_clock_minutes: 30, clock_in_method: 'any', section_id: '' }
 
 export default function Locations() {
-  const { hasPermission } = useAuth()
+  const { hasPermission, profile } = useAuth()
   const canEditStructure = hasPermission('org.structure.edit')
   const [stores, setStores] = useState([])
   const [employees, setEmployees] = useState([])
@@ -111,7 +111,9 @@ export default function Locations() {
         if (error) throw error
         if (data) setStores(prev => prev.map(s => s.id === data.id ? data : s))
       } else {
-        const { data, error } = await createStore(payload)
+        // 新增時自動帶 organization_id，避免新門市 org=null 被多租戶 filter 擋掉
+        // （任務/LIFF 等有 org filter 的下拉會撈不到）
+        const { data, error } = await createStore({ ...payload, organization_id: profile?.organization_id || 1 })
         if (error) throw error
         if (data) setStores(prev => [...prev, data])
       }

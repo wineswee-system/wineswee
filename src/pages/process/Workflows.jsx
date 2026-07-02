@@ -322,6 +322,7 @@ export default function Workflows() {
           bucket: '工作流程', category: '工作流程',
           priority: s.priority || '中',
           organization_id: profile?.organization_id || null,
+          created_by_emp_id: profile?.id || null,   // tasks_ins RLS：發別人靠建立者過
         }
       })
       const { data: createdTasks } = await supabase.from('tasks').insert(newRows).select()
@@ -466,6 +467,7 @@ export default function Workflows() {
       bucket: origTask.bucket || '工作流程',
       category: origTask.category || '工作流程',
       organization_id: profile?.organization_id || null,
+      created_by_emp_id: profile?.id || null,   // tasks_ins RLS：發別人靠建立者過
       approval_chain_id: origTask.approval_chain_id || null,
       confirmation_required: origTask.confirmation_required || false,
       confirmation_mode: origTask.confirmation_mode || null,
@@ -576,6 +578,7 @@ export default function Workflows() {
       started_at: initStatus === '進行中' ? new Date().toISOString() : null,
       bucket: '工作流程', category: '工作流程',
       organization_id: profile?.organization_id || null,
+      created_by_emp_id: profile?.id || null,   // tasks_ins RLS：發別人靠建立者過
       approval_chain_id: useChain ? Number(taskForm.approval_chain_id) : null,
       confirmation_required: !!(useChain || usePeople),
       confirmation_mode: usePeople ? (taskForm.confirmation_mode || 'parallel') : null,
@@ -1011,6 +1014,7 @@ export default function Workflows() {
             bucket: '工作流程', category: '工作流程',
             priority: cfg.priority,
             organization_id: profile?.organization_id || null,
+            created_by_emp_id: profile?.id || null,   // tasks_ins RLS：發別人靠建立者過
             // ★ 關聯欄位
             approval_chain_id: extras.approval_chain_id || step.approval_chain_id || null,
             confirmation_mode: extras.confirmation_mode || 'parallel',

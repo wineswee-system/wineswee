@@ -690,12 +690,15 @@ export default function InstanceDetailView({
                   const payload = {
                     title: draft.title,
                     assignee: draft.assignee || null,
+                    assignee_id: draft.assignee ? (employees.find(e => e.name === draft.assignee)?.id || null) : null,
                     due_date: draft.due_date || null,
                     due_time: '17:00',
                     status: '未開始',
                     workflow_instance_id: inst.id,
                     store_id: stores.find(s => s.name === inst.store)?.id ?? null,
                     step_order: maxOrder + 1,
+                    organization_id: inst.organization_id || null,
+                    created_by_emp_id: currentEmpId || null,   // tasks_ins RLS：發別人靠建立者過
                   }
                   const { data, error } = await createTask(payload)
                   if (error) throw new Error(error.message)

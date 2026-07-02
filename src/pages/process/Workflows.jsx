@@ -661,8 +661,12 @@ export default function Workflows() {
 
   const handleEditInstance = async () => {
     if (!selectedInstance) return
+    // 換負責人時同步重算部門（比照建立流程 handleCreateBlankWorkflow）
+    const assigneeEmp = editForm.assignee ? employees.find(e => e.name === editForm.assignee) : null
+    const assigneeDept = assigneeEmp?.dept || assigneeEmp?.departments?.name || null
     const { data } = await updateWorkflowInstance(selectedInstance.id, {
       assignee: editForm.assignee || null,
+      department: assigneeDept,
       groups: editForm.groups.length > 0 ? editForm.groups : null,
       project_id: editForm.project_id ? Number(editForm.project_id) : null,
       completion_chain_id: editForm.completion_chain_id ? Number(editForm.completion_chain_id) : null,
@@ -891,6 +895,7 @@ export default function Workflows() {
       notes: blankWorkflowForm.notes || null,
       completion_chain_id: blankWorkflowForm.completion_chain_id ? Number(blankWorkflowForm.completion_chain_id) : null,
       applicant_emp_id: profile?.id || null,
+      started_by_id: profile?.id || null,   // RLS 讀回保險
       started_by: currentUser,
       status: '進行中',
       organization_id: profile?.organization_id || null,

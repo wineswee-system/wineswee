@@ -276,7 +276,6 @@ export default function WorkUnitSettings() {
                 const eff = getEffectiveLeaveStep(lt.code)
                 const k = `${selectedStoreId}.${lt.code}`
                 const hasOverride = !!draftLeaveSteps[k]
-                const stepOpts = LEAVE_STEP_OPTIONS[eff.unit] || LEAVE_STEP_OPTIONS.day
                 return (
                   <tr key={lt.code} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                     <td style={{ padding: '10px 14px', fontWeight: 600 }}>
@@ -287,22 +286,32 @@ export default function WorkUnitSettings() {
                       <select
                         className="form-input"
                         value={eff.unit}
-                        onChange={e => setLeaveStep(lt.code, { unit: e.target.value, step: e.target.value === 'day' ? 0.5 : 1 })}
+                        onChange={e => {
+                          const u = e.target.value
+                          setLeaveStep(lt.code, { unit: u, step: u === 'day' ? 0.5 : u === 'hour' ? 1 : 30 })
+                        }}
                         style={{ width: 100, fontSize: 12 }}
                       >
                         <option value="day">天</option>
                         {lt.allowHourly !== false && <option value="hour">小時</option>}
+                        {lt.allowHourly !== false && <option value="minute">分鐘</option>}
                       </select>
                     </td>
                     <td style={{ padding: '10px 14px' }}>
-                      <select
-                        className="form-input"
-                        value={eff.step}
-                        onChange={e => setLeaveStep(lt.code, { step: Number(e.target.value) })}
-                        style={{ width: 160, fontSize: 12 }}
-                      >
-                        {stepOpts.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                      </select>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <input
+                          type="number"
+                          className="form-input"
+                          value={eff.step}
+                          min={eff.unit === 'day' ? 0.25 : eff.unit === 'hour' ? 0.5 : 1}
+                          step={eff.unit === 'day' ? 0.25 : eff.unit === 'hour' ? 0.5 : 5}
+                          onChange={e => setLeaveStep(lt.code, { step: Number(e.target.value) })}
+                          style={{ width: 100, fontSize: 12 }}
+                        />
+                        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                          {eff.unit === 'day' ? '天' : eff.unit === 'hour' ? '小時' : '分鐘'}／單位
+                        </span>
+                      </div>
                     </td>
                     <td style={{ padding: '10px 14px', fontSize: 11 }}>
                       {hasOverride ? (

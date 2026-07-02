@@ -203,7 +203,9 @@ export default function Leave() {
     let days, hours
     if (form.unit === 'hour') {
       hours = Math.max(0.5, diffHours(form.start_time, form.end_time))
+      // 對齊最小單位：小時 → 直接 snap；分鐘 → 換成分鐘 snap 再換回小時
       if (stepCfg.unit === 'hour') hours = snapToStep(hours, stepCfg.step)
+      else if (stepCfg.unit === 'minute') hours = snapToStep(hours * 60, stepCfg.step) / 60
       days = Math.round(hours / 8 * 10) / 10
     } else {
       const workDays = countWorkDays(form.start_date, form.end_date || form.start_date, holidays)

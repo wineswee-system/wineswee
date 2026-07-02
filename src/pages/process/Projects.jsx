@@ -324,6 +324,9 @@ export default function Projects() {
           const { data: newWf } = await createWorkflowInstance({
             template_name: wf.name || wf.template_name || '',
             status: '進行中',
+            // workflow_instances_sel RLS 要 started_by_id/applicant_emp_id=本人 才讀得回（非 admin）
+            started_by_id: profile?.id || null,
+            applicant_emp_id: profile?.id || null,
             started_by: wf.assignee || payload.owner,
             assignee: wf.assignee || null,
             store: wf.store || payload.store || null,
@@ -353,6 +356,7 @@ export default function Projects() {
               approval_chain_id: t.approval_mode === 'chain' && t.approval_chain_id ? Number(t.approval_chain_id) : null,
               confirmation_mode: t.approval_mode === 'people' ? (t.confirmation_mode || 'parallel') : null,
               organization_id: profile?.organization_id || null,
+              created_by_emp_id: profile?.id || null,   // tasks_ins RLS：指派給別人時靠建立者過
             }))
             const { data: insertedWfTasks } = await supabase.from('tasks').insert(wfTaskRows).select()
             for (let ti = 0; ti < (insertedWfTasks?.length || 0); ti++) {
@@ -394,6 +398,7 @@ export default function Projects() {
             approval_chain_id: t.approval_mode === 'chain' && t.approval_chain_id ? Number(t.approval_chain_id) : null,
             confirmation_mode: t.approval_mode === 'people' ? (t.confirmation_mode || 'parallel') : null,
             organization_id: profile?.organization_id || null,
+            created_by_emp_id: profile?.id || null,   // tasks_ins RLS：指派給別人時靠建立者過
           }))
           const { data: insertedTasks } = await supabase.from('tasks').insert(taskRows).select()
           // 指定人員簽核 → task_confirmations；綁定表單 → create_task_form_binding（對齊其他建任務路徑）
@@ -556,6 +561,7 @@ export default function Projects() {
       approval_chain_id: chainId,
       confirmation_mode: fd.approval_mode === 'people' ? (fd.confirmation_mode || 'parallel') : null,
       organization_id: profile?.organization_id || null,
+      created_by_emp_id: profile?.id || null,   // tasks_ins RLS：指派給別人時靠建立者過
     })
     if (!data) return false
     // 指定人員簽核 → 建 task_confirmations（對齊獨立任務頁）
@@ -615,6 +621,7 @@ export default function Projects() {
       approval_chain_id: chainId,
       confirmation_mode: fd.approval_mode === 'people' ? (fd.confirmation_mode || 'parallel') : null,
       organization_id: profile?.organization_id || null,
+      created_by_emp_id: profile?.id || null,   // tasks_ins RLS：指派給別人時靠建立者過
     })
     if (!data) return false
     // 指定人員簽核 → 建 task_confirmations（對齊獨立任務頁）
@@ -727,6 +734,7 @@ export default function Projects() {
             store: wfStore,
             bucket: 'Project',
             category: wf.name || null,
+            created_by_emp_id: profile?.id || null,   // tasks_ins RLS：指派給別人時靠建立者過
           }))
           await supabase.from('tasks').insert(taskRows)
         }

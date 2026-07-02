@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { ModalOverlay } from '../../../components/Modal'
 import Time24 from '../../../components/Time24'
 
-export default function ShiftEditPopup({ emp, date, shift, storeSettings, schedules, currentSchedule, handleSetShift, handleDeleteShift, onClose }) {
+export default function ShiftEditPopup({ emp, date, shift, storeSettings, schedules, currentSchedule, handleSetShift, handleDeleteShift, onClose, shiftDefs = [] }) {
   const dow = ['日', '一', '二', '三', '四', '五', '六'][new Date(date).getDay()]
   const dayNames = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
   const oh = storeSettings?.operating_hours?.[dayNames[new Date(date).getDay()]]
@@ -16,6 +16,9 @@ export default function ShiftEditPopup({ emp, date, shift, storeSettings, schedu
 
   const [startTime, setStartTime] = useState(lastPreset?.start || storeOpen)
   const [endTime, setEndTime] = useState(lastPreset?.end || storeClose)
+  // 選了「班別設定」的快捷鈕時，記住班別名稱當 shift name（讓 shiftDefs.find(name) 對得到）；
+  // 手動改時間則清掉，退回用 起~迄 當名稱。
+  const [pickedLabel, setPickedLabel] = useState(null)
 
   const storeOptions = [
     emp.store,
@@ -42,7 +45,13 @@ export default function ShiftEditPopup({ emp, date, shift, storeSettings, schedu
   const midH = openH + Math.floor((effectiveClose - openH) / 2)
   const fmt = (h) => `${String(h % 24).padStart(2, '0')}:00`
 
-  const presets = [
+  // 快捷班別：優先讀「班別設定」(shift_definitions)；沒設定才退回用開關店時間切一半算
+  const toHHMM = (t) => (t ? String(t).slice(0, 5) : '')
+  const defPresets = (Array.isArray(shiftDefs) ? shiftDefs : [])
+    .map(d => ({ label: d.name, start: toHHMM(d.start_time), end: toHHMM(d.end_time) }))
+    .filter(p => p.label && p.start && p.end)
+    .filter((p, i, arr) => arr.findIndex(x => x.label === p.label) === i)
+  const presets = defPresets.length > 0 ? defPresets : [
     { label: `${openH}~${effectiveClose % 24 || 24}`, start: fmt(openH), end: fmt(effectiveClose) },
     { label: `${openH}~${midH}`, start: fmt(openH), end: fmt(midH) },
     { label: `${midH}~${effectiveClose % 24 || 24}`, start: fmt(midH), end: fmt(effectiveClose) },
@@ -55,7 +64,8 @@ export default function ShiftEditPopup({ emp, date, shift, storeSettings, schedu
     const s = startTime.replace(':00', '').replace(/^0/, '')
     const e = endTime.replace(':00', '').replace(/^0/, '')
     try { localStorage.setItem(lastPresetKey, JSON.stringify({ start: startTime, end: endTime })) } catch {}
-    handleSetShift(emp.name, date, `${s}~${e}`, startTime, endTime, sourceStore || null)
+    const shiftName = pickedLabel || `${s}~${e}`
+    handleSetShift(emp.name, date, shiftName, startTime, endTime, sourceStore || null)
     onClose()
   }
 
@@ -82,7 +92,7 @@ export default function ShiftEditPopup({ emp, date, shift, storeSettings, schedu
       if (!isNaN(num) && num >= 1 && num <= presets.length) {
         e.preventDefault()
         const p = presets[num - 1]
-        setStartTime(p.start); setEndTime(p.end)
+        setStartTime(p.start); setEndTime(p.end); setPickedLabel(p.label)
         return
       }
       const k = e.key.toLowerCase()
@@ -95,7 +105,7 @@ export default function ShiftEditPopup({ emp, date, shift, storeSettings, schedu
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [startTime, endTime, sourceStore, shift])
+  }, [startTime, endTime, sourceStore, shift, pickedLabel])
 
   return (
     <ModalOverlay onClose={onClose}>
@@ -132,9 +142,9 @@ export default function ShiftEditPopup({ emp, date, shift, storeSettings, schedu
         )}
 
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 8 }}>
-          <Time24 value={startTime} onChange={setStartTime} style={{ flex: 1 }} />
+          <Time24 value={startTime} onChange={v => { setStartTime(v); setPickedLabel(null) }} style={{ flex: 1 }} />
           <span style={{ color: 'var(--text-muted)', fontSize: 14 }}>~</span>
-          <Time24 value={endTime} onChange={setEndTime} style={{ flex: 1 }} />
+          <Time24 value={endTime} onChange={v => { setEndTime(v); setPickedLabel(null) }} style={{ flex: 1 }} />
         </div>
 
         <button onClick={handleConfirm} style={{
@@ -144,7 +154,7 @@ export default function ShiftEditPopup({ emp, date, shift, storeSettings, schedu
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4, marginBottom: 8 }}>
           {presets.map(p => (
-            <button key={p.label} onClick={() => { setStartTime(p.start); setEndTime(p.end) }}
+            <button key={p.label} onClick={() => { setStartTime(p.start); setEndTime(p.end); setPickedLabel(p.label) }}
               style={{
                 padding: '6px 2px', borderRadius: 6, border: '1px solid var(--border-medium)',
                 background: startTime === p.start && endTime === p.end ? 'rgba(34,211,238,0.15)' : 'var(--bg-card)',

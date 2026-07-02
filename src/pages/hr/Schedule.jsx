@@ -190,6 +190,11 @@ export default function Schedule() {
   const activeDates = useCycleView ? cycleDates : monthDates
   const activeStart = useCycleView ? cycleInfo.start : monthStart
   const activeEnd = useCycleView ? cycleInfo.end : monthEnd
+  // 四週變形（cycle）：每 7 天（對齊 cycle 起算日 = activeDates[0]）一週，
+  // 在每週第一天（非第一欄）畫分隔線。月視圖不畫。
+  const weekSepDates = useCycleView
+    ? new Set((activeDates || []).filter((_, i) => i > 0 && i % 7 === 0))
+    : new Set()
 
   useEffect(() => {
     Promise.all([
@@ -1720,6 +1725,7 @@ export default function Schedule() {
           storeFilter={storeFilter}
           holidaySet={holidaySet}
           storeSettings={storeSettings}
+          weekSepDates={weekSepDates}
           pendingLeaveMap={pendingLeaveMap}
           violationsByEmp={(() => {
             const map = {}

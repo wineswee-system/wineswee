@@ -30,6 +30,7 @@ export default function MonthScheduleTable({
   storeFilter,
   holidaySet,
   storeSettings,
+  weekSepDates = new Set(),  // Set<'YYYY-MM-DD'> — 四週變形每週第一天，畫週分隔線
   pendingLeaveMap = {},  // empName → Set<dateStr>（待審核/審核中請假）
   violationsByEmp = {},   // empName → { errors: N, warnings: N }
   onClickEmployeeBadge,   // 點 badge 開合規 modal
@@ -126,7 +127,7 @@ export default function MonthScheduleTable({
                       textAlign: 'center', padding: '4px 1px',
                       width: 42, minWidth: 42, maxWidth: 42,
                       borderBottom: '2px solid var(--border-medium)',
-                      borderLeft: '1px solid var(--border-medium)',
+                      borderLeft: weekSepDates?.has(date) ? '3px solid var(--accent-red)' : '1px solid var(--border-medium)',
                       background: isHoliday ? 'rgba(239,68,68,0.08)' : isWeekend ? 'rgba(99,102,241,0.05)' : undefined,
                     }}>
                       <div style={{ fontSize: 10, fontWeight: 700, color: isHoliday ? 'var(--accent-red)' : isWeekend ? '#818cf8' : 'var(--text-primary)' }}>
@@ -181,6 +182,7 @@ export default function MonthScheduleTable({
                       storeFilter={store}
                       holidaySet={holidaySet}
                       storeSettings={storeSettings}
+                      weekSepDates={weekSepDates}
                       pendingLeaveMap={pendingLeaveMap}
                       schedules={schedules}
                       violationsByEmp={violationsByEmp}
@@ -217,6 +219,7 @@ export default function MonthScheduleTable({
                     storeFilter={storeFilter}
                     holidaySet={holidaySet}
                     storeSettings={storeSettings}
+                    weekSepDates={weekSepDates}
                     pendingLeaveMap={pendingLeaveMap}
                     schedules={schedules}
                     violationsByEmp={violationsByEmp}
@@ -264,6 +267,7 @@ function EmployeeRow({
   selection, setSelection, selecting, setSelecting, isCellInSelection,
   handleSetShift, handleDeleteShift,
   canEditSchedule, SHIFT_TYPES, getStoreShifts, storeFilter, holidaySet, storeSettings,
+  weekSepDates = new Set(),
   pendingLeaveMap = {}, schedules = [],
   violationsByEmp = {}, onClickEmployeeBadge,
   lockedDates = new Set(),
@@ -368,6 +372,8 @@ function EmployeeRow({
             textAlign: 'center', padding: '2px 1px', position: 'relative',
             width: 42, minWidth: 42, maxWidth: 42, height: 42,
             border: isFocused ? '2px solid var(--accent-cyan)' : '1px solid var(--border-medium)',
+            // 四週變形每週第一天：左邊畫紅色分隔線（focus 時不蓋掉 cyan 外框）
+            ...(weekSepDates?.has(date) && !isFocused ? { borderLeft: '3px solid var(--accent-red)' } : {}),
             background: cellLocked
               ? 'repeating-linear-gradient(45deg, rgba(100,116,139,0.06), rgba(100,116,139,0.06) 4px, transparent 4px, transparent 8px)'
               : isSelected ? 'rgba(34,211,238,0.20)'
@@ -488,6 +494,7 @@ function EmployeeRow({
                 emp={emp} date={date} shift={shift}
                 storeSettings={storeSettings}
                 schedules={schedules}
+                shiftDefs={getStoreShifts ? getStoreShifts(emp.store, 'all') : shiftDefs}
                 currentSchedule={schedules.find(s => s.employee === emp.name && s.date === date)}
                 handleSetShift={handleSetShift} handleDeleteShift={handleDeleteShift}
                 onClose={() => setEditCell(null)}

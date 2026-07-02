@@ -56,7 +56,7 @@ export default function Expenses() {
   const handleFileSelect = (e) => {
     const files = Array.from(e.target.files || [])
     const newFiles = files.map(f => ({ file: f, preview: URL.createObjectURL(f) }))
-    setAttachFiles(prev => [...prev, ...newFiles].slice(0, 5))
+    setAttachFiles(prev => [...prev, ...newFiles].slice(0, 20))
     e.target.value = ''
   }
   const removeAttach = (idx) => {
@@ -590,13 +590,14 @@ export default function Expenses() {
               <option value="false">無收據</option>
             </select>
           </Field>
-          <Field label="收據附件（最多 5 個）">
+          <Field label="收據附件（最多 20 個）">
             <div>
               <CarriedAttachments
                 atts={cloneSourceAtts.map(url => ({ url, file_name: decodeURIComponent(String(url).split('?')[0].split('/').pop() || '附件') }))}
                 onRemove={(i) => setCloneSourceAtts(prev => prev.filter((_, j) => j !== i))}
               />
-              <input type="file" multiple accept="image/*,application/pdf"
+              <input type="file" multiple
+                accept="image/*,.heic,.heif,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv,.txt"
                 onChange={handleFileSelect}
                 style={{ fontSize: 12 }}
               />

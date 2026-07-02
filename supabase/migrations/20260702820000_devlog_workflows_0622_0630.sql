@@ -53,13 +53,14 @@ BEGIN
   -- 每天一個流程
   FOR d IN SELECT * FROM jsonb_to_recordset(days) AS x(date date, code text, name text, note text, tasks jsonb)
   LOOP
-    IF NOT EXISTS (SELECT 1 FROM workflow_instances WHERE workflow_code = d.code) THEN
+    -- workflow_code 是 generated 欄位，不能塞；改用 template_name 當冪等標記
+    IF NOT EXISTS (SELECT 1 FROM workflow_instances WHERE template_name = d.name AND project_id = v_proj) THEN
       INSERT INTO workflow_instances(template_name, store, status, started_by, started_by_id, started_at, completed_at,
-                                     organization_id, department, project_id, sort_order, project_order, workflow_code, priority, notes)
+                                     organization_id, department, project_id, sort_order, project_order, priority, notes)
       VALUES(d.name, '威耀總部', '已完成', '洪伯嘉', v_emp,
              (d.date::text || ' 09:00+08')::timestamptz, (d.date::text || ' 18:00+08')::timestamptz,
              v_org, v_dept, v_proj,
-             extract(day from d.date)::int, extract(day from d.date)::int, d.code, '中', d.note)
+             extract(day from d.date)::int, extract(day from d.date)::int, '中', d.note)
       RETURNING id INTO v_wi;
 
       i := 0;

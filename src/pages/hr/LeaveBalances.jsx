@@ -34,8 +34,9 @@ const daysToHours = (d) => Math.round(Number(d || 0) * 8)
 const hoursToHours = (h) => Math.round(Number(h || 0))
 
 export default function LeaveBalances() {
-  const { profile, isStoreStaff } = useAuth()
-  const isStaff = isStoreStaff
+  const { profile, isAdmin } = useAuth()
+  // 假別餘額權限：只有 admin/super_admin 可看全部 + 批次調整/結算；
+  // 其餘角色（manager/office_staff/store_staff）只看自己、唯讀。
   const currentYear = new Date().getFullYear()
 
   const [employees, setEmployees]     = useState([])
@@ -109,7 +110,7 @@ export default function LeaveBalances() {
         .select('id, name, employee_number, dept, store, status, employment_type, join_date, weekly_hours, gender')
         .eq('organization_id', orgId).order('name')
       let emps = data || []
-      if (isStaff && profile?.id) {
+      if (!isAdmin && profile?.id) {
         emps = emps.filter(e => e.id === profile.id)
         setSelectedEmpId(profile.id)
       }
@@ -404,7 +405,7 @@ export default function LeaveBalances() {
           <div>
             <h2><span className="header-icon">📊</span> 假勤明細</h2>
           </div>
-          {!isStaff && (
+          {isAdmin && (
             <div style={{ display: 'flex', gap: 8 }}>
               <button className="btn btn-ghost" onClick={() => {
                 setBulkSelectedIds([]); setBulkSearch(''); setBulkLeaveType('annual')
@@ -430,7 +431,7 @@ export default function LeaveBalances() {
           value={yearFilter} onChange={e => setYearFilter(Number(e.target.value))}>
           {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
         </select>
-        {!isStaff && (
+        {isAdmin && (
           <>
             <select className="form-input" style={{ fontSize: 13, width: 100 }}
               value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
@@ -451,7 +452,7 @@ export default function LeaveBalances() {
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden', border: '1px solid var(--border-medium)', borderRadius: 12, background: 'var(--bg-card)', minHeight: 0 }}>
 
         {/* Left: employee list */}
-        {!isStaff && (
+        {isAdmin && (
           <div style={{ width: 176, flexShrink: 0, borderRight: '1px solid var(--border-medium)', overflowY: 'auto' }}>
             {filteredEmployees.length === 0 && (
               <div style={{ padding: 16, fontSize: 12, color: 'var(--text-muted)', textAlign: 'center' }}>無員工</div>
@@ -510,7 +511,7 @@ export default function LeaveBalances() {
                     <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'auto' }}>
                       <thead>
                         <tr style={{ background: 'var(--bg-secondary)', position: 'sticky', top: 0, zIndex: 1 }}>
-                          {['假勤項目','假勤年/月/日','可休區間','可休','已休','剩餘','簽核中','可申請', ...(isStaff ? [] : [''])].map((h, i) => (
+                          {['假勤項目','假勤年/月/日','可休區間','可休','已休','剩餘','簽核中','可申請', ...(isAdmin ? [''] : [])].map((h, i) => (
                             <th key={i} style={{ padding: '10px 12px', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textAlign: h === '假勤項目' ? 'left' : 'center', whiteSpace: 'nowrap', borderBottom: '1px solid var(--border-medium)' }}>{h}</th>
                           ))}
                         </tr>
@@ -533,7 +534,7 @@ export default function LeaveBalances() {
                               </td>
                               {numCell(r.pendingHours, r.pendingHours > 0 ? 'var(--accent-purple)' : null)}
                               {numCell(r.canApplyHours, 'var(--accent-cyan)')}
-                              {!isStaff && !r.isMonthly && (
+                              {isAdmin && !r.isMonthly && (
                                 <td style={{ ...cellStyle, textAlign: 'center' }}>
                                   <button className="btn btn-sm btn-ghost" style={{ padding: '2px 10px', fontSize: 12 }}
                                     onClick={() => openEditRow(r)}>
@@ -541,7 +542,7 @@ export default function LeaveBalances() {
                                   </button>
                                 </td>
                               )}
-                              {!isStaff && r.isMonthly && <td style={cellStyle} />}
+                              {isAdmin && r.isMonthly && <td style={cellStyle} />}
                             </tr>
                           )
                         })}

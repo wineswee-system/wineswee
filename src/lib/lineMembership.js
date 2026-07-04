@@ -70,7 +70,7 @@ export async function notifyMemberLevelUp(memberId, { oldLevel, newLevel }) {
       },
     },
   }]
-  return pushToMember(memberId, messages)
+  return pushToMember(memberId, messages, 'level_up')
 }
 
 /**
@@ -111,7 +111,7 @@ export async function notifyMemberPointsEarned(memberId, { points, newTotal, rea
       },
     },
   }]
-  return pushToMember(memberId, messages)
+  return pushToMember(memberId, messages, 'points')
 }
 
 /**
@@ -155,7 +155,7 @@ export async function notifyMemberCouponReceived(memberId, { couponName, couponC
       },
     },
   }]
-  return pushToMember(memberId, messages)
+  return pushToMember(memberId, messages, 'coupon')
 }
 
 /**
@@ -200,5 +200,5 @@ export async function notifyMemberBirthdayReward(memberId, { points = 0, couponN
       },
     },
   }]
-  return pushToMember(memberId, messages)
+  return pushToMember(memberId, messages, 'birthday')
 }

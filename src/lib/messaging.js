@@ -8,6 +8,7 @@
  */
 
 import { supabase } from './supabase'
+import { logger } from './logger'
 
 // ── Channel Abstraction ──────────────────────────────────────
 // Pluggable channel configurations (read from env or DB)
@@ -34,10 +35,11 @@ const CHANNELS = {
   line: {
     name: 'LINE',
     icon: 'MessageCircle',
-    // 實際 LINE 推送走 hr-notify Edge Function，channel token 存在 supabase 的 secret，
-    // 不從 Vite env 讀（之前的 VITE_LINE_CHANNEL_TOKEN 已拔，避免後人誤以為要設）
+    // 會員 LINE 推送走 crm-line-send Edge Function（lineSender.js），
+    // token 為 supabase secret LINE_CHANNEL_ACCESS_TOKEN_CRM，不從 Vite env 讀。
+    // ⚠️ 員工 LINE 通知是另一個頻道（hr-notify / line-push），不可混用。
     configured: true,
-    config: { via: 'edge_function:hr-notify' }
+    config: { via: 'edge_function:crm-line-send' }
   }
 }
 
@@ -215,13 +217,8 @@ function generateMessageId() {
  * @returns {{ success: boolean, messageId: string, error?: string }}
  */
 export function sendEmail(to, subject, body, options = {}) {
-  // TODO: 實際整合 SMTP (nodemailer) 或 SendGrid API
-  // 參考設定：
-  // const smtpConfig = options.smtpConfig || {
-  //   host: 'smtp.gmail.com', port: 587,
-  //   auth: { user: '', pass: '' }
-  // }
-
+  // ⚠️ Email 通道尚未整合（SMTP / SendGrid）。此 stub「不會」發送，
+  //    且明確回報失敗 — 不再假裝成功。
   const messageId = generateMessageId()
   const recipients = Array.isArray(to) ? to : [to]
 
@@ -235,15 +232,15 @@ export function sendEmail(to, subject, body, options = {}) {
     }
   }
 
-  console.log(`[Email] 發送至 ${recipients.join(', ')} | 主旨: ${subject}`)
+  logger.warn('[messaging] Email 通道尚未設定，未發送', { to: recipients, subject })
 
   return {
-    success: true,
+    success: false,
     messageId,
     channel: 'email',
     to: recipients,
     subject,
-    sentAt: new Date().toISOString(),
+    error: 'Email 通道尚未設定',
   }
 }
 
@@ -255,45 +252,23 @@ export function sendEmail(to, subject, body, options = {}) {
  * @returns {{ success: boolean, messageId: string, error?: string }}
  */
 export function sendLINEMessage(userId, message, options = {}) {
-  // TODO: 實際整合 LINE Messaging API
-  // POST https://api.line.me/v2/bot/message/push
-  // Headers: { Authorization: `Bearer ${options.channelAccessToken}` }
-
+  // ⚠️ @deprecated — 會員 LINE 發送請改用 src/lib/comms/lineSender.js 的
+  //    sendLineToMembers（走 crm-line-send edge function、真正發送並寫入
+  //    message_logs）。此 stub 保留只為相容舊呼叫端，一律回報失敗。
   const messageId = generateMessageId()
 
   if (!userId) {
     return { success: false, messageId, error: 'LINE User ID 不得為空' }
   }
 
-  const type = options.type || (typeof message === 'string' ? 'text' : 'flex')
-
-  let payload
-  if (type === 'text') {
-    payload = { type: 'text', text: message }
-  } else if (type === 'flex') {
-    payload = {
-      type: 'flex',
-      altText: options.altText || '您有一則新通知',
-      contents: typeof message === 'object' ? message : { type: 'bubble', body: { type: 'box', layout: 'vertical', contents: [{ type: 'text', text: message }] } },
-    }
-  } else if (type === 'image') {
-    payload = {
-      type: 'image',
-      originalContentUrl: message,
-      previewImageUrl: options.previewUrl || message,
-    }
-  }
-
-  console.log(`[LINE] 發送至 ${userId} | 類型: ${type}`)
+  logger.warn('[messaging] sendLINEMessage 已棄用，未發送 — 請改用 lineSender.sendLineToMembers', { userId })
 
   return {
-    success: true,
+    success: false,
     messageId,
     channel: 'line',
     userId,
-    type,
-    payload,
-    sentAt: new Date().toISOString(),
+    error: '此介面已棄用，請改用會員 LINE 通道（lineSender.sendLineToMembers）',
   }
 }
 
@@ -305,10 +280,8 @@ export function sendLINEMessage(userId, message, options = {}) {
  * @returns {{ success: boolean, messageId: string, error?: string }}
  */
 export function sendSMS(phoneNumber, message, options = {}) {
-  // TODO: 實際整合三竹簡訊 (Mitake) 或 Every8d API
-  // 三竹 API: https://smsapi.mitake.com.tw/api/mtk/SmSend
-  // Every8d: https://oms.every8d.com/API21/HTTP/sendSMS.ashx
-
+  // ⚠️ 簡訊通道尚未整合（三竹 Mitake / Every8d）。此 stub「不會」發送，
+  //    且明確回報失敗 — 不再假裝成功。
   const messageId = generateMessageId()
 
   // 驗證手機號碼格式
@@ -317,25 +290,20 @@ export function sendSMS(phoneNumber, message, options = {}) {
     return { success: false, messageId, error: '手機號碼格式不正確（請使用 09xxxxxxxx）' }
   }
 
-  // 檢查簡訊長度
-  const charCount = message.length
-  const smsCount = Math.ceil(charCount / 70) // 中文 70 字 = 1 則
-
-  console.log(`[SMS] 發送至 ${cleaned} | ${charCount} 字 (${smsCount} 則)`)
+  logger.warn('[messaging] 簡訊通道尚未設定，未發送', { phoneNumber: cleaned })
 
   return {
-    success: true,
+    success: false,
     messageId,
     channel: 'sms',
     phoneNumber: cleaned,
-    charCount,
-    smsCount,
-    sentAt: new Date().toISOString(),
+    error: '簡訊通道尚未設定',
   }
 }
 
 /**
  * 批次發送 Email（行銷活動用）
+ * ⚠️ Email 通道尚未設定 — 每筆都會回報失敗（見 sendEmail），不假裝成功。
  * @param {Array} recipients - [{email, name, ...customData}]
  * @param {string} template  - MESSAGE_TEMPLATES 的 key 或自訂範本字串
  * @param {Object} data      - 範本共用變數

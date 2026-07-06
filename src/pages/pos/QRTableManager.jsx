@@ -63,7 +63,7 @@ function QRModal({ session, orgName, storeName, storeCity, tableNumber, onClose,
     const bodyW  = is58 ? '48mm' : '76mm'
     const pageW  = is58 ? '58mm' : '80mm'
     // QR 尺寸用 mm 精準鎖定：58mm 桌卡固定 20mm×20mm（黑點少不中斷、省紙），80mm 維持大張。
-    const qrSize = is58 ? '20mm' : '52mm'
+    const qrSize = is58 ? '25mm' : '52mm'
     const tnumPx = is58 ? '40px' : '52px'
     const win = window.open('', '_blank', 'width=340,height=560')
     if (!win) return
@@ -73,22 +73,23 @@ function QRModal({ session, orgName, storeName, storeCity, tableNumber, onClose,
   <title>桌卡 T${tableNumber}</title>
   <style>
     *{margin:0;padding:0;box-sizing:border-box;outline:none!important}
+    /* 熱感機全純黑：灰色印出來會抖成灰點/太淡 → 一律 #000 */
     body{font-family:"Noto Sans TC","蘋方","微軟正黑體",sans-serif;
-         text-align:center;padding:12px 10px 16px;background:#fff;color:#111;
-         width:${bodyW};max-width:100%}
-    .hdr{border:2px solid #111;padding:7px 10px;margin-bottom:8px}
-    .hdr-brand{font-size:13px;font-weight:600;letter-spacing:1px;color:#555}
-    .hdr-name{font-size:17px;font-weight:900;letter-spacing:2px;margin-top:2px}
-    .hdr-city{font-size:11px;color:#555;margin-top:2px;letter-spacing:1px}
-    .dash{border:none;border-top:1px dashed #bbb;margin:8px 0}
-    .open{font-size:11px;color:#666;margin-bottom:6px}
-    .tnum{font-size:${tnumPx};font-weight:900;letter-spacing:4px;
+         text-align:center;padding:12px 10px 16px;background:#fff;color:#000;font-weight:700;
+         width:${bodyW};max-width:100%;margin:0 auto}
+    .hdr{border:2px solid #000;padding:7px 10px;margin-bottom:8px}
+    .hdr-brand{font-size:13px;font-weight:700;letter-spacing:1px;color:#000}
+    .hdr-name{font-size:17px;font-weight:900;letter-spacing:2px;margin-top:2px;color:#000}
+    .hdr-city{font-size:11px;color:#000;margin-top:2px;letter-spacing:1px}
+    .dash{border:none;border-top:1px dashed #000;margin:8px 0}
+    .open{font-size:11px;color:#000;margin-bottom:6px}
+    .tnum{font-size:${tnumPx};font-weight:900;letter-spacing:4px;color:#000;
           line-height:1;margin:6px 0 10px}
-    .qr-wrap{display:inline-block;border:1px solid #ddd;padding:6px;margin-bottom:6px}
+    .qr-wrap{display:inline-block;border:1px solid #000;padding:6px;margin-bottom:6px}
     img{display:block;image-rendering:pixelated;image-rendering:crisp-edges}
-    .cta{font-size:15px;font-weight:700;letter-spacing:3px;margin:8px 0 2px}
-    .expiry{font-size:11px;color:#777;margin-top:4px}
-    .foot{font-size:9px;color:#ccc;margin-top:10px;letter-spacing:1px}
+    .cta{font-size:15px;font-weight:700;letter-spacing:3px;margin:8px 0 2px;color:#000}
+    .expiry{font-size:11px;color:#000;margin-top:4px}
+    .foot{font-size:9px;color:#000;margin-top:10px;letter-spacing:1px}
     @media print{
       *{outline:none!important}
       @page{margin:0;size:${pageW} auto}

@@ -24,6 +24,7 @@ export default function ProjectListView({
   employees,
   stores,
   approvalChains,
+  checklists = [],
   departments = [],
   filtered,
   tab,
@@ -241,6 +242,8 @@ export default function ProjectListView({
         <ProjectTemplateModal
           tpl={editingTpl}
           saving={tplSaving}
+          checklists={checklists}
+          approvalChains={approvalChains}
           onClose={() => setEditingTpl(null)}
           onSubmit={async (payload) => {
             if (editingTpl.id) {

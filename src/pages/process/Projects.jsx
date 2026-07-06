@@ -32,6 +32,7 @@ export default function Projects() {
   const [stores, setStores] = useState([])
   const [templates, setTemplates] = useState([])
   const [approvalChains, setApprovalChains] = useState([])
+  const [checklists, setChecklists] = useState([])
   const [departments, setDepartments] = useState([])
   const [comments, setComments] = useState([])
   const [selfFillQueue, setSelfFillQueue] = useState(null)  // 建立任務後自己填表單跳出佇列
@@ -159,7 +160,7 @@ export default function Projects() {
     const orgId = profile?.organization_id
     if (!orgId) return // Auth not ready; re-triggered when profile resolves (see useEffect below)
     setLoading(true)
-    const [pRes, wRes, eRes, sRes, cRes, tplRes, acRes, expRes, dRes] = await Promise.all([
+    const [pRes, wRes, eRes, sRes, cRes, tplRes, acRes, expRes, dRes, clRes] = await Promise.all([
       supabase.from('projects').select('*').eq('organization_id', orgId).order('created_at', { ascending: false }),
       supabase.from('workflow_instances').select('*').eq('organization_id', orgId).not('project_id', 'is', null).order('sort_order'),
       getEmployees(),
@@ -171,6 +172,7 @@ export default function Projects() {
         .select('id, title, employee, estimated_amount, actual_amount, status, project_id, account_name, store, created_at')
         .order('created_at', { ascending: false }),
       getDepartments(orgId),
+      supabase.from('checklists').select('id, name, items').order('name'),
     ])
     // Load tasks that either carry project_id directly OR belong to a project's workflow instance.
     // Two separate queries avoids URL-length overflow: the old .or() with wIds.join(',') breaks
@@ -198,6 +200,7 @@ export default function Projects() {
     setApprovalChains(acRes.data || [])
     setExpenses(expRes.data || [])
     setDepartments(dRes.data || [])
+    setChecklists(clRes.data || [])
     setLoading(false)
 
     // 從 ?project=id 自動展開專案（儀表板點任務導過來）
@@ -694,15 +697,18 @@ export default function Projects() {
       if (!project) throw new Error('建立專案失敗')
 
       // 2. Create workflows + tasks — prefer per-workflow overrides from deployForm
+      //    進階欄位（綁表單/簽核鏈/查核清單/說明）一律取自「範本」tplWfs，避免 deployForm 覆寫時遺失
+      const tplWfs = Array.isArray(tpl.workflows) ? tpl.workflows : JSON.parse(tpl.workflows || '[]')
       const deployWfs = deployForm.workflows?.length
         ? deployForm.workflows
-        : (Array.isArray(tpl.workflows) ? tpl.workflows : JSON.parse(tpl.workflows || '[]')).map(w => ({
+        : tplWfs.map(w => ({
             name: w.name, owner: '', store: '', due_date: '',
             tasks: (w.tasks || []).map(t => ({ ...t, assignee: '', due_date: '' })),
           }))
 
       for (let i = 0; i < deployWfs.length; i++) {
         const wf = deployWfs[i]
+        const tplWf = tplWfs[i] || { tasks: [] }
         // Fallback chain: wf-override → project-level → profile
         const wfOwner   = wf.owner   || deployForm.owner   || profile?.name || ''
         const wfStore   = wf.store   || deployForm.store   || null
@@ -723,27 +729,51 @@ export default function Projects() {
         }).select().single()
 
         if (instance && wf.tasks?.length > 0) {
-          const taskRows = wf.tasks.map((t, j) => ({
-            title: t.title,
-            workflow_instance_id: instance.id,
-            project_id: project.id,
-            organization_id: orgId,  // ★ 補 org_id
-            // step 1 直接開工 進行中、step 2+ 待處理（等 trg_task_advance_next_step 推進）
-            // trigger:'manual' 的任務維持 待處理，需人工啟動
-            status: j === 0 && t.trigger !== 'manual' ? '進行中' : '待處理',
-            started_at: j === 0 && t.trigger !== 'manual' ? new Date().toISOString() : null,
-            role: t.role || null,
-            step_order: j + 1,
-            priority: t.priority || '中',
-            // Fallback chain: task-override → wf-override → project-level
-            assignee: t.assignee || wfOwner || null,
-            due_date: t.due_date || wfDueDate,
-            store: wfStore,
-            bucket: 'Project',
-            category: wf.name || null,
-            created_by_emp_id: profile?.id || null,   // tasks_ins RLS：指派給別人時靠建立者過
-          }))
-          await supabase.from('tasks').insert(taskRows)
+          const taskRows = wf.tasks.map((t, j) => {
+            const rt = tplWf.tasks?.[j] || t   // 範本任務 = 進階欄位來源
+            return {
+              title: t.title,
+              description: rt.description || null,
+              approval_chain_id: rt.approval_chain_id || null,   // 任務完成後掛簽核鏈
+              workflow_instance_id: instance.id,
+              project_id: project.id,
+              organization_id: orgId,  // ★ 補 org_id
+              // step 1 直接開工 進行中、step 2+ 待處理（等 trg_task_advance_next_step 推進）
+              // trigger:'manual' 的任務維持 待處理，需人工啟動
+              status: j === 0 && t.trigger !== 'manual' ? '進行中' : '待處理',
+              started_at: j === 0 && t.trigger !== 'manual' ? new Date().toISOString() : null,
+              role: t.role || null,
+              step_order: j + 1,
+              priority: t.priority || '中',
+              // Fallback chain: task-override → wf-override → project-level
+              assignee: t.assignee || wfOwner || null,
+              due_date: t.due_date || wfDueDate,
+              store: wfStore,
+              bucket: 'Project',
+              category: wf.name || null,
+              created_by_emp_id: profile?.id || null,   // tasks_ins RLS：指派給別人時靠建立者過
+            }
+          })
+          // insert 帶 .select() 取回 id → 逐任務建綁表單 + 掛查核清單（比照流程範本部署）
+          const { data: insertedTasks } = await supabase.from('tasks').insert(taskRows).select('id')
+          if (insertedTasks) {
+            for (let j = 0; j < insertedTasks.length; j++) {
+              const rt = tplWf.tasks?.[j] || wf.tasks[j] || {}
+              const taskId = insertedTasks[j].id
+              for (const f of (rt.required_forms || [])) {
+                await supabase.rpc('create_task_form_binding', {
+                  p_task_id: taskId,
+                  p_form_type: f.form_type,
+                  p_form_template_id: f.form_template_id || null,
+                  p_fill_mode: f.fill_mode || 'self',
+                  p_assignee_id: f.fill_mode === 'other' ? (f.assignee_id || null) : null,
+                })
+              }
+              if (rt.checklist_id) {
+                await supabase.from('task_checklists').insert({ task_id: taskId, checklist_id: rt.checklist_id })
+              }
+            }
+          }
         }
       }
 
@@ -974,6 +1004,7 @@ export default function Projects() {
       employees={employees}
       stores={stores}
       approvalChains={approvalChains}
+      checklists={checklists}
       departments={departments}
       filtered={filtered}
       tab={tab}

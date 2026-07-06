@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { Plus, Trash2, Workflow, CheckSquare, GripVertical, GitBranch, ArrowDown } from 'lucide-react'
+import { Plus, Trash2, Workflow, CheckSquare, GripVertical, GitBranch, ArrowDown, Shield, FileText } from 'lucide-react'
 import Modal, { Field } from '../../../components/Modal'
+import FormBindingsPicker from '../../../components/FormBindingsPicker'
 
 const CATEGORIES = ['展店', 'HR', '營運', '採購', '倉管', '財務', '行銷', '客服']
 const PRIORITY_OPTIONS = ['高', '中', '低']
@@ -14,7 +15,7 @@ const WF_TRIGGERS = [
   { value: 'on_prev_wf_complete', label: '前一流程全部完成後' },
 ]
 
-const emptyTask = () => ({ title: '', role: '', priority: '中', trigger: 'auto', delay_days: '' })
+const emptyTask = () => ({ title: '', role: '', priority: '中', trigger: 'auto', delay_days: '', description: '', checklist_id: '', approval_chain_id: '', required_forms: [] })
 const emptyWorkflow = () => ({ name: '', trigger: 'manual', delay_days: '', tasks: [emptyTask()] })
 
 /** 深複製一份 template 供編輯用 */
@@ -39,12 +40,16 @@ function cloneTpl(tpl) {
         priority:   t.priority   || '中',
         trigger:    t.trigger    || 'auto',
         delay_days: t.delay_days ?? '',
+        description:       t.description       || '',
+        checklist_id:      t.checklist_id      || '',
+        approval_chain_id: t.approval_chain_id || '',
+        required_forms:    Array.isArray(t.required_forms) ? t.required_forms : [],
       })),
     })),
   }
 }
 
-export default function ProjectTemplateModal({ tpl, onClose, onSubmit, saving = false }) {
+export default function ProjectTemplateModal({ tpl, onClose, onSubmit, saving = false, checklists = [], approvalChains = [] }) {
   const [form, setForm] = useState(() => cloneTpl(tpl))
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
@@ -84,7 +89,10 @@ export default function ProjectTemplateModal({ tpl, onClose, onSubmit, saving = 
             .filter(t => t.title.trim())
             .map(t => ({
               ...t,
-              delay_days: t.delay_days !== '' ? Number(t.delay_days) : null,
+              delay_days:        t.delay_days !== '' ? Number(t.delay_days) : null,
+              checklist_id:      t.checklist_id      ? Number(t.checklist_id)      : null,
+              approval_chain_id: t.approval_chain_id ? Number(t.approval_chain_id) : null,
+              required_forms:    Array.isArray(t.required_forms) ? t.required_forms : [],
             })),
         })),
     })
@@ -285,6 +293,47 @@ export default function ProjectTemplateModal({ tpl, onClose, onSubmit, saving = 
                           )}
                         </div>
                       )}
+
+                      {/* ── 進階：查核清單 / 簽核鏈 / 說明 / 綁表單（比照流程範本步驟）── */}
+                      <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px dashed var(--border-subtle)', paddingLeft: 17 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                          <label style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                            <span style={{ display: 'flex', alignItems: 'center', gap: 3, marginBottom: 3 }}>
+                              <CheckSquare size={10} style={{ color: 'var(--accent-green)' }} /> 查核清單
+                            </span>
+                            <select className="form-input" style={{ width: '100%', fontSize: 11 }}
+                              value={task.checklist_id || ''}
+                              onChange={e => setTask(wi, ti, 'checklist_id', e.target.value ? Number(e.target.value) : '')}>
+                              <option value="">無</option>
+                              {checklists.map(cl => <option key={cl.id} value={cl.id}>{cl.name}{cl.items ? ` (${cl.items} 項)` : ''}</option>)}
+                            </select>
+                          </label>
+                          <label style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                            <span style={{ display: 'flex', alignItems: 'center', gap: 3, marginBottom: 3 }}>
+                              <Shield size={10} style={{ color: 'var(--accent-purple)' }} /> 需要簽核
+                            </span>
+                            <select className="form-input" style={{ width: '100%', fontSize: 11 }}
+                              value={task.approval_chain_id || ''}
+                              onChange={e => setTask(wi, ti, 'approval_chain_id', e.target.value ? Number(e.target.value) : '')}>
+                              <option value="">不需要</option>
+                              {approvalChains.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            </select>
+                          </label>
+                        </div>
+                        <input className="form-input" style={{ width: '100%', fontSize: 11, marginTop: 8 }}
+                          value={task.description || ''}
+                          onChange={e => setTask(wi, ti, 'description', e.target.value)}
+                          placeholder="任務說明（選填）" />
+                        <div style={{ marginTop: 8 }}>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 3 }}>
+                            <FileText size={10} style={{ color: 'var(--accent-cyan)' }} /> 綁定表單（完成此任務前需填完）
+                          </div>
+                          <FormBindingsPicker
+                            value={task.required_forms || []}
+                            onChange={next => setTask(wi, ti, 'required_forms', next)}
+                          />
+                        </div>
+                      </div>
                     </div>
                   </div>
                 ))}

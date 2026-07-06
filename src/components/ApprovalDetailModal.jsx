@@ -97,7 +97,12 @@ export default function ApprovalDetailModal({
       if (!t) return s
       // 不蓋過 caller 已算好的 durationText（buildChainBasedSteps 對加簽 step
       // 自己算 duration，RPC 不一定有對應 entry）
-      return { ...s, durationText: s.durationText || t.duration_text }
+      // exited_at = 該關核准/駁回、移交下一關的時間 → 當作「這關幾點簽的」completedAt 顯示
+      return {
+        ...s,
+        durationText: s.durationText || t.duration_text,
+        completedAt: s.completedAt || t.exited_at || null,
+      }
     })
   }, [chainSteps, timeline])
 

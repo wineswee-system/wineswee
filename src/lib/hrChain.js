@@ -57,6 +57,31 @@ export async function findFormChainByApplicantType(formType, organizationId, emp
 }
 
 /**
+ * 人力需求專屬 chain 解析（特例）
+ *
+ * 人力需求跟其他 HR 表單不同：不依申請人身分分流，整條只綁「一條」鏈，
+ * 且只有 manager 以上才能送單。故不共用 findFormChainByApplicantType，
+ * 直接讀 form_chain_configs(form_type='headcount') 取單一 active 鏈：
+ *   優先 applicant_type='all'，否則取任一 active（依 id）。
+ * 讀 form_chain_configs（前端可讀）而非直查 approval_chains（RLS org/admin 限定，前端易拿到 null）。
+ * 回傳 { id, name } 或 null。
+ */
+export async function findHeadcountChain(organizationId) {
+  const { data: rows } = await supabase
+    .from('form_chain_configs')
+    .select('chain_id, applicant_type, approval_chains(id, name)')
+    .eq('form_type', 'headcount')
+    .eq('organization_id', organizationId)
+    .eq('is_active', true)
+    .order('id', { ascending: true })
+
+  if (!rows?.length) return null
+  const best = rows.find(r => r.applicant_type === 'all') || rows[0]
+  if (!best?.chain_id) return null
+  return { id: best.chain_id, name: best.approval_chains?.name || null }
+}
+
+/**
  * 找 category 對應的 active chain（取第一條）
  * 沒找到回 null（caller 應走後備邏輯）
  */

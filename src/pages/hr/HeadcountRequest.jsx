@@ -10,7 +10,7 @@ import Modal, { Field } from '../../components/Modal'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { toast } from '../../lib/toast'
 import {
-  findActiveChainByCategory, loadChainStepsBatch,
+  findHeadcountChain, loadChainStepsBatch,
   resolveFirstApprovers, approveChainStep, notifyApprovers,
 } from '../../lib/hrChain'
 import ApprovalDetailModal from '../../components/ApprovalDetailModal'
@@ -196,7 +196,7 @@ export default function HeadcountRequest() {
       supabase.from('employees').select('id,name,name_en,position,department_id,store_id,signature_url,departments!department_id(name)').eq('status','在職').order('name'),
       supabase.from('departments').select('id,name').eq('organization_id', orgId || 0).order('name'),
       supabase.from('stores').select('id,name').eq('organization_id', orgId || 0).order('name'),
-      findActiveChainByCategory('人力需求', orgId),
+      findHeadcountChain(orgId),
       orgId ? supabase.from('organizations').select('name, logo_url').eq('id', orgId).maybeSingle() : Promise.resolve({ data: null }),
     ])
     setList(r || [])
@@ -238,6 +238,8 @@ export default function HeadcountRequest() {
   }
 
   const handleSubmit = async () => {
+    // 人力需求特例：只有 manager 以上才能送單
+    if (!isManagerOrAbove) return toast.error('僅主管（含）以上可提出人力需求申請')
     const empId = isManagerOrAbove ? form.employee_id : profile?.id
     const validateForm = isManagerOrAbove
       ? { employee_id: empId, job_title: form.job_title, headcount: form.headcount }
@@ -305,7 +307,7 @@ export default function HeadcountRequest() {
       }
     } else if (!activeChain) {
       toast.warning('已送出（目前無「人力需求」簽核鏈，admin 可直接核准）', {
-        description: '建議到「簽核鏈設定」建立 category=人力需求 的鏈',
+        description: '請到「簽核設定」為人力需求綁定一條簽核鏈',
       })
     }
 
@@ -448,7 +450,9 @@ export default function HeadcountRequest() {
                 <Settings size={14} /> 簽核設定
               </button>
             )}
-            <button className="btn btn-primary" onClick={() => setShowForm(true)}><Plus size={14} /> 新增申請</button>
+            {isManagerOrAbove && (
+              <button className="btn btn-primary" onClick={() => setShowForm(true)}><Plus size={14} /> 新增申請</button>
+            )}
           </div>
         </div>
       </div>

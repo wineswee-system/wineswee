@@ -62,7 +62,8 @@ function QRModal({ session, orgName, storeName, storeCity, tableNumber, onClose,
     const is58 = (() => { try { return localStorage.getItem('pos_paper_width') === '58' } catch { return false } })()
     const bodyW  = is58 ? '48mm' : '76mm'
     const pageW  = is58 ? '58mm' : '80mm'
-    const qrPx   = is58 ? 150 : 200
+    // QR 尺寸用 mm 精準鎖定：58mm 桌卡固定 20mm×20mm（黑點少不中斷、省紙），80mm 維持大張。
+    const qrSize = is58 ? '20mm' : '52mm'
     const tnumPx = is58 ? '40px' : '52px'
     const win = window.open('', '_blank', 'width=340,height=560')
     if (!win) return
@@ -104,7 +105,7 @@ function QRModal({ session, orgName, storeName, storeCity, tableNumber, onClose,
   <hr class="dash">
   ${openStr ? `<div class="open">開桌 ${openStr}</div>` : ''}
   <div class="tnum">T${tableNumber}</div>
-  <div class="qr-wrap"><img src="${dataUrl}" width="${qrPx}" height="${qrPx}"></div>
+  <div class="qr-wrap"><img src="${dataUrl}" style="width:${qrSize};height:${qrSize}"></div>
   <div class="cta">掃 碼 點 餐</div>
   <hr class="dash">
   ${expiryStr ? `<div class="expiry">有效至 ${expiryStr}（4 小時）</div>` : ''}

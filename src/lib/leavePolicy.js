@@ -97,6 +97,20 @@ export const LEAVE_TYPES = [
     description: '依法令規定應給予公假（選舉投票、教召、作證等）',
   },
 
+  // ── 天然災害停止上班 ──
+  {
+    code: 'disaster',
+    name: '天災假',
+    shortName: '天災',
+    law: '天然災害停止上班及上課作業辦法',
+    paid: true,
+    unit: 'day',
+    minUnit: 0.5,
+    allowHourly: true,
+    salary: '照給',
+    description: '天然災害（颱風、地震等）宣布停止上班之假別',
+  },
+
   // ── 勞基法 第50條 + 性平法 §15：產假 ──
   {
     code: 'maternity',

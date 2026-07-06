@@ -811,6 +811,22 @@ export default function Projects() {
     setTplSaving(false)
   }
 
+  const handleCreateTemplate = async (payload) => {
+    setTplSaving(true)
+    const { data, error } = await supabase
+      .from('project_templates')
+      .insert(payload)
+      .select()
+      .single()
+    if (error) {
+      toast.error('建立失敗：' + error.message)
+    } else if (data) {
+      setTemplates(prev => [...prev, data])
+      toast.success('模板已建立')
+    }
+    setTplSaving(false)
+  }
+
   const handleDeleteTemplate = async (tpl) => {
     if (!(await confirm({ message: `確定刪除模板「${tpl.name}」？已部署的專案不受影響。`, confirmLabel: '確認刪除', danger: true }))) return
     const { error } = await supabase.from('project_templates').delete().eq('id', tpl.id)
@@ -1005,6 +1021,7 @@ export default function Projects() {
       openDeploy={openDeploy}
       onEditTemplate={handleEditTemplate}
       onDeleteTemplate={handleDeleteTemplate}
+      onCreateTemplate={handleCreateTemplate}
       tplSaving={tplSaving}
     />
       {selfFillQueue && (

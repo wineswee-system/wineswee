@@ -76,6 +76,7 @@ export default function ProjectListView({
   // template edit/delete
   onEditTemplate,
   onDeleteTemplate,
+  onCreateTemplate,
   tplSaving = false,
 }) {
   const [editingTpl, setEditingTpl] = useState(null)
@@ -169,8 +170,15 @@ export default function ProjectListView({
       {/* Templates tab */}
       {tab === 'templates' && (
         <div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+            <button className="btn btn-primary"
+              style={{ display: 'flex', alignItems: 'center', gap: 5 }}
+              onClick={() => setEditingTpl({})}>
+              <Plus size={14} /> 新增專案範本
+            </button>
+          </div>
           {templates.length === 0 ? (
-            <div className="card" style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>尚無專案模板</div>
+            <div className="card" style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>尚無專案模板，點右上「新增專案範本」建立第一個</div>
           ) : templates.map(tpl => {
             const tplWorkflows = Array.isArray(tpl.workflows) ? tpl.workflows : JSON.parse(tpl.workflows || '[]')
             const totalTasks = tplWorkflows.reduce((s, w) => s + (w.tasks?.length || 0), 0)
@@ -235,7 +243,11 @@ export default function ProjectListView({
           saving={tplSaving}
           onClose={() => setEditingTpl(null)}
           onSubmit={async (payload) => {
-            await onEditTemplate(editingTpl.id, payload)
+            if (editingTpl.id) {
+              await onEditTemplate(editingTpl.id, payload)
+            } else {
+              await onCreateTemplate(payload)
+            }
             setEditingTpl(null)
           }}
         />

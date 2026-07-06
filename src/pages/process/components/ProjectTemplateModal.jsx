@@ -96,10 +96,10 @@ export default function ProjectTemplateModal({ tpl, onClose, onSubmit, saving = 
 
   return (
     <Modal
-      title="✏️ 編輯專案模板"
+      title={tpl?.id ? '✏️ 編輯專案模板' : '➕ 新增專案模板'}
       onClose={onClose}
       onSubmit={handleSubmit}
-      submitLabel={saving ? '儲存中...' : '儲存變更'}
+      submitLabel={saving ? '儲存中...' : (tpl?.id ? '儲存變更' : '建立模板')}
       submitDisabled={saving || !form.name?.trim()}
     >
       {/* ── 基本資訊 ── */}

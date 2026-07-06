@@ -3,6 +3,7 @@ import { Search, Download, MapPin, Clock, CalendarCheck } from 'lucide-react'
 import { getAttendance, serverClockIn, getActiveEmployees, getDepartments, getStores } from '../../lib/db'
 import { exportAttendancePdf } from '../../lib/exportPdf'
 import { validateClockIn } from '../../lib/clockInValidator'
+import { getRestMinutes } from '../../lib/scheduleUtils'
 import { todayTW, monthStartTW, nowTimeTW } from '../../lib/datetime'
 import { useAuth } from '../../contexts/AuthContext'
 import { useErrorHandler } from '../../hooks/useErrorHandler'
@@ -222,8 +223,12 @@ export default function Attendance() {
     if (editClockIn && editClockOut) {
       const [ih, im] = editClockIn.split(':').map(Number)
       const [oh, om] = editClockOut.split(':').map(Number)
-      const hrs = ((oh * 60 + om) - (ih * 60 + im)) / 60
-      if (hrs > 0) { payload.hours = Math.round(hrs * 10) / 10; payload.total_hours = payload.hours }
+      let mins = (oh * 60 + om) - (ih * 60 + im)
+      if (mins < 0) mins += 24 * 60   // 跨午夜
+      const gross = mins / 60
+      // ★ 扣休息（與正常下班打卡/backfill 同規則：<5h=0、5~9h=30分、≥9h=60分）
+      const net = gross - getRestMinutes(gross) / 60
+      if (net > 0) { payload.total_hours = Math.round(net * 100) / 100; payload.hours = payload.total_hours }
     }
     const { error } = await supabase.from('attendance_records').update(payload).eq('id', r.id)
     if (error) { setSaving(false); setClockMsg({ type: 'error', text: '儲存失敗：' + error.message }); return }

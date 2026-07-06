@@ -243,6 +243,9 @@ export default function Leave() {
       }
     }
 
+    // 解析員工資料 — 必須在第一次用到 emp（isEmpPT / 加給政策 / 補休 / payload）之前宣告，
+    // 否則 const emp 的 TDZ 會噴「Cannot access 'emp' before initialization」
+    const emp = employees.find(e => e.name === form.employee)
     // Validate
     const isEmpPT = emp?.salary_type === 'hourly'
     const empWeeklyHours = Number(emp?.weekly_hours) || 0
@@ -257,8 +260,7 @@ export default function Leave() {
       ? annualLeaveRows.reduce((s, l) => s + (l.hours || (l.days || 0) * (empWeeklyHours / 5 || 8)), 0)
       : 0
 
-    // 查詢門市/員工的假別加給政策
-    const emp = employees.find(e => e.name === form.employee)
+    // 查詢門市/員工的假別加給政策（emp 已於上方宣告）
     const storeId = await getStoreIdByName(emp?.store)
     const leaveBenefits = await getEffectiveBenefits(emp?.id || null, storeId, 'leave')
     const customPolicy = leaveBenefits[form.type] || null

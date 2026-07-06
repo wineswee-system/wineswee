@@ -4,6 +4,18 @@ import { getAttendance, serverClockIn, getActiveEmployees, getDepartments, getSt
 import { exportAttendancePdf } from '../../lib/exportPdf'
 import { validateClockIn } from '../../lib/clockInValidator'
 import { getRestMinutes } from '../../lib/scheduleUtils'
+
+// 由上下班時間算「淨工時」（扣休息：<5h=0、5~9h=30分、≥9h=60分；跨午夜 +24h）
+function computeNet(inStr, outStr) {
+  if (!inStr || !outStr) return null
+  const [ih, im] = inStr.split(':').map(Number)
+  const [oh, om] = outStr.split(':').map(Number)
+  let mins = (oh * 60 + om) - (ih * 60 + im)
+  if (mins < 0) mins += 24 * 60
+  const gross = mins / 60
+  const net = gross - getRestMinutes(gross) / 60
+  return net > 0 ? Math.round(net * 100) / 100 : 0
+}
 import { todayTW, monthStartTW, nowTimeTW } from '../../lib/datetime'
 import { useAuth } from '../../contexts/AuthContext'
 import { useErrorHandler } from '../../hooks/useErrorHandler'
@@ -62,6 +74,7 @@ export default function Attendance() {
   const [editModal, setEditModal] = useState(null) // record being edited
   const [editClockIn, setEditClockIn] = useState('')
   const [editClockOut, setEditClockOut] = useState('')
+  const [editHours, setEditHours] = useState('')   // 手動工時（空=用自動扣休息值）
   const [editReason, setEditReason] = useState('')
   const [editHistory, setEditHistory] = useState([])
   const [historyLoading, setHistoryLoading] = useState(false)
@@ -203,6 +216,7 @@ export default function Attendance() {
     setEditModal(r)
     setEditClockIn(r.clock_in || '')
     setEditClockOut(r.clock_out || '')
+    setEditHours('')            // 空=用自動扣休息值；填了=用手動值
     setEditReason('')
     setEditHistory([])
     setHistoryLoading(true)
@@ -211,7 +225,7 @@ export default function Attendance() {
     setEditHistory(data || [])
     setHistoryLoading(false)
   }
-  const cancelEdit = () => { setEditModal(null); setEditReason(''); setEditHistory([]) }
+  const cancelEdit = () => { setEditModal(null); setEditReason(''); setEditHours(''); setEditHistory([]) }
 
   const saveEdit = async () => {
     const r = editModal
@@ -220,15 +234,13 @@ export default function Attendance() {
     const payload = {}
     if (editClockIn) payload.clock_in = editClockIn
     if (editClockOut) payload.clock_out = editClockOut
-    if (editClockIn && editClockOut) {
-      const [ih, im] = editClockIn.split(':').map(Number)
-      const [oh, om] = editClockOut.split(':').map(Number)
-      let mins = (oh * 60 + om) - (ih * 60 + im)
-      if (mins < 0) mins += 24 * 60   // 跨午夜
-      const gross = mins / 60
-      // ★ 扣休息（與正常下班打卡/backfill 同規則：<5h=0、5~9h=30分、≥9h=60分）
-      const net = gross - getRestMinutes(gross) / 60
-      if (net > 0) { payload.total_hours = Math.round(net * 100) / 100; payload.hours = payload.total_hours }
+    // 工時：有手動填就用手動值（固定不浮動）；沒填才自動算（扣休息）
+    if (editHours !== '' && !isNaN(Number(editHours))) {
+      payload.total_hours = Math.round(Number(editHours) * 100) / 100
+      payload.hours = payload.total_hours
+    } else if (editClockIn && editClockOut) {
+      const net = computeNet(editClockIn, editClockOut)
+      if (net > 0) { payload.total_hours = net; payload.hours = net }
     }
     const { error } = await supabase.from('attendance_records').update(payload).eq('id', r.id)
     if (error) { setSaving(false); setClockMsg({ type: 'error', text: '儲存失敗：' + error.message }); return }
@@ -546,6 +558,17 @@ export default function Attendance() {
                 <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>下班打卡</div>
                 <input type="time" value={editClockOut} onChange={e => setEditClockOut(e.target.value)}
                   className="form-input" style={{ width: '100%' }} />
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>工時（小時）</div>
+              <input type="number" step="0.01" min="0" value={editHours}
+                onChange={e => setEditHours(e.target.value)}
+                placeholder={editClockIn && editClockOut ? `自動 ${computeNet(editClockIn, editClockOut)}（可改）` : '留空=依上下班自動算'}
+                className="form-input" style={{ width: '100%' }} />
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                留空 = 依上下班時間自動算（扣休息）；填了 = 固定用這個值，不會被浮動重算。
               </div>
             </div>
 

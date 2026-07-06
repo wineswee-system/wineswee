@@ -56,6 +56,12 @@ function QRModal({ session, orgName, storeName, storeCity, tableNumber, onClose,
     const openStr   = fmt(session?.created_at)
     const expiryStr = fmt(session?.expires_at)
     const cityLine  = storeCity ? `<div class="hdr-city">${storeCity}</div>` : ''
+    // 紙寬：58mm 熱感機縮小版面（可印寬 ~48mm），否則沿用 80mm 桌卡
+    const is58 = (() => { try { return localStorage.getItem('pos_paper_width') === '58' } catch { return false } })()
+    const bodyW  = is58 ? '48mm' : '76mm'
+    const pageW  = is58 ? '58mm' : '80mm'
+    const qrPx   = is58 ? 150 : 200
+    const tnumPx = is58 ? '40px' : '52px'
     const win = window.open('', '_blank', 'width=340,height=560')
     if (!win) return
     win.document.write(`<!DOCTYPE html><html>
@@ -66,14 +72,14 @@ function QRModal({ session, orgName, storeName, storeCity, tableNumber, onClose,
     *{margin:0;padding:0;box-sizing:border-box;outline:none!important}
     body{font-family:"Noto Sans TC","蘋方","微軟正黑體",sans-serif;
          text-align:center;padding:12px 10px 16px;background:#fff;color:#111;
-         width:76mm;max-width:100%}
+         width:${bodyW};max-width:100%}
     .hdr{border:2px solid #111;padding:7px 10px;margin-bottom:8px}
     .hdr-brand{font-size:13px;font-weight:600;letter-spacing:1px;color:#555}
     .hdr-name{font-size:17px;font-weight:900;letter-spacing:2px;margin-top:2px}
     .hdr-city{font-size:11px;color:#555;margin-top:2px;letter-spacing:1px}
     .dash{border:none;border-top:1px dashed #bbb;margin:8px 0}
     .open{font-size:11px;color:#666;margin-bottom:6px}
-    .tnum{font-size:52px;font-weight:900;letter-spacing:4px;
+    .tnum{font-size:${tnumPx};font-weight:900;letter-spacing:4px;
           line-height:1;margin:6px 0 10px}
     .qr-wrap{display:inline-block;border:1px solid #ddd;padding:6px;margin-bottom:6px}
     img{display:block}
@@ -82,7 +88,7 @@ function QRModal({ session, orgName, storeName, storeCity, tableNumber, onClose,
     .foot{font-size:9px;color:#ccc;margin-top:10px;letter-spacing:1px}
     @media print{
       *{outline:none!important}
-      @page{margin:0;size:80mm auto}
+      @page{margin:0;size:${pageW} auto}
       body{padding:6px 4px 12px;-webkit-print-color-adjust:exact}
     }
   </style>
@@ -96,7 +102,7 @@ function QRModal({ session, orgName, storeName, storeCity, tableNumber, onClose,
   <hr class="dash">
   ${openStr ? `<div class="open">開桌 ${openStr}</div>` : ''}
   <div class="tnum">T${tableNumber}</div>
-  <div class="qr-wrap"><img src="${dataUrl}" width="200" height="200"></div>
+  <div class="qr-wrap"><img src="${dataUrl}" width="${qrPx}" height="${qrPx}"></div>
   <div class="cta">掃 碼 點 餐</div>
   <hr class="dash">
   ${expiryStr ? `<div class="expiry">有效至 ${expiryStr}（4 小時）</div>` : ''}

@@ -21,6 +21,8 @@ export default function POSPaymentOverlay({
   confirmingPayment,
   autoPrint,
   setAutoPrint,
+  paperWidth,
+  setPaperWidth,
   setShowReceipt,
   handlePrintReceipt,
   handleConfirmGateway,
@@ -191,6 +193,26 @@ export default function POSPaymentOverlay({
             <Printer size={13} />
             自動列印收據
           </label>
+
+          {/* 收據紙寬（依門市熱感機）*/}
+          {setPaperWidth && (
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              marginTop: 8, fontSize: 12, color: 'var(--text-secondary)',
+            }}>
+              <Printer size={12} /> 紙寬
+              {['58', '80'].map(w => (
+                <button key={w} type="button" onClick={() => setPaperWidth(w)}
+                  style={{
+                    padding: '3px 12px', borderRadius: 6, fontSize: 12, cursor: 'pointer',
+                    border: '1px solid var(--border-medium)',
+                    background: paperWidth === w ? 'var(--accent-cyan)' : 'transparent',
+                    color: paperWidth === w ? '#fff' : 'var(--text-secondary)',
+                    fontWeight: paperWidth === w ? 700 : 500,
+                  }}>{w}mm</button>
+              ))}
+            </div>
+          )}
 
           {/* Refund button */}
           <button

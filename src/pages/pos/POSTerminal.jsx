@@ -90,6 +90,10 @@ export default function POSTerminal() {
   const [autoPrint, setAutoPrint] = useState(() => {
     try { return localStorage.getItem('pos_auto_print') === 'true' } catch { return false }
   })
+  // 收據紙寬 '58' | '80'（依門市熱感機；58mm 版面會縮小內容避免被裁）
+  const [paperWidth, setPaperWidth] = useState(() => {
+    try { return localStorage.getItem('pos_paper_width') || '80' } catch { return '80' }
+  })
 
   // Hold / Recall orders
   const [savedOrders, setSavedOrders] = useState(() => {
@@ -108,6 +112,9 @@ export default function POSTerminal() {
   useEffect(() => {
     try { localStorage.setItem('pos_auto_print', String(autoPrint)) } catch {}
   }, [autoPrint])
+  useEffect(() => {
+    try { localStorage.setItem('pos_paper_width', paperWidth) } catch {}
+  }, [paperWidth])
 
   // 離線交易自動同步：恢復連線 / 進入 POS 時補送佇列（冪等，重複呼叫只生效一次）
   useEffect(() => { initOfflineSync() }, [])
@@ -351,6 +358,7 @@ export default function POSTerminal() {
     companyName: '威士威企業總部',
     companyTaxId: '12345678',
     cashierName: '系統',
+    paperWidth: Number(paperWidth),   // 58 | 80 → 收據版面寬度
   }
 
   const handleCheckout = async () => {
@@ -926,6 +934,8 @@ export default function POSTerminal() {
         confirmingPayment={confirmingPayment}
         autoPrint={autoPrint}
         setAutoPrint={setAutoPrint}
+        paperWidth={paperWidth}
+        setPaperWidth={setPaperWidth}
         setShowReceipt={setShowReceipt}
         handlePrintReceipt={handlePrintReceipt}
         handleConfirmGateway={handleConfirmGateway}

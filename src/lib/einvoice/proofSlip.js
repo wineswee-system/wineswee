@@ -171,11 +171,18 @@ export function buildProofSlipHtml(p) {
   const now = new Date()
   const timeStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`
 
+  // 紙寬：58mm 熱感機縮版（可印寬 ~48mm，兩個 QR 要縮小才並排得下）；否則 80mm
+  const is58 = Number(p.paperWidth) === 58
+    || (() => { try { return localStorage.getItem('pos_paper_width') === '58' } catch { return false } })()
+  const bodyW = is58 ? '48mm' : '76mm'
+  const qrMm  = is58 ? '20mm' : '26mm'
+  const pageW = is58 ? '58mm' : '80mm'
+
   return `<!DOCTYPE html><html><head><meta charset="UTF-8">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:"Courier New","Noto Sans TC","微軟正黑體",monospace;
-     width:76mm;max-width:100%;padding:8px 6px;text-align:center;color:#000;background:#fff}
+     width:${bodyW};max-width:100%;padding:8px 6px;text-align:center;color:#000;background:#fff}
 .store{font-size:14px;font-weight:700;margin-bottom:2px}
 .title{font-size:17px;font-weight:900;letter-spacing:2px}
 .period{font-size:19px;font-weight:900;letter-spacing:1px;margin-top:2px}
@@ -185,10 +192,10 @@ body{font-family:"Courier New","Noto Sans TC","微軟正黑體",monospace;
 .bc{margin:6px 0 2px}
 .bc svg{max-width:100%;height:40px}
 .qrs{display:flex;justify-content:space-between;padding:2px 8px 0}
-.qrs img{width:26mm;height:26mm}
+.qrs img{width:${qrMm};height:${qrMm}}
 hr.cut{border:none;border-top:1px dashed #999;margin:10px 0 8px}
 .note{font-size:10px;color:#555;margin-top:4px}
-@media print{@page{margin:2mm;size:80mm auto}}
+@media print{@page{margin:2mm;size:${pageW} auto}}
 </style></head><body>
 ${storeName ? `<div class="store">${storeName}</div>` : ''}
 <div class="title">電子發票證明聯</div>

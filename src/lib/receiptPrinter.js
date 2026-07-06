@@ -7,6 +7,12 @@ import { toast } from './toast'
 export function generateReceiptHTML(transaction, options = {}) {
   const { companyName = '商店', companyAddress = '', companyTaxId = '', cashierName = '' } = options;
 
+  // 紙寬：58mm 熱感機可印寬約 48mm；80mm 可印約 72mm。options.paperWidth: 58 | 80（預設 80）
+  const is58 = Number(options.paperWidth) === 58;
+  const P = is58
+    ? { page: '58mm', body: '48mm', margin: '2mm', base: '11px', store: '14px', td: '10px', total: '13px' }
+    : { page: '80mm', body: '72mm', margin: '4mm', base: '12px', store: '16px', td: '11px', total: '14px' };
+
   const items = (transaction.items || []).map(item => `
     <tr>
       <td style="text-align:left">${item.name}</td>
@@ -21,12 +27,12 @@ export function generateReceiptHTML(transaction, options = {}) {
     <html>
     <head>
       <style>
-        @page { size: 80mm auto; margin: 0; }
+        @page { size: ${P.page} auto; margin: 0; }
         body {
           font-family: 'Courier New', monospace;
-          font-size: 12px;
-          width: 72mm;
-          margin: 4mm;
+          font-size: ${P.base};
+          width: ${P.body};
+          margin: ${P.margin};
           color: #000;
         }
         .center { text-align: center; }
@@ -34,9 +40,9 @@ export function generateReceiptHTML(transaction, options = {}) {
         .bold { font-weight: bold; }
         .divider { border-top: 1px dashed #000; margin: 4px 0; }
         table { width: 100%; border-collapse: collapse; }
-        td { padding: 1px 0; font-size: 11px; }
-        .store-name { font-size: 16px; font-weight: bold; }
-        .total-line { font-size: 14px; font-weight: bold; }
+        td { padding: 1px 0; font-size: ${P.td}; }
+        .store-name { font-size: ${P.store}; font-weight: bold; }
+        .total-line { font-size: ${P.total}; font-weight: bold; }
         .footer { font-size: 10px; color: #666; margin-top: 8px; }
       </style>
     </head>
@@ -117,6 +123,10 @@ export function printReceipt(transaction, options = {}) {
 // Generate shift report HTML for browser print
 export function generateShiftReportHTML(shift, transactions = [], options = {}) {
   const { companyName = '商店' } = options;
+  const is58 = Number(options.paperWidth) === 58;
+  const P = is58
+    ? { page: '58mm', body: '48mm', margin: '2mm', base: '11px' }
+    : { page: '80mm', body: '72mm', margin: '4mm', base: '12px' };
 
   // Aggregate payment method totals from transactions
   const paymentTotals = {};
@@ -144,12 +154,12 @@ export function generateShiftReportHTML(shift, transactions = [], options = {}) 
     <html>
     <head>
       <style>
-        @page { size: 80mm auto; margin: 0; }
+        @page { size: ${P.page} auto; margin: 0; }
         body {
           font-family: 'Courier New', monospace;
-          font-size: 12px;
-          width: 72mm;
-          margin: 4mm;
+          font-size: ${P.base};
+          width: ${P.body};
+          margin: ${P.margin};
           color: #000;
         }
         .center { text-align: center; }

@@ -13,6 +13,9 @@ import { buildQRPair, code39Svg, buildBarcodeContent, buildProofSlipHtml, format
 import { getEventBus } from '../../lib/events/index.js'
 import POSVariantModal from './components/POSVariantModal'
 
+// 收據紙寬（門市熱感機）：pos_paper_width='58' → 58mm，否則 80mm。用於各列印版面的 @page size。
+const posPaperPage = () => { try { return localStorage.getItem('pos_paper_width') === '58' ? '58mm' : '80mm' } catch { return '80mm' } }
+
 // ── Styles ────────────────────────────────────────────────────────────────────
 const S = {
   page: {
@@ -319,7 +322,7 @@ body{font-family:"Noto Sans TC","微軟正黑體",monospace;padding:12px 10px;wi
 hr{border:none;border-top:2px dashed #000;margin:8px 0}
 table{width:100%;border-collapse:collapse}
 .foot{font-size:12px;color:#666;text-align:right;margin-top:6px}
-@media print{@page{margin:2mm;size:80mm auto}button{display:none}}
+@media print{@page{margin:2mm;size:${posPaperPage()} auto}button{display:none}}
 </style></head><body>
 <div class="hdr"><span class="tnum">T${tableNumber}</span><span class="time">${timeStr}</span></div>
 <hr>
@@ -785,7 +788,7 @@ table th{font-size:12px;font-weight:400;border-bottom:1px dashed #000;padding-bo
 .th-amt{text-align:right}
 .r{display:flex;justify-content:space-between;font-size:12px;padding:2px 0}
 .total{display:flex;justify-content:space-between;font-size:15px;font-weight:800;padding:3px 0}
-@media print{@page{margin:2mm;size:80mm auto}}
+@media print{@page{margin:2mm;size:${posPaperPage()} auto}}
 </style></head><body>
 <div class="center bold" style="font-size:14px;margin-bottom:2px">${storeName || '威士威'}</div>
 <div>內用:${orderNum}</div>
@@ -1798,7 +1801,7 @@ hr{border:none;border-top:1px dashed #ccc;margin:10px 0}
 img{display:block;margin:0 auto}
 .hint{font-size:13px;font-weight:600;margin-top:10px}
 .expiry{font-size:11px;color:#aaa;margin-top:4px}
-@media print{@page{margin:4mm;size:80mm auto}body{padding:8px}}
+@media print{@page{margin:4mm;size:${posPaperPage()} auto}body{padding:8px}}
 </style></head><body>
 <div class="store">${storeName || '威士威'}</div>
 <hr>

@@ -30,10 +30,12 @@ function QRModal({ session, orgName, storeName, storeCity, tableNumber, onClose,
 
   useEffect(() => {
     if (!canvasRef.current) return
+    // 熱感機是純黑白 1-bit：dark 一定要純黑(#000)，用 #0f172a 會被抖色成灰 → 糊。
+    // 解析度拉高(440)避免印在 ~40mm(203dpi≈320點)時被放大糊掉。
     QRCode.toCanvas(canvasRef.current, url, {
-      width: 260,
+      width: 440,
       margin: 2,
-      color: { dark: '#0f172a', light: '#ffffff' },
+      color: { dark: '#000000', light: '#ffffff' },
     })
   }, [url])
 
@@ -82,7 +84,7 @@ function QRModal({ session, orgName, storeName, storeCity, tableNumber, onClose,
     .tnum{font-size:${tnumPx};font-weight:900;letter-spacing:4px;
           line-height:1;margin:6px 0 10px}
     .qr-wrap{display:inline-block;border:1px solid #ddd;padding:6px;margin-bottom:6px}
-    img{display:block}
+    img{display:block;image-rendering:pixelated;image-rendering:crisp-edges}
     .cta{font-size:15px;font-weight:700;letter-spacing:3px;margin:8px 0 2px}
     .expiry{font-size:11px;color:#777;margin-top:4px}
     .foot{font-size:9px;color:#ccc;margin-top:10px;letter-spacing:1px}

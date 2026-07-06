@@ -1761,11 +1761,31 @@ export default function WaiterMode() {
     if (!selTable || !effectiveStoreId) return
     setGenQr(true)
     try {
+      // ★ 關鍵：session 一定要掛一張 open 訂單。沒有 order_id → 客人端 orderId=null → 送出沒反應。
+      //   沿用桌位已開的訂單(orderId)，沒有才新建一張 open 單。
+      let linkOrderId = orderId
+      if (!linkOrderId) {
+        const { data: order, error: orderErr } = await supabase
+          .from('pos_orders')
+          .insert({
+            organization_id: orgId,
+            store_id: effectiveStoreId,
+            table_id: selTable.id,
+            status: 'open',
+            order_source: 'qr',
+          })
+          .select('id')
+          .single()
+        if (orderErr) throw orderErr
+        linkOrderId = order.id
+        setOrderId(order.id)
+      }
       const expiresAt = new Date(Date.now() + 4 * 60 * 60 * 1000)
       const { data: session, error } = await supabase.from('qr_order_sessions').insert({
         organization_id: orgId,
         store_id: effectiveStoreId,
         table_id: selTable.id,
+        order_id: linkOrderId,
         token: crypto.randomUUID(),
         expires_at: expiresAt.toISOString(),
       }).select('token').single()

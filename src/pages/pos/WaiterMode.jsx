@@ -306,22 +306,25 @@ function printKitchenSlip(tableNumber, rows) {
     const totalQty = rows.reduce((s, r) => s + (r.quantity ?? r.qty ?? 1), 0)
     const itemRows = rows.map(r => {
       const qty  = r.quantity ?? r.qty ?? 1
-      const note = r.note ? `<tr><td colspan="2" style="font-size:12px;color:#444;padding:0 0 5px 4px">⚑ ${r.note}</td></tr>` : ''
-      return `<tr><td style="font-size:16px;font-weight:700;padding:4px 0">${r.name ?? r.item_name ?? ''}</td><td style="font-size:16px;font-weight:700;text-align:right;white-space:nowrap">× ${qty}</td></tr>${note}`
+      const note = r.note ? `<tr><td colspan="2" style="font-size:12px;color:#000;padding:0 0 5px 4px">⚑ ${r.note}</td></tr>` : ''
+      return `<tr><td style="font-size:16px;font-weight:900;padding:4px 0">${r.name ?? r.item_name ?? ''}</td><td style="font-size:16px;font-weight:900;text-align:right;white-space:nowrap">× ${qty}</td></tr>${note}`
     }).join('')
 
+    const is58 = (() => { try { return localStorage.getItem('pos_paper_width') === '58' } catch { return false } })()
     const win = window.open('', '_blank', 'width=320,height=480')
     if (!win) return
     win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:"Noto Sans TC","微軟正黑體",monospace;padding:12px 10px;width:100%}
+/* 熱感機全純黑+置中 */
+body{font-family:"Noto Sans TC","微軟正黑體",monospace;color:#000;font-weight:700;
+     padding:12px 8px;width:${is58 ? '48mm' : '72mm'};max-width:100%;margin:0 auto}
 .hdr{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
-.tnum{font-size:34px;font-weight:900;letter-spacing:1px}
-.time{font-size:15px;color:#333;font-weight:600}
+.tnum{font-size:34px;font-weight:900;letter-spacing:1px;color:#000}
+.time{font-size:15px;color:#000;font-weight:700}
 hr{border:none;border-top:2px dashed #000;margin:8px 0}
 table{width:100%;border-collapse:collapse}
-.foot{font-size:12px;color:#666;text-align:right;margin-top:6px}
+.foot{font-size:12px;color:#000;text-align:right;margin-top:6px;font-weight:700}
 @media print{@page{margin:2mm;size:${posPaperPage()} auto}button{display:none}}
 </style></head><body>
 <div class="hdr"><span class="tnum">T${tableNumber}</span><span class="time">${timeStr}</span></div>
@@ -334,6 +337,56 @@ table{width:100%;border-collapse:collapse}
     win.focus()
     setTimeout(() => { win.print(); setTimeout(() => win.close(), 800) }, 350)
   } catch (_) { /* 印表機未就緒時靜默，不影響送廚房主流程 */ }
+}
+
+// 給客人的明細（預結單，含金額+總計）— 隨時可手動印，不用結帳。全純黑+置中，支援 58mm。
+function printOrderDetail(tableNumber, items, storeName) {
+  try {
+    if (!items || items.length === 0) { toast.error('尚無明細可列印'); return }
+    const is58 = (() => { try { return localStorage.getItem('pos_paper_width') === '58' } catch { return false } })()
+    const now = new Date()
+    const p2 = n => String(n).padStart(2, '0')
+    const timeStr = `${now.getFullYear()}/${now.getMonth() + 1}/${now.getDate()} ${p2(now.getHours())}:${p2(now.getMinutes())}`
+    const totalQty = items.reduce((s, i) => s + (i.quantity ?? i.qty ?? 1), 0)
+    const total    = items.reduce((s, i) => s + (Number(i.unit_price) || 0) * (i.quantity ?? i.qty ?? 1), 0)
+    const itemRows = items.map(i => {
+      const qty = i.quantity ?? i.qty ?? 1
+      const sub = (Number(i.unit_price) || 0) * qty
+      const note = i.note ? `<tr><td colspan="3" style="text-align:left;font-size:11px;padding:0 0 4px 6px">⚑ ${i.note}</td></tr>` : ''
+      return `<tr><td class="nm">${i.name ?? i.item_name ?? ''}</td><td class="q">×${qty}</td><td class="amt">${sub.toLocaleString()}</td></tr>${note}`
+    }).join('')
+    const win = window.open('', '_blank', 'width=320,height=520')
+    if (!win) return
+    win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
+*{margin:0;padding:0;box-sizing:border-box}
+/* 全純黑 + 置中 */
+body{font-family:"Noto Sans TC","微軟正黑體",monospace;color:#000;font-weight:700;
+     width:${is58 ? '48mm' : '72mm'};max-width:100%;margin:0 auto;padding:10px 8px;text-align:center}
+.store{font-size:16px;font-weight:900}
+.tnum{font-size:22px;font-weight:900;margin:4px 0}
+.meta{font-size:12px;color:#000;margin:2px 0}
+hr{border:none;border-top:1px dashed #000;margin:6px 0}
+table{width:100%;border-collapse:collapse}
+td{font-size:13px;padding:3px 0;color:#000}
+.nm{text-align:left}
+.q{text-align:center;white-space:nowrap;padding:0 6px}
+.amt{text-align:right;white-space:nowrap}
+.total{display:flex;justify-content:space-between;font-size:16px;font-weight:900;margin-top:4px}
+@media print{@page{margin:0;size:${posPaperPage()} auto}}
+</style></head><body>
+<div class="store">${storeName || '威士威'}</div>
+<div class="tnum">T${tableNumber}</div>
+<div class="meta">${timeStr}</div>
+<hr>
+<table>${itemRows}</table>
+<hr>
+<div class="total"><span>合計 ${totalQty} 品</span><span>NT$ ${total.toLocaleString()}</span></div>
+<hr>
+<div class="meta">此為明細，非正式發票</div>
+</body></html>`)
+    win.document.close(); win.focus()
+    setTimeout(() => { win.print(); setTimeout(() => win.close(), 800) }, 350)
+  } catch (_) { /* 靜默 */ }
 }
 
 function Spinner() {
@@ -2077,6 +2130,11 @@ img{display:block;margin:0 auto}
           <button style={S.iconBtn(false)} onClick={generateQR} disabled={genQr} title="產生 QR 點餐連結 / 列印桌卡">
             {genQr ? '…' : 'QR / 桌卡'}
           </button>
+          {existingItems.length > 0 && (
+            <button style={S.iconBtn(false)} onClick={() => printOrderDetail(selTable.table_number, existingItems, storeName)} title="列印給客人的明細（不用結帳）">
+              印明細
+            </button>
+          )}
           {!wide && cartCount > 0 && (
             <button style={S.iconBtn(false)} disabled={submitBusy} onClick={handleSubmit}>
               {submitBusy ? '送出…' : `送廚房(${cartCount})`}

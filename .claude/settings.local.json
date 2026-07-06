@@ -59,7 +59,19 @@
       "PowerShell(npx vitest run src/lib/einvoice/__tests__/proofSlip.test.js src/lib/__tests__/tableQR.test.js)",
       "PowerShell(npm test -- --run 2>&1)",
       "PowerShell(npx esbuild supabase/functions/issue-invoice/index.ts --loader:.ts=ts --outfile=\"C:\\\\Users\\\\TING\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-TING-Documents-Astro8-AI-sme-ops\\\\7791f865-a5f3-4274-8b20-5de6f6ef993c\\\\scratchpad\\\\esbuild-check\\\\issue-invoice.js\" --format=esm)",
-      "Bash(git reset *)"
+      "Bash(git reset *)",
+      "Bash(git commit -m ' *)",
+      "Bash(grep -E \"\\\\.\\(jsx?|ts|sql\\)$\")",
+      "PowerShell(npx supabase migration list --linked 2>&1)",
+      "PowerShell(npx supabase db push --linked --dry-run 2>&1)",
+      "Bash(npx --yes http-server -p 8377 -s)",
+      "Bash(grep -o '{\"local\":\"202606[0-9]*\",\"remote\":\"[0-9]*\"' \"C:/Users/TING/.claude/projects/c--Users-TING-Documents-Astro8-AI-sme-ops/b341d867-9027-4082-af4a-5195e96fd3de/tool-results/bl5kqc1t6.txt\")",
+      "Bash(grep -o '{\"local\":\"2026062113[0-9]*\",\"remote\":\"[0-9]*\"\\\\|{\"local\":\"2026062113[0-9]*\",\"remote\":\"\"' \"C:/Users/TING/.claude/projects/c--Users-TING-Documents-Astro8-AI-sme-ops/b341d867-9027-4082-af4a-5195e96fd3de/tool-results/bl5kqc1t6.txt\")",
+      "mcp__plugin_everything-claude-code_playwright__browser_resize",
+      "mcp__plugin_everything-claude-code_playwright__browser_take_screenshot",
+      "Bash(echo \"---exit $?\")",
+      "PowerShell(git add -u)",
+      "PowerShell(git add supabase/migrations/20260706160000_pos_server_side_sale_v3.sql)"
     ],
     "additionalDirectories": [
       "\\tmp"

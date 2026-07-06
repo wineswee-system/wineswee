@@ -40,7 +40,11 @@ export function registerWMSHandlers(bus) {
   })
 
   // ── POS transaction completed → deduct stock ──
+  // 零售收銀台（POSTerminal）已於 secure_create_pos_transaction v3 後端原子扣庫存
+  // （事件帶 server_processed 旗標）→ 跳過，避免雙重扣減。
+  // 內用（WaiterMode / pos_orders 模型）仍走此處。
   bus.subscribe('pos.transaction.completed', async function onPOSTransactionDeductStock(event) {
+    if (event.payload.server_processed) return
     const { transaction_id, items, store } = event.payload
     if (!items || items.length === 0) return
 
@@ -68,7 +72,9 @@ export function registerWMSHandlers(bus) {
   })
 
   // ── POS transaction refunded → restore stock ──
+  // 零售退款已於 secure_refund_pos_transaction 後端原子還庫（server_processed）→ 跳過
   bus.subscribe('pos.transaction.refunded', async function onPOSRefundRestoreStock(event) {
+    if (event.payload.server_processed) return
     const { refund_id, items, store } = event.payload
     if (!items || items.length === 0) return
 

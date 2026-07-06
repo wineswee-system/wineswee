@@ -1,75 +1,96 @@
 import { useState, useEffect, useCallback } from 'react'
 import { RefreshCw, Printer } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { getCashMovements, recordCashMovement } from '../../lib/db'
 import { useTenant } from '../../contexts/TenantContext'
 import { useAuth } from '../../contexts/AuthContext'
+import { toast } from '../../lib/toast'
 
 const METHOD_LABEL = { cash: '現金', card: '信用卡', line_pay: 'LINE Pay', jkopay: '街口', other: '其他' }
+// 零售交易（pos_transactions）付款方式為中文標籤 → 對回報表鍵值；未知標籤原樣顯示
+const ZH_TO_CODE = { '現金': 'cash', '信用卡': 'card', 'LINE Pay': 'line_pay', '街口支付': 'jkopay', '其他': 'other' }
 
 function today() { return new Date().toISOString().slice(0, 10) }
-function floatKey(storeId, date) { return `posFloat_${storeId}_${date}` }
 
 export default function XReport() {
-  const { storeId } = useTenant()
+  const { tenant, storeId } = useTenant()
   const { profile } = useAuth()
+  const orgId = tenant?.organization_id
 
   const [date,       setDate]       = useState(today)
   const [loading,    setLoading]    = useState(false)
   const [orders,     setOrders]     = useState([])
   const [payments,   setPayments]   = useState([])
+  const [retail,     setRetail]     = useState([])   // 零售收銀台交易（pos_transactions）
+  const [returns,    setReturns]    = useState([])   // 零售退款（pos_returns）
+  const [movements,  setMovements]  = useState([])   // 現金收支（含開班備用金）
   const [topItems,   setTopItems]   = useState([])
   const [openFloat,  setOpenFloat]  = useState('')
   const [actualCash, setActualCash] = useState('')
-
-  // ── Persist opening float per store per day ───────────────────────────────
-  useEffect(() => {
-    if (!storeId) return
-    const saved = localStorage.getItem(floatKey(storeId, date))
-    setOpenFloat(saved ?? '')
-    setActualCash('')
-  }, [storeId, date])
-
-  function saveFloat(val) {
-    setOpenFloat(val)
-    if (storeId) localStorage.setItem(floatKey(storeId, date), val)
-  }
+  const [cashForm,   setCashForm]   = useState({ type: 'cash_out', amount: '', reason: '' })
 
   // ── Load data ─────────────────────────────────────────────────────────────
   const load = useCallback(async () => {
-    if (!storeId) return
+    if (!storeId || !orgId) return
     setLoading(true)
     try {
       const start = `${date}T00:00:00`
       const end   = `${date}T23:59:59`
 
-      // Paid orders for the day
-      const { data: ords } = await supabase
-        .from('pos_orders')
-        .select('id')
-        .eq('store_id', storeId)
-        .eq('status', 'paid')
-        .gte('paid_at', start)
-        .lte('paid_at', end)
-
-      setOrders(ords ?? [])
-      if (!ords?.length) { setPayments([]); setTopItems([]); setLoading(false); return }
-
-      const ids = ords.map(o => o.id)
-
-      // Payments + items in parallel
-      const [{ data: pmts }, { data: itms }] = await Promise.all([
-        supabase.from('pos_payments').select('amount, payment_method').in('order_id', ids),
-        supabase.from('pos_order_items').select('name, unit_price, quantity').in('order_id', ids).is('voided_at', null),
+      // 內用/QR（pos_orders 模型）＋ 零售（pos_transactions 模型）＋ 現金收支 平行載入
+      const [ordsRes, retailRes, returnsRes, movesRes] = await Promise.all([
+        supabase.from('pos_orders').select('id')
+          .eq('store_id', storeId).eq('status', 'paid')
+          .gte('paid_at', start).lte('paid_at', end),
+        supabase.from('pos_transactions')
+          .select('id, total, payment_method, payment_splits, items, status, created_at')
+          .eq('organization_id', orgId).eq('store_id', storeId)
+          .gte('created_at', start).lte('created_at', end),
+        supabase.from('pos_returns')
+          .select('refund_amount, refund_method, created_at')
+          .eq('organization_id', orgId).eq('store_id', storeId)
+          .not('transaction_id', 'is', null)
+          .gte('created_at', start).lte('created_at', end),
+        getCashMovements(orgId, { storeId, date }),
       ])
 
-      setPayments(pmts ?? [])
+      const ords = ordsRes.data ?? []
+      setOrders(ords)
+      setRetail(retailRes.data ?? [])
+      setReturns(returnsRes.data ?? [])
+      const moves = movesRes.data ?? []
+      setMovements(moves)
 
-      // Aggregate top items
+      // 開班備用金：DB 為準（pos_cash_movements.opening_float）
+      const floatRow = moves.find(m => m.movement_type === 'opening_float')
+      setOpenFloat(floatRow ? String(Number(floatRow.amount)) : '')
+
+      // 內用收款與品項
+      let pmts = [], itms = []
+      if (ords.length) {
+        const ids = ords.map(o => o.id)
+        const [{ data: p }, { data: i }] = await Promise.all([
+          supabase.from('pos_payments').select('amount, payment_method').in('order_id', ids),
+          supabase.from('pos_order_items').select('name, unit_price, quantity').in('order_id', ids).is('voided_at', null),
+        ])
+        pmts = p ?? []; itms = i ?? []
+      }
+      setPayments(pmts)
+
+      // 熱銷品項：內用品項 ＋ 零售 items JSONB 合併
       const map = {}
-      for (const i of (itms ?? [])) {
+      for (const i of itms) {
         if (!map[i.name]) map[i.name] = { qty: 0, revenue: 0 }
         map[i.name].qty     += i.quantity
         map[i.name].revenue += Number(i.unit_price) * i.quantity
+      }
+      for (const t of (retailRes.data ?? [])) {
+        for (const i of (t.items ?? [])) {
+          const name = i.name ?? '未命名'
+          if (!map[name]) map[name] = { qty: 0, revenue: 0 }
+          map[name].qty     += Number(i.qty ?? 1)
+          map[name].revenue += Number(i.price ?? 0) * Number(i.qty ?? 1)
+        }
       }
       setTopItems(
         Object.entries(map)
@@ -78,21 +99,65 @@ export default function XReport() {
           .slice(0, 10)
       )
     } finally { setLoading(false) }
-  }, [storeId, date])
+  }, [storeId, orgId, date])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { load(); setActualCash('') }, [load])
+
+  // 開班備用金：離開欄位時寫入 DB（每店每日一筆，可覆寫）
+  async function saveFloat() {
+    if (!orgId) return
+    const amt = Number(openFloat) || 0
+    const { error } = await recordCashMovement({
+      movement_type: 'opening_float', amount: amt,
+      store_id: storeId, business_date: date,
+      created_by: profile?.name ?? null,
+    })
+    if (error) toast.error('備用金儲存失敗：' + error.message)
+  }
+
+  // 領錢/存錢
+  async function submitCashMovement() {
+    const amt = Number(cashForm.amount)
+    if (!amt || amt <= 0) { toast.error('請輸入金額'); return }
+    if (!cashForm.reason.trim()) { toast.error('請填寫原因'); return }
+    const { error } = await recordCashMovement({
+      movement_type: cashForm.type, amount: amt, reason: cashForm.reason.trim(),
+      store_id: storeId, business_date: date,
+      created_by: profile?.name ?? null,
+    })
+    if (error) { toast.error('記錄失敗：' + error.message); return }
+    setCashForm({ type: 'cash_out', amount: '', reason: '' })
+    load()
+  }
 
   // ── Derived ───────────────────────────────────────────────────────────────
   const byMethod = payments.reduce((acc, p) => {
     acc[p.payment_method] = (acc[p.payment_method] ?? 0) + Number(p.amount)
     return acc
   }, {})
+  // 零售交易併入（分帳逐筆計入各方式）
+  for (const t of retail) {
+    if (Array.isArray(t.payment_splits) && t.payment_splits.length > 0) {
+      for (const s of t.payment_splits) {
+        const key = ZH_TO_CODE[s.method] ?? s.method
+        byMethod[key] = (byMethod[key] ?? 0) + Number(s.amount)
+      }
+    } else {
+      const key = ZH_TO_CODE[t.payment_method] ?? t.payment_method
+      byMethod[key] = (byMethod[key] ?? 0) + Number(t.total)
+    }
+  }
+
   const totalRevenue  = Object.values(byMethod).reduce((s, v) => s + v, 0)
   const cashRevenue   = byMethod.cash ?? 0
+  const cashIn        = movements.filter(m => m.movement_type === 'cash_in').reduce((s, m) => s + Number(m.amount), 0)
+  const cashOut       = movements.filter(m => m.movement_type === 'cash_out').reduce((s, m) => s + Number(m.amount), 0)
+  const cashRefunds   = returns.filter(r => r.refund_method === 'cash').reduce((s, r) => s + Number(r.refund_amount), 0)
+  const refundsTotal  = returns.reduce((s, r) => s + Number(r.refund_amount), 0)
   const floatAmt      = Number(openFloat) || 0
-  const expectedCash  = floatAmt + cashRevenue
+  const expectedCash  = floatAmt + cashRevenue + cashIn - cashOut - cashRefunds
   const variance      = actualCash !== '' ? Number(actualCash) - expectedCash : null
-  const orderCount    = orders.length
+  const orderCount    = orders.length + retail.length
   const avgTicket     = orderCount ? Math.round(totalRevenue / orderCount) : 0
 
   // ── Print ─────────────────────────────────────────────────────────────────
@@ -113,9 +178,13 @@ ${'─'.repeat(36)}
 營業額：      $${totalRevenue.toLocaleString()}
 結帳訂單：    ${orderCount} 筆
 平均客單：    $${avgTicket.toLocaleString()}
+退款：        $${refundsTotal.toLocaleString()}
 ${'─'.repeat(36)}
 開班備用金：  $${floatAmt.toLocaleString()}
 現金收款：    $${cashRevenue.toLocaleString()}
+存錢(+)：     $${cashIn.toLocaleString()}
+領錢(-)：     $${cashOut.toLocaleString()}
+現金退款(-)： $${cashRefunds.toLocaleString()}
 理論在抽屜：  $${expectedCash.toLocaleString()}
 ${actualCash !== '' ? `實際點鈔：    $${Number(actualCash).toLocaleString()}` : '（未點鈔）'}
 ${variance !== null ? `現金差異：    ${variance >= 0 ? '+' : ''}${variance.toLocaleString()} 元` : ''}
@@ -137,7 +206,7 @@ ${'='.repeat(36)}
             X 報表 · 今日快報
           </h1>
           <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>
-            {isToday ? '● 即時更新 — 不影響結班' : '歷史日期查閱'}
+            {isToday ? '● 即時更新 — 不影響結班' : '歷史日期查閱'}（含收銀台零售＋內用/QR）
           </p>
         </div>
         <div style={{ flex: 1 }} />
@@ -185,6 +254,7 @@ ${'='.repeat(36)}
                   {Object.entries(byMethod).map(([m, v]) => (
                     <Row key={m} label={METHOD_LABEL[m] ?? m} value={`NT$ ${Number(v).toLocaleString()}`} />
                   ))}
+                  {refundsTotal > 0 && <Row label="退款" value={`- NT$ ${refundsTotal.toLocaleString()}`} />}
                   <Row label="合計" value={`NT$ ${totalRevenue.toLocaleString()}`} bold accent />
                 </>
               )}
@@ -194,12 +264,16 @@ ${'='.repeat(36)}
             <div style={card}>
               <div style={sectionTitle}>現金盤點</div>
 
-              <label style={lbl}>開班備用金</label>
+              <label style={lbl}>開班備用金（存入資料庫，跨裝置一致）</label>
               <input type="number" placeholder="0" value={openFloat}
-                onChange={e => saveFloat(e.target.value)}
+                onChange={e => setOpenFloat(e.target.value)}
+                onBlur={saveFloat}
                 style={{ ...inputStyle, marginBottom: 12 }} />
 
               <Row label="現金收款"   value={`NT$ ${cashRevenue.toLocaleString()}`} />
+              {cashIn > 0 && <Row label="存錢 (+)" value={`NT$ ${cashIn.toLocaleString()}`} />}
+              {cashOut > 0 && <Row label="領錢 (−)" value={`NT$ ${cashOut.toLocaleString()}`} />}
+              {cashRefunds > 0 && <Row label="現金退款 (−)" value={`NT$ ${cashRefunds.toLocaleString()}`} />}
               <Row label="理論在抽屜" value={`NT$ ${expectedCash.toLocaleString()}`} bold accent />
 
               <label style={{ ...lbl, marginTop: 14 }}>實際點鈔</label>
@@ -225,6 +299,37 @@ ${'='.repeat(36)}
                   )}
                 </div>
               )}
+
+              {/* 領錢 / 存錢（寫入 pos_cash_movements ＋ 稽核軌跡） */}
+              <div style={{ marginTop: 18, paddingTop: 14, borderTop: '1px solid var(--border-subtle)' }}>
+                <div style={{ ...lbl, marginBottom: 8 }}>現金收支（領錢/存錢）</div>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                  <select value={cashForm.type}
+                    onChange={e => setCashForm(f => ({ ...f, type: e.target.value }))}
+                    style={{ ...inputStyle, width: 90, flexShrink: 0 }}>
+                    <option value="cash_out">領錢</option>
+                    <option value="cash_in">存錢</option>
+                  </select>
+                  <input type="number" placeholder="金額" value={cashForm.amount}
+                    onChange={e => setCashForm(f => ({ ...f, amount: e.target.value }))}
+                    style={{ ...inputStyle, width: 90, flexShrink: 0 }} />
+                  <input type="text" placeholder="原因（必填）" value={cashForm.reason}
+                    onChange={e => setCashForm(f => ({ ...f, reason: e.target.value }))}
+                    style={{ ...inputStyle, flex: 1 }} />
+                </div>
+                <button onClick={submitCashMovement}
+                  style={{ width: '100%', padding: '8px 0', borderRadius: 8, border: 'none', background: 'var(--accent-cyan)', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                  記錄現金收支
+                </button>
+                {movements.filter(m => m.movement_type !== 'opening_float').map(m => (
+                  <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text-secondary)', padding: '6px 0', borderBottom: '1px solid var(--border-subtle)' }}>
+                    <span>{m.movement_type === 'cash_in' ? '存錢' : '領錢'}｜{m.reason}</span>
+                    <span style={{ fontWeight: 600, color: m.movement_type === 'cash_in' ? 'var(--accent-green)' : 'var(--accent-orange)' }}>
+                      {m.movement_type === 'cash_in' ? '+' : '−'}NT$ {Number(m.amount).toLocaleString()}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 

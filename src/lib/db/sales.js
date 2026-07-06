@@ -131,6 +131,8 @@ export const getPOSTransactions = (orgId) => {
 export const getPOSTransactionByNumber = (transactionNumber) =>
   supabase.from('pos_transactions').select('*').eq('transaction_number', transactionNumber).maybeSingle()
 
+// v3：副作用（扣庫存/點數/消費紀錄/優惠券核銷/傳票）由 RPC 後端原子執行。
+// points_earned 由後端以 member_levels 計算（單一事實來源），前端傳值僅供相容。
 export const createPOSTransaction = (data) =>
   supabase.rpc('secure_create_pos_transaction', {
     p_store: data.store,
@@ -149,7 +151,54 @@ export const createPOSTransaction = (data) =>
     p_invoice_carrier: data.invoice_carrier ?? null,
     // 離線補送冪等鍵：佇列時以 crypto.randomUUID() 產生，重試帶同值 → RPC 冪等重放
     p_client_tx_id: data.client_tx_id ?? null,
+    p_store_id: data.store_id ?? null,
+    p_note: data.note ?? null,
+    p_manual_discount: data.manual_discount ?? 0,
+    p_coupon_assignment_id: data.coupon_assignment_id ?? null,
+    p_payment_splits: data.payment_splits ?? null,
+    p_manager_pin: data.manager_pin ?? null,
   })
+
+// 零售交易退款（後端原子：退貨紀錄/還庫存/扣回點數/迴轉傳票/稽核）
+// items = [{name, qty, price}]；null = 整筆退。組織已設主管 PIN 時必須帶 manager_pin。
+export const refundPOSTransaction = ({ transaction_number, items = null, reason = null, refund_method = 'cash', manager_pin = null, cashier = null }) =>
+  supabase.rpc('secure_refund_pos_transaction', {
+    p_transaction_number: transaction_number,
+    p_items: items,
+    p_reason: reason,
+    p_refund_method: refund_method,
+    p_manager_pin: manager_pin,
+    p_cashier: cashier,
+  })
+
+// ── 現金收支（開班備用金 / 領錢 / 存錢） ───────────────────
+export const recordCashMovement = ({ movement_type, amount, reason = null, store_id = null, business_date = null, created_by = null }) =>
+  supabase.rpc('pos_record_cash_movement', {
+    p_movement_type: movement_type,
+    p_amount: amount,
+    p_reason: reason,
+    p_store_id: store_id,
+    p_business_date: business_date ?? new Date().toISOString().slice(0, 10),
+    p_created_by: created_by,
+  })
+
+export const getCashMovements = (orgId, { storeId = null, date = null } = {}) => {
+  let q = supabase.from('pos_cash_movements').select('*').order('created_at', { ascending: true })
+  if (orgId) q = q.eq('organization_id', orgId)
+  if (storeId != null) q = q.eq('store_id', storeId)
+  if (date) q = q.eq('business_date', date)
+  return q
+}
+
+// ── 主管授權 PIN ────────────────────────────────────────────
+export const setManagerPin = ({ label, pin, current_pin = null }) =>
+  supabase.rpc('pos_set_manager_pin', { p_label: label, p_pin: pin, p_current_pin: current_pin })
+
+export const getManagerPins = (orgId) => {
+  let q = supabase.from('pos_manager_pins').select('id, label, is_active, created_at').order('label')
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
 
 export const updatePOSTransaction = (id, data) =>
   supabase.from('pos_transactions').update(data).eq('id', id).select().single()

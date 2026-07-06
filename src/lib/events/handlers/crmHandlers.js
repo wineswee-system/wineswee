@@ -37,7 +37,11 @@ export function registerCRMHandlers(bus) {
   })
 
   // ── POS transaction completed → update loyalty points (DB-driven tiers) ──
+  // 零售收銀台（POSTerminal）已於 secure_create_pos_transaction v3 後端原子處理
+  // 點數/等級/消費紀錄（事件帶 server_processed 旗標）→ 跳過，避免雙重累點。
+  // 內用（WaiterMode / pos_orders 模型）仍走此處。
   bus.subscribe('pos.transaction.completed', async function onPOSTransactionUpdateLoyalty(event) {
+    if (event.payload.server_processed) return
     const { customer_id, total, store, points_used } = event.payload
     if (!customer_id) return
 
@@ -168,7 +172,9 @@ export function registerCRMHandlers(bus) {
   })
 
   // ── POS transaction completed → record member_purchase + lines ──
+  // 零售收銀台已後端寫入 member_purchases（server_processed）→ 跳過
   bus.subscribe('pos.transaction.completed', async function onPOSTransactionRecordPurchase(event) {
+    if (event.payload.server_processed) return
     const { customer_id, total, store_id, transaction_id, payment_method, items } = event.payload
     if (!customer_id || !items?.length) return
 
@@ -227,7 +233,9 @@ export function registerCRMHandlers(bus) {
   })
 
   // ── POS transaction refunded → reverse loyalty points ──
+  // 零售退款已於 secure_refund_pos_transaction 後端扣回點數（server_processed）→ 跳過
   bus.subscribe('pos.transaction.refunded', async function onPOSRefundReverseLoyalty(event) {
+    if (event.payload.server_processed) return
     const { customer_id, refund_amount, original_total, refund_id, reason } = event.payload
     if (!customer_id) return
 

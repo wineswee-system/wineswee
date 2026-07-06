@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
+import { getCashMovements } from '../../lib/db'
 import { useTenant } from '../../contexts/TenantContext'
 
 const METHOD_LABEL = {
@@ -9,12 +10,18 @@ const METHOD_LABEL = {
   jkopay:   '街口',
   other:    '其他',
 }
+// 零售交易（pos_transactions）付款方式為中文標籤 → 對回報表鍵值
+const ZH_TO_CODE = { '現金': 'cash', '信用卡': 'card', 'LINE Pay': 'line_pay', '街口支付': 'jkopay', '其他': 'other' }
 
 export default function ZReport() {
-  const { storeId } = useTenant()
+  const { tenant, storeId } = useTenant()
+  const orgId = tenant?.organization_id
   const [shifts,     setShifts]     = useState([])
   const [selShift,   setSelShift]   = useState(null)
   const [payments,   setPayments]   = useState([])
+  const [retail,     setRetail]     = useState([])   // 零售收銀台交易（班別時間窗內）
+  const [returns,    setReturns]    = useState([])   // 零售退款
+  const [movements,  setMovements]  = useState([])   // 現金收支（領錢/存錢）
   const [orderCount, setOrderCount] = useState(0)
   const [actualCash, setActualCash] = useState('')
   const [openFloat,  setOpenFloat]  = useState('')
@@ -39,43 +46,86 @@ export default function ZReport() {
       })
   }, [storeId])
 
-  // Load payments for the selected shift
+  // Load payments for the selected shift（內用 pos_orders ＋ 零售 pos_transactions ＋ 現金收支）
   useEffect(() => {
     if (!selShift) return
     setLoading(true)
-    supabase
-      .from('pos_orders')
-      .select('id')
-      .eq('shift_id', selShift.id)
-      .eq('status', 'paid')
-      .then(async ({ data: orders }) => {
-        if (!orders?.length) {
-          setPayments([])
-          setOrderCount(0)
-          setLoading(false)
-          return
-        }
+
+    const windowStart = selShift.opened_at
+    const windowEnd   = selShift.closed_at ?? new Date().toISOString()
+    const bizDate     = String(selShift.opened_at ?? '').slice(0, 10)
+
+    async function loadShiftData() {
+      try {
+        const [ordersRes, retailRes, returnsRes, movesRes] = await Promise.all([
+          supabase.from('pos_orders').select('id')
+            .eq('shift_id', selShift.id).eq('status', 'paid'),
+          orgId
+            ? supabase.from('pos_transactions')
+                .select('id, total, payment_method, payment_splits, status, created_at')
+                .eq('organization_id', orgId).eq('store_id', storeId)
+                .gte('created_at', windowStart).lte('created_at', windowEnd)
+            : Promise.resolve({ data: [] }),
+          orgId
+            ? supabase.from('pos_returns')
+                .select('refund_amount, refund_method, created_at')
+                .eq('organization_id', orgId).eq('store_id', storeId)
+                .not('transaction_id', 'is', null)
+                .gte('created_at', windowStart).lte('created_at', windowEnd)
+            : Promise.resolve({ data: [] }),
+          orgId
+            ? getCashMovements(orgId, { storeId, date: bizDate })
+            : Promise.resolve({ data: [] }),
+        ])
+
+        const orders = ordersRes.data ?? []
         setOrderCount(orders.length)
-        const { data: pmts } = await supabase
-          .from('pos_payments')
-          .select('id, amount, payment_method')
-          .in('order_id', orders.map(o => o.id))
-        setPayments(pmts ?? [])
+        setRetail(retailRes.data ?? [])
+        setReturns(returnsRes.data ?? [])
+        setMovements((movesRes.data ?? []).filter(m => m.movement_type !== 'opening_float'))
+
+        if (orders.length) {
+          const { data: pmts } = await supabase
+            .from('pos_payments')
+            .select('id, amount, payment_method')
+            .in('order_id', orders.map(o => o.id))
+          setPayments(pmts ?? [])
+        } else {
+          setPayments([])
+        }
+      } finally {
         setLoading(false)
-      })
+      }
+    }
+    loadShiftData()
     setActualCash('')
     setOpenFloat(String(selShift.opening_float ?? 0))
-  }, [selShift])
+  }, [selShift, orgId, storeId])
 
-  // Aggregate by payment method
+  // Aggregate by payment method（內用收款 ＋ 零售交易；零售分帳逐筆計入）
   const byMethod = payments.reduce((acc, p) => {
     acc[p.payment_method] = (acc[p.payment_method] ?? 0) + Number(p.amount)
     return acc
   }, {})
+  for (const t of retail) {
+    if (Array.isArray(t.payment_splits) && t.payment_splits.length > 0) {
+      for (const s of t.payment_splits) {
+        const key = ZH_TO_CODE[s.method] ?? s.method
+        byMethod[key] = (byMethod[key] ?? 0) + Number(s.amount)
+      }
+    } else {
+      const key = ZH_TO_CODE[t.payment_method] ?? t.payment_method
+      byMethod[key] = (byMethod[key] ?? 0) + Number(t.total)
+    }
+  }
   const totalRevenue = Object.values(byMethod).reduce((s, v) => s + v, 0)
+  const totalOrders  = orderCount + retail.length
   const cashRevenue  = byMethod.cash ?? 0
+  const cashIn       = movements.filter(m => m.movement_type === 'cash_in').reduce((s, m) => s + Number(m.amount), 0)
+  const cashOut      = movements.filter(m => m.movement_type === 'cash_out').reduce((s, m) => s + Number(m.amount), 0)
+  const cashRefunds  = returns.filter(r => r.refund_method === 'cash').reduce((s, r) => s + Number(r.refund_amount), 0)
   const floatAmt     = Number(openFloat) || 0
-  const expectedCash = floatAmt + cashRevenue
+  const expectedCash = floatAmt + cashRevenue + cashIn - cashOut - cashRefunds
   const variance     = actualCash !== '' ? Number(actualCash) - expectedCash : null
 
   function printZReport() {
@@ -96,10 +146,13 @@ ${'─'.repeat(36)}
 ${lines}
 ${'─'.repeat(36)}
 合計          $${totalRevenue.toLocaleString()}
-結帳訂單：${orderCount} 筆
+結帳訂單：${totalOrders} 筆
 ${'─'.repeat(36)}
 開班備用金：$${floatAmt.toLocaleString()}
 現金收款：  $${cashRevenue.toLocaleString()}
+存錢(+)：   $${cashIn.toLocaleString()}
+領錢(-)：   $${cashOut.toLocaleString()}
+現金退款(-)：$${cashRefunds.toLocaleString()}
 理論在抽屜：$${expectedCash.toLocaleString()}
 ${actualCash !== '' ? `實際點鈔：  $${Number(actualCash).toLocaleString()}` : ''}
 ${varLine}
@@ -189,7 +242,7 @@ ${'='.repeat(36)}
                   <span style={{ color: 'var(--accent-cyan)' }}>${totalRevenue.toLocaleString()}</span>
                 </div>
                 <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-muted)' }}>
-                  結帳訂單：{orderCount} 筆 ／ 訂單流水：{selShift.order_counter}
+                  結帳訂單：{totalOrders} 筆（內用 {orderCount}・零售 {retail.length}）／ 訂單流水：{selShift.order_counter}
                 </div>
               </>
             )}
@@ -212,6 +265,9 @@ ${'='.repeat(36)}
             </div>
 
             <Row label="現金收款"   value={`$${cashRevenue.toLocaleString()}`} />
+            {cashIn > 0 && <Row label="存錢 (+)" value={`$${cashIn.toLocaleString()}`} />}
+            {cashOut > 0 && <Row label="領錢 (−)" value={`$${cashOut.toLocaleString()}`} />}
+            {cashRefunds > 0 && <Row label="現金退款 (−)" value={`$${cashRefunds.toLocaleString()}`} />}
             <Row label="理論在抽屜" value={`$${expectedCash.toLocaleString()}`} bold accent />
 
             <div style={{ margin: '16px 0 12px' }}>

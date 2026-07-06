@@ -2,13 +2,14 @@ import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { RotateCcw, Usb } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import { createPOSTransaction, updatePOSTransaction, createInvoice, searchMemberByQuery, getPOSTransactionByNumber, getMemberCoupons, redeemCoupon } from '../../lib/db'
+import { createPOSTransaction, refundPOSTransaction, searchMemberByQuery, getPOSTransactionByNumber, getMemberCoupons } from '../../lib/db'
 import { useTenant } from '../../contexts/TenantContext'
 import { getEventBus } from '../../lib/events/index.js'
-import { createPaymentRequest, processRefund } from '../../lib/payment'
+import { createPaymentRequest } from '../../lib/payment'
 import { processPayment, confirmPayment, refundPayment, getPaymentMethods, validateEdcFields, recordEdcPayment } from '../../lib/paymentGateway'
-import { calculateInvoiceTax, generateInvoiceNumber } from '../../lib/einvoice'
+import { calculateInvoiceTax } from '../../lib/einvoice'
 import { printReceipt, connectThermalPrinter, kickCashDrawer } from '../../lib/receiptPrinter'
+import Modal, { Field } from '../../components/Modal'
 import POSPaymentOverlay from './components/POSPaymentOverlay'
 import POSProductGrid from './components/POSProductGrid'
 import POSCartPanel from './components/POSCartPanel'
@@ -35,8 +36,9 @@ const PAYMENT_METHOD_MAP = GATEWAY_METHODS.map(m => ({
   icon: m.icon,
 }))
 
-// Invoice sequence counter (in production this comes from DB)
-let invoiceSeq = Math.floor(Math.random() * 90000000) + 10000000
+// 電子發票由正式管線（pos_payments.invoice_status='pending' → issue-invoice
+// edge function → 字軌配號 allocate_invoice_number）開立；
+// 收銀當下不再以前端亂數產生假發票號碼。
 
 export default function POSTerminal() {
   const { tenant } = useTenant()
@@ -85,6 +87,10 @@ export default function POSTerminal() {
 
   // 中信 EDC 刷卡登錄（F-D1：credit_card = 端末機記錄模式，與 ECPay 脫鉤）
   const [edcInfo, setEdcInfo] = useState({ card_brand: 'VISA', card_last4: '', auth_code: '' })
+
+  // 主管授權 PIN（組織啟用 PIN 制度後，手動折扣/退款會要求授權）
+  const [pinPrompt, setPinPrompt] = useState(null) // { message, onSubmit(pin) }
+  const [pinInput, setPinInput] = useState('')
 
   // Auto-print preference (persisted in localStorage)
   const [autoPrint, setAutoPrint] = useState(() => {
@@ -361,7 +367,8 @@ export default function POSTerminal() {
     paperWidth: Number(paperWidth),   // 58 | 80 → 收據版面寬度
   }
 
-  const handleCheckout = async () => {
+  const handleCheckout = async (managerPin = null) => {
+    if (typeof managerPin !== 'string') managerPin = null // onClick 事件物件防呆
     if (cart.length === 0) return
 
     // ★ 防呆：手動折扣不可為負，也不可超過 subtotal
@@ -398,7 +405,18 @@ export default function POSTerminal() {
       }
     }
 
+    // 分帳 payload：以中文標籤送後端（RPC 驗證方式合法且加總 = 總額）
+    const splitsPayload = paymentSplits.length > 0
+      ? paymentSplits.map(s => ({
+          method: PAYMENT_METHOD_MAP.find(m => m.code === s.method)?.label || s.method,
+          amount: Number(s.amount),
+        }))
+      : null
+
     // ★ 離線模式：僅支援現金，交易入本機佇列（帶冪等鍵），連線後自動同步
+    // 補送時 RPC 一樣執行完整副作用（扣庫存/點數/消費紀錄）— 離線銷售不再漏帳。
+    // 注意：不將主管 PIN 存入佇列（明碼落地風險）；若組織啟用 PIN 且含手動折扣，
+    // 補送會進死信清單待人工重試。
     if (!isOnline()) {
       if (effectivePaymentMethod !== 'cash') {
         toast.error('離線狀態僅支援現金交易')
@@ -407,14 +425,19 @@ export default function POSTerminal() {
       const txnNum = `POS-${String(Date.now()).slice(-6)}`
       queueTransaction({
         transaction_number: txnNum,
-        store: '威士威企業總部',
+        store: tenant?.store_name || tenant?.name || '威士威企業總部',
         cashier: '系統',
         items: cart.map(c => ({ name: c.name, qty: c.qty, price: c.price, order_type: c.order_type })),
         subtotal, discount: safeDiscount, tax, total,
         payment_method: currentPaymentLabel,
         member_id: selectedMember?.id ?? null,
-        points_earned: selectedMember ? Math.floor(total / 10) : 0,
+        points_earned: 0, // 後端以 member_levels 計算
         points_used: pointsUsed,
+        store_id: tenant?.store_id ?? null,
+        note: orderNote.trim() || null,
+        manual_discount: safeManualDiscount,
+        coupon_assignment_id: selectedCoupon?.id ?? null,
+        payment_splits: splitsPayload,
       })
       const nowDate = new Date()
       const printTime = nowDate.toLocaleString('zh-TW', { hour12: false,
@@ -474,44 +497,41 @@ export default function POSTerminal() {
         await new Promise(r => setTimeout(r, 1000))
       }
 
-      // 2. Generate e-invoice number
-      invoiceSeq++
-      const invoiceNum = generateInvoiceNumber('AB', invoiceSeq)
-
-      const txnNum = `POS-${String(Date.now()).slice(-6)}`
-
-      // 3. Create POS transaction record
-      const { data: txnRecord } = await createPOSTransaction({
-        transaction_number: txnNum,
-        store: '威士威企業總部',
+      // 2. 建立交易 — 後端單一原子交易完成：入帳、扣庫存＋異動稽核、
+      //    會員點數/等級/消費紀錄（member_levels 單一事實來源）、
+      //    優惠券單次核銷、分帳驗證、傳票、稽核軌跡
+      const { data: txnRecord, error: txnError } = await createPOSTransaction({
+        store: tenant?.store_name || tenant?.name || '威士威企業總部',
         cashier: '系統',
         items: cart.map(c => ({ name: c.name, qty: c.qty, price: c.price, order_type: c.order_type })),
         subtotal, discount: safeDiscount, tax, total,
         payment_method: currentPaymentLabel,
-        payment_id: payResult.paymentId,
+        payment_ref: payResult.paymentId,
         member_id: selectedMember?.id ?? null,
-        points_earned: selectedMember ? Math.floor(total / 10) : 0,
         points_used: pointsUsed,
-        status: '完成',
+        store_id: tenant?.store_id ?? null,
+        note: orderNote.trim() || null,
+        manual_discount: safeManualDiscount,
+        coupon_assignment_id: selectedCoupon?.id ?? null,
+        payment_splits: splitsPayload,
+        manager_pin: managerPin,
       })
 
-      const newTransactionId = txnRecord ?? txnNum
-
-      // Patch note onto transaction record (RPC doesn't accept it directly)
-      if (orderNote.trim() && txnRecord) {
-        updatePOSTransaction(txnRecord, { note: orderNote.trim() }).catch(() => {})
-      }
-
-      // Insert one pos_payments row per split; single payment uses default behavior
-      if (paymentSplits.length > 0) {
-        for (const split of paymentSplits) {
-          await supabase.from('pos_payments').insert({
-            order_id: newTransactionId,
-            method: split.method,
-            amount: split.amount,
-          })
+      if (txnError) {
+        if (String(txnError.message).includes('APPROVAL_REQUIRED')) {
+          setPaymentStage('cart')
+          setProcessingMsg('')
+          setPinInput('')
+          setPinPrompt({ message: '手動折扣需主管 PIN 授權', onSubmit: pin => handleCheckout(pin) })
+          return
         }
+        throw new Error(txnError.message)
       }
+
+      const txnNum = txnRecord?.transaction_number || `POS-${String(Date.now()).slice(-6)}`
+      const newTransactionId = txnRecord?.id ?? txnNum
+      // 電子發票走正式管線（issue-invoice）後補開立，收據先不印發票號
+      const invoiceNum = null
 
       // 中信 EDC 卡付登錄：寫入 pos_payments（gateway='ctbc_edc'）。
       // invoice_status 維持預設 'pending'，由 issue-invoice 補開 — 發票與付款方式解耦。
@@ -521,7 +541,9 @@ export default function POSTerminal() {
           await recordEdcPayment({
             organization_id: tenant?.organization_id ?? null,
             store_id: tenant?.store_id ?? null,
-            order_id: newTransactionId,
+            // 零售交易（pos_transactions INT id）→ transaction_id；
+            // 舊寫法塞 order_id（UUID FK）必失敗，卡收從未落庫
+            transaction_id: txnRecord?.id ?? null,
             amount: total,
             ...edcInfo,
           })
@@ -548,58 +570,27 @@ export default function POSTerminal() {
         })
       }
 
-      // Publish event → Finance AR, WMS stock deduction, CRM loyalty/purchase/survey
+      // 3. 發布事件（server_processed：庫存/點數/消費紀錄/傳票已由 RPC 完成，
+      //    僅剩問卷邀請、通知等非關鍵訂閱者會處理）
       try {
         const bus = getEventBus()
         await bus.publish('pos.transaction.completed', {
           transaction_id: String(newTransactionId),
           transaction_number: txnNum,
-          store: '威士威企業總部',
+          store: tenant?.store_name || tenant?.name || '威士威企業總部',
           cashier: '系統',
           total,
           payment_method: currentPaymentLabel,
           items: cart.map(c => ({ name: c.name, qty: c.qty, price: c.price, order_type: c.order_type })),
           customer_id: selectedMember?.id ?? null,
           points_used: pointsUsed,
-          store_id: null,
+          store_id: tenant?.store_id ?? null,
           note: orderNote.trim() || null,
+          server_processed: true,
         })
       } catch (e) {
         console.warn('[POS] event publish failed:', e.message)
       }
-
-      // Mark coupon assignment as redeemed (fire-and-forget — checkout already succeeded)
-      if (selectedCoupon?.id) {
-        redeemCoupon(selectedCoupon.id, txnRecord).catch(e =>
-          console.warn('[POS] coupon redemption failed:', e.message)
-        )
-      }
-
-      // 4. Create e-invoice
-      await createInvoice({
-        invoice_number: invoiceNum,
-        invoice_date: new Date().toISOString().slice(0, 10),
-        items: cart.map(c => ({ name: c.name, qty: c.qty, price: c.price })),
-        subtotal, tax, total,
-        carrier_type: carrierType !== 'none' ? carrierType : null,
-        carrier_value: carrierType !== 'none' ? carrierValue : null,
-        status: '已開立',
-      })
-
-      // 5. Create journal entry (debit: cash/bank, credit: revenue)
-      const debitAccount = effectivePaymentMethod === 'cash' ? '1100' : '1200'
-      const debitName = effectivePaymentMethod === 'cash' ? '現金' : '銀行存款'
-      await supabase.rpc('secure_create_journal_entry', {
-        p_entry_date: new Date().toISOString().slice(0, 10),
-        p_description: `POS 銷售 ${txnNum}（${currentPaymentLabel}）`,
-        p_lines: [
-          { account_code: debitAccount, account_name: debitName, debit: total, credit: 0, memo: txnNum },
-          { account_code: '4100', account_name: '營業收入', debit: 0, credit: total, memo: txnNum },
-        ],
-        p_source: 'POS',
-        p_source_id: null,
-        p_created_by: '系統',
-      })
 
       // Build receipt data
       const nowDate = new Date()
@@ -615,7 +606,7 @@ export default function POSTerminal() {
         terminalId: '01',
         orderType: '外帶',
         orderNum: txnNum,
-        seqNum: invoiceSeq,
+        seqNum: null,
         openedAt: printTime,
         date: nowDate.toLocaleString('zh-TW'),
         items: cart.map(c => ({ name: c.name, qty: c.qty, price: c.price, amount: c.price * c.qty })),
@@ -706,29 +697,59 @@ export default function POSTerminal() {
     }
   }
 
-  // Quick refund from success overlay
-  const handleQuickRefund = async () => {
-    if (!paymentResult?.gatewayTransactionId || !receiptData?.total) return
+  // Quick refund from success overlay — 後端原子退款（退貨紀錄/還庫存/扣點/迴轉傳票）
+  const handleQuickRefund = async (managerPin = null) => {
+    if (typeof managerPin !== 'string') managerPin = null // onClick 事件物件防呆
+    if (!receiptData?.txnNum || receiptData.offline) {
+      if (receiptData?.offline) toast.error('離線交易尚未同步，請於同步後再退款')
+      return
+    }
     try {
-      const result = await refundPayment(paymentResult.gatewayTransactionId, receiptData.total, '櫃台退款')
-      if (result.success) {
-        setRefundResult(result)
-        setShowRefund(true)
+      // 付款閘道沖正（模擬層）— 失敗不擋帳務退款
+      if (paymentResult?.gatewayTransactionId) {
+        try { await refundPayment(paymentResult.gatewayTransactionId, receiptData.total, '櫃台退款') } catch {}
+      }
 
-        // Publish refund event so loyalty points get reversed
-        try {
-          const bus = getEventBus()
-          await bus.publish('pos.transaction.refunded', {
-            refund_id: result.refundId || `QREF-${Date.now()}`,
-            original_transaction_id: paymentResult.gatewayTransactionId,
-            store: '門市',
-            refund_amount: receiptData.total,
-            reason: '櫃台退款',
-            items: receiptData.items?.map(i => ({ name: i.name, qty: i.qty })) || [],
-          })
-        } catch (evtErr) {
-          console.error('Failed to publish refund event:', evtErr)
+      const { data, error } = await refundPOSTransaction({
+        transaction_number: receiptData.txnNum,
+        reason: '櫃台退款',
+        refund_method: 'cash',
+        manager_pin: managerPin,
+        cashier: '系統',
+      })
+      if (error) {
+        if (String(error.message).includes('APPROVAL_REQUIRED')) {
+          setPinInput('')
+          setPinPrompt({ message: '退款需主管 PIN 授權', onSubmit: pin => handleQuickRefund(pin) })
+          return
         }
+        throw new Error(error.message)
+      }
+
+      setRefundResult({
+        success: true,
+        refundId: data.refund_id,
+        paymentId: receiptData.txnNum,
+        amount: Number(data.refund_amount),
+        message: data.status === '已退款' ? '全額退款完成' : '部分退款完成',
+      })
+      setShowRefund(true)
+
+      // 通知型訂閱者（副作用已由 RPC 完成 → server_processed）
+      try {
+        const bus = getEventBus()
+        await bus.publish('pos.transaction.refunded', {
+          refund_id: String(data.refund_id),
+          original_transaction_id: receiptData.txnNum,
+          store: tenant?.store_name || '門市',
+          customer_id: selectedMember?.id ?? null,
+          refund_amount: Number(data.refund_amount),
+          reason: '櫃台退款',
+          items: receiptData.items?.map(i => ({ name: i.name, qty: i.qty })) || [],
+          server_processed: true,
+        })
+      } catch (evtErr) {
+        console.error('Failed to publish refund event:', evtErr)
       }
     } catch (err) {
       console.error('Refund failed:', err)
@@ -783,28 +804,53 @@ export default function POSTerminal() {
     setRefundItems(prev => prev.map((item, i) => i === idx ? { ...item, selected: !item.selected } : item))
   }
 
-  const processRefundSubmit = async () => {
+  // 部分/全品項退貨 — 後端原子退款（原 processRefund 為純前端模擬，從未落庫）
+  const processRefundSubmit = async (managerPin = null) => {
+    if (typeof managerPin !== 'string') managerPin = null // Modal onSubmit 事件物件防呆
     const selectedItems = refundItems.filter(i => i.selected)
     if (selectedItems.length === 0) return
-    const refundTotal = selectedItems.reduce((sum, i) => sum + i.price * i.qty, 0)
-    const result = processRefund(refundTxnId, refundTotal, '顧客退貨')
-    setRefundResult(result)
 
-    // Publish refund event so loyalty points get reversed
-    if (result.success) {
-      try {
-        const bus = getEventBus()
-        await bus.publish('pos.transaction.refunded', {
-          refund_id: result.refundId,
-          original_transaction_id: refundTxnId,
-          store: '門市',
-          refund_amount: refundTotal,
-          reason: result.reason || '顧客退貨',
-          items: selectedItems,
-        })
-      } catch (err) {
-        console.error('Failed to publish refund event:', err)
+    const { data, error } = await refundPOSTransaction({
+      transaction_number: refundTxnId.trim(),
+      items: selectedItems.map(i => ({ name: i.name, qty: i.qty, price: i.price })),
+      reason: '顧客退貨',
+      refund_method: 'cash',
+      manager_pin: managerPin,
+      cashier: '系統',
+    })
+
+    if (error) {
+      if (String(error.message).includes('APPROVAL_REQUIRED')) {
+        setPinInput('')
+        setPinPrompt({ message: '退款需主管 PIN 授權', onSubmit: pin => processRefundSubmit(pin) })
+        return
       }
+      toast.error('退款失敗：' + error.message)
+      return
+    }
+
+    setRefundResult({
+      success: true,
+      refundId: data.refund_id,
+      paymentId: refundTxnId.trim(),
+      amount: Number(data.refund_amount),
+      message: data.status === '已退款' ? '全額退款完成' : '部分退款完成',
+    })
+
+    // 通知型訂閱者（副作用已由 RPC 完成 → server_processed）
+    try {
+      const bus = getEventBus()
+      await bus.publish('pos.transaction.refunded', {
+        refund_id: String(data.refund_id),
+        original_transaction_id: refundTxnId.trim(),
+        store: tenant?.store_name || '門市',
+        refund_amount: Number(data.refund_amount),
+        reason: '顧客退貨',
+        items: selectedItems.map(i => ({ name: i.name, qty: i.qty })),
+        server_processed: true,
+      })
+    } catch (err) {
+      console.error('Failed to publish refund event:', err)
     }
   }
 
@@ -1009,6 +1055,34 @@ export default function POSTerminal() {
           onClose={() => setShowReceipt(false)}
           onPrint={handlePrintReceipt}
         />
+      )}
+
+      {/* 主管授權 PIN（手動折扣/退款；組織於 pos_manager_pins 啟用後強制） */}
+      {pinPrompt && (
+        <Modal
+          title="主管授權"
+          onClose={() => { setPinPrompt(null); setPinInput('') }}
+          onSubmit={() => {
+            const submit = pinPrompt.onSubmit
+            const pin = pinInput
+            setPinPrompt(null)
+            setPinInput('')
+            submit(pin)
+          }}
+          submitLabel="確認授權"
+        >
+          <Field label={pinPrompt.message}>
+            <input
+              className="form-input"
+              type="password"
+              inputMode="numeric"
+              autoFocus
+              placeholder="輸入主管 PIN"
+              value={pinInput}
+              onChange={e => setPinInput(e.target.value)}
+            />
+          </Field>
+        </Modal>
       )}
 
       {showRefund && (

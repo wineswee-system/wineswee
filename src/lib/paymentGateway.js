@@ -298,11 +298,16 @@ export async function recordEdcPayment(paymentDraft = {}) {
 
   const amount = Number(paymentDraft.amount)
   if (!Number.isFinite(amount) || amount <= 0) throw new Error('付款金額必須大於零')
+  if (paymentDraft.order_id == null && paymentDraft.transaction_id == null) {
+    throw new Error('EDC 付款登錄需要 order_id（內用單）或 transaction_id（零售交易）')
+  }
 
   const row = {
     organization_id: paymentDraft.organization_id,
     store_id: paymentDraft.store_id,
-    order_id: paymentDraft.order_id,
+    // 內用（pos_orders，UUID）走 order_id；零售（pos_transactions，INT）走 transaction_id
+    ...(paymentDraft.order_id != null ? { order_id: paymentDraft.order_id } : {}),
+    ...(paymentDraft.transaction_id != null ? { transaction_id: paymentDraft.transaction_id } : {}),
     amount,
     payment_method: 'card',
     gateway: 'ctbc_edc',

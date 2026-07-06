@@ -5,6 +5,7 @@ import QRCode from 'qrcode'
 import { supabase } from '../../lib/supabase'
 import { useAuth, useOrgId } from '../../contexts/AuthContext'
 import { toast } from '../../lib/toast'
+import { confirm } from '../../lib/confirm'
 import { parseTableQR } from '../../lib/tableQR'
 import { createBarcodeListener, playBeep } from '../../lib/barcodeScanner'
 import { kickCashDrawer, connectThermalPrinter } from '../../lib/receiptPrinter'
@@ -1956,6 +1957,30 @@ img{display:block;margin:0 auto}
     toast.success('品項已作廢')
   }
 
+  // ── 釋放桌位：把 open 訂單作廢(voided)，桌位變空桌，不用硬結一張假單 ──────────
+  //   無品項(如產 QR 開的空單)→ 直接釋放；有品項 → 需確認。
+  async function releaseTable() {
+    if (!selTable) return
+    if (!orderId) { backToTables(); return }
+    const n = existingItems.length
+    if (n > 0 && !(await confirm({
+      message: `T${selTable.table_number} 還有 ${n} 品尚未結帳。\n\n確定要「取消整桌並釋放桌位」嗎？（訂單會作廢，未結帳的餐點不會入帳）`,
+    }))) return
+    try {
+      const { error } = await supabase.from('pos_orders').update({ status: 'voided' }).eq('id', orderId)
+      if (error) throw error
+      // 撤銷該桌 QR session，避免舊 QR 又點餐掛到已作廢的單
+      await supabase.from('qr_order_sessions')
+        .update({ revoked_at: new Date().toISOString() })
+        .eq('order_id', orderId).is('revoked_at', null)
+      setActiveOrders(prev => prev.filter(o => o.id !== orderId))
+      toast.success(`T${selTable.table_number} 已釋放桌位`)
+      backToTables()
+    } catch (e) {
+      toast.error('釋放失敗：' + (e.message || ''))
+    }
+  }
+
   // ── Open checkout: auto-submit pending cart first ─────────────────────────
   async function openCheckout() {
     let finalOrderId = orderId
@@ -2133,6 +2158,12 @@ img{display:block;margin:0 auto}
           {existingItems.length > 0 && (
             <button style={S.iconBtn(false)} onClick={() => printOrderDetail(selTable.table_number, existingItems, storeName)} title="列印給客人的明細（不用結帳）">
               印明細
+            </button>
+          )}
+          {orderId && (
+            <button style={{ ...S.iconBtn(false), color: 'var(--accent-red)', borderColor: 'var(--accent-red)' }}
+              onClick={releaseTable} title="取消整桌訂單、釋放桌位（不用結帳）">
+              釋放桌位
             </button>
           )}
           {!wide && cartCount > 0 && (

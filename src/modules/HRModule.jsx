@@ -28,6 +28,7 @@ import AttritionPrediction from '../pages/hr/AttritionPrediction'
 import CompensationBenchmark from '../pages/hr/CompensationBenchmark'
 import EngagementSurveys from '../pages/hr/EngagementSurveys'
 import TaxForms from '../pages/hr/TaxForms'
+import NhiSupplement from '../pages/hr/NhiSupplement'
 import SelfService from '../pages/hr/SelfService'
 import LeaveCalendar from '../pages/hr/LeaveCalendar'
 import ProbationTracker from '../pages/hr/ProbationTracker'
@@ -94,6 +95,7 @@ export default memo(function HRModule() {
       <Route path="compensation" element={<CompensationBenchmark />} />
       <Route path="surveys" element={<EngagementSurveys />} />
       <Route path="tax-forms" element={<TaxForms />} />
+      <Route path="nhi-supplement" element={<NhiSupplement />} />
       <Route path="self-service" element={<SelfService />} />
       <Route path="leave-calendar" element={<LeaveCalendar />} />
       <Route path="probation" element={<ProbationTracker />} />

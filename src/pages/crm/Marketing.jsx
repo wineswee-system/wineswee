@@ -5,9 +5,11 @@ import { Plus } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { toast } from '../../lib/toast'
 import {
-  sendBulkEmail, sendLINEMessage, sendSMS,
+  sendBulkEmail, sendSMS,
   sendCampaignMessages, getChannels, MESSAGE_TEMPLATES,
 } from '../../lib/messaging'
+import { sendLineToMembers } from '../../lib/comms/lineSender'
+import { logger } from '../../lib/logger'
 import {
   filterUnsubscribed, createUnsubscribeRecord,
   evaluateSegment, PRESET_SEGMENTS,
@@ -279,7 +281,7 @@ export default function Marketing() {
 
     try {
       const sendGroup = async (group, message, subject) => {
-        let sent = 0, failed = 0
+        let sent = 0, failed = 0, skipped = 0
         if (channelType === 'email') {
           // Generate tracking for each recipient
           group.forEach(r => {
@@ -293,9 +295,21 @@ export default function Marketing() {
           sent = bulkResult.sent
           failed = bulkResult.failed
         } else if (channelType === 'line') {
-          for (const r of group) {
-            const res = sendLINEMessage(r.lineUserId, message)
-            if (res.success) sent++; else failed++
+          // 真實發送：走 crm-line-send（會員 LINE 頻道），
+          // LINE userId 由後端從 members.line_user_id 解析，未綁定者計入 skipped
+          try {
+            const res = await sendLineToMembers({
+              memberIds: group.map(r => r.id),
+              template: { type: 'text', text: message },
+              context: { campaignId: campaign.id, kind: 'campaign' },
+            })
+            sent += res.sent
+            failed += res.failed
+            skipped += res.skipped
+          } catch (err) {
+            logger.error('[Marketing] LINE 活動發送失敗', { campaignId: campaign.id, error: err.message })
+            toast.error(`LINE 發送失敗：${err.message}`)
+            failed += group.length
           }
         } else if (channelType === 'sms') {
           for (const r of group) {
@@ -303,18 +317,20 @@ export default function Marketing() {
             if (res.success) sent++; else failed++
           }
         }
-        return { sent, failed }
+        return { sent, failed, skipped }
       }
 
       const resA = await sendGroup(groupA, campaign.message, form.subject || campaign.name)
       result.sent += resA.sent
       result.failed += resA.failed
+      result.skipped = (result.skipped || 0) + (resA.skipped || 0)
 
       let abResult = null
       if (isAB && groupB.length > 0) {
         const resB = await sendGroup(groupB, campaign._abTest.messageB || campaign.message, campaign._abTest.subjectB || campaign.name)
         result.sent += resB.sent
         result.failed += resB.failed
+        result.skipped = (result.skipped || 0) + (resB.skipped || 0)
         // Simulate open rates for A/B comparison
         const openRateA = Math.floor(30 + Math.random() * 45)
         const openRateB = Math.floor(30 + Math.random() * 45)
@@ -330,17 +346,20 @@ export default function Marketing() {
       }
 
       // Log to message_logs table via abstraction layer
-      try {
-        const logResult = await sendCampaignMessages(
-          channelType,
-          recipients,
-          form.subject || campaign.name,
-          campaign.message,
-          campaign.id
-        )
-        setCampaignMessageLogs(prev => ({ ...prev, [campaign.id]: logResult.results }))
-      } catch (logErr) {
-        console.warn('Message log write failed (non-blocking):', logErr)
+      // LINE 由 crm-line-send 後端逐收件人寫入 message_logs，前端不重複記錄
+      if (channelType !== 'line') {
+        try {
+          const logResult = await sendCampaignMessages(
+            channelType,
+            recipients,
+            form.subject || campaign.name,
+            campaign.message,
+            campaign.id
+          )
+          setCampaignMessageLogs(prev => ({ ...prev, [campaign.id]: logResult.results }))
+        } catch (logErr) {
+          logger.warn('[Marketing] message_logs 寫入失敗（不阻斷）', { error: logErr?.message })
+        }
       }
 
       // Generate real tracking events

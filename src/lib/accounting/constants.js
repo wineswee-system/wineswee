@@ -6,15 +6,24 @@ export const CHART_OF_ACCOUNTS = [
   { code: '1100', name: '現金',       type: '資產' },
   { code: '1102', name: '銀行存款',   type: '資產' },
   { code: '1130', name: '應收帳款',   type: '資產' },
+  { code: '1140', name: '預付款項',   type: '資產' }, // F-A3 立沖（1150 已為存貨，故取 1140）
   { code: '1141', name: '應收票據',   type: '資產' },
+  { code: '1142', name: '託收票據',   type: '資產' }, // F-A4 票據託收
   { code: '1150', name: '存貨',       type: '資產' },
+  { code: '1160', name: '暫付款',     type: '資產' }, // F-A3 立沖
+  { code: '1170', name: '進項稅額',   type: '資產' },
   { code: '1600', name: '固定資產',   type: '資產' },
   { code: '1610', name: '累計折舊',   type: '資產' },
 
   // 2xxx 負債
   { code: '2100', name: '應付帳款',   type: '負債' },
   { code: '2110', name: '應付票據',   type: '負債' },
+  { code: '2120', name: '應付薪資',   type: '負債' },
+  { code: '2130', name: '代扣款項',   type: '負債' },
+  { code: '2170', name: '銷項稅額',   type: '負債' },
   { code: '2200', name: '短期借款',   type: '負債' },
+  { code: '2260', name: '預收貨款',   type: '負債' }, // F-A3 立沖
+  { code: '2270', name: '暫收款',     type: '負債' }, // F-A3 立沖
   { code: '2300', name: '長期借款',   type: '負債' },
 
   // 3xxx 權益
@@ -28,6 +37,7 @@ export const CHART_OF_ACCOUNTS = [
 
   // 5xxx 銷貨成本
   { code: '5100', name: '銷貨成本',   type: '銷貨成本' },
+  { code: '5150', name: '存貨盤損',   type: '銷貨成本' }, // F-C2 盤虧
 
   // 6xxx 營業費用
   { code: '6100', name: '薪資費用',   type: '營業費用' },
@@ -42,6 +52,7 @@ export const CHART_OF_ACCOUNTS = [
   { code: '7100', name: '利息收入',   type: '營業外收入/支出' },
   { code: '7200', name: '利息支出',   type: '營業外收入/支出' },
   { code: '7300', name: '匯兌損益',   type: '營業外收入/支出' },
+  { code: '7400', name: '存貨盤盈',   type: '營業外收入/支出' }, // F-C2 盤盈
 ]
 
 // ─── 科目代碼 → 類型映射 ─────────────────────────────────────

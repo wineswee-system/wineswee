@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
 import { FileText, Upload, Download, CheckCircle, Clock, AlertTriangle, Send, Printer, Calendar } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import { generate401Report, generate403Report, generateMediaFile } from '../../lib/taxReport'
+import { generate401Report, generateWithholdingSummary, generateMediaFile } from '../../lib/taxReport'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { exportToCSV, exportToPDF } from '../../lib/exportUtils'
+import VatDocumentsTab from './components/VatDocumentsTab'
+import WithholdingMediaSection from './components/WithholdingMediaSection'
 
 import { fmtNT as fmt } from '../../lib/currency'
 const toROCYear = (y) => y - 1911
@@ -115,7 +117,7 @@ export default function TaxFiling() {
       gross_amount: Number(s.gross_salary || s.amount) || 0,
       tax_withheld: Number(s.tax_withheld || s.withholding_tax) || 0,
     }))
-    const result = generate403Report(records, { year, startMonth: 1, endMonth: 12 })
+    const result = generateWithholdingSummary(records, { year, startMonth: 1, endMonth: 12 })
     setReport403(result)
   }
 
@@ -147,7 +149,7 @@ export default function TaxFiling() {
         { key: 'income_type_name', label: '所得類別' },
         { key: 'gross_amount', label: '給付總額' },
         { key: 'tax_withheld', label: '扣繳稅額' },
-      ], `403報表_${rocYear}年`)
+      ], `扣繳彙總_${rocYear}年`)
     }
   }
 
@@ -169,7 +171,7 @@ export default function TaxFiling() {
       <div className="page-header">
         <div>
           <h1>📋 營業稅申報</h1>
-          <p>401/403 申報管理</p>
+          <p>401 申報 / 進銷項憑證檔 / 扣繳彙總</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn btn-primary" onClick={handleExportCSV} disabled={tab === '401' ? !report401 : !report403}><Download size={16} /> 匯出 CSV</button>
@@ -184,7 +186,7 @@ export default function TaxFiling() {
         <select className="form-input" style={{ width: 120 }} value={year} onChange={e => setYear(Number(e.target.value))}>
           {[...Array(5)].map((_, i) => { const y = now.getFullYear() - 2 + i; return <option key={y} value={y}>{toROCYear(y)}年 ({y})</option> })}
         </select>
-        {tab === '401' && (
+        {(tab === '401' || tab === 'vatdocs') && (
           <>
             <label>期別</label>
             <select className="form-input" style={{ width: 140 }} value={periodIdx} onChange={e => setPeriodIdx(Number(e.target.value))}>
@@ -196,7 +198,7 @@ export default function TaxFiling() {
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 0, marginBottom: 16 }}>
-        {[{ key: '401', label: '401 營業稅' }, { key: '403', label: '403 扣繳申報' }].map(t => (
+        {[{ key: '401', label: '401 營業稅' }, { key: 'vatdocs', label: '憑證檔' }, { key: '403', label: '扣繳彙總' }].map(t => (
           <button key={t.key} className={`btn ${tab === t.key ? 'btn-primary' : ''}`} style={{ borderRadius: tab === t.key ? '8px 8px 0 0' : '8px 8px 0 0', minWidth: 140 }} onClick={() => setTab(t.key)}>{t.label}</button>
         ))}
       </div>
@@ -291,7 +293,10 @@ export default function TaxFiling() {
         </>
       )}
 
-      {/* 403 Tab */}
+      {/* 憑證檔 Tab（F-B3：進銷項憑證 + 缺漏警示 + 401 預覽 + 媒體檔） */}
+      {tab === 'vatdocs' && <VatDocumentsTab year={year} period={period} />}
+
+      {/* 扣繳彙總 Tab（原誤名 403） */}
       {tab === '403' && (
         <>
           <div className="card" style={{ marginBottom: 16 }}>
@@ -317,13 +322,13 @@ export default function TaxFiling() {
           </div>
 
           <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
-            <button className="btn btn-primary" onClick={handleGenerate403}><FileText size={16} /> 產生403報表</button>
+            <button className="btn btn-primary" onClick={handleGenerate403}><FileText size={16} /> 產生扣繳彙總</button>
             <button className="btn btn-primary" onClick={() => handleMediaDownload('403')} disabled={!report403}><Upload size={16} /> 產生媒體申報檔</button>
           </div>
 
           {report403 && (
             <div className="card" style={{ marginBottom: 16, border: '2px solid var(--accent-green)' }}>
-              <div className="card-header"><h3 className="card-title"><CheckCircle size={18} /> 403 報表已產生</h3></div>
+              <div className="card-header"><h3 className="card-title"><CheckCircle size={18} /> 扣繳彙總已產生</h3></div>
               <div style={{ padding: 16 }}>
                 <p>期別：{report403.period}</p>
                 {report403.summary_by_type.map((t, i) => (
@@ -333,6 +338,9 @@ export default function TaxFiling() {
               </div>
             </div>
           )}
+
+          {/* F-B4：憑單媒體申報檔（固定欄寬）— 純新增，不動上方 pipe 格式下載 */}
+          <WithholdingMediaSection year={year} salaryRows={filteredSalary} />
         </>
       )}
 

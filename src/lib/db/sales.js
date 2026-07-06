@@ -208,14 +208,14 @@ export const getAllPointTransactions = (orgId) => {
   return q
 }
 
-// POS member lookup — search by phone or member_number (used at checkout)
+// POS member lookup — search by phone, member_number, or member-card QR token (used at checkout)
 export async function searchMemberByQuery(query, orgId) {
   if (!query?.trim()) return null
   const q = query.trim()
   let req = supabase
     .from('members')
     .select('id, name, phone, member_number, level, level_id, available_points, lifetime_spend, total_spent, organization_id')
-    .or(`phone.ilike.%${q}%,member_number.ilike.%${q}%`)
+    .or(`phone.ilike.%${q}%,member_number.ilike.%${q}%,qr_token.eq.${q}`)
     .limit(1)
   if (orgId) req = req.eq('organization_id', orgId)
   const { data } = await req

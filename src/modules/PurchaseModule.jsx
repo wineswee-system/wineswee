@@ -11,6 +11,7 @@ import ProcurementPipeline from '../pages/purchase/ProcurementPipeline'
 import ProcurementWorkflow from '../pages/purchase/ProcurementWorkflow'
 import ThreeWayMatch from '../pages/purchase/ThreeWayMatch'
 import BlanketOrders from '../pages/purchase/BlanketOrders'
+import Allowances from '../pages/purchase/Allowances'
 
 export default function PurchaseModule() {
   return (
@@ -22,6 +23,7 @@ export default function PurchaseModule() {
       <Route path="requests" element={<PurchaseRequests />} />
       <Route path="orders" element={<PurchaseOrders />} />
       <Route path="receipts" element={<GoodsReceipts />} />
+      <Route path="allowances" element={<Allowances />} />
       <Route path="contracts" element={<Contracts />} />
       <Route path="pipeline" element={<ProcurementPipeline />} />
       <Route path="workflow" element={<ProcurementWorkflow />} />

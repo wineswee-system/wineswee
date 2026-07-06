@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react'
-import { Calculator, Download, Save } from 'lucide-react'
+import { useState } from 'react'
+import { Calculator, Download, Save, CalendarCheck } from 'lucide-react'
 import { getInventoryValuation, saveValuationSnapshot } from '../../lib/inventoryCosting'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import MonthlyCloseTab from './components/MonthlyCloseTab'
 
 import { toast } from '../../lib/toast'
 const COSTING_METHODS = [
@@ -10,6 +11,7 @@ const COSTING_METHODS = [
 ]
 
 export default function Valuation() {
+  const [tab, setTab] = useState('valuation')
   const [costingMethod, setCostingMethod] = useState('weighted_avg')
   const [valuationDate, setValuationDate] = useState(() => new Date().toISOString().split('T')[0])
   const [data, setData] = useState([])
@@ -38,7 +40,7 @@ export default function Valuation() {
     setSaving(true)
     try {
       await saveValuationSnapshot(data, valuationDate)
-      toast.error('快照已儲存')
+      toast.success('快照已儲存')
     } catch (err) {
       console.error('儲存快照失敗:', err)
       toast.error('儲存快照失敗: ' + (err.message || '未知錯誤'))
@@ -90,19 +92,34 @@ export default function Valuation() {
         <div className="page-header-row">
           <div>
             <h2><span className="header-icon"><Calculator size={20} /></span> 庫存估價 Inventory Valuation</h2>
-            <p>依成本層計算 FIFO / 加權平均庫存價值</p>
+            <p>依成本層計算 FIFO / 加權平均庫存價值，並支援月加權平均月結</p>
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn btn-secondary" onClick={handleExportPDF} disabled={data.length === 0}>
-              <Download size={14} /> 匯出 PDF
-            </button>
-            <button className="btn btn-primary" onClick={handleSaveSnapshot} disabled={data.length === 0 || saving}>
-              <Save size={14} /> {saving ? '儲存中...' : '儲存快照'}
-            </button>
-          </div>
+          {tab === 'valuation' && (
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-secondary" onClick={handleExportPDF} disabled={data.length === 0}>
+                <Download size={14} /> 匯出 PDF
+              </button>
+              <button className="btn btn-primary" onClick={handleSaveSnapshot} disabled={data.length === 0 || saving}>
+                <Save size={14} /> {saving ? '儲存中...' : '儲存快照'}
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
+      {/* Tab：估價 / 月結 */}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 16, background: 'var(--bg-card)', borderRadius: 10, padding: 4, border: '1px solid var(--border-subtle)', width: 'fit-content' }}>
+        {[['valuation', '估價', Calculator], ['monthly', '月結', CalendarCheck]].map(([key, label, Icon]) => (
+          <button key={key} onClick={() => setTab(key)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 16px', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 500, background: tab === key ? 'var(--accent-cyan)' : 'transparent', color: tab === key ? '#fff' : 'var(--text-muted)' }}>
+            <Icon size={13} /> {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'monthly' && <MonthlyCloseTab />}
+
+      {tab === 'valuation' && (
+      <>
       {/* 控制列 */}
       <div className="card" style={{ marginBottom: 16 }}>
         <div style={{ padding: '12px 16px', display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -224,6 +241,8 @@ export default function Valuation() {
           <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>選擇成本方法後按「計算估價」</div>
           <div style={{ fontSize: 13 }}>系統將依據成本層資料計算各品項庫存價值</div>
         </div>
+      )}
+      </>
       )}
     </div>
   )

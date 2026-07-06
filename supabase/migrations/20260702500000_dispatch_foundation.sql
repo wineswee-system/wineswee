@@ -76,7 +76,17 @@ CREATE TABLE IF NOT EXISTS dispatch_routes (
   updated_at timestamptz DEFAULT now()
 );
 
--- ── Carrier configs extension ─────────────────────────────────────────────────
+-- ── Carrier configs (base table + dispatch extension) ─────────────────────────
+-- Not created by any prior migration (only lived in the archived schema, with a
+-- different shape). Create the shape the dispatch/WMS code actually queries:
+-- carrier_configs(name) and .eq('organization_id', ...).
+CREATE TABLE IF NOT EXISTS carrier_configs (
+  id serial PRIMARY KEY,
+  organization_id int REFERENCES organizations(id) ON DELETE CASCADE,
+  name text NOT NULL,
+  carrier_type text,
+  created_at timestamptz DEFAULT now()
+);
 ALTER TABLE carrier_configs ADD COLUMN IF NOT EXISTS adapter_type text DEFAULT 'manual';
 ALTER TABLE carrier_configs ADD COLUMN IF NOT EXISTS api_credentials jsonb DEFAULT '{}';
 ALTER TABLE carrier_configs ADD COLUMN IF NOT EXISTS webhook_secret text;
@@ -84,6 +94,12 @@ ALTER TABLE carrier_configs ADD COLUMN IF NOT EXISTS service_levels jsonb DEFAUL
 ALTER TABLE carrier_configs ADD COLUMN IF NOT EXISTS supported_zones text[] DEFAULT '{}';
 ALTER TABLE carrier_configs ADD COLUMN IF NOT EXISTS cutoff_time time;
 ALTER TABLE carrier_configs ADD COLUMN IF NOT EXISTS is_active boolean DEFAULT true;
+
+-- carrier_configs holds api_credentials (carrier API keys) — org-scope reads/writes.
+ALTER TABLE carrier_configs ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "carrier_configs_org" ON carrier_configs;
+CREATE POLICY "carrier_configs_org" ON carrier_configs FOR ALL TO authenticated
+  USING (organization_id IN (SELECT organization_id FROM employees WHERE auth_user_id = auth.uid()));
 
 -- ── Dispatch jobs (core workflow entity) ──────────────────────────────────────
 CREATE TABLE IF NOT EXISTS dispatch_jobs (

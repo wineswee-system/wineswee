@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useTenant } from '../../contexts/TenantContext'
 import Badge from '../../components/ui/Badge'
+import { issueInvoice, retryPendingInvoices, voidInvoice } from '../../lib/invoiceService'
+import { toast } from '../../lib/toast'
 
 const INV_LABEL   = { pending: '待開立', issued: '已開立', voided: '已作廢' }
 const INV_VARIANT = { pending: 'warning', issued: 'success', voided: 'default' }
@@ -46,10 +48,14 @@ export default function InvoiceList() {
   useEffect(() => { load() }, [storeId, dateFrom, dateTo, invStatus])
 
   async function handleVoid(paymentId) {
-    const { error } = await supabase.functions.invoke('void-invoice', { body: { paymentId } })
-    if (!error) {
+    // 走 invoiceService（同日作廢/跨日折讓由 server 判斷；成功後發事件同步進銷項憑證檔）
+    const res = await voidInvoice(paymentId)
+    if (res.ok) {
+      toast.success(res.voidType === 'credit_note' ? '已開立折讓' : '發票已作廢')
       setVoidConfirm(null)
       load()
+    } else {
+      toast.error(res.error || '發票作廢/折讓失敗，可稍後重試')
     }
   }
 
@@ -76,12 +82,25 @@ export default function InvoiceList() {
   }
 
   async function handleIssue(paymentId) {
-    // Generate a placeholder invoice number — replace with real CERP/tax integration
-    const num = `AB-${Date.now().toString().slice(-8)}`
-    await supabase
-      .from('pos_payments')
-      .update({ invoice_status: 'issued', invoice_number: num })
-      .eq('id', paymentId)
+    // 伺服器端配號＋開立（issue-invoice edge function，冪等）
+    const res = await issueInvoice(paymentId)
+    if (res.ok) {
+      toast.success(res.alreadyIssued ? `發票已開立：${res.invoiceNumber}` : `發票開立成功：${res.invoiceNumber}`)
+    } else {
+      toast.error(res.error || '發票開立失敗，可稍後重試')
+    }
+    load()
+  }
+
+  async function handleRetryPending() {
+    const res = await retryPendingInvoices({ storeId })
+    if (!res.ok) {
+      toast.error(res.error || '補開失敗')
+    } else if (res.total === 0) {
+      toast.success('沒有待開立的發票')
+    } else {
+      toast.success(`補開完成：成功 ${res.issued} 筆，失敗 ${res.failed} 筆`)
+    }
     load()
   }
 
@@ -102,7 +121,10 @@ export default function InvoiceList() {
           {Object.entries(INV_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
         </select>
         <button onClick={load} style={S.btn}>查詢</button>
-        <button onClick={exportCSV} disabled={rows.length === 0} style={{ ...S.btn, background: 'var(--accent-green)', marginLeft: 'auto' }}>
+        <button onClick={handleRetryPending} style={{ ...S.btn, background: 'var(--accent-orange)', marginLeft: 'auto' }}>
+          補開待開發票
+        </button>
+        <button onClick={exportCSV} disabled={rows.length === 0} style={{ ...S.btn, background: 'var(--accent-green)' }}>
           ↓ 匯出 CSV
         </button>
       </div>

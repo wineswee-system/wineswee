@@ -1,8 +1,15 @@
 ﻿import { supabase } from '../../supabase.js'
+import { hasActiveRule } from '../../accounting/postingEngine.js'
+import { logger } from '../../logger.js'
 
 /**
  * Finance event handlers.
  * Subscribes to cross-module events that produce financial records (AR, AP, JE).
+ *
+ * F-A2 起：傳票（JE）改由規則表驅動的 postingHandlers 產生。
+ * 本檔硬寫科目的 JE 段落改為「讓位」— 若該單據類型有啟用中的 posting_rules
+ * （全域種子預設啟用），legacy 路徑跳過 JE，避免與規則引擎雙重入帳。
+ * AR / AP 單據建立不受影響。
  */
 export function registerFinanceHandlers(bus) {
   // ── WMS shipment completed → create AR + journal entry ──
@@ -18,6 +25,8 @@ export function registerFinanceHandlers(bus) {
       paid_amount: 0,
       due_date: getDueDate(30),
       status: '未收款',
+      // 事件 metadata 帶 org 時顯式寫入（無則由 DB trigger set_org_default 補）
+      ...(event.metadata?.organization_id ? { organization_id: event.metadata.organization_id } : {}),
     }).select().single()
 
     if (arError) throw new Error(`AR creation failed: ${arError.message}`)
@@ -39,6 +48,15 @@ export function registerFinanceHandlers(bus) {
   // ── AR created → create journal entry (Dr 應收 / Cr 營業收入) ──
   bus.subscribe('finance.ar.created', async function onARCreated(event) {
     const { customer, amount, invoice_number, source, source_id } = event.payload
+
+    // F-A2：出貨（source='出貨'）的傳票已由規則引擎（postingHandlers 訂閱
+    // wms.shipment.completed → sales_shipment）產生，有規則時 legacy 硬寫路徑
+    // 讓位，避免雙重入帳。其他來源（POS 等）不在引擎覆蓋範圍，維持 legacy。
+    if (source === '出貨' && await hasActiveRule('sales_shipment')) {
+      logger.info('[financeHandlers] sales_shipment 有拋轉規則，legacy JE 讓位', { source, source_id })
+      return
+    }
+
     const entryNumber = `JE-${new Date().toISOString().slice(0, 4)}-${String(Date.now()).slice(-3)}`
 
     const { data: entry, error: entryError } = await supabase.rpc('secure_create_journal_entry', {
@@ -80,6 +98,8 @@ export function registerFinanceHandlers(bus) {
       paid_amount: 0,
       due_date: getDueDate(paymentDays),
       status: '未付款',
+      // 事件 metadata 帶 org 時顯式寫入（無則由 DB trigger set_org_default 補）
+      ...(event.metadata?.organization_id ? { organization_id: event.metadata.organization_id } : {}),
     }).select().single()
 
     if (apError) throw new Error(`AP creation failed: ${apError.message}`)
@@ -95,6 +115,13 @@ export function registerFinanceHandlers(bus) {
       causation_id: event.id,
       correlation_id: event.metadata.correlation_id,
     })
+
+    // F-A2：進貨驗收傳票已由規則引擎（postingHandlers → purchase_receipt）產生，
+    // 有啟用規則時 legacy 硬寫路徑讓位，避免雙重入帳。
+    if (await hasActiveRule('purchase_receipt')) {
+      logger.info('[financeHandlers] purchase_receipt 有啟用拋轉規則，legacy JE 讓位', { po_id, po_number })
+      return
+    }
 
     // Create journal entry (Dr 營業成本 / Cr 應付帳款)
     const { data: entry, error: entryError } = await supabase.rpc('secure_create_journal_entry', {

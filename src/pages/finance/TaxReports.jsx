@@ -1,7 +1,7 @@
 ﻿import { useState, useEffect } from 'react'
 import { FileText, Download, Filter } from 'lucide-react'
 import { getInvoices } from '../../lib/db'
-import { generate401Report, generate403Report, calculateBusinessTax, formatTaxPeriod } from '../../lib/taxReport'
+import { generate401Report, generateWithholdingSummary, calculateBusinessTax, formatTaxPeriod } from '../../lib/taxReport'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { useOrgId } from '../../contexts/AuthContext'
 
@@ -36,7 +36,7 @@ export default function TaxReports() {
   if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
   const report401 = generate401Report(invoices, period)
-  const report403 = generate403Report(invoices, period)
+  const report403 = generateWithholdingSummary(invoices, period)
   const businessTax = calculateBusinessTax(report401)
 
   const { salesTax = 0, purchaseTax = 0, netPayable = 0, salesInvoices = [], purchaseInvoices = [] } = report401 || {}
@@ -66,7 +66,7 @@ export default function TaxReports() {
           `進項發票數: ${purchaseInvoices.length}`,
         ].join('\n')
       : [
-          `403 扣繳申報媒體檔`,
+          `各類所得扣繳彙總媒體檔`,
           `期別: ${formatTaxPeriod(period)}`,
           `扣繳筆數: ${withholdingRecords.length}`,
           `扣繳總額: ${totalWithholding}`,
@@ -113,7 +113,7 @@ export default function TaxReports() {
       {/* Tab Bar */}
       <div style={{ borderBottom: '1px solid var(--border)', marginBottom: 20, display: 'flex' }}>
         <button style={tabStyle('401')} onClick={() => setActiveTab('401')}>401 營業稅</button>
-        <button style={tabStyle('403')} onClick={() => setActiveTab('403')}>403 扣繳申報</button>
+        <button style={tabStyle('403')} onClick={() => setActiveTab('403')}>扣繳彙總</button>
       </div>
 
       {activeTab === '401' && (

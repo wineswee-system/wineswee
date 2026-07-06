@@ -1,10 +1,11 @@
 ﻿import { useState, useEffect, Fragment } from 'react'
 import { ModalOverlay } from '../../components/Modal'
 import { createPortal } from 'react-dom'
-import { Plus, X, CheckCircle, Package, Truck, ClipboardList } from 'lucide-react'
+import { Plus, X, CheckCircle, Package, Truck, ClipboardList, ScanLine } from 'lucide-react'
 import { getPickLists, createPickList, updatePickList, getPackLists, createPackList, updatePackList, getSalesOrders, getWarehouses } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import ScanVerifyPanel from './components/ScanVerifyPanel'
 import { useOrgId } from '../../contexts/AuthContext'
 
 const PICK_STATUSES = ['待揀貨', '揀貨中', '已完成']
@@ -23,6 +24,7 @@ export default function PickPackShip() {
   const [pickForm, setPickForm] = useState({ sales_order_id: '', warehouse_id: '', picker: '' })
   const [expanded, setExpanded] = useState(null)   // 展開中的揀貨單 id
   const [fefoLots, setFefoLots] = useState({})     // { pickId: { sku_code: lot } } — 最快到期批號
+  const [scanTarget, setScanTarget] = useState(null) // 掃碼檢核中的包裝單（F-C4 出貨檢核）
 
   // FEFO：撈該揀貨單各品項「最快到期」的批號(先進先出提示給揀貨員)
   const loadFefoLots = async (pickId, skuCodes) => {
@@ -283,17 +285,39 @@ export default function PickPackShip() {
                     <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 12, fontWeight: 600, background: `color-mix(in srgb, ${statusColor(pack.status)} 15%, transparent)`, color: statusColor(pack.status) }}>{pack.status}</span>
                   </td>
                   <td>
-                    {(pack.status === '待包裝' || pack.status === '包裝中') && (
-                      <button className="btn btn-primary" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => completePacking(pack)}>
-                        <CheckCircle size={12} /> 完成包裝
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => setScanTarget(pack)}>
+                        <ScanLine size={12} /> 掃碼檢核
                       </button>
-                    )}
+                      {(pack.status === '待包裝' || pack.status === '包裝中') && (
+                        <button className="btn btn-primary" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => completePacking(pack)}>
+                          <CheckCircle size={12} /> 完成包裝
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+      )}
+
+      {/* 掃碼檢核（F-C4 出貨檢核：包裝明細 vs 實掃比對） */}
+      {scanTarget && (
+        <ModalOverlay onClose={() => setScanTarget(null)}>
+          <div style={{ background: 'var(--bg-card)', borderRadius: 12, padding: 24, width: 560, maxHeight: '85vh', overflowY: 'auto', border: '1px solid var(--border)' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ margin: 0 }}>掃碼檢核 — {scanTarget.pack_number}</h3>
+              <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }} onClick={() => setScanTarget(null)}><X size={20} /></button>
+            </div>
+            <ScanVerifyPanel
+              orgId={orgId}
+              title={`包裝明細比對（${(scanTarget.boxes || []).length} 箱）`}
+              items={(scanTarget.boxes || []).flatMap(b => b.items || [])}
+            />
+          </div>
+        </ModalOverlay>
       )}
 
       {/* Create Pick Modal */}

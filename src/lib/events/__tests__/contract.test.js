@@ -89,6 +89,24 @@ describe('Event Catalog Contract', () => {
     it('finance.journal.posted exists', () => {
       expect(EVENT_CATALOG['finance.journal.posted']).toBeTruthy()
     })
+
+    it('finance.voucher.auto_posted has required fields', () => {
+      const schema = EVENT_CATALOG['finance.voucher.auto_posted']
+      expect(schema).toBeTruthy()
+      expect(schema.payload.entry_id.required).toBe(true)
+      expect(schema.payload.doc_type.required).toBe(true)
+      expect(schema.payload.source_type.required).toBe(true)
+      expect(schema.payload.source_id.required).toBe(true)
+    })
+
+    it('finance.invoice lifecycle events exist (F-B3 vat ingestion)', () => {
+      for (const type of ['finance.invoice.issued', 'finance.invoice.voided', 'finance.invoice.allowance']) {
+        const schema = EVENT_CATALOG[type]
+        expect(schema, `missing ${type}`).toBeTruthy()
+        expect(schema.payload.payment_id.required).toBe(true)
+      }
+      expect(EVENT_CATALOG['finance.invoice.issued'].payload.invoice_number.required).toBe(true)
+    })
   })
 
   // ── WMS Events Contract ──

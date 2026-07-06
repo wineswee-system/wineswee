@@ -20,6 +20,15 @@ import CashFlow from '../pages/finance/CashFlow'
 import PeriodClose from '../pages/finance/PeriodClose'
 import ChartOfAccounts from '../pages/finance/ChartOfAccounts'
 import Currencies from '../pages/finance/Currencies'
+import GeneralLedger from '../pages/finance/GeneralLedger'
+import JournalBook from '../pages/finance/JournalBook'
+import CostOfGoodsStatement from '../pages/finance/CostOfGoodsStatement'
+import OpenItems from '../pages/finance/OpenItems'
+import NotesManagement from '../pages/finance/NotesManagement'
+import SettlementBatches from '../pages/finance/SettlementBatches'
+import InvoiceTracks from '../pages/finance/InvoiceTracks'
+import PostingRules from '../pages/finance/PostingRules'
+import ProfitLossByDept from '../pages/finance/ProfitLossByDept'
 // ExpenseRequests 已搬到 HR module → /hr/expense-requests（2026-05-09，員工沒財務權限要看得到）
 // ExpenseApprovalSettings 已下架（2026-05-08）— 改用 /hr/expense-requests 頁右上「⚙ 簽核設定」
 
@@ -46,6 +55,15 @@ export default memo(function FinanceModule() {
       <Route path="cost-centers" element={<CostCenters />} />
       <Route path="cash-flow" element={<CashFlow />} />
       <Route path="period-close" element={<PeriodClose />} />
+      <Route path="general-ledger" element={<GeneralLedger />} />
+      <Route path="journal-book" element={<JournalBook />} />
+      <Route path="cost-of-goods" element={<CostOfGoodsStatement />} />
+      <Route path="open-items" element={<OpenItems />} />
+      <Route path="notes" element={<NotesManagement />} />
+      <Route path="settlement-batches" element={<SettlementBatches />} />
+      <Route path="invoice-tracks" element={<InvoiceTracks />} />
+      <Route path="posting-rules" element={<PostingRules />} />
+      <Route path="profit-loss-by-dept" element={<ProfitLossByDept />} />
     </Routes>
   )
 })

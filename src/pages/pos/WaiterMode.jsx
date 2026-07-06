@@ -5,6 +5,12 @@ import QRCode from 'qrcode'
 import { supabase } from '../../lib/supabase'
 import { useAuth, useOrgId } from '../../contexts/AuthContext'
 import { toast } from '../../lib/toast'
+import { parseTableQR } from '../../lib/tableQR'
+import { createBarcodeListener, playBeep } from '../../lib/barcodeScanner'
+import { kickCashDrawer, connectThermalPrinter } from '../../lib/receiptPrinter'
+import { issueInvoice } from '../../lib/invoiceService'
+import { buildQRPair, code39Svg, buildBarcodeContent, buildProofSlipHtml, formatInvNo } from '../../lib/einvoice/proofSlip'
+import { getEventBus } from '../../lib/events/index.js'
 import POSVariantModal from './components/POSVariantModal'
 
 // ── Styles ────────────────────────────────────────────────────────────────────
@@ -347,7 +353,20 @@ const PAY_METHODS = [
 
 const PAY_LABEL = { cash: '現金', card: '信用卡', line_pay: 'LINE Pay', jkopay: '街口', other: '其他' }
 
-function CheckoutModal({ tableNumber, orgId, storeId, orderId, storeName, onClose, onDone }) {
+// 非現金收款一律走銀行收單（實體刷卡機 / 銀行掃碼），不經線上金流閘道：
+// card → 銀行刷卡機；line_pay / jkopay → 掃顧客出示的付款碼後確認
+const TERMINAL_METHODS = { card: '銀行刷卡機', line_pay: 'LINE Pay', jkopay: '街口' }
+
+// 錢包付款碼：16-19 碼數字（EAN-13 商品條碼最長 13 碼，不會誤判）
+const WALLET_CODE_RE = /^\d{16,19}$/
+
+// 手機載具條碼：/ + 7 碼（0-9 A-Z + - .）
+const CARRIER_RE = /^\/[0-9A-Z+\-.]{7}$/
+
+// 點數折抵匯率（與 POSTerminal 一致：1 點 = NT$0.5）
+const POINT_RATE = 0.5
+
+function CheckoutModal({ tableNumber, orgId, storeId, orderId, storeName, cashier, openDrawer, onClose, onDone }) {
   const [payMethod, setPayMethod] = useState('cash')
   const [busy,      setBusy]      = useState(false)
   const [dbItems,   setDbItems]   = useState([])
@@ -363,20 +382,52 @@ function CheckoutModal({ tableNumber, orgId, storeId, orderId, storeName, onClos
   const [memberPhone,  setMemberPhone]  = useState('')
   const [member,       setMember]       = useState(null)   // { id, name, phone, level, total_points }
   const [memberBusy,   setMemberBusy]   = useState(false)
+  const [couponCode,   setCouponCode]   = useState('')
+  const [coupon,       setCoupon]       = useState(null)   // applied coupon (+ assignmentId if member-owned)
+  const [couponBusy,   setCouponBusy]   = useState(false)
+  const [memberCoupons, setMemberCoupons] = useState([])   // bound member's unused, valid coupons
+  const [pointsUsed,   setPointsUsed]   = useState('')     // points to redeem for dollars
+  const [cashTendered, setCashTendered] = useState('')     // 現金實收金額
+  const [walletCode,   setWalletCode]   = useState('')     // 掃到的顧客錢包付款碼
+  const [paymentId,    setPaymentId]    = useState(null)   // 本次收款的 pos_payments.id（開發票用）
+  const [invoiceNo,    setInvoiceNo]    = useState(null)   // 已開立的發票號碼
+  const [invoiceMeta,  setInvoiceMeta]  = useState(null)   // { number, randomCode, salesAmount, taxAmount, invoiceDate }
+  const [invoiceBusy,  setInvoiceBusy]  = useState(false)
+  const [sellerTaxId,  setSellerTaxId]  = useState('')     // 賣方統編（organizations.tax_id，證明聯用）
+  const [stage,        setStage]        = useState('form') // 'form' | 'paid'
+  const [awaitCarrier, setAwaitCarrier] = useState(false)  // paid stage: waiting for carrier scan
+  const [carrierSaved, setCarrierSaved] = useState(null)   // carrier the e-invoice was saved to
+  const [carrierInput, setCarrierInput] = useState('')
+  const [svcPct,       setSvcPct]       = useState(10)     // 服務費 %（門市設定，預設 10）
+  const [svcOn,        setSvcOn]        = useState(true)   // 本單是否收服務費
+  const [termDone,     setTermDone]     = useState(false)  // 銀行刷卡機交易已完成
+  const [termAuthCode, setTermAuthCode] = useState('')     // 刷卡授權碼（選填）
 
   // Fetch items + order meta (opened_at, order_number, note) on mount
   useEffect(() => {
     Promise.all([
       supabase.from('pos_order_items')
-        .select('id, name, unit_price, quantity')
+        .select('id, name, unit_price, quantity, pos_product_id')
         .eq('order_id', orderId)
         .is('voided_at', null)
         .order('created_at'),
       supabase.from('pos_orders')
-        .select('opened_at, order_number, note, member_id, members(id, name, phone, level, total_points)')
+        .select('opened_at, order_number, note, member_id, members(id, name, phone, level, total_points, available_points)')
         .eq('id', orderId)
         .maybeSingle(),
-    ]).then(([itemsRes, orderRes]) => {
+      supabase.from('pos_store_settings')
+        .select('service_charge_pct')
+        .eq('organization_id', orgId)
+        .eq('store_id', storeId)
+        .maybeSingle(),
+      supabase.from('organizations')
+        .select('tax_id')
+        .eq('id', orgId)
+        .maybeSingle(),
+    ]).then(([itemsRes, orderRes, settingsRes, orgRes]) => {
+      const pct = Number(settingsRes?.data?.service_charge_pct)
+      if (Number.isFinite(pct)) setSvcPct(pct)
+      setSellerTaxId(orgRes?.data?.tax_id ?? '')
       setDbItems(itemsRes.data ?? [])
       const ord = orderRes.data ?? {}
       setOrderInfo(ord)
@@ -389,18 +440,40 @@ function CheckoutModal({ tableNumber, orgId, storeId, orderId, storeName, onClos
     })
   }, [orderId])
 
+  // 手動查詢：手機 / 會員編號 / 會員卡 QR token 皆可
   async function searchMember() {
     const q = memberPhone.trim()
     if (!q) return
     setMemberBusy(true)
     const { data } = await supabase.from('members')
-      .select('id, name, phone, level, total_points')
-      .ilike('phone', `%${q}%`)
-      .limit(1).maybeSingle()
+      .select('id, name, phone, level, total_points, available_points')
+      .eq('organization_id', orgId)
+      .or(`phone.ilike.%${q}%,member_number.ilike.%${q}%,qr_token.eq.${q}`)
+      .limit(1)
     setMemberBusy(false)
-    if (data) setMember(data)
+    const found = data?.[0] ?? null
+    if (found) { setMember(found); setMemberPhone(found.phone ?? '') }
     else toast.error('查無此會員')
   }
+
+  // 綁定會員後載入其未使用、可折抵的優惠券（app 錢包同步：coupon_assignments）
+  useEffect(() => {
+    if (!member?.id) { setMemberCoupons([]); setPointsUsed(''); return }
+    supabase.from('coupon_assignments')
+      .select('id, expires_at, coupons(id, code, name, type, value, min_purchase, valid_until, status)')
+      .eq('member_id', member.id)
+      .is('used_at', null)
+      .then(({ data }) => {
+        const now = new Date()
+        setMemberCoupons((data ?? []).filter(a =>
+          a.coupons &&
+          a.coupons.status === 'active' &&
+          ['pct_off', 'fixed_off'].includes(a.coupons.type) &&
+          (!a.expires_at || new Date(a.expires_at) > now) &&
+          (!a.coupons.valid_until || new Date(a.coupons.valid_until) > now)
+        ))
+      })
+  }, [member?.id])
 
   const subtotal    = dbItems.reduce((s, i) => s + Number(i.unit_price) * i.quantity, 0)
   const taxAmount   = Math.round(subtotal * 5 / 105)   // 含稅 5%（結帳前小計含稅）
@@ -409,9 +482,271 @@ function CheckoutModal({ tableNumber, orgId, storeId, orderId, storeName, onClos
       ? Math.round(subtotal * Math.min(parseFloat(discVal) || 0, 100) / 100)
       : Math.min(parseFloat(discVal) || 0, subtotal)
     : 0
-  const total = subtotal - discAmount
+  const couponDiscount = coupon
+    ? coupon.type === 'pct_off'
+      ? Math.floor(subtotal * (Number(coupon.value) || 0) / 100)
+      : Math.min(Math.max(0, subtotal - discAmount), Number(coupon.value) || 0)
+    : 0
+  // 內用服務費（以餐點小計計算，折扣前；可整單免收）
+  const serviceCharge = svcOn ? Math.round(subtotal * svcPct / 100) : 0
+  const pointsAvailable = member?.available_points ?? 0
+  const pointsNum       = Math.max(0, Math.min(Math.floor(Number(pointsUsed) || 0), pointsAvailable))
+  const pointsDiscount  = Math.min(
+    Math.floor(pointsNum * POINT_RATE),
+    Math.max(0, subtotal + serviceCharge - discAmount - couponDiscount)
+  )
+  const total = Math.max(0, subtotal + serviceCharge - discAmount - couponDiscount - pointsDiscount)
 
-  function printReceipt() {
+  // 會員錢包選券（出示 app 優惠券畫面 → 店員點選）
+  function applyMemberCoupon(a) {
+    const c = a.coupons
+    if (Number(c.min_purchase) > subtotal) {
+      toast.error(`未達低消 NT$${Number(c.min_purchase).toLocaleString()}`)
+      return
+    }
+    setCoupon({ ...c, assignmentId: a.id })
+    toast.success(`已套用「${c.name}」`)
+  }
+
+  // ── 優惠碼套用（打字或掃描）──────────────────────────────────
+  // 回傳 'applied' | 'invalid' | 'notfound'，掃描分流時據此決定是否再試商品條碼
+  async function applyCoupon(codeRaw, { silent = false } = {}) {
+    const code = (codeRaw ?? couponCode).trim()
+    if (!code) return 'notfound'
+    setCouponBusy(true)
+    try {
+      const { data } = await supabase.from('coupons')
+        .select('id, code, name, type, value, min_purchase, valid_from, valid_until, status, usage_limit_total, used_count')
+        .eq('organization_id', orgId)
+        .ilike('code', code)
+        .limit(1)
+      const c = data?.[0]
+      if (!c) {
+        if (!silent) toast.error('查無此優惠碼')
+        return 'notfound'
+      }
+      const now = new Date()
+      if (c.status !== 'active')                                  { toast.error('此優惠券未啟用'); return 'invalid' }
+      if (c.valid_from && new Date(c.valid_from) > now)           { toast.error('此優惠券尚未生效'); return 'invalid' }
+      if (c.valid_until && new Date(c.valid_until) <= now)        { toast.error('此優惠券已過期'); return 'invalid' }
+      if (c.usage_limit_total && c.used_count >= c.usage_limit_total) { toast.error('此優惠券已達使用上限'); return 'invalid' }
+      if (!['pct_off', 'fixed_off'].includes(c.type))             { toast.error('此券型不支援結帳折抵'); return 'invalid' }
+      if (Number(c.min_purchase) > subtotal)                      { toast.error(`未達低消 NT$${Number(c.min_purchase).toLocaleString()}`); return 'invalid' }
+
+      // 通用碼 vs 會員專屬券：有發放紀錄（assignments）的券視為會員專屬，
+      // 必須綁定持券會員才能用；無發放紀錄的碼為通用碼，任何人可輸入
+      const { count: issuedCount } = await supabase.from('coupon_assignments')
+        .select('id', { count: 'exact', head: true })
+        .eq('coupon_id', c.id)
+      let assignmentId = null
+      if ((issuedCount ?? 0) > 0) {
+        if (!member) { toast.error('此為會員專屬優惠券，請先綁定會員'); return 'invalid' }
+        const { data: asg } = await supabase.from('coupon_assignments')
+          .select('id')
+          .eq('coupon_id', c.id).eq('member_id', member.id)
+          .is('used_at', null)
+          .limit(1)
+        if (!asg?.[0]) { toast.error('此會員未持有此優惠券（或已使用）'); return 'invalid' }
+        assignmentId = asg[0].id
+      }
+      setCoupon({ ...c, assignmentId })
+      setCouponCode('')
+      toast.success(`已套用「${c.name}」`)
+      return 'applied'
+    } finally {
+      setCouponBusy(false)
+    }
+  }
+
+  // ── 掃商品條碼 → 加入本單 ────────────────────────────────────
+  async function addProductItem(p) {
+    const existing = dbItems.find(i => i.pos_product_id === p.id)
+    if (existing) {
+      const { error } = await supabase.from('pos_order_items')
+        .update({ quantity: existing.quantity + 1 })
+        .eq('id', existing.id)
+      if (error) { playBeep(false); toast.error('加入失敗：' + error.message); return }
+      setDbItems(prev => prev.map(i => i.id === existing.id ? { ...i, quantity: i.quantity + 1 } : i))
+    } else {
+      const { data, error } = await supabase.from('pos_order_items')
+        .insert({
+          order_id:       orderId,
+          item_type:      'product',
+          pos_product_id: p.id,
+          name:           p.name,
+          unit_price:     p.retail_price,
+          quantity:       1,
+          source:         'staff',
+        })
+        .select('id, name, unit_price, quantity, pos_product_id')
+        .single()
+      if (error) { playBeep(false); toast.error('加入失敗：' + error.message); return }
+      setDbItems(prev => [...prev, data])
+    }
+    playBeep(true)
+    toast.success(`已加入 ${p.name}`)
+  }
+
+  // ── 開立電子發票（冪等；失敗不擋流程，付款維持 pending 由發票查詢頁補開）──
+  // 回傳 { number, randomCode, salesAmount, taxAmount, invoiceDate } 或 null
+  async function ensureInvoice(pid = paymentId) {
+    if (invoiceMeta) return invoiceMeta
+    if (!pid) return null
+    setInvoiceBusy(true)
+    const res = await issueInvoice(pid)
+    setInvoiceBusy(false)
+    if (res.ok) {
+      const meta = {
+        number:      res.invoiceNumber,
+        randomCode:  res.randomCode,
+        salesAmount: res.salesAmount,
+        taxAmount:   res.taxAmount,
+        invoiceDate: res.invoiceDate,
+      }
+      setInvoiceNo(res.invoiceNumber)
+      setInvoiceMeta(meta)
+      return meta
+    }
+    toast.info(res.error || '發票將稍後補開')
+    return null
+  }
+
+  // ── 列印電子發票證明聯（含交易明細，虛線裁切）──────────────────
+  async function printProofSlip(inv) {
+    const invDate = inv.invoiceDate ? new Date(`${inv.invoiceDate}T00:00:00`) : new Date()
+    const salesAmt = inv.salesAmount ?? Math.round(total / 1.05)
+    const buyer = invType === 'company' && buyerTaxId ? buyerTaxId : null
+    const qrItems = dbItems.map(i => ({ name: i.name, quantity: i.quantity, unitPrice: Number(i.unit_price) }))
+
+    const { left, right } = buildQRPair({
+      invoiceNumber: inv.number,
+      date:          invDate,
+      randomCode:    inv.randomCode,
+      salesAmount:   salesAmt,
+      totalAmount:   total,
+      buyerTaxId:    buyer,
+      sellerTaxId,
+      items:         qrItems,
+    })
+    let qrL = '', qrR = ''
+    try {
+      ;[qrL, qrR] = await Promise.all([
+        QRCode.toDataURL(left,  { margin: 0, width: 160 }),
+        QRCode.toDataURL(right, { margin: 0, width: 160 }),
+      ])
+    } catch { /* QR 產生失敗仍列印其餘內容 */ }
+
+    const row = (label, amt, bold = false) =>
+      `<div style="display:flex;justify-content:space-between${bold ? ';font-weight:800;border-top:1px dashed #999;margin-top:4px;padding-top:2px' : ''}"><span>${label}</span><span>${amt}</span></div>`
+    const detailHtml = `
+<div style="text-align:left;font-size:12px;line-height:1.7">
+  <div style="text-align:center;font-weight:700;margin-bottom:4px">交易明細</div>
+  ${dbItems.map(i => row(`${i.name} ×${i.quantity}`, (Number(i.unit_price) * i.quantity).toLocaleString())).join('')}
+  ${serviceCharge > 0 ? row(`服務費(${svcPct}%)`, serviceCharge.toLocaleString()) : ''}
+  ${discAmount > 0 ? row('折扣', `-${discAmount.toLocaleString()}`) : ''}
+  ${couponDiscount > 0 ? row(`優惠券(${coupon.code})`, `-${couponDiscount.toLocaleString()}`) : ''}
+  ${pointsDiscount > 0 ? row(`點數折抵(${pointsNum}點)`, `-${pointsDiscount.toLocaleString()}`) : ''}
+  ${row('合計', total.toLocaleString(), true)}
+</div>`
+
+    const html = buildProofSlipHtml({
+      storeName,
+      invoiceNumber:  inv.number,
+      date:           invDate,
+      randomCode:     inv.randomCode,
+      totalAmount:    total,
+      sellerTaxId,
+      buyerTaxId:     buyer,
+      barcodeSvg:     code39Svg(buildBarcodeContent(invDate, inv.number, inv.randomCode)),
+      qrLeftDataUrl:  qrL,
+      qrRightDataUrl: qrR,
+      detailHtml,
+    })
+    const win = window.open('', '_blank', 'width=340,height=680')
+    if (!win) { toast.error('請允許彈出視窗以列印證明聯'); return }
+    win.document.write(html)
+    win.document.close()
+    win.focus()
+  }
+
+  // ── 付款後存載具（電子發票）────────────────────────────────
+  async function saveCarrier(code) {
+    const { error } = await supabase.from('pos_orders')
+      .update({ carrier_type: 'mobile', carrier_id: code })
+      .eq('id', orderId)
+    if (error) { playBeep(false); toast.error('載具儲存失敗：' + error.message); return }
+    // 同步掛到付款（issue-invoice 讀 pos_payments 為主）再開立
+    if (paymentId) {
+      await supabase.from('pos_payments')
+        .update({ carrier_type: '3J0002', carrier_number: code })
+        .eq('id', paymentId)
+    }
+    setCarrierSaved(code)
+    setAwaitCarrier(false)
+    setCarrierInput('')
+    playBeep(true)
+    const inv = await ensureInvoice()
+    toast.success(inv ? `電子發票 ${formatInvNo(inv.number)} 已存入載具 ${code}` : `載具 ${code} 已登錄，發票開立後自動歸戶`)
+  }
+
+  // ── 結帳中掃描分流：載具 → 會員卡 QR → 優惠碼 → 商品條碼 ──────
+  // 掃描一律精確比對（qr_token / code / barcode），避免模糊查詢誤配
+  async function handleScan(code) {
+    const codeUp = code.trim().toUpperCase()
+    // 付款完成階段：只接收手機載具條碼
+    if (stage === 'paid') {
+      if (CARRIER_RE.test(codeUp)) await saveCarrier(codeUp)
+      else playBeep(false)
+      return
+    }
+    // 付款前掃到載具條碼 → 直接帶入發票欄位
+    if (CARRIER_RE.test(codeUp)) {
+      setInvType('mobile')
+      setCarrierId(codeUp)
+      playBeep(true)
+      toast.success(`已帶入手機載具 ${codeUp}`)
+      return
+    }
+    // 顧客錢包付款碼（LINE Pay / 街口出示付款碼，銀行掃碼收單）
+    if ((payMethod === 'line_pay' || payMethod === 'jkopay') && WALLET_CODE_RE.test(codeUp)) {
+      setWalletCode(codeUp)
+      setTermDone(true)
+      playBeep(true)
+      toast.success(`已讀取${TERMINAL_METHODS[payMethod]}付款碼，請確認收款`)
+      return
+    }
+    if (parseTableQR(code)) return // 桌卡 QR，結帳中無意義
+    const { data: memData } = await supabase.from('members')
+      .select('id, name, phone, level, total_points, available_points')
+      .eq('organization_id', orgId)
+      .eq('qr_token', code)
+      .limit(1)
+    const mem = memData?.[0]
+    if (mem) {
+      setMember(mem); setMemberPhone(mem.phone ?? '')
+      playBeep(true); toast.success(`已綁定會員 ${mem.name}`)
+      return
+    }
+    const couponResult = await applyCoupon(code, { silent: true })
+    if (couponResult === 'applied') { playBeep(true); return }
+    if (couponResult === 'invalid') { playBeep(false); return } // 原因已 toast
+    const { data: prods } = await supabase.from('pos_products')
+      .select('id, name, retail_price')
+      .eq('organization_id', orgId)
+      .eq('barcode', code)
+      .eq('is_available', true)
+      .limit(1)
+    if (prods?.[0]) { await addProductItem(prods[0]); return }
+    playBeep(false)
+    toast.error('無法辨識的條碼 / QR')
+  }
+
+  // 掃描槍全域監聽（modal 開啟期間）；handler 走 ref 避免 stale closure
+  const scanRef = useRef(handleScan)
+  scanRef.current = handleScan
+  useEffect(() => createBarcodeListener(code => scanRef.current(code)), [])
+
+  function printReceipt(invNo = invoiceNo) {
     try {
       const now = new Date()
       const pad = (n) => String(n).padStart(2, '0')
@@ -430,8 +765,9 @@ function CheckoutModal({ tableNumber, orgId, storeId, orderId, storeName, onClos
           <td style="text-align:right;font-size:13px;white-space:nowrap">${amt.toLocaleString()}</td>
         </tr>`
       }).join('')
-      const invLine = invType === 'mobile'  ? `<div style="font-size:11px;color:#666;margin-top:2px">手機載具：${carrierId || '—'}</div>`
-                    : invType === 'company' ? `<div style="font-size:11px;color:#666;margin-top:2px">統編：${buyerTaxId}　${buyerCompany}</div>`
+      const carrierShown = invType === 'mobile' ? (carrierId || carrierSaved) : carrierSaved
+      const invLine = carrierShown             ? `<div style="font-size:11px;color:#666;margin-top:2px">手機載具：${carrierShown}</div>`
+                    : invType === 'company'    ? `<div style="font-size:11px;color:#666;margin-top:2px">統編：${buyerTaxId}　${buyerCompany}</div>`
                     : ''
       const win = window.open('', '_blank', 'width=320,height=680')
       if (!win) return
@@ -457,6 +793,7 @@ table th{font-size:12px;font-weight:400;border-bottom:1px dashed #000;padding-bo
 <hr>
 <div>列印時間${printTime} 機01</div>
 <div>單:${orderNum}</div>
+${invNo ? `<div class="bold">發票號碼:${invNo.length === 10 ? invNo.slice(0, 2) + '-' + invNo.slice(2) : invNo}</div>` : ''}
 <div>送達時間:${openedStr}</div>
 <div>桌:T${tableNumber}</div>
 <div>開:${openTime}</div>
@@ -470,7 +807,10 @@ table th{font-size:12px;font-weight:400;border-bottom:1px dashed #000;padding-bo
   <tbody>${itemRows}</tbody>
 </table>
 <hr>
+${serviceCharge > 0 ? `<div class="r"><span>服務費(${svcPct}%)</span><span>${serviceCharge.toLocaleString()}</span></div>` : ''}
 ${discAmount > 0 ? `<div class="r"><span>折扣</span><span>-${discAmount.toLocaleString()}</span></div>` : ''}
+${couponDiscount > 0 ? `<div class="r"><span>優惠券(${coupon.code})</span><span>-${couponDiscount.toLocaleString()}</span></div>` : ''}
+${pointsDiscount > 0 ? `<div class="r"><span>點數折抵(${pointsNum}點)</span><span>-${pointsDiscount.toLocaleString()}</span></div>` : ''}
 <div class="total"><span>合計:</span><span>${total.toLocaleString()}</span></div>
 <hr>
 <div class="r"><span>付款方式</span><span class="bold">${PAY_LABEL[payMethod] ?? payMethod}</span></div>
@@ -486,27 +826,52 @@ ${orderNote ? `<div>備註:${orderNote}</div>` : ''}
   }
 
   async function confirm() {
+    // 非現金走銀行收單：需先於刷卡機／掃碼完成交易並確認
+    if (TERMINAL_METHODS[payMethod] && !termDone) {
+      toast.error(payMethod === 'card'
+        ? '請先於銀行刷卡機完成交易，並按「已完成刷卡」'
+        : `請先掃描顧客的${TERMINAL_METHODS[payMethod]}付款碼，或於掃碼機完成後按「已完成收款」`)
+      return
+    }
+    // 現金：有輸入實收金額時不可低於應收
+    if (payMethod === 'cash' && cashTendered !== '' && Number(cashTendered) < total) {
+      toast.error('實收金額不足')
+      return
+    }
     setBusy(true)
     try {
-      const { error: pErr } = await supabase.from('pos_payments').insert({
+      const { data: payRow, error: pErr } = await supabase.from('pos_payments').insert({
         organization_id: orgId,
         store_id: storeId,
         order_id: orderId,
         amount: total,
         payment_method: payMethod,
-      })
+        // 付款前已掃載具 → 直接掛在付款上（issue-invoice 以 pos_payments 為主、pos_orders 為輔）
+        ...(invType === 'mobile' && carrierId && { carrier_type: '3J0002', carrier_number: carrierId }),
+      }).select('id').single()
       if (pErr) throw pErr
+      setPaymentId(payRow.id)
 
+      const totalDiscount = discAmount + couponDiscount + pointsDiscount
+      const noteParts = [
+        noteVal.trim(),
+        couponDiscount > 0 ? `[優惠券 ${coupon.code} -NT$${couponDiscount}]` : '',
+        pointsDiscount > 0 ? `[點數折抵 ${pointsNum}點 -NT$${pointsDiscount}]` : '',
+        payMethod === 'card' && termAuthCode.trim() ? `[刷卡授權碼 ${termAuthCode.trim()}]` : '',
+        walletCode ? `[${TERMINAL_METHODS[payMethod] ?? ''}付款碼 ${walletCode}]` : '',
+        payMethod === 'cash' && cashTendered !== '' ? `[現金實收 NT$${Number(cashTendered)} 找零 NT$${Math.max(0, Number(cashTendered) - total)}]` : '',
+      ]
       const orderUpdate = {
         status:   'paid',
         paid_at:  new Date().toISOString(),
         tax_amount: taxAmount,
-        note:     noteVal.trim() || null,
+        service_charge: serviceCharge,
+        note:     noteParts.filter(Boolean).join(' ') || null,
         member_id: member?.id ?? null,
-        ...(discAmount > 0 && {
-          discount_type:   discType,
-          discount_value:  parseFloat(discVal) || 0,
-          discount_amount: discAmount,
+        ...(totalDiscount > 0 && {
+          discount_type:   discAmount > 0 ? discType : 'fixed',
+          discount_value:  discAmount > 0 ? (parseFloat(discVal) || 0) : couponDiscount + pointsDiscount,
+          discount_amount: totalDiscount,
         }),
         ...(invType !== 'none' && {
           carrier_type:  invType,
@@ -518,9 +883,44 @@ ${orderNote ? `<div>備註:${orderNote}</div>` : ''}
       const { error: uErr } = await supabase.from('pos_orders').update(orderUpdate).eq('id', orderId)
       if (uErr) throw uErr
 
+      // 會員持券核銷（同 POSTerminal redeemCoupon 模式：蓋 used_at，失敗不擋結帳）
+      if (coupon?.assignmentId) {
+        supabase.from('coupon_assignments')
+          .update({ used_at: new Date().toISOString() })
+          .eq('id', coupon.assignmentId)
+          .then(({ error }) => { if (error) console.error('[checkout] coupon redeem failed', error) })
+      }
+
+      // 發佈交易完成事件 → CRM 累點＋點數折抵、WMS 零售品扣庫存
+      // 點數增減統一由 crmHandlers 處理（earn + redeem），這裡不直接改 DB 以免重複扣點
+      try {
+        const bus = getEventBus()
+        await bus.publish('pos.transaction.completed', {
+          transaction_id: String(orderId),
+          transaction_number: orderInfo.order_number || String(orderId).slice(-8).toUpperCase(),
+          store: storeName || '門市',
+          cashier: cashier || '服務員',
+          total,
+          payment_method: payMethod,
+          // 只帶零售商品（有 pos_product_id）：菜單餐點不參與 WMS 名稱比對扣庫存
+          items: dbItems.filter(i => i.pos_product_id).map(i => ({ name: i.name, qty: i.quantity })),
+          ...(member && { customer_id: member.id, points_used: pointsNum }),
+        })
+      } catch (e) {
+        console.warn('[waiter] event publish failed:', e.message)
+      }
+
+      // 現金收款 → 自動開錢箱（RJ45 接收據機踢出埠）＋稽核紀錄
+      if (payMethod === 'cash') {
+        openDrawer?.('sale', cashTendered !== '' ? `實收 NT$${Number(cashTendered)}` : null)
+      }
+
       toast.success(`T${tableNumber} 結帳完成 NT$${total.toLocaleString()}`)
-      printReceipt()
-      onDone()
+      // 進入結帳後流程：詢問列印收據或存入載具
+      if (invType === 'mobile' && carrierId) setCarrierSaved(carrierId)
+      setStage('paid')
+      // 發票資料已齊（載具已掃 / 統編已填）→ 立即開立；未定者待顧客選擇後開立
+      if (invType !== 'none') ensureInvoice(payRow.id)
     } catch (e) {
       toast.error('結帳失敗：' + e.message)
     } finally {
@@ -530,15 +930,121 @@ ${orderNote ? `<div>備註:${orderNote}</div>` : ''}
 
   return createPortal(
     <div style={S.overlay}>
-      <div onClick={onClose} style={{ position: 'absolute', inset: 0 }} />
+      <div onClick={stage === 'paid' ? async () => { await ensureInvoice(); onDone() } : onClose} style={{ position: 'absolute', inset: 0 }} />
       <div style={S.coBox}>
+        {stage === 'paid' ? (
+          <>
+            <div style={S.coHead}>
+              <span style={S.coTitle}>結帳完成 — 桌號 T{tableNumber}</span>
+            </div>
+            <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ textAlign: 'center', padding: '6px 0' }}>
+                <div style={{ fontSize: 14, color: 'var(--accent-green)', fontWeight: 700 }}>✓ 已收款（{PAY_LABEL[payMethod] ?? payMethod}）</div>
+                <div style={{ fontSize: 30, fontWeight: 800, color: 'var(--text-primary)', marginTop: 4 }}>NT${total.toLocaleString()}</div>
+                {payMethod === 'cash' && cashTendered !== '' && (
+                  <div style={{ fontSize: 14, color: 'var(--text-secondary)', marginTop: 6 }}>
+                    實收 NT${Number(cashTendered).toLocaleString()} ·{' '}
+                    <span style={{ color: 'var(--accent-green)', fontWeight: 800 }}>
+                      找零 NT${Math.max(0, Number(cashTendered) - total).toLocaleString()}
+                    </span>
+                  </div>
+                )}
+                {invoiceNo ? (
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4, fontFamily: 'monospace' }}>
+                    發票號碼 {invoiceNo.length === 10 ? `${invoiceNo.slice(0, 2)}-${invoiceNo.slice(2)}` : invoiceNo}
+                  </div>
+                ) : invoiceBusy ? (
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>發票開立中…</div>
+                ) : null}
+              </div>
+
+              {carrierSaved ? (
+                <>
+                  <div style={{ textAlign: 'center', padding: '8px 10px', borderRadius: 8, background: 'var(--accent-green-dim)', border: '1px solid var(--accent-green)', color: 'var(--accent-green)', fontSize: 13, fontWeight: 600 }}>
+                    電子發票已存入載具 {carrierSaved}
+                  </div>
+                  <div style={{ fontSize: 13, color: 'var(--text-secondary)', textAlign: 'center' }}>是否需要列印明細？</div>
+                  <div style={{ display: 'flex', gap: 10 }}>
+                    <button
+                      style={{ flex: 1, padding: '11px 0', borderRadius: 10, border: '1px solid var(--border-primary)', background: 'var(--bg-tertiary)', color: 'var(--text-primary)', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
+                      onClick={async () => { const inv = await ensureInvoice(); printReceipt(inv?.number ?? invoiceNo); onDone() }}>
+                      列印明細
+                    </button>
+                    <button
+                      style={{ flex: 1, padding: '11px 0', borderRadius: 10, border: 'none', background: 'var(--accent-green)', color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
+                      onClick={async () => { await ensureInvoice(); onDone() }}>
+                      不用，完成
+                    </button>
+                  </div>
+                </>
+              ) : awaitCarrier ? (
+                <>
+                  <div style={{ fontSize: 13, color: 'var(--text-secondary)', textAlign: 'center' }}>
+                    請掃描手機載具條碼（/ 開頭共 8 碼），或手動輸入
+                  </div>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <input
+                      placeholder="/ABC1234"
+                      value={carrierInput}
+                      maxLength={8}
+                      onChange={e => setCarrierInput(e.target.value.toUpperCase())}
+                      onKeyDown={e => e.key === 'Enter' && CARRIER_RE.test(carrierInput) && saveCarrier(carrierInput)}
+                      style={{ flex: 1, padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border-primary)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: 15, letterSpacing: 2, outline: 'none' }}
+                    />
+                    <button
+                      disabled={!CARRIER_RE.test(carrierInput)}
+                      onClick={() => saveCarrier(carrierInput)}
+                      style={{ padding: '10px 16px', borderRadius: 8, border: 'none', background: CARRIER_RE.test(carrierInput) ? 'var(--accent-cyan)' : 'var(--bg-card)', color: CARRIER_RE.test(carrierInput) ? '#fff' : 'var(--text-muted)', fontSize: 13, fontWeight: 700, cursor: CARRIER_RE.test(carrierInput) ? 'pointer' : 'not-allowed' }}>
+                      存入
+                    </button>
+                  </div>
+                  <button onClick={() => setAwaitCarrier(false)}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 12, padding: 4 }}>
+                    ← 返回
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div style={{ fontSize: 13, color: 'var(--text-secondary)', textAlign: 'center' }}>發票 / 收據如何處理？</div>
+                  <div style={{ display: 'flex', gap: 10 }}>
+                    <button
+                      disabled={invoiceBusy}
+                      style={{ flex: 1, padding: '11px 0', borderRadius: 10, border: '1px solid var(--border-primary)', background: 'var(--bg-tertiary)', color: 'var(--text-primary)', fontSize: 14, fontWeight: 700, cursor: invoiceBusy ? 'wait' : 'pointer' }}
+                      onClick={async () => {
+                        const inv = await ensureInvoice()
+                        // 有隨機碼 → 列印正式證明聯（含明細）；否則退回明細單（發票待補開）
+                        if (inv?.randomCode) await printProofSlip(inv)
+                        else printReceipt(inv?.number ?? null)
+                        onDone()
+                      }}>
+                      🖨 列印發票收據
+                    </button>
+                    <button
+                      style={{ flex: 1, padding: '11px 0', borderRadius: 10, border: '1px solid var(--accent-cyan)', background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
+                      onClick={() => setAwaitCarrier(true)}>
+                      📱 存入載具
+                    </button>
+                  </div>
+                  <button onClick={async () => { await ensureInvoice(); onDone() }}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 12, padding: 4 }}>
+                    皆不需要，完成
+                  </button>
+                </>
+              )}
+            </div>
+          </>
+        ) : (
+          <>
         <div style={S.coHead}>
           <span style={S.coTitle}>結帳 — 桌號 T{tableNumber}</span>
           <button style={S.coClose} onClick={onClose}>×</button>
         </div>
 
         <div style={S.coBody}>
-          <div style={S.coSection}>品項明細</div>
+          <div style={S.coSection}>
+            品項明細
+            <span style={{ fontWeight: 400, fontSize: 11, color: 'var(--text-muted)', marginLeft: 8 }}>掃商品條碼可加購</span>
+          </div>
           {loading && <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 14 }}>載入中…</div>}
           {!loading && dbItems.length === 0 && (
             <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 14 }}>無品項</div>
@@ -579,10 +1085,67 @@ ${orderNote ? `<div>備註:${orderNote}</div>` : ''}
           )}
         </div>
 
+        {/* Service charge row */}
+        <div style={{ padding: '0 20px 8px', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>服務費</span>
+          <button onClick={() => setSvcOn(v => !v)}
+            style={{ padding: '2px 10px', borderRadius: 6, border: '1px solid', fontSize: 11, cursor: 'pointer',
+              borderColor: svcOn ? 'var(--accent-cyan)' : 'var(--border-default)',
+              background: svcOn ? 'var(--accent-cyan-dim)' : 'var(--bg-secondary)',
+              color: svcOn ? 'var(--accent-cyan)' : 'var(--text-muted)' }}>
+            {svcOn ? `${svcPct}%` : '免收'}
+          </button>
+          {serviceCharge > 0 && (
+            <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>+ NT${serviceCharge.toLocaleString()}</span>
+          )}
+        </div>
+
+        {/* Coupon code row */}
+        <div style={{ padding: '0 20px 8px', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>優惠碼</span>
+          {coupon ? (
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', borderRadius: 8, background: 'var(--accent-purple-dim)', border: '1px solid var(--accent-purple)' }}>
+              <span style={{ flex: 1, fontSize: 12, fontWeight: 700, color: 'var(--accent-purple)' }}>{coupon.code} · {coupon.name}</span>
+              <span style={{ fontSize: 12, color: 'var(--accent-purple)', flexShrink: 0 }}>- NT${couponDiscount.toLocaleString()}</span>
+              <button onClick={() => setCoupon(null)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 15, lineHeight: 1, padding: 0, flexShrink: 0 }}>×</button>
+            </div>
+          ) : (
+            <>
+              <input
+                placeholder="輸入 / 掃描優惠券代碼"
+                value={couponCode}
+                onChange={e => setCouponCode(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && applyCoupon()}
+                style={{ flex: 1, padding: '4px 8px', borderRadius: 6, border: '1px solid var(--border-default)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: 13, outline: 'none' }}
+              />
+              <button onClick={() => applyCoupon()} disabled={couponBusy}
+                style={{ padding: '4px 12px', borderRadius: 6, border: 'none', background: 'var(--accent-purple)', color: '#fff', fontSize: 12, fontWeight: 600, cursor: couponBusy ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap' }}>
+                {couponBusy ? '…' : '套用'}
+              </button>
+            </>
+          )}
+        </div>
+
         <div style={S.coTotal}>
-          {discAmount > 0 && (
+          {(discAmount > 0 || couponDiscount > 0 || pointsDiscount > 0 || serviceCharge > 0) && (
             <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', fontSize: 13, color: 'var(--text-muted)', marginBottom: 4 }}>
               <span>小計</span><span>NT${subtotal.toLocaleString()}</span>
+            </div>
+          )}
+          {serviceCharge > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', fontSize: 13, color: 'var(--text-muted)', marginBottom: 4 }}>
+              <span>服務費（{svcPct}%）</span><span>+ NT${serviceCharge.toLocaleString()}</span>
+            </div>
+          )}
+          {couponDiscount > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', fontSize: 13, color: 'var(--accent-purple)', marginBottom: 4 }}>
+              <span>優惠券 {coupon.code}</span><span>- NT${couponDiscount.toLocaleString()}</span>
+            </div>
+          )}
+          {pointsDiscount > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', fontSize: 13, color: 'var(--accent-green)', marginBottom: 4 }}>
+              <span>點數折抵（{pointsNum} 點）</span><span>- NT${pointsDiscount.toLocaleString()}</span>
             </div>
           )}
           <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-muted)' }}>應收合計</span>
@@ -604,18 +1167,54 @@ ${orderNote ? `<div>備註:${orderNote}</div>` : ''}
         <div style={{ padding: '10px 20px 4px', fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.5px' }}>會員</div>
         <div style={{ padding: '0 20px 10px' }}>
           {member ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, background: 'var(--accent-cyan-dim)', border: '1px solid var(--accent-cyan)' }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent-cyan)' }}>{member.name}</div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{member.phone} · {member.level} · {member.total_points} 點</div>
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, background: 'var(--accent-cyan-dim)', border: '1px solid var(--accent-cyan)' }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent-cyan)' }}>{member.name}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{member.phone} · {member.level} · 可用 {pointsAvailable.toLocaleString()} 點</div>
+                </div>
+                <button onClick={() => { setMember(null); setMemberPhone(''); setPointsUsed(''); if (coupon?.assignmentId) setCoupon(null) }}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 16, lineHeight: 1, padding: 0 }}>×</button>
               </div>
-              <button onClick={() => { setMember(null); setMemberPhone('') }}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 16, lineHeight: 1, padding: 0 }}>×</button>
-            </div>
+
+              {/* 會員錢包優惠券（app 內優惠券，點選套用） */}
+              {memberCoupons.length > 0 && !coupon && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                  {memberCoupons.map(a => (
+                    <button key={a.id} onClick={() => applyMemberCoupon(a)}
+                      style={{ padding: '4px 10px', borderRadius: 999, border: '1px solid var(--accent-purple)', background: 'var(--accent-purple-dim)', color: 'var(--accent-purple)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                      🎟 {a.coupons.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* 點數折抵 */}
+              {pointsAvailable > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>點數折抵</span>
+                  <input
+                    type="number" min="0" max={pointsAvailable} value={pointsUsed}
+                    onChange={e => setPointsUsed(e.target.value)}
+                    placeholder="0"
+                    style={{ width: 80, padding: '4px 8px', borderRadius: 6, border: '1px solid var(--border-default)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: 13, outline: 'none' }}
+                  />
+                  <button
+                    onClick={() => setPointsUsed(String(Math.min(pointsAvailable, Math.ceil(Math.max(0, subtotal + serviceCharge - discAmount - couponDiscount) / POINT_RATE))))}
+                    style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid var(--border-primary)', background: 'var(--bg-tertiary)', color: 'var(--text-secondary)', fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                    全折
+                  </button>
+                  {pointsDiscount > 0 && (
+                    <span style={{ fontSize: 12, color: 'var(--accent-green)', fontWeight: 600 }}>- NT${pointsDiscount.toLocaleString()}</span>
+                  )}
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>1點=NT${POINT_RATE}</span>
+                </div>
+              )}
+            </>
           ) : (
             <div style={{ display: 'flex', gap: 6 }}>
               <input
-                placeholder="手機號碼搜尋"
+                placeholder="手機 / 會員編號（可掃會員 QR）"
                 value={memberPhone}
                 onChange={e => setMemberPhone(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && searchMember()}
@@ -672,9 +1271,93 @@ ${orderNote ? `<div>備註:${orderNote}</div>` : ''}
         <div style={{ padding: '10px 20px 4px', fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.5px' }}>付款方式</div>
         <div style={S.coPayMethods}>
           {PAY_METHODS.map(m => (
-            <button key={m.key} style={S.coPayBtn(payMethod === m.key)} onClick={() => setPayMethod(m.key)}>{m.label}</button>
+            <button key={m.key} style={S.coPayBtn(payMethod === m.key)} onClick={() => { setPayMethod(m.key); setTermDone(false); setWalletCode('') }}>{m.label}</button>
           ))}
         </div>
+
+        {/* 信用卡 → 銀行實體刷卡機（EDC），交易完成後由店員確認 */}
+        {payMethod === 'card' && (
+          <div style={{ margin: '0 20px 10px', padding: '10px 12px', borderRadius: 8, background: 'var(--accent-orange-dim)', border: '1px solid var(--accent-orange)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ fontSize: 12, color: 'var(--accent-orange)', fontWeight: 600 }}>
+              請於銀行刷卡機刷卡 NT${total.toLocaleString()}，交易核准後按「已完成刷卡」
+            </div>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <input
+                placeholder="授權碼（選填）"
+                value={termAuthCode}
+                onChange={e => setTermAuthCode(e.target.value)}
+                style={{ flex: 1, padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border-primary)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: 13, outline: 'none' }}
+              />
+              <button onClick={() => setTermDone(v => !v)}
+                style={{ padding: '6px 14px', borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap',
+                  border: termDone ? 'none' : '1px solid var(--border-primary)',
+                  background: termDone ? 'var(--accent-green)' : 'var(--bg-tertiary)',
+                  color: termDone ? '#fff' : 'var(--text-secondary)' }}>
+                {termDone ? '✓ 已完成刷卡' : '已完成刷卡'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* LINE Pay / 街口：掃顧客出示的付款碼（銀行掃碼收單） */}
+        {(payMethod === 'line_pay' || payMethod === 'jkopay') && (
+          <div style={{ margin: '0 20px 10px', padding: '10px 12px', borderRadius: 8, background: 'var(--accent-orange-dim)', border: '1px solid var(--accent-orange)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ fontSize: 12, color: 'var(--accent-orange)', fontWeight: 600 }}>
+              請顧客出示 {TERMINAL_METHODS[payMethod]} 付款碼，以掃描槍掃描收款 NT${total.toLocaleString()}
+            </div>
+            {walletCode ? (
+              <div style={{ fontSize: 12, color: 'var(--accent-green)', fontWeight: 700 }}>
+                ✓ 已讀取付款碼 …{walletCode.slice(-6)}
+              </div>
+            ) : (
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <button onClick={() => setTermDone(v => !v)}
+                  style={{ padding: '6px 14px', borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap',
+                    border: termDone ? 'none' : '1px solid var(--border-primary)',
+                    background: termDone ? 'var(--accent-green)' : 'var(--bg-tertiary)',
+                    color: termDone ? '#fff' : 'var(--text-secondary)' }}>
+                  {termDone ? '✓ 已完成收款' : '已完成收款（掃碼機）'}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 現金：實收金額 / 找零，確認後自動開錢箱 */}
+        {payMethod === 'cash' && (() => {
+          const tendered = cashTendered === '' ? null : Number(cashTendered)
+          const change = tendered != null ? tendered - total : 0
+          return (
+            <div style={{ margin: '0 20px 10px', padding: '10px 12px', borderRadius: 8, background: 'var(--bg-primary)', border: '1px solid var(--border-primary)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>實收金額</span>
+                <input
+                  type="number" min="0"
+                  value={cashTendered}
+                  onChange={e => setCashTendered(e.target.value)}
+                  placeholder={String(total)}
+                  style={{ flex: 1, minWidth: 70, padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border-primary)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: 15, fontWeight: 700, outline: 'none' }}
+                />
+                {[['剛好', total], ['$500', 500], ['$1000', 1000]].map(([label, v]) => (
+                  <button key={label} onClick={() => setCashTendered(String(v))}
+                    style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border-primary)', background: 'var(--bg-tertiary)', color: 'var(--text-secondary)', fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {tendered != null && (change >= 0 ? (
+                <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--accent-green)', textAlign: 'right' }}>
+                  找零 NT${change.toLocaleString()}
+                </div>
+              ) : (
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent-red)', textAlign: 'right' }}>
+                  不足 NT${Math.abs(change).toLocaleString()}
+                </div>
+              ))}
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>確認收款後將自動開啟錢箱</div>
+            </div>
+          )
+        })()}
 
         <div style={S.coFoot}>
           <button style={{ ...S.smallBtn(false), flex: 1 }} onClick={onClose} disabled={busy}>取消</button>
@@ -686,11 +1369,19 @@ ${orderNote ? `<div>備註:${orderNote}</div>` : ''}
               color: busy || loading ? 'var(--text-muted)' : '#fff',
               fontSize: 15, fontWeight: 800,
             }}
-            onClick={confirm} disabled={busy || loading || dbItems.length === 0}
+            onClick={confirm}
+            disabled={busy || loading || dbItems.length === 0
+              || (!!TERMINAL_METHODS[payMethod] && !termDone)
+              || (payMethod === 'cash' && cashTendered !== '' && Number(cashTendered) < total)}
           >
-            {busy ? '結帳中…' : '確認收款'}
+            {busy ? '結帳中…'
+              : TERMINAL_METHODS[payMethod] && !termDone ? (payMethod === 'card' ? '待刷卡機確認' : '待掃碼確認')
+              : payMethod === 'cash' && cashTendered !== '' && Number(cashTendered) < total ? '實收不足'
+              : '確認收款'}
           </button>
         </div>
+          </>
+        )}
       </div>
     </div>,
     document.body
@@ -808,6 +1499,21 @@ export default function WaiterMode() {
   const [variantTarget, setVariantTarget] = useState(null) // item being configured
   const qrCanvasRef = useRef(null)
 
+  // 收據機 / 錢箱（錢箱以 RJ45 接收據機踢出埠，經 Web Serial 送 ESC/POS 脈衝開啟）
+  const [thermalPort,     setThermalPort]     = useState(null)
+  const [showDrawerModal, setShowDrawerModal] = useState(false)
+  const [drawerReason,    setDrawerReason]    = useState('現金校正')
+  const [drawerNote,      setDrawerNote]      = useState('')
+
+  // Deep link from a scanned table QR: /pos/waiter?store=X&table=Y&checkout=1
+  const [deepLink] = useState(() => {
+    const sp = new URLSearchParams(window.location.search)
+    return sp.get('table')
+      ? { store: sp.get('store'), table: sp.get('table'), checkout: sp.get('checkout') === '1' }
+      : null
+  })
+  const deepLinkDone = useRef(false)
+
   const effectiveStoreId = storeIdSel ?? storeId
   const storeName = stores.find(s => s.id === effectiveStoreId)?.name ?? profile?.store ?? ''
 
@@ -825,7 +1531,11 @@ export default function WaiterMode() {
       .then(({ data }) => {
         const list = data ?? []
         setStores(list)
-        const defaultId = (storeId && list.some(s => s.id === storeId)) ? storeId : list[0]?.id ?? null
+        const deepLinkStoreId = deepLink?.store
+          ? list.find(s => String(s.id) === String(deepLink.store))?.id ?? null
+          : null
+        const defaultId = deepLinkStoreId
+          ?? ((storeId && list.some(s => s.id === storeId)) ? storeId : list[0]?.id ?? null)
         setStoreIdSel(defaultId)
       })
   }, [user, orgId, storeId])
@@ -843,6 +1553,31 @@ export default function WaiterMode() {
       setTables(tbl ?? [])
       setActiveOrders(ords ?? [])
       setSelTable(null); setOrderId(null); setExistingItems([]); setCart({})
+
+      // Scanned table QR deep link — jump straight to that table (and checkout)
+      if (deepLink && !deepLinkDone.current) {
+        deepLinkDone.current = true
+        navigate(window.location.pathname, { replace: true }) // consume params so refresh won't re-trigger
+        const target = (tbl ?? []).find(t => String(t.id) === String(deepLink.table))
+        if (target) {
+          const activeOrder = (ords ?? []).find(o => o.table_id === target.id)
+          setSelTable(target); setOrderType('dine_in')
+          if (activeOrder) {
+            setOrderId(activeOrder.id)
+            const { data: existing } = await supabase
+              .from('pos_order_items').select('id, name, unit_price, quantity, note')
+              .eq('order_id', activeOrder.id).order('created_at')
+            setExistingItems(existing ?? [])
+            if (deepLink.checkout) setShowCheckout(true)
+          } else if (deepLink.checkout) {
+            toast.info(`T${target.table_number} 尚無訂單，請先點餐`)
+          }
+          setPhase('order')
+          return
+        }
+        toast.error('找不到桌台，請確認桌卡是否屬於此門市')
+      }
+
       setPhase('select_table')
     }
     loadTables().catch(e => { setErrMsg(e?.message ?? '載入失敗'); setPhase('error') })
@@ -882,6 +1617,25 @@ export default function WaiterMode() {
     }, 30000)
     return () => clearInterval(id)
   }, [phase, effectiveStoreId])
+
+  // ── Scan a table QR card while on the table-select screen ────────────────
+  // USB/藍牙掃描槍讀桌卡 → 直接進該桌；已有訂單則直接開結帳
+  useEffect(() => {
+    if (phase !== 'select_table') return
+    return createBarcodeListener((code) => {
+      const parsed = parseTableQR(code)
+      if (!parsed) return
+      const table = tables.find(t => String(t.id) === String(parsed.tableId))
+      if (!table) {
+        playBeep(false)
+        toast.error('找不到此桌台，請確認桌卡是否屬於此門市')
+        return
+      }
+      playBeep(true)
+      const hasOrder = activeOrders.some(o => o.table_id === table.id)
+      selectTable(table).then(() => { if (hasOrder) setShowCheckout(true) })
+    })
+  }, [phase, tables, activeOrders])
 
   // ── QR canvas ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -945,6 +1699,42 @@ export default function WaiterMode() {
     })
     setNoteTarget(null)
   }, [noteTarget, noteDraft])
+
+  // ── 收據機 / 錢箱 ──────────────────────────────────────────────────────────
+  async function connectDrawer() {
+    if (thermalPort) {
+      try { await thermalPort.close() } catch {}
+      setThermalPort(null)
+      toast.info('已中斷收據機／錢箱連線')
+      return
+    }
+    const result = await connectThermalPrinter()
+    if (result.connected) { setThermalPort(result.port); toast.success('已連接收據機／錢箱') }
+    else toast.error(result.error || '連接失敗')
+  }
+
+  // 開錢箱＋寫入稽核紀錄（reason: sale / correction / refund / other）
+  async function openDrawerLogged(reason, note = null, orderIdArg = null) {
+    if (!thermalPort) {
+      toast.error('尚未連接收據機／錢箱，請先按「連接錢箱」')
+      return false
+    }
+    try {
+      await kickCashDrawer(thermalPort)
+    } catch (e) {
+      toast.error('開錢箱失敗：' + e.message)
+      return false
+    }
+    supabase.from('pos_drawer_events').insert({
+      organization_id: orgId,
+      store_id:        effectiveStoreId,
+      order_id:        orderIdArg,
+      reason,
+      note,
+      opened_by:       profile?.id ?? null,
+    }).then(({ error }) => { if (error) console.error('[drawer] audit log failed', error) })
+    return true
+  }
 
   // ── Select table ──────────────────────────────────────────────────────────
   async function selectTable(table) {
@@ -1156,6 +1946,8 @@ img{display:block;margin:0 auto}
               {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           )}
+          <button style={S.iconBtn(false)} onClick={connectDrawer}>{thermalPort ? '✓ 錢箱' : '連接錢箱'}</button>
+          <button style={S.iconBtn(false)} onClick={() => { setDrawerReason('現金校正'); setDrawerNote(''); setShowDrawerModal(true) }}>開錢箱</button>
           <button style={S.iconBtn(false)} onClick={() => navigate('/pos')}>← 返回</button>
         </div>
       </div>
@@ -1189,6 +1981,51 @@ img{display:block;margin:0 auto}
             })}
           </div>
         </>
+      )}
+
+      {/* 開錢箱（非收款）— 現金校正等原因，留稽核紀錄 */}
+      {showDrawerModal && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 1200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div onClick={() => setShowDrawerModal(false)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)' }} />
+          <div style={{ position: 'relative', zIndex: 1, background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)', borderRadius: 14, padding: 20, width: 320, display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)' }}>開啟錢箱（非收款）</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>非收款開箱將留存稽核紀錄，請選擇原因</div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {['現金校正', '找零補鈔', '其他'].map(r => (
+                <button key={r} onClick={() => setDrawerReason(r)}
+                  style={{ padding: '5px 12px', borderRadius: 999, border: '1px solid', fontSize: 12, cursor: 'pointer',
+                    borderColor: drawerReason === r ? 'var(--accent-cyan)' : 'var(--border-primary)',
+                    background: drawerReason === r ? 'var(--accent-cyan-dim)' : 'var(--bg-tertiary)',
+                    color: drawerReason === r ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>
+                  {r}
+                </button>
+              ))}
+            </div>
+            <input
+              placeholder="補充說明（選填）"
+              value={drawerNote}
+              onChange={e => setDrawerNote(e.target.value)}
+              style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border-primary)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
+            />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => setShowDrawerModal(false)}
+                style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: '1px solid var(--border-primary)', background: 'var(--bg-tertiary)', color: 'var(--text-secondary)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                取消
+              </button>
+              <button
+                onClick={async () => {
+                  const ok = await openDrawerLogged(
+                    drawerReason === '其他' ? 'other' : 'correction',
+                    [drawerReason, drawerNote.trim()].filter(Boolean).join('：')
+                  )
+                  if (ok) { toast.success('錢箱已開啟'); setShowDrawerModal(false); setDrawerNote('') }
+                }}
+                style={{ flex: 2, padding: '10px 0', borderRadius: 8, border: 'none', background: 'var(--accent-cyan)', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                開啟錢箱
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
@@ -1418,6 +2255,8 @@ img{display:block;margin:0 auto}
           storeId={effectiveStoreId}
           orderId={orderId}
           storeName={storeName}
+          cashier={profile?.name ?? profile?.email ?? '服務員'}
+          openDrawer={(reason, note) => openDrawerLogged(reason, note, orderId)}
           onClose={() => setShowCheckout(false)}
           onDone={afterCheckout}
         />

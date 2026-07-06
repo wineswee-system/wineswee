@@ -3,6 +3,8 @@ import { Plus, PlayCircle, CheckCircle, XCircle, Trash2, RefreshCw } from 'lucid
 import { useTenant } from '../../contexts/TenantContext'
 import { useAuth } from '../../contexts/AuthContext'
 import { getPilotRuns, getSurveys, getMemberGroups, createPilotRun, deletePilotRun, launchPilotRun, approvePilotRun, rejectPilotRun } from '../../lib/db'
+import { dispatchDueLineSurveyInvitations } from '../../lib/comms/lineSender'
+import { logger } from '../../lib/logger'
 
 const STATUS_META = {
   draft:     { label: '草稿',   color: 'var(--text-muted)',    bg: 'var(--bg-tertiary)' },
@@ -52,9 +54,27 @@ export default function PilotRuns() {
     if (!confirm(`確定發送 Pilot「${pilot.name}」？將對目標群組建立問卷邀請。`)) return
     setLaunching(pilot.id)
     const { data, error } = await launchPilotRun(pilot.id)
+    if (error) { setLaunching(null); alert(`發送失敗：${error.message}`); return }
+
+    // LINE 通道問卷：立即發送「已到期」邀請（send_after 已到者）；
+    // 有延遲設定的邀請維持 pending，由排程屆時發送
+    const survey = surveys.find(s => s.id === pilot.survey_id)
+    let lineNote = ''
+    if (survey?.send_channel === 'line') {
+      try {
+        const r = await dispatchDueLineSurveyInvitations(pilot.survey_id)
+        lineNote = r.due > 0
+          ? `\nLINE 已發送 ${r.sent} 筆` +
+            (r.skipped > 0 ? `，${r.skipped} 筆未綁定略過` : '') +
+            (r.failed > 0 ? `，${r.failed} 筆失敗` : '')
+          : '\n邀請尚未到發送時間，屆時將自動發送'
+      } catch (err) {
+        logger.error('[PilotRuns] LINE 邀請發送失敗', { pilotId: pilot.id, error: err.message })
+        lineNote = `\nLINE 發送失敗：${err.message}`
+      }
+    }
     setLaunching(null)
-    if (error) { alert(`發送失敗：${error.message}`); return }
-    alert(`已建立 ${data || 0} 筆邀請，等待系統排程發送`)
+    alert(`已建立 ${data || 0} 筆邀請${lineNote}`)
     load()
   }
 

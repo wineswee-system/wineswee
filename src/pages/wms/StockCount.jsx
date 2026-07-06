@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react'
-import { Plus, Search, ClipboardList, Calendar, AlertTriangle, CheckCircle, ScanBarcode, Trash2 } from 'lucide-react'
+import { Plus, Search, ClipboardList, Calendar, AlertTriangle, CheckCircle, ScanBarcode, Trash2, Scale, BookCheck } from 'lucide-react'
 import { getStockCounts, createStockCount } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
 import { calculateWeightedAverage } from '../../lib/inventoryCosting'
+import { deriveVariances, splitLossGain, canPostStockCount, postStockCount } from '../../lib/stockCountPosting'
+import { updateStockCount } from '../../lib/db/inventoryClose'
 import { playBeep } from '../../lib/barcodeScanner'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
@@ -40,6 +42,7 @@ export default function StockCount() {
   // Variance analysis state
   const [varianceItems, setVarianceItems] = useState([])
   const [selectedCount, setSelectedCount] = useState(null)
+  const [postingId, setPostingId] = useState(null) // 調帳過帳中的盤點單 id
 
   // 條碼盤點清單 state
   const [scanSheet, setScanSheet] = useState([]) // [{ sku_code, sku_name, count }]
@@ -95,6 +98,19 @@ export default function StockCount() {
   // Open variance analysis for a count — load real stock data
   const openVariance = async (count) => {
     setSelectedCount(count)
+    // 已核對/已調帳：直接還原已儲存的核對明細（items JSONB）
+    if (Array.isArray(count.items) && count.items.length > 0) {
+      setVarianceItems(count.items.map(i => ({
+        sku: i.sku ?? i.sku_code,
+        name: i.name ?? i.sku_name ?? i.sku ?? i.sku_code,
+        system_qty: Number(i.system_qty) || 0,
+        counted_qty: i.counted_qty == null ? (Number(i.system_qty) || 0) : (Number(i.counted_qty) || 0),
+        unit_cost: Number(i.unit_cost) || 0,
+        editable: count.status !== '已調帳',
+      })))
+      setShowVarianceModal(true)
+      return
+    }
     try {
       // Load real SKUs and stock levels for this warehouse
       const [{ data: skus }, { data: stocks }] = await Promise.all([
@@ -155,35 +171,66 @@ export default function StockCount() {
     }
   }
 
-  // Adjust all variances at once
-  const handleAdjustAll = async () => {
-    const itemsWithVariance = varianceItems.filter(v => v.counted_qty !== v.system_qty)
-    if (itemsWithVariance.length === 0) { toast.error('無差異需要調整'); return }
-    if (!(await confirm({ message: `確定要調整 ${itemsWithVariance.length} 個品項的庫存差異？` }))) return
+  // 儲存核對結果：實盤數回寫 stock_counts.items，狀態 盤點中 → 已核對
+  // （之後由「調帳過帳」一次產生盤差調整 + 盤盈虧傳票，取代逐筆手動調整）
+  const handleSaveChecked = async () => {
+    if (!selectedCount) return
+    const items = varianceItems.map(v => ({
+      sku: v.sku,
+      name: v.name,
+      system_qty: v.system_qty,
+      counted_qty: v.counted_qty,
+      unit_cost: v.unit_cost,
+    }))
+    const diffCount = items.filter(i => i.counted_qty !== i.system_qty).length
+    if (!(await confirm({ message: `確定儲存核對結果？共 ${diffCount} 項差異，狀態將更新為「已核對」，之後可執行「調帳過帳」。` }))) return
+    try {
+      const { data, error } = await updateStockCount(selectedCount.id, {
+        items,
+        total_items: items.length,
+        discrepancies: diffCount,
+        status: '已核對',
+      })
+      if (error) throw error
+      setCounts(prev => prev.map(c => c.id === data.id ? data : c))
+      setShowVarianceModal(false)
+      toast.success('核對結果已儲存（已核對），可於列表執行「調帳過帳」')
+    } catch (err) {
+      toast.error('儲存核對結果失敗：' + (err.message || '未知錯誤'))
+    }
+  }
 
-    for (const item of itemsWithVariance) {
-      const diff = item.counted_qty - item.system_qty
-      await supabase.from('inventory_adjustments').insert({
-        sku_code: item.sku,
-        sku_name: item.name,
-        quantity: diff,
-        reason: `盤點調整 (系統: ${item.system_qty}, 實盤: ${item.counted_qty})`,
-        operator: selectedCount?.counter || '系統',
-      })
+  // 已核對 → 已調帳：呼叫 secure_post_stock_count（盤差調整 + 盤盈虧傳票，冪等）
+  const handlePost = async (count) => {
+    if (!canPostStockCount(count.status)) {
+      toast.error('僅「已核對」狀態的盤點單可執行調帳過帳')
+      return
     }
-    const bus = getEventBus()
-    for (const item of itemsWithVariance) {
-      const diff = item.counted_qty - item.system_qty
+    if (!(await confirm({ message: `確定將盤點單 #${count.id}（${count.warehouse}）調帳過帳？將產生盤差調整與盤盈虧傳票。` }))) return
+    setPostingId(count.id)
+    try {
+      const res = await postStockCount(count)
+      const voucherNos = (res?.vouchers || []).map(v => v.entry_number).filter(Boolean).join('、')
+      const net = Number(res?.variance_amount) || 0
+      toast.success(
+        `已調帳：盤盈虧金額 ${net >= 0 ? '+' : '-'}$${Math.abs(net).toLocaleString()}` +
+        (voucherNos ? `，傳票 ${voucherNos}` : '（差異金額 0，未產傳票）')
+      )
+      const bus = getEventBus()
       await bus.publish('wms.stock.adjusted', {
-        sku_code: item.sku,
-        adjustment: diff,
-        reason: '盤點批次調整',
-        warehouse: selectedCount?.warehouse || '',
-        count_id: String(selectedCount?.id || ''),
+        sku_code: '*',
+        adjustment: net,
+        reason: '盤點盈虧過帳',
+        warehouse: count.warehouse || '',
+        count_id: String(count.id),
       })
+      const { data } = await getStockCounts()
+      setCounts(data || [])
+    } catch (err) {
+      toast.error(err.message || '調帳過帳失敗')
+    } finally {
+      setPostingId(null)
     }
-    toast.success(`已建立 ${itemsWithVariance.length} 筆庫存調整`)
-    setShowVarianceModal(false)
   }
 
   // 條碼盤點掃描
@@ -305,7 +352,7 @@ export default function StockCount() {
 
       {/* Tab */}
       <div style={{ display: 'flex', gap: 4, marginBottom: 16, background: 'var(--bg-card)', borderRadius: 10, padding: 4, border: '1px solid var(--border-subtle)', width: 'fit-content' }}>
-        {[['counts', '📋 盤點記錄'], ['schedules', '📅 循環排程']].map(([key, label]) => (
+        {[['counts', '📋 盤點記錄'], ['schedules', '📅 循環排程'], ['variance-report', '⚖️ 盤盈虧報表']].map(([key, label]) => (
           <button key={key} onClick={() => setTab(key)} style={{ padding: '6px 16px', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 500, background: tab === key ? 'var(--accent-cyan)' : 'transparent', color: tab === key ? '#fff' : 'var(--text-muted)' }}>{label}</button>
         ))}
       </div>
@@ -322,10 +369,10 @@ export default function StockCount() {
           <div className="data-table-wrapper">
             <table className="data-table">
               <thead>
-                <tr><th>盤點日期</th><th>倉庫</th><th>盤點人</th><th>總品項</th><th>差異數</th><th>狀態</th><th>備註</th><th>操作</th></tr>
+                <tr><th>盤點日期</th><th>倉庫</th><th>盤點人</th><th>總品項</th><th>差異數</th><th>狀態</th><th>盤盈虧 / 傳票</th><th>備註</th><th>操作</th></tr>
               </thead>
               <tbody>
-                {filtered.length === 0 && <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>尚無盤點記錄</td></tr>}
+                {filtered.length === 0 && <tr><td colSpan={9} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>尚無盤點記錄</td></tr>}
                 {filtered.map(c => (
                   <tr key={c.id}>
                     <td>{c.count_date}</td>
@@ -336,15 +383,44 @@ export default function StockCount() {
                       {c.discrepancies || 0}
                     </td>
                     <td>
-                      <span className={`badge ${c.status === '已完成' ? 'badge-success' : c.status === '盤點中' ? 'badge-warning' : 'badge-info'}`}>
+                      <span className={`badge ${
+                        c.status === '已調帳' ? 'badge-success'
+                          : c.status === '已完成' ? 'badge-success'
+                          : c.status === '已核對' ? 'badge-info'
+                          : c.status === '盤點中' ? 'badge-warning' : 'badge-info'}`}>
                         <span className="badge-dot"></span>{c.status}
                       </span>
                     </td>
-                    <td style={{ fontSize: 12, color: 'var(--text-secondary)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.notes}</td>
                     <td>
-                      <button className="btn btn-secondary" style={{ fontSize: 11, padding: '3px 8px' }} onClick={() => openVariance(c)}>
-                        <AlertTriangle size={11} /> 差異分析
-                      </button>
+                      {c.status === '已調帳' ? (
+                        <div style={{ fontSize: 12 }}>
+                          <span style={{
+                            fontFamily: 'monospace', fontWeight: 700,
+                            color: Number(c.variance_amount) > 0 ? 'var(--accent-green)'
+                              : Number(c.variance_amount) < 0 ? 'var(--accent-red)' : 'var(--text-muted)',
+                          }}>
+                            {Number(c.variance_amount) >= 0 ? '+' : '-'}${Math.abs(Number(c.variance_amount) || 0).toLocaleString()}
+                          </span>
+                          {(c.journal_refs || []).map(j => (
+                            <div key={j.entry_number} style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--text-secondary)' }}>
+                              {j.kind === 'loss' ? '盤虧' : '盤盈'} {j.entry_number}
+                            </div>
+                          ))}
+                        </div>
+                      ) : <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>-</span>}
+                    </td>
+                    <td style={{ fontSize: 12, color: 'var(--text-secondary)', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.notes}</td>
+                    <td>
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        <button className="btn btn-secondary" style={{ fontSize: 11, padding: '3px 8px' }} onClick={() => openVariance(c)}>
+                          <AlertTriangle size={11} /> 差異分析
+                        </button>
+                        {c.status === '已核對' && (
+                          <button className="btn btn-primary" style={{ fontSize: 11, padding: '3px 8px' }} disabled={postingId === c.id} onClick={() => handlePost(c)}>
+                            <BookCheck size={11} /> {postingId === c.id ? '過帳中...' : '調帳過帳'}
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -398,6 +474,112 @@ export default function StockCount() {
           </div>
         </div>
       )}
+
+      {/* 盤盈虧報表：數量差 × 單價 = 金額差，依倉別/盈虧分類（已調帳盤點單） */}
+      {tab === 'variance-report' && (() => {
+        const posted = counts.filter(c => c.status === '已調帳')
+        const rows = posted.map(c => {
+          const split = splitLossGain(deriveVariances(c.items))
+          return { count: c, ...split }
+        })
+        const totalLoss = rows.reduce((s, r) => s + r.shortageTotal, 0)
+        const totalGain = rows.reduce((s, r) => s + r.overageTotal, 0)
+        const byWarehouse = Object.values(rows.reduce((acc, r) => {
+          const key = r.count.warehouse || '未指定'
+          if (!acc[key]) acc[key] = { warehouse: key, counts: 0, shortage: 0, overage: 0 }
+          acc[key].counts += 1
+          acc[key].shortage += r.shortageTotal
+          acc[key].overage += r.overageTotal
+          return acc
+        }, {}))
+
+        return (
+          <>
+            <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', marginBottom: 16 }}>
+              <div className="stat-card" style={{ '--card-accent': 'var(--accent-red)', '--card-accent-dim': 'var(--accent-red-dim)' }}>
+                <div className="stat-card-label">總盤虧金額</div>
+                <div className="stat-card-value">${totalLoss.toLocaleString()}</div>
+              </div>
+              <div className="stat-card" style={{ '--card-accent': 'var(--accent-green)', '--card-accent-dim': 'var(--accent-green-dim)' }}>
+                <div className="stat-card-label">總盤盈金額</div>
+                <div className="stat-card-value">${totalGain.toLocaleString()}</div>
+              </div>
+              <div className="stat-card" style={{ '--card-accent': 'var(--accent-purple)', '--card-accent-dim': 'var(--accent-purple-dim)' }}>
+                <div className="stat-card-label">淨盤盈虧</div>
+                <div className="stat-card-value">
+                  {totalGain - totalLoss >= 0 ? '+' : '-'}${Math.abs(Math.round((totalGain - totalLoss) * 100) / 100).toLocaleString()}
+                </div>
+              </div>
+            </div>
+
+            <div className="card" style={{ marginBottom: 16 }}>
+              <div className="card-header">
+                <div className="card-title"><span className="card-title-icon"><Scale size={16} /></span> 依倉別彙總</div>
+              </div>
+              <div className="data-table-wrapper">
+                <table className="data-table">
+                  <thead>
+                    <tr><th>倉庫</th><th>盤點單數</th><th style={{ textAlign: 'right' }}>盤虧金額</th><th style={{ textAlign: 'right' }}>盤盈金額</th><th style={{ textAlign: 'right' }}>淨額</th></tr>
+                  </thead>
+                  <tbody>
+                    {byWarehouse.length === 0 && <tr><td colSpan={5} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>尚無已調帳的盤點單</td></tr>}
+                    {byWarehouse.map(w => (
+                      <tr key={w.warehouse}>
+                        <td style={{ fontWeight: 600 }}>{w.warehouse}</td>
+                        <td>{w.counts}</td>
+                        <td style={{ textAlign: 'right', fontFamily: 'monospace', color: 'var(--accent-red)' }}>${w.shortage.toLocaleString()}</td>
+                        <td style={{ textAlign: 'right', fontFamily: 'monospace', color: 'var(--accent-green)' }}>${w.overage.toLocaleString()}</td>
+                        <td style={{ textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: w.overage - w.shortage >= 0 ? 'var(--accent-green)' : 'var(--accent-red)' }}>
+                          {w.overage - w.shortage >= 0 ? '+' : '-'}${Math.abs(Math.round((w.overage - w.shortage) * 100) / 100).toLocaleString()}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="card-header">
+                <div className="card-title"><span className="card-title-icon"><ClipboardList size={16} /></span> 盤盈虧明細（依盤點單）</div>
+              </div>
+              <div className="data-table-wrapper">
+                <table className="data-table">
+                  <thead>
+                    <tr><th>盤點單</th><th>日期</th><th>倉庫</th><th>虧項/盈項</th><th style={{ textAlign: 'right' }}>盤虧金額</th><th style={{ textAlign: 'right' }}>盤盈金額</th><th style={{ textAlign: 'right' }}>淨額</th><th>傳票</th></tr>
+                  </thead>
+                  <tbody>
+                    {rows.length === 0 && <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>尚無已調帳的盤點單</td></tr>}
+                    {rows.map(r => (
+                      <tr key={r.count.id}>
+                        <td style={{ fontFamily: 'monospace', fontWeight: 600 }}>#{r.count.id}</td>
+                        <td>{r.count.count_date}</td>
+                        <td style={{ fontWeight: 600 }}>{r.count.warehouse}</td>
+                        <td style={{ fontSize: 12 }}>
+                          <span style={{ color: 'var(--accent-red)' }}>{r.lossItems.length} 虧</span>
+                          {' / '}
+                          <span style={{ color: 'var(--accent-green)' }}>{r.gainItems.length} 盈</span>
+                        </td>
+                        <td style={{ textAlign: 'right', fontFamily: 'monospace', color: 'var(--accent-red)' }}>${r.shortageTotal.toLocaleString()}</td>
+                        <td style={{ textAlign: 'right', fontFamily: 'monospace', color: 'var(--accent-green)' }}>${r.overageTotal.toLocaleString()}</td>
+                        <td style={{ textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: r.netAmount >= 0 ? 'var(--accent-green)' : 'var(--accent-red)' }}>
+                          {r.netAmount >= 0 ? '+' : '-'}${Math.abs(r.netAmount).toLocaleString()}
+                        </td>
+                        <td style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--text-secondary)' }}>
+                          {(r.count.journal_refs || []).map(j => (
+                            <div key={j.entry_number}>{j.kind === 'loss' ? '盤虧' : '盤盈'} {j.entry_number}</div>
+                          ))}
+                          {(r.count.journal_refs || []).length === 0 && '-'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        )
+      })()}
 
       {/* New Count Modal */}
       {showModal && (
@@ -464,10 +646,19 @@ export default function StockCount() {
 
       {/* Variance Analysis Modal */}
       {showVarianceModal && (
-        <Modal title={`差異分析 - ${selectedCount?.warehouse || ''} (${selectedCount?.count_date || ''})`} onClose={() => setShowVarianceModal(false)} onSubmit={handleAdjustAll} submitLabel="全部調整" width={800}>
+        <Modal
+          title={`差異分析 - ${selectedCount?.warehouse || ''} (${selectedCount?.count_date || ''})`}
+          onClose={() => setShowVarianceModal(false)}
+          onSubmit={selectedCount?.status === '已調帳' ? undefined : handleSaveChecked}
+          submitLabel="儲存核對結果"
+          width={800}
+        >
           <div style={{ marginBottom: 12, padding: 10, background: 'var(--bg-main)', borderRadius: 8, fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span>容差範圍: <strong>{TOLERANCE_PERCENT}%</strong></span>
-            <span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {selectedCount?.status === '已調帳' && (
+                <span className="badge badge-success"><span className="badge-dot"></span>已調帳（唯讀）</span>
+              )}
               差異品項: <strong style={{ color: 'var(--accent-red)' }}>{varianceItems.filter(v => v.counted_qty !== v.system_qty).length}</strong> / {varianceItems.length}
             </span>
           </div>
@@ -499,7 +690,7 @@ export default function StockCount() {
                       <td>{v.name}</td>
                       <td>{v.system_qty}</td>
                       <td>
-                        <input type="number" className="form-input" style={{ width: 80, padding: '2px 6px', fontWeight: 600, textAlign: 'center' }} value={v.counted_qty} onChange={e => updateCountedQty(i, e.target.value)} />
+                        <input type="number" className="form-input" style={{ width: 80, padding: '2px 6px', fontWeight: 600, textAlign: 'center' }} value={v.counted_qty} disabled={selectedCount?.status === '已調帳'} onChange={e => updateCountedQty(i, e.target.value)} />
                       </td>
                       <td style={{
                         fontWeight: 700,
@@ -523,12 +714,12 @@ export default function StockCount() {
                         {dollarVariance === 0 ? '-' : (dollarVariance > 0 ? '+$' : '-$') + Math.abs(dollarVariance).toLocaleString()}
                       </td>
                       <td>
-                        {diff !== 0 ? (
+                        {diff !== 0 && selectedCount?.status !== '已調帳' ? (
                           <button className="btn btn-secondary" style={{ fontSize: 10, padding: '2px 6px' }} onClick={() => handleVarianceAdjust(v)}>
                             <CheckCircle size={10} /> 調整
                           </button>
                         ) : (
-                          <span style={{ fontSize: 11, color: 'var(--accent-green)' }}>相符</span>
+                          <span style={{ fontSize: 11, color: diff === 0 ? 'var(--accent-green)' : 'var(--text-muted)' }}>{diff === 0 ? '相符' : '已調帳'}</span>
                         )}
                       </td>
                     </tr>

@@ -3,6 +3,8 @@ import { Plus, Search, Barcode } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
+import BarcodeManagerModal from './components/BarcodeManagerModal'
+import { useOrgId } from '../../contexts/AuthContext'
 
 const CATEGORIES = ['食品', '飲料', '電子', '服飾', '家居', '美妝', '文具', '其他']
 const COSTING_METHODS = [
@@ -47,11 +49,13 @@ function BarcodeVisual({ code }) {
 }
 
 export default function SKUs() {
+  const orgId = useOrgId()
   const [skus, setSkus] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [search, setSearch] = useState('')
   const [showModal, setShowModal] = useState(false)
+  const [showBarcodeModal, setShowBarcodeModal] = useState(null) // 條碼管理中的 SKU（F-C4）
   const [showVariantModal, setShowVariantModal] = useState(null)
   const [variantForm, setVariantForm] = useState({ attributes: {}, variants: [] })
   const [viewMode, setViewMode] = useState('all') // 'all', 'parents', 'variants'
@@ -216,7 +220,15 @@ export default function SKUs() {
                         </div>
                       )}
                     </td>
-                    <td><BarcodeVisual code={s.barcode} /></td>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <BarcodeVisual code={s.barcode} />
+                        <button className="btn btn-secondary" style={{ fontSize: 11, padding: '2px 8px', whiteSpace: 'nowrap' }}
+                          title="條碼管理（一品多碼）" onClick={() => setShowBarcodeModal(s)}>
+                          <Barcode size={11} /> 管理
+                        </button>
+                      </div>
+                    </td>
                     <td><span className="badge badge-cyan">{s.category}</span></td>
                     <td>{s.unit}</td>
                     <td style={{ fontSize: 12 }}>
@@ -254,6 +266,15 @@ export default function SKUs() {
           </table>
         </div>
       </div>
+
+      {/* 條碼管理 Modal（F-C4 一品多碼） */}
+      {showBarcodeModal && (
+        <BarcodeManagerModal
+          sku={showBarcodeModal}
+          orgId={orgId}
+          onClose={() => setShowBarcodeModal(null)}
+        />
+      )}
 
       {/* 變體管理 Modal */}
       {showVariantModal && (

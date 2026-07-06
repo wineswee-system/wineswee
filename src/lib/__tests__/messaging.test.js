@@ -39,40 +39,58 @@ describe('MESSAGE_TEMPLATES', () => {
 })
 
 // ═════════════════════════════════════════════════════════════
+// Email/SMS 通道尚未整合 — stub 現在「明確回報失敗」而非假裝成功。
+// 會員 LINE 發送已改走 src/lib/comms/lineSender.js（crm-line-send）。
 describe('sendEmail', () => {
-  it('MS-01: sends email and returns messageId', () => {
+  it('MS-01: 通道未設定 → 明確失敗並回傳 messageId', () => {
     const result = sendEmail('test@example.com', 'Test Subject', 'Test Body')
-    expect(result.success).toBe(true)
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('Email 通道尚未設定')
     expect(result.messageId).toMatch(/^MSG-/)
   })
 
-  it('handles array of recipients', () => {
+  it('handles array of recipients (仍回報未設定)', () => {
     const result = sendEmail(['a@test.com', 'b@test.com'], 'Subject', 'Body')
-    expect(result.success).toBe(true)
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('Email 通道尚未設定')
+  })
+
+  it('無效 email 直接回報格式錯誤', () => {
+    const result = sendEmail('not-an-email', 'Subject', 'Body')
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('無效的 Email 地址')
   })
 })
 
 // ═════════════════════════════════════════════════════════════
 describe('sendLINEMessage', () => {
-  it('MS-02: formats LINE message', () => {
+  it('MS-02: 已棄用 stub → 明確失敗，導向 lineSender', () => {
     const result = sendLINEMessage('U12345', 'Hello!')
-    expect(result.success).toBe(true)
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('lineSender')
     expect(result.messageId).toMatch(/^MSG-/)
   })
 })
 
 // ═════════════════════════════════════════════════════════════
 describe('sendSMS', () => {
-  it('MS-03: formats SMS', () => {
+  it('MS-03: 通道未設定 → 明確失敗', () => {
     const result = sendSMS('0912345678', 'Your OTP is 123456')
-    expect(result.success).toBe(true)
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('簡訊通道尚未設定')
     expect(result.messageId).toMatch(/^MSG-/)
+  })
+
+  it('手機格式錯誤優先回報格式錯誤', () => {
+    const result = sendSMS('12345', 'test')
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('手機號碼格式不正確')
   })
 })
 
 // ═════════════════════════════════════════════════════════════
 describe('sendBulkEmail', () => {
-  it('MS-04: batches bulk email', () => {
+  it('MS-04: 通道未設定 → 全數失敗，不假裝成功', () => {
     const recipients = Array.from({ length: 50 }, (_, i) => ({
       email: `user${i}@test.com`,
       name: `User ${i}`,
@@ -84,9 +102,9 @@ describe('sendBulkEmail', () => {
       orderDate: '2026-04-05',
       companyName: 'Test Corp',
     })
-    expect(result.success).toBe(true)
-    expect(result.sent).toBe(50)
-    expect(result.failed).toBe(0)
+    expect(result.success).toBe(false)
+    expect(result.sent).toBe(0)
+    expect(result.failed).toBe(50)
   })
 })
 

@@ -25,6 +25,7 @@ const STATUS_CONFIG = {
   simulated: { label: '模擬',   badge: 'badge-info' },
   failed:    { label: '失敗',   badge: 'badge-error' },
   queued:    { label: '排隊中', badge: 'badge-warning' },
+  skipped_no_binding: { label: '未綁定略過', badge: 'badge-warning' },
 }
 
 const FILTER_TABS = [
@@ -40,6 +41,7 @@ const STATUS_TABS = [
   { key: 'simulated', label: '模擬' },
   { key: 'failed', label: '失敗' },
   { key: 'queued', label: '排隊中' },
+  { key: 'skipped_no_binding', label: '未綁定略過' },
 ]
 
 export default function MessageLog() {

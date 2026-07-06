@@ -84,6 +84,7 @@ export const groupNav = {
         { icon: Tag, label: '價格規則', path: '/sales/pricing' },
         { icon: DollarSign, label: '業務佣金', path: '/sales/commission' },
         { icon: RotateCcw, label: '銷售退貨', path: '/sales/returns' },
+        { icon: FileText, label: '銷貨折讓單', path: '/sales/allowances' },
         { icon: Truck, label: '物流追蹤', path: '/sales/shipments' },
       ]
     },
@@ -133,6 +134,7 @@ export const groupNav = {
         { icon: ClipboardList, label: '採購申請', path: '/purchase/requests' },
         { icon: FileText, label: '採購單', path: '/purchase/orders' },
         { icon: FileCheck, label: '進貨驗收', path: '/purchase/receipts' },
+        { icon: FileText, label: '進貨折讓單', path: '/purchase/allowances' },
         { icon: FileText, label: '合約管理', path: '/purchase/contracts' },
         { icon: FileText, label: '長期採購協議', path: '/purchase/blanket' },
         { icon: GitBranch, label: '採購管線', path: '/purchase/pipeline' },
@@ -194,6 +196,9 @@ export const groupNav = {
         { icon: Receipt, label: '應付帳款', path: '/finance/ap' },
         { icon: FileText, label: '電子發票', path: '/finance/invoices' },
         { icon: CreditCard, label: '銀行對帳', path: '/finance/bank' },
+        { icon: BookText, label: '立沖帳管理', path: '/finance/open-items' },
+        { icon: Receipt, label: '票據管理', path: '/finance/notes' },
+        { icon: CreditCard, label: '卡款結算批次', path: '/finance/settlement-batches' },
       ]
     },
     {
@@ -204,6 +209,9 @@ export const groupNav = {
         { icon: FileText, label: '資產負債表', path: '/finance/balance-sheet' },
         { icon: TrendingUp, label: '損益表', path: '/finance/profit-loss' },
         { icon: TrendingUp, label: '現金流量表', path: '/finance/cash-flow' },
+        { icon: BookText, label: '總分類帳', path: '/finance/general-ledger' },
+        { icon: BookText, label: '日記簿', path: '/finance/journal-book' },
+        { icon: BarChart3, label: '營業成本表', path: '/finance/cost-of-goods' },
       ]
     },
     {
@@ -213,6 +221,7 @@ export const groupNav = {
         { icon: Receipt, label: '稅務申報', path: '/finance/tax-reports' },
         { icon: FileText, label: '營業稅申報', path: '/finance/tax-filing' },
         { icon: Receipt, label: '401 營業稅報表', path: '/finance/tax-report' },
+        { icon: FileText, label: '發票字軌配號', path: '/finance/invoice-tracks' },
       ]
     },
     {
@@ -223,9 +232,11 @@ export const groupNav = {
         { icon: DollarSign, label: '幣別管理', path: '/finance/currencies' },
         { icon: BarChart3, label: '預算管理', path: '/finance/budgets' },
         { icon: BarChart3, label: '成本中心', path: '/finance/cost-centers' },
+        { icon: BarChart3, label: '部門損益表', path: '/finance/profit-loss-by-dept' },
         { icon: Package, label: '固定資產', path: '/finance/fixed-assets' },
         { icon: ArrowRightLeft, label: '匯率管理', path: '/finance/exchange-rates' },
         { icon: FileText, label: '期間關帳', path: '/finance/period-close' },
+        { icon: BookText, label: '過帳規則', path: '/finance/posting-rules' },
       ]
     },
   ],
@@ -299,6 +310,7 @@ export const groupNav = {
         { icon: Scale, label: '資遣管理', path: '/hr/severance' },
         { icon: Scale, label: '法扣管理', path: '/hr/legal-deductions' },
         { icon: FileBarChart, label: '扣繳憑單', path: '/hr/tax-forms' },
+        { icon: FileBarChart, label: '二代健保補充保費', path: '/hr/nhi-supplement' },
         { icon: Star, label: '績效管理', path: '/hr/performance' },
         { icon: DollarSign, label: '績效獎金', path: '/hr/bonus' },
         { icon: DollarSign, label: '門市業績獎金', path: '/hr/store-bonus' },

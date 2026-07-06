@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { RotateCcw, Usb } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { createPOSTransaction, updatePOSTransaction, createInvoice, searchMemberByQuery, getPOSTransactionByNumber, getMemberCoupons, redeemCoupon } from '../../lib/db'
 import { useTenant } from '../../contexts/TenantContext'
 import { getEventBus } from '../../lib/events/index.js'
 import { createPaymentRequest, processRefund } from '../../lib/payment'
-import { processPayment, confirmPayment, refundPayment, getPaymentMethods } from '../../lib/paymentGateway'
+import { processPayment, confirmPayment, refundPayment, getPaymentMethods, validateEdcFields, recordEdcPayment } from '../../lib/paymentGateway'
 import { calculateInvoiceTax, generateInvoiceNumber } from '../../lib/einvoice'
 import { printReceipt, connectThermalPrinter, kickCashDrawer } from '../../lib/receiptPrinter'
 import POSPaymentOverlay from './components/POSPaymentOverlay'
@@ -16,7 +17,11 @@ import POSRefundModal from './components/POSRefundModal'
 import POSQROrderQueue from './components/POSQROrderQueue'
 import POSVariantModal from './components/POSVariantModal'
 import POSComboModal from './components/POSComboModal'
-import { cacheProducts, cacheMenuItems, getCachedProducts, getCachedMenuItems, isOnline } from '../../lib/posCache'
+import { cacheProducts, cacheMenuItems, getCachedProducts, getCachedMenuItems, isOnline, queueTransaction } from '../../lib/posCache'
+import { initOfflineSync } from '../../lib/posOfflineSync'
+import OfflineSyncBadge from './components/OfflineSyncBadge'
+import EdcPaymentForm from './components/EdcPaymentForm'
+import { parseTableQR } from '../../lib/tableQR'
 
 import { toast } from '../../lib/toast'
 
@@ -35,6 +40,7 @@ let invoiceSeq = Math.floor(Math.random() * 90000000) + 10000000
 
 export default function POSTerminal() {
   const { tenant } = useTenant()
+  const navigate = useNavigate()
   const [products, setProducts] = useState([])
   const [productsLoading, setProductsLoading] = useState(true)
 
@@ -77,6 +83,9 @@ export default function POSTerminal() {
   const [orderNote, setOrderNote] = useState('')
   const [paymentSplits, setPaymentSplits] = useState([])
 
+  // 中信 EDC 刷卡登錄（F-D1：credit_card = 端末機記錄模式，與 ECPay 脫鉤）
+  const [edcInfo, setEdcInfo] = useState({ card_brand: 'VISA', card_last4: '', auth_code: '' })
+
   // Auto-print preference (persisted in localStorage)
   const [autoPrint, setAutoPrint] = useState(() => {
     try { return localStorage.getItem('pos_auto_print') === 'true' } catch { return false }
@@ -99,6 +108,9 @@ export default function POSTerminal() {
   useEffect(() => {
     try { localStorage.setItem('pos_auto_print', String(autoPrint)) } catch {}
   }, [autoPrint])
+
+  // 離線交易自動同步：恢復連線 / 進入 POS 時補送佇列（冪等，重複呼叫只生效一次）
+  useEffect(() => { initOfflineSync() }, [])
 
   useEffect(() => {
     const orgId = tenant?.organization_id
@@ -249,6 +261,13 @@ export default function POSTerminal() {
     e.preventDefault()
     if (!barcodeInput.trim()) return
     const q = barcodeInput.trim()
+    // 掃到桌卡 QR（客人點餐連結）→ 跳轉服務員模式該桌結帳
+    const tableQR = parseTableQR(q)
+    if (tableQR) {
+      setBarcodeInput('')
+      navigate(`/pos/waiter?store=${encodeURIComponent(tableQR.storeId)}&table=${encodeURIComponent(tableQR.tableId)}&checkout=1`)
+      return
+    }
     const product = products.find(p => p.barcode === q || p.name.includes(q))
     if (product) {
       addToCart(product)
@@ -362,6 +381,64 @@ export default function POSTerminal() {
       }
     }
 
+    // 信用卡（中信 EDC）：結帳前必須完成 卡別/末四碼/授權碼 登錄
+    if (effectivePaymentMethod === 'credit_card') {
+      const edcErrors = validateEdcFields(edcInfo)
+      if (edcErrors.length > 0) {
+        toast.error(edcErrors[0])
+        return
+      }
+    }
+
+    // ★ 離線模式：僅支援現金，交易入本機佇列（帶冪等鍵），連線後自動同步
+    if (!isOnline()) {
+      if (effectivePaymentMethod !== 'cash') {
+        toast.error('離線狀態僅支援現金交易')
+        return
+      }
+      const txnNum = `POS-${String(Date.now()).slice(-6)}`
+      queueTransaction({
+        transaction_number: txnNum,
+        store: '威士威企業總部',
+        cashier: '系統',
+        items: cart.map(c => ({ name: c.name, qty: c.qty, price: c.price, order_type: c.order_type })),
+        subtotal, discount: safeDiscount, tax, total,
+        payment_method: currentPaymentLabel,
+        member_id: selectedMember?.id ?? null,
+        points_earned: selectedMember ? Math.floor(total / 10) : 0,
+        points_used: pointsUsed,
+      })
+      const nowDate = new Date()
+      const printTime = nowDate.toLocaleString('zh-TW', { hour12: false,
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit' }).replace(/\//g, '-')
+      setReceiptData({
+        storeName: tenant?.store_name || tenant?.name || '威士威企業總部',
+        txnNum,
+        invoiceNum: null, // 離線無法配號，同步後由補開流程開立
+        paymentId: txnNum,
+        printTime, terminalId: '01', orderType: '外帶', orderNum: txnNum,
+        seqNum: null, openedAt: printTime,
+        date: nowDate.toLocaleString('zh-TW'),
+        items: cart.map(c => ({ name: c.name, qty: c.qty, price: c.price, amount: c.price * c.qty })),
+        subtotal, discount: safeDiscount, pointsUsed, pointsDiscount, tax, total,
+        paymentMethod: currentPaymentLabel,
+        cashTendered: Number(cashTendered),
+        change: changeAmount,
+        carrierType: null, carrierValue: null,
+        note: orderNote.trim() || null,
+        offline: true,
+      })
+      setPaymentResult({ paymentId: txnNum, offline: true })
+      setGatewayPending(false)
+      setGatewayConfirmed(true)
+      setPaymentStage('success')
+      setProcessingMsg('')
+      toast.success('離線交易已暫存，連線後將自動同步')
+      if (thermalPort) kickCashDrawer(thermalPort).catch(() => {})
+      return
+    }
+
     setPaymentStage('paying')
     setProcessingMsg('處理付款中...')
 
@@ -425,6 +502,23 @@ export default function POSTerminal() {
             method: split.method,
             amount: split.amount,
           })
+        }
+      }
+
+      // 中信 EDC 卡付登錄：寫入 pos_payments（gateway='ctbc_edc'）。
+      // invoice_status 維持預設 'pending'，由 issue-invoice 補開 — 發票與付款方式解耦。
+      // 失敗不擋結帳（卡已於刷卡機過卡完成），僅記錄警示供日後補登。
+      if (effectivePaymentMethod === 'credit_card' && paymentSplits.length === 0) {
+        try {
+          await recordEdcPayment({
+            organization_id: tenant?.organization_id ?? null,
+            store_id: tenant?.store_id ?? null,
+            order_id: newTransactionId,
+            amount: total,
+            ...edcInfo,
+          })
+        } catch (e) {
+          console.warn('[POS] EDC 卡付登錄失敗（交易已完成，請至卡收明細補登）:', e.message)
         }
       }
 
@@ -584,6 +678,7 @@ export default function POSTerminal() {
     setAvailableCoupons([])
     setSelectedCoupon(null)
     setPaymentSplits([])
+    setEdcInfo({ card_brand: 'VISA', card_last4: '', auth_code: '' })
   }
 
   // Gateway confirm handler (simulates callback from payment gateway)
@@ -806,6 +901,8 @@ export default function POSTerminal() {
             <button className="btn" style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-primary)' }} onClick={() => setShowRefund(true)}>
               <RotateCcw size={14} /> 退貨/退款
             </button>
+
+            <OfflineSyncBadge />
           </div>
         </div>
       </div>
@@ -889,6 +986,11 @@ export default function POSTerminal() {
           onUpdateItemCourse={(id, course) => setCart(prev => prev.map(c => c.id === id ? { ...c, course } : c))}
         />
       </div>
+
+      {/* 中信 EDC 刷卡登錄（選擇信用卡付款時顯示） */}
+      {paymentStage === 'cart' && effectivePaymentMethod === 'credit_card' && (
+        <EdcPaymentForm value={edcInfo} onChange={setEdcInfo} />
+      )}
 
       {showReceipt && receiptData && (
         <POSReceiptModal

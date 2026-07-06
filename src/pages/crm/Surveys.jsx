@@ -1,7 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, BarChart2, Pencil, Trash2, PlayCircle, ChevronDown } from 'lucide-react'
+import { Plus, BarChart2, Pencil, Trash2, PlayCircle, ChevronDown, Send } from 'lucide-react'
 import { useTenant } from '../../contexts/TenantContext'
 import { getSurveys, deleteSurvey, updateSurvey } from '../../lib/db'
+import { dispatchDueLineSurveyInvitations } from '../../lib/comms/lineSender'
+import { toast } from '../../lib/toast'
+import { logger } from '../../lib/logger'
 import SurveyBuilderModal from './components/SurveyBuilderModal'
 import SurveyResultsPanel from './components/SurveyResultsPanel'
 
@@ -48,6 +51,28 @@ export default function Surveys() {
 
   function openCreate() { setEditing(null); setBuilderOpen(true) }
   function openEdit(s)  { setEditing(s);    setBuilderOpen(true) }
+
+  const [dispatchingId, setDispatchingId] = useState(null)
+  // 發送此問卷「已到期」的 LINE 邀請（購後觸發由 crmHandlers 排入 pending，
+  // 到 send_after 時間後由此發送；未綁定 LINE 的會員維持 pending）
+  async function handleDispatchLine(s) {
+    if (!confirm(`發送「${s.name}」的到期 LINE 邀請？`)) return
+    setDispatchingId(s.id)
+    try {
+      const r = await dispatchDueLineSurveyInvitations(s.id)
+      if (r.due === 0) toast.info('目前沒有到期待發送的邀請')
+      else toast.success(
+        `LINE 已發送 ${r.sent} 筆` +
+        (r.skipped > 0 ? `，${r.skipped} 筆未綁定略過` : '') +
+        (r.failed > 0 ? `，${r.failed} 筆失敗` : '')
+      )
+    } catch (err) {
+      logger.error('[Surveys] LINE 邀請發送失敗', { surveyId: s.id, error: err.message })
+      toast.error(`發送失敗：${err.message}`)
+    } finally {
+      setDispatchingId(null)
+    }
+  }
 
   return (
     <div style={{ padding: '1.5rem', maxWidth: '1100px', margin: '0 auto' }}>
@@ -129,6 +154,14 @@ export default function Surveys() {
                     <td style={{ padding: '0.75rem 1rem' }}>
                       <div style={{ display: 'flex', gap: '0.35rem' }}>
                         <ActionBtn icon={<BarChart2 size={14} />} title="查看結果" onClick={() => setViewing(s)} color="var(--accent-blue)" />
+                        {s.send_channel === 'line' && (
+                          <ActionBtn
+                            icon={<Send size={14} />}
+                            title={dispatchingId === s.id ? '發送中…' : '發送到期 LINE 邀請'}
+                            onClick={() => dispatchingId || handleDispatchLine(s)}
+                            color="var(--accent-cyan)"
+                          />
+                        )}
                         <ActionBtn icon={<PlayCircle size={14} />} title="試跑 Pilot" onClick={() => window.location.href = `/crm/pilots?survey=${s.id}`} color="var(--accent-purple)" />
                         <ActionBtn icon={<Pencil size={14} />}    title="編輯"     onClick={() => openEdit(s)}  color="var(--text-muted)" />
                         <ActionBtn icon={<Trash2 size={14} />}    title="刪除"     onClick={() => handleDelete(s.id)} color="var(--accent-red)" />

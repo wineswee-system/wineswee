@@ -14,6 +14,9 @@ export default function MarketingSendResultModal({ sendResult, onClose }) {
         {sendResult.unsubFiltered > 0 && (
           <p style={{ color: 'var(--accent-orange)', fontSize: 12 }}>已排除 {sendResult.unsubFiltered} 位退訂用戶</p>
         )}
+        {sendResult.skipped > 0 && (
+          <p style={{ color: 'var(--accent-orange)', fontSize: 12 }}>另有 {sendResult.skipped} 位會員未綁定 LINE，已略過</p>
+        )}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, margin: '16px 0' }}>

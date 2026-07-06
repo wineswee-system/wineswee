@@ -1,10 +1,12 @@
 ﻿import { supabase } from '../supabase'
 import { workflow, step, fanOut, fanIn, registerStep } from '../workflow/index.js'
+import { getTenantOrgId } from '../events/middleware/tenantContext.js'
 
 // ── Monthly Close Workflow ──
 // Usage: await workflow.start('monthly-close', { month: '2026-05' })
 //
 // DAG:
+//   depreciation.run   ← F-A5 月折舊提列（須在 ledger.lock 之前，否則傳票進不了帳）
 //   ledger.lock
 //     ↓ fan-out (3 parallel branches)
 //       branch 0: payroll.calculate → payroll.post
@@ -13,6 +15,18 @@ import { workflow, step, fanOut, fanIn, registerStep } from '../workflow/index.j
 //     ↓ fan-in (all must succeed)
 //   profitability.calculate
 //   report.generate
+
+registerStep('depreciation.run', async (ctx) => {
+  const { runMonthlyDepreciation } = await import('../accounting/fixedAssetOps.js')
+  const result = await runMonthlyDepreciation(ctx.month)
+  return {
+    period: ctx.month,
+    totalAmount: result?.total_amount ?? 0,
+    journalEntryId: result?.journal_entry_id ?? null,
+    alreadyExists: result?.already_exists === true, // 冪等：重跑月結不重複提列
+    skipped: result?.skipped === true,              // 無可折舊資產 → 照常通過
+  }
+})
 
 registerStep('ledger.lock', async (ctx) => {
   await supabase.from('accounting_periods')
@@ -49,6 +63,7 @@ registerStep('report.generate', async (ctx) => {
 })
 
 workflow.define('monthly-close', [
+  step('depreciation.run'),
   step('ledger.lock'),
   fanOut([
     [step('payroll.calculate'), step('payroll.post')],
@@ -80,6 +95,7 @@ function parsePaymentTerms(terms) {
 export async function createARFromShipment(shipment) {
   const invoiceNumber = `INV-${new Date().toISOString().slice(0, 4)}-${String(Date.now()).slice(-3)}`
 
+  const orgId = getTenantOrgId()
   const { data: ar, error: arError } = await supabase.from('accounts_receivable').insert({
     invoice_number: invoiceNumber,
     customer: shipment.customer,
@@ -88,6 +104,8 @@ export async function createARFromShipment(shipment) {
     paid_amount: 0,
     due_date: getDueDate(30), // NET30
     status: '未收款',
+    // 顯式寫入 org（無 session org 時由 DB trigger set_org_default 補）
+    ...(orgId ? { organization_id: orgId } : {}),
   }).select().single()
 
   if (arError) return { ok: false, error: arError.message }
@@ -118,6 +136,7 @@ export async function createAPFromReceipt(receipt, po) {
   const amount = (po.total_amount || 0) + (po.tax || 0) + (po.shipping || 0)
   const paymentDays = parsePaymentTerms(po.payment_terms)
 
+  const orgId = getTenantOrgId()
   const { data: ap, error: apError } = await supabase.from('accounts_payable').insert({
     bill_number: billNumber,
     supplier: po.supplier,
@@ -126,6 +145,8 @@ export async function createAPFromReceipt(receipt, po) {
     paid_amount: 0,
     due_date: getDueDate(paymentDays),
     status: '未付款',
+    // 顯式寫入 org（無 session org 時由 DB trigger set_org_default 補）
+    ...(orgId ? { organization_id: orgId } : {}),
   }).select().single()
 
   if (apError) return { ok: false, error: apError.message }
@@ -158,30 +179,37 @@ export async function calculateProfitability(month) {
   const nextMonthStart = m === 12
     ? `${y + 1}-01-01`
     : `${y}-${String(m + 1).padStart(2, '0')}-01`
+  const orgId = getTenantOrgId()
 
   // 收入: AR 已收款金額
-  const { data: arRecords } = await supabase
+  let arQ = supabase
     .from('accounts_receivable')
     .select('amount, paid_amount')
     .gte('created_at', monthStart)
     .lt('created_at', nextMonthStart)
+  if (orgId) arQ = arQ.eq('organization_id', orgId)
+  const { data: arRecords } = await arQ
 
   const revenue = (arRecords || []).reduce((s, r) => s + (r.paid_amount || 0), 0)
 
   // 進貨成本: AP 金額
-  const { data: apRecords } = await supabase
+  let apQ = supabase
     .from('accounts_payable')
     .select('amount, paid_amount')
     .gte('created_at', monthStart)
     .lt('created_at', nextMonthStart)
+  if (orgId) apQ = apQ.eq('organization_id', orgId)
+  const { data: apRecords } = await apQ
 
   const purchaseCost = (apRecords || []).reduce((s, r) => s + (r.amount || 0), 0)
 
   // 人工成本: 薪資
-  const { data: salaryRecords } = await supabase
+  let salQ = supabase
     .from('salary_records')
     .select('net_salary')
     .eq('month', month)
+  if (orgId) salQ = salQ.eq('organization_id', orgId)
+  const { data: salaryRecords } = await salQ
 
   const laborCost = (salaryRecords || []).reduce((s, r) => s + (r.net_salary || 0), 0)
 

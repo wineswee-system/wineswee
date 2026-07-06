@@ -1,22 +1,58 @@
 import { useState, useEffect } from 'react'
 import { CheckCircle, AlertTriangle, Filter, Download } from 'lucide-react'
-import { getTrialBalance } from '../../lib/accounting'
+import { getTrialBalance, getAccountType } from '../../lib/accounting'
+import { getAccounts } from '../../lib/db'
 import { exportTrialBalancePdf } from '../../lib/exportPdf'
 import LoadingSpinner from '../../components/LoadingSpinner'
 
 import { fmtNT as fmt } from '../../lib/currency'
 
+// 級次「總帳科目」：依 accounts.parent_code 把明細科目滾算到最上層科目
+function rollUpToParents(rows, accountsList) {
+  const acctMap = Object.fromEntries((accountsList || []).map(a => [a.code, a]))
+  const topCode = (code) => {
+    let cur = code
+    let guard = 0
+    while (acctMap[cur]?.parent_code && guard++ < 10) cur = acctMap[cur].parent_code
+    return cur
+  }
+  const grouped = {}
+  for (const row of rows) {
+    const code = topCode(row.account_code)
+    if (!grouped[code]) {
+      const acct = acctMap[code]
+      grouped[code] = {
+        account_code: code,
+        account_name: acct?.name || (code === row.account_code ? row.account_name : code),
+        type: acct?.type || row.type || getAccountType(code),
+        net: 0,
+      }
+    }
+    grouped[code].net = Math.round((grouped[code].net + row.debit_balance - row.credit_balance) * 100) / 100
+  }
+  return Object.values(grouped)
+    .map(({ net, ...g }) => ({
+      ...g,
+      debit_balance: net >= 0 ? net : 0,
+      credit_balance: net < 0 ? Math.round(Math.abs(net) * 100) / 100 : 0,
+    }))
+    .sort((a, b) => a.account_code.localeCompare(b.account_code))
+}
+
 export default function TrialBalance() {
   const [trialData, setTrialData] = useState([])
+  const [accounts, setAccounts] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [asOfDate, setAsOfDate] = useState(new Date().toISOString().slice(0, 10))
+  const [level, setLevel] = useState('明細') // 級次：明細科目（預設）/ 總帳科目
 
   const loadData = (date) => {
     setLoading(true)
     setError(null)
-    getTrialBalance(date).then(data => {
+    Promise.all([getTrialBalance(date), getAccounts()]).then(([data, accountsRes]) => {
       setTrialData(data || [])
+      setAccounts(accountsRes.data || [])
     }).catch(err => {
       console.error('Failed to load data:', err)
       setError('資料載入失敗，請重新整理頁面')
@@ -37,8 +73,10 @@ export default function TrialBalance() {
   if (loading) return <LoadingSpinner />
   if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
-  const totalDebit = Math.round(trialData.reduce((s, r) => s + (r.debit_balance || 0), 0) * 100) / 100
-  const totalCredit = Math.round(trialData.reduce((s, r) => s + (r.credit_balance || 0), 0) * 100) / 100
+  const displayData = level === '總帳' ? rollUpToParents(trialData, accounts) : trialData
+
+  const totalDebit = Math.round(displayData.reduce((s, r) => s + (r.debit_balance || 0), 0) * 100) / 100
+  const totalCredit = Math.round(displayData.reduce((s, r) => s + (r.credit_balance || 0), 0) * 100) / 100
   const isBalanced = Math.abs(totalDebit - totalCredit) < 0.01
 
   const typeColor = (type) => {
@@ -55,7 +93,7 @@ export default function TrialBalance() {
   }
 
   const handleExportPdf = () => {
-    exportTrialBalancePdf(trialData, asOfDate, { totalDebit, totalCredit, isBalanced })
+    exportTrialBalancePdf(displayData, asOfDate, { totalDebit, totalCredit, isBalanced })
   }
 
   return (
@@ -66,7 +104,25 @@ export default function TrialBalance() {
             <h2><span className="header-icon">📊</span> 試算表 Trial Balance</h2>
             <p>各科目借貸餘額彙總（僅含已過帳傳票）</p>
           </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            {/* 級次切換：總帳科目（依 parent_code 彙總）/ 明細科目（預設） */}
+            <div style={{ display: 'flex', border: '1px solid var(--border-medium)', borderRadius: 6, overflow: 'hidden' }}>
+              {['總帳', '明細'].map(lv => (
+                <button
+                  key={lv}
+                  onClick={() => setLevel(lv)}
+                  className="btn"
+                  style={{
+                    fontSize: 12, padding: '6px 12px', borderRadius: 0, border: 'none',
+                    background: level === lv ? 'var(--accent-cyan-dim)' : 'transparent',
+                    color: level === lv ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+                    fontWeight: level === lv ? 700 : 400,
+                  }}
+                >
+                  {lv}科目
+                </button>
+              ))}
+            </div>
             <Filter size={14} />
             <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>截止日期</span>
             <input
@@ -94,8 +150,8 @@ export default function TrialBalance() {
 
       <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
         <div className="stat-card" style={{ '--card-accent': 'var(--accent-cyan)', '--card-accent-dim': 'var(--accent-cyan-dim)' }}>
-          <div className="stat-card-label">科目數</div>
-          <div className="stat-card-value">{trialData.length}</div>
+          <div className="stat-card-label">科目數（{level}級）</div>
+          <div className="stat-card-value">{displayData.length}</div>
         </div>
         <div className="stat-card" style={{ '--card-accent': 'var(--accent-green)', '--card-accent-dim': 'var(--accent-green-dim)' }}>
           <div className="stat-card-label">借方合計</div>
@@ -133,9 +189,9 @@ export default function TrialBalance() {
               </tr>
             </thead>
             <tbody>
-              {trialData.length === 0 ? (
+              {displayData.length === 0 ? (
                 <tr><td colSpan={5} style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)' }}>截至此日期無已過帳資料</td></tr>
-              ) : trialData.map((row, i) => (
+              ) : displayData.map((row, i) => (
                 <tr key={row.account_code || i}>
                   <td style={{ fontFamily: 'monospace', fontWeight: 600 }}>{row.account_code}</td>
                   <td>{row.account_name}</td>

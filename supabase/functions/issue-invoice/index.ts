@@ -1,9 +1,16 @@
 // 電子發票開立 (issue-invoice)
 // Input: { paymentId } — 對應 pos_payments.id（拆帳時每筆付款各開一張發票）
-// Provider 由 INVOICE_PROVIDER 環境變數決定：'mock'（預設）| 'wenchung'（文中 CERP）| 'ecpay'
+// Provider 由 INVOICE_PROVIDER 環境變數決定：'mock'（預設）| 'efirst'（e首發票）| 'wenchung'（文中 CERP）| 'ecpay'
 // 冪等：已開立直接回傳既有號碼；併發時靠 pos_invoices.payment_id 唯一索引擋重複。
 
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import {
+  getEfirstConfig,
+  buildIssuePayload,
+  callEfirst,
+  type EfirstConfig,
+  type EfirstItem,
+} from '../_shared/efirst.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin':  '*',
@@ -30,6 +37,11 @@ function invoicePeriod(d: Date): string {
   return `${y}${String(odd).padStart(2, '0')}`
 }
 
+// 發票隨機碼（4 碼數字，證明聯列印 / 兌獎用）
+function genRandomCode(): string {
+  return String(Math.floor(Math.random() * 10000)).padStart(4, '0')
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
@@ -52,9 +64,22 @@ Deno.serve(async (req) => {
 
     if (payErr || !payment) return json({ error: '找不到付款記錄' }, 404)
 
-    // 冪等：已開立直接回傳既有號碼
+    // 冪等：已開立直接回傳既有號碼（含證明聯列印所需欄位）
     if (payment.invoice_status === 'issued' && payment.invoice_number) {
-      return json({ ok: true, alreadyIssued: true, invoiceNumber: payment.invoice_number })
+      const { data: inv } = await supabase
+        .from('pos_invoices')
+        .select('random_code, sales_amount, tax_amount, invoice_date')
+        .eq('payment_id', payment.id)
+        .maybeSingle()
+      return json({
+        ok: true,
+        alreadyIssued: true,
+        invoiceNumber: payment.invoice_number,
+        randomCode:  inv?.random_code ?? null,
+        salesAmount: inv?.sales_amount ?? null,
+        taxAmount:   inv?.tax_amount ?? null,
+        invoiceDate: inv?.invoice_date ?? null,
+      })
     }
     if (payment.invoice_status === 'voided') {
       return json({ error: '此付款之發票已作廢，無法重新開立' }, 409)
@@ -105,6 +130,22 @@ Deno.serve(async (req) => {
 
     if (provider === 'mock') {
       result = await issueMock(supabase, payment.organization_id, payment.paid_at)
+    } else if (provider === 'efirst') {
+      // ── e首發票（已定案之加值中心，PLAN F-B1）──
+      const cfg = getEfirstConfig()
+      if (!cfg) {
+        return json({ error: '尚未設定 e首發票憑證（EFIRST_API_KEY / EFIRST_SELLER_ID / EFIRST_ENDPOINT）' }, 501)
+      }
+      result = await issueEfirst(supabase, cfg, payment, {
+        buyerTaxId,
+        buyerCompany,
+        carrierType,
+        carrierNumber,
+        salesAmount,
+        taxAmount,
+        total,
+        items: items ?? [],
+      })
     } else if (provider === 'wenchung') {
       // ── TODO(文中 CERP)：待業主提供憑證後實作（Blockers B1-B5，同 void-invoice）──
       // 所需環境變數：WENCHUNG_API_KEY / WENCHUNG_API_SECRET / WENCHUNG_SELLER_ID（營業人統編）/ WENCHUNG_ENDPOINT
@@ -151,6 +192,10 @@ Deno.serve(async (req) => {
 
     const { invoiceNumber, response: providerResponse } = result
     const invoiceDate = new Date().toISOString().slice(0, 10)
+    // 隨機碼：供應商有回傳（efirst randomNumber）用供應商的，否則自行產生
+    const provRandom = (providerResponse as Record<string, unknown>)?.randomNumber
+      ?? ((providerResponse as Record<string, unknown>)?.efirst as Record<string, unknown> | undefined)?.randomNumber
+    const randomCode = provRandom != null ? String(provRandom).padStart(4, '0') : genRandomCode()
 
     // ── 6. 寫入發票記錄 ──
     const { error: invErr } = await supabase.from('pos_invoices').insert({
@@ -166,6 +211,7 @@ Deno.serve(async (req) => {
       carrier_id:      carrierNumber,
       buyer_tax_id:    buyerTaxId,
       buyer_company:   buyerCompany,
+      random_code:     randomCode,
       status:          'issued',
       provider,
       provider_response: {
@@ -179,10 +225,20 @@ Deno.serve(async (req) => {
       if (invErr.code === '23505') {
         const { data: existing } = await supabase
           .from('pos_invoices')
-          .select('invoice_number')
+          .select('invoice_number, random_code, sales_amount, tax_amount, invoice_date')
           .eq('payment_id', payment.id)
           .maybeSingle()
-        if (existing) return json({ ok: true, alreadyIssued: true, invoiceNumber: existing.invoice_number })
+        if (existing) {
+          return json({
+            ok: true,
+            alreadyIssued: true,
+            invoiceNumber: existing.invoice_number,
+            randomCode:  existing.random_code ?? null,
+            salesAmount: existing.sales_amount ?? null,
+            taxAmount:   existing.tax_amount ?? null,
+            invoiceDate: existing.invoice_date ?? null,
+          })
+        }
       }
       return json({ error: `發票記錄寫入失敗：${invErr.message}` }, 500)
     }
@@ -194,7 +250,7 @@ Deno.serve(async (req) => {
       .eq('id', paymentId)
     if (updErr) return json({ error: `付款狀態更新失敗：${updErr.message}` }, 500)
 
-    return json({ ok: true, invoiceNumber, provider, salesAmount, taxAmount, invoiceDate })
+    return json({ ok: true, invoiceNumber, provider, salesAmount, taxAmount, invoiceDate, randomCode })
   } catch (e) {
     const msg = e instanceof Error ? e.message : '伺服器錯誤'
     return json({ error: msg }, 500)
@@ -228,6 +284,84 @@ async function issueMock(
       track,
       sequence: n,
       note: '模擬開立（未上傳財政部，正式環境請設定 INVOICE_PROVIDER）',
+    },
+  }
+}
+
+// ── e首發票 provider：配號沿用 allocate_invoice_number RPC（同 mock），
+//    開立 API 打到 e首發票，回應原文存 provider_response ──
+async function issueEfirst(
+  supabase: SupabaseClient,
+  cfg: EfirstConfig,
+  payment: {
+    id: string
+    organization_id: number
+    paid_at: string | null
+  },
+  ctx: {
+    buyerTaxId: string | null
+    buyerCompany: string | null
+    carrierType: string | null
+    carrierNumber: string | null
+    salesAmount: number
+    taxAmount: number
+    total: number
+    items: Array<{ name: string; quantity: number; unit_price: number }>
+  },
+): Promise<ProviderResult> {
+  const track = (Deno.env.get('EFIRST_INVOICE_TRACK') || Deno.env.get('MOCK_INVOICE_TRACK') || 'AB').toUpperCase()
+  const period = invoicePeriod(payment.paid_at ? new Date(payment.paid_at) : new Date())
+
+  // 原子配號（與 mock 同一 RPC — 換 provider 不換配號機制）
+  const { data: seq, error: seqErr } = await supabase.rpc('allocate_invoice_number', {
+    p_org_id: payment.organization_id,
+    p_period: period,
+    p_track:  track,
+  })
+  if (seqErr || seq === null || seq === undefined) {
+    throw new Error(`發票號碼配號失敗：${seqErr?.message ?? '未知錯誤'}`)
+  }
+  const n = Number(seq)
+  const invoiceNumber = `${track}${String(n).padStart(8, '0')}`
+
+  const efirstItems: EfirstItem[] = ctx.items.map((i) => ({
+    description: i.name,
+    quantity: Number(i.quantity),
+    unitPrice: Number(i.unit_price),
+    amount: Math.round(Number(i.quantity) * Number(i.unit_price)),
+  }))
+
+  const payload = buildIssuePayload(cfg, {
+    relateNumber: payment.id, // 冪等鍵
+    invoiceNumber,
+    invoiceDate: new Date().toISOString().slice(0, 10),
+    buyerId: ctx.buyerTaxId,
+    buyerName: ctx.buyerCompany,
+    carrierType: ctx.carrierType,
+    carrierId: ctx.carrierNumber,
+    taxType: '1',
+    salesAmount: ctx.salesAmount,
+    taxAmount: ctx.taxAmount,
+    totalAmount: ctx.total,
+    items: efirstItems,
+  })
+
+  // TODO(efirst-mapping)：API 路徑待官方文件確認（暫定 {endpoint}/invoices/issue）
+  const res = await callEfirst(`${cfg.endpoint}/invoices/issue`, cfg.apiKey, payload)
+  if (!res.ok) {
+    // provider 失敗 → 整筆開立失敗（付款維持 pending，可由 retryPendingInvoices 補開）
+    throw new Error(res.error ?? 'e首發票開立失敗')
+  }
+
+  return {
+    invoiceNumber,
+    response: {
+      provider: 'efirst',
+      period,
+      track,
+      sequence: n,
+      relate_number: payment.id,
+      efirst: res.data ?? {},
     },
   }
 }

@@ -7,6 +7,7 @@ import Returns from '../pages/sales/Returns'
 import Shipments from '../pages/sales/Shipments'
 import PricingRules from '../pages/sales/PricingRules'
 import Commission from '../pages/sales/Commission'
+import Allowances from '../pages/sales/Allowances'
 
 export default function SalesModule() {
   return (
@@ -16,6 +17,7 @@ export default function SalesModule() {
       <Route path="orders" element={<SalesOrders />} />
       <Route path="promotions" element={<Promotions />} />
       <Route path="returns" element={<Returns />} />
+      <Route path="allowances" element={<Allowances />} />
       <Route path="shipments" element={<Shipments />} />
       <Route path="pricing" element={<PricingRules />} />
       <Route path="commission" element={<Commission />} />

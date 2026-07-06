@@ -79,6 +79,23 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   try {
+    // ── Auth：service-role 繞過 RLS，必須驗 JWT 並以呼叫者 org 限縮收件人 ──
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader) return json({ error: '未授權' }, 401)
+
+    // @ts-ignore — Deno global
+    const db = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
+
+    const jwt = authHeader.replace('Bearer ', '')
+    const { data: { user }, error: authError } = await db.auth.getUser(jwt)
+    if (authError || !user) return json({ error: '憑證無效' }, 401)
+
+    const { data: caller } = await db
+      .from('employees').select('organization_id').eq('email', user.email).maybeSingle()
+    if (!caller) return json({ error: '權限不足：僅內部員工可發送' }, 403)
+    // null org = super_admin（org_visible 同義）→ 不限縮；否則鎖定呼叫者 org
+    const callerOrgId: number | null = caller.organization_id ?? null
+
     const { memberIds, template, context = {}, vars = {} } = await req.json()
 
     if (!Array.isArray(memberIds) || memberIds.length === 0) {
@@ -101,14 +118,16 @@ serve(async (req) => {
       return json({ error: 'CRM LINE 頻道尚未設定' }, 500)
     }
 
-    // @ts-ignore — Deno global
-    const db = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
-
     // 會員 LINE 綁定「只」來自 members 表（member-app LIFF 綁定）
-    const { data: members, error: mErr } = await db
+    // 非數字 id（如模擬資料）不進查詢，直接視為未綁定 skipped
+    // 收件人一律限縮呼叫者 org — 跨組織 memberIds 視為不存在（skipped）
+    const numericIds = memberIds.map((id: unknown) => Number(id)).filter((n: number) => Number.isInteger(n))
+    let mQuery = db
       .from('members')
       .select('id, name, line_user_id, organization_id')
-      .in('id', memberIds)
+      .in('id', numericIds.length > 0 ? numericIds : [-1])
+    if (callerOrgId != null) mQuery = mQuery.eq('organization_id', callerOrgId)
+    const { data: members, error: mErr } = await mQuery
     if (mErr) return json({ error: `會員查詢失敗: ${mErr.message}` }, 500)
 
     const found = new Map<number, { id: number; name: string; line_user_id: string | null; organization_id: number | null }>(

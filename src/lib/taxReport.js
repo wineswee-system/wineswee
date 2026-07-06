@@ -3,13 +3,24 @@
  *
  * 支援報表：
  * 1. 401 營業稅申報表（銷項 / 進項 / 應納稅額）
- * 2. 403 各類所得扣繳暨免扣繳憑單申報
+ * 2. 各類所得扣繳彙總（generateWithholdingSummary；舊名 generate403Report 已棄用 —
+ *    其內容為扣繳彙總，並非營業稅 403 兼營申報）
  * 3. 營業稅計算（標準稅率 5%）
  * 4. 民國年期別格式化
- * 5. 媒體申報檔案產生
+ * 5. 媒體申報檔案產生（F-B3 正式版在 vatReport.js — 本檔另 re-export）
  *
- * 所有函式皆為純函式，不依賴外部狀態
+ * 除 generate401FromDB 外皆為純函式，不依賴外部狀態
  */
+
+// F-B3 進銷項憑證檔運算（401 彙總 / 81-byte 媒體檔 / 403 兼營比例扣抵）
+export {
+  generate401FromVatDocs,
+  generateVatMediaFile,
+  MEDIA_LAYOUT,
+  calculate403Deduction,
+  generateMediaFile, // @deprecated pipe 格式（實作移至 vatReport.js）
+} from './vatReport.js'
+import { generate401FromVatDocs } from './vatReport.js'
 
 // ══════════════════════════════════════
 //  常數定義
@@ -120,19 +131,22 @@ export function generate401Report(salesInvoices, purchaseInvoices, period) {
 }
 
 // ══════════════════════════════════════
-//  2. 403 各類所得扣繳申報
+//  2. 各類所得扣繳彙總（原誤名 403）
 // ══════════════════════════════════════
 
 /**
- * 產生 403 各類所得扣繳暨免扣繳憑單申報
+ * 產生各類所得扣繳暨免扣繳憑單彙總
+ *
+ * 註：本報表為「扣繳彙總」，並非營業稅 403（兼營）申報書 —
+ * 舊名 generate403Report 為命名誤導，已改名（PLAN F-B3.2）。
  *
  * @param {Array} withholdingRecords - 扣繳紀錄
  *   [{payee_id, payee_name, income_type, gross_amount, tax_withheld}]
  * @param {Object} period - 申報期別
  *   {year: number, startMonth: number, endMonth: number}
- * @returns {Object} 403 申報資料
+ * @returns {Object} 扣繳彙總資料
  */
-export function generate403Report(withholdingRecords, period) {
+export function generateWithholdingSummary(withholdingRecords, period) {
   const records = []
   const summaryByType = {} // 依所得類別彙總
 
@@ -180,6 +194,9 @@ export function generate403Report(withholdingRecords, period) {
     },
   }
 }
+
+/** @deprecated 誤名 — 內容為扣繳彙總而非營業稅 403，請改用 generateWithholdingSummary */
+export const generate403Report = generateWithholdingSummary
 
 // ══════════════════════════════════════
 //  3. 營業稅計算
@@ -239,77 +256,9 @@ export function formatTaxPeriod(year, month, endMonth) {
 
 // ══════════════════════════════════════
 //  5. 媒體申報檔案產生
+//  （deprecated pipe 格式 generateMediaFile 移至 vatReport.js，
+//    與正式 81-byte 版 generateVatMediaFile 併置 — 本檔頂部 re-export）
 // ══════════════════════════════════════
-
-/**
- * 產生媒體申報格式字串（結構化文字檔）
- *
- * 401 格式：固定欄位寬度，每行一張發票
- * 403 格式：固定欄位寬度，每行一筆扣繳紀錄
- *
- * @param {Object} report - generate401Report 或 generate403Report 的結果
- * @param {string} type - 報表類型 ('401' | '403')
- * @returns {string} 媒體申報格式字串
- */
-export function generateMediaFile(report, type) {
-  const lines = []
-
-  if (type === '401') {
-    // ── 401 營業稅媒體申報格式 ──
-
-    // 檔頭：期別、銷項總額、進項總額、應納稅額
-    lines.push(
-      `H|${report.period}|${report.salesAmount}|${report.salesTax}|${report.purchaseAmount}|${report.purchaseTax}|${report.netTax}`
-    )
-
-    // 銷項明細
-    for (const row of (report.rows?.sales || [])) {
-      lines.push(
-        `S|${row.invoice_no}|${row.date}|${padRight(row.buyer_tax_id, 8)}|${row.amount}|${row.tax}`
-      )
-    }
-
-    // 進項明細
-    for (const row of (report.rows?.purchases || [])) {
-      lines.push(
-        `P|${row.invoice_no}|${row.date}|${padRight(row.seller_tax_id, 8)}|${row.amount}|${row.tax}`
-      )
-    }
-
-    // 檔尾
-    lines.push(
-      `T|${report.salesInvoiceCount || 0}|${report.purchaseInvoiceCount || 0}|${report.taxPayable}|${report.taxCredit || 0}`
-    )
-  } else if (type === '403') {
-    // ── 403 各類所得扣繳媒體申報格式 ──
-
-    // 檔頭
-    lines.push(
-      `H|${report.period}|${report.summary?.total_records || 0}|${report.summary?.total_gross || 0}|${report.summary?.total_withheld || 0}`
-    )
-
-    // 明細
-    for (const rec of (report.records || [])) {
-      lines.push(
-        `D|${padRight(rec.payee_id, 10)}|${padRight(rec.payee_name, 20)}|${rec.income_type}|${rec.gross_amount}|${rec.tax_withheld}`
-      )
-    }
-
-    // 各類別小計
-    for (const st of (report.summary_by_type || [])) {
-      lines.push(
-        `S|${st.income_type}|${st.income_type_name}|${st.count}|${st.total_gross}|${st.total_withheld}`
-      )
-    }
-
-    // 檔尾
-    lines.push(
-      `T|${report.summary?.total_records || 0}|${report.summary?.total_gross || 0}|${report.summary?.total_withheld || 0}`
-    )
-  }
-
-  return lines.join('\n')
-}
 
 // ══════════════════════════════════════
 //  6. 401 營業稅申報 — 從資料庫產生
@@ -317,7 +266,12 @@ export function generateMediaFile(report, type) {
 
 /**
  * 從 Supabase 產生 401 營業稅申報表
- * 自動查詢 invoices + accounts_payable，依稅別分類彙總
+ *
+ * 資料來源優先序（F-B3）：
+ * 1. vat_output_documents / vat_input_documents（正式進銷項憑證檔）— 該期別有資料時採用
+ *    → 結果帶 dataSource: 'vat_documents'
+ * 2. 憑證檔無資料（或表尚未建立）→ 回退舊來源 invoices + accounts_payable
+ *    → 結果帶 dataSource: 'legacy'
  *
  * @param {number} year   - 西元年
  * @param {number} period - 雙月期別 (1=1-2月, 2=3-4月, 3=5-6月, 4=7-8月, 5=9-10月, 6=11-12月)
@@ -331,6 +285,31 @@ export async function generate401FromDB(year, period, supabaseClient) {
   const startDate = `${year}-${String(startMonth).padStart(2, '0')}-01`
   const endDay = new Date(year, endMonth, 0).getDate()
   const endDate = `${year}-${String(endMonth).padStart(2, '0')}-${String(endDay).padStart(2, '0')}`
+
+  // ── 優先：正式進銷項憑證檔（vat_* 表；期別 int YYYYMM 奇數月）──
+  const periodInt = year * 100 + startMonth
+  try {
+    const [outRes, inRes] = await Promise.all([
+      supabaseClient.from('vat_output_documents').select('*').eq('period', periodInt),
+      supabaseClient.from('vat_input_documents').select('*').eq('period', periodInt),
+    ])
+    const outputDocs = outRes.error ? [] : (outRes.data || [])
+    const inputDocs = inRes.error ? [] : (inRes.data || [])
+
+    if (outputDocs.length > 0 || inputDocs.length > 0) {
+      const report = generate401FromVatDocs(outputDocs, inputDocs, periodInt)
+      return {
+        ...report,
+        bimonthPeriod: period,
+        startDate,
+        endDate,
+        dataSource: 'vat_documents',
+        _raw: { outputDocs, inputDocs },
+      }
+    }
+  } catch {
+    // 憑證檔查詢失敗（表未建立等）→ 靜默回退 legacy 來源
+  }
 
   const TAX_RATE = 0.05
 
@@ -420,6 +399,7 @@ export async function generate401FromDB(year, period, supabaseClient) {
       taxPayable,
       isRefund,
     },
+    dataSource: 'legacy', // 憑證檔無資料 → 舊來源（invoices + accounts_payable）
     // 保留原始資料供明細展開
     _raw: {
       invoices: invoices || [],
@@ -463,14 +443,4 @@ export function taxReportToCSV(reportData) {
   rows.push(`應納(溢付)稅額,${summary.taxPayable}`)
 
   return rows.join('\n')
-}
-
-// ── 輔助函式 ──
-
-/**
- * 字串右補空白至指定長度（媒體申報固定欄寬用）
- */
-function padRight(str, len) {
-  const s = String(str || '')
-  return s.length >= len ? s.substring(0, len) : s + ' '.repeat(len - s.length)
 }

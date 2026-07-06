@@ -214,7 +214,7 @@ export default function AIInventory() {
 
       {/* ═══════ Smart Reorder ═══════ */}
       {activeTab === 'reorder' && (
-        <ReorderTab stockLevels={stockLevels} suppliers={suppliers} />
+        <ReorderTab stockLevels={stockLevels} suppliers={suppliers} transactions={transactions} />
       )}
 
       {/* ═══════ Expiry / Waste ═══════ */}

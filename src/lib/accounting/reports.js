@@ -1,5 +1,6 @@
 import { supabase } from '../supabase'
 import { CHART_OF_ACCOUNTS, getAccountType } from './constants'
+import { getTenantOrgId } from '../events/middleware/tenantContext.js'
 
 // ─── 試算表 ───────────────────────────────────────────────────
 
@@ -170,12 +171,20 @@ export function generateProfitLoss(trialBalance, period) {
   const otherIncome = []
   const otherExpenses = []
 
+  // 收入減項（contra revenue）：銷貨退回及折讓 — 科目表未細分時以名稱判斷（fallback）
+  const isRevenueContra = (row) =>
+    row.type === '收入' && /銷貨退回|銷貨折讓|退回及折讓/.test(row.account_name || '')
+  let salesReturnsAndAllowances = 0
+
   for (const row of trialBalance) {
     const entry = { item: row.account_name, amount: 0 }
 
     if (row.type === '收入') {
-      // 收入正常餘額在貸方；銷貨退回(4200)為借方減項
+      // 收入正常餘額在貸方；銷貨退回及折讓為借方減項（列於收入段、金額為負）
       entry.amount = Math.round((row.credit_balance - row.debit_balance) * 100) / 100
+      if (isRevenueContra(row)) {
+        salesReturnsAndAllowances = Math.round((salesReturnsAndAllowances - entry.amount) * 100) / 100
+      }
       revenue.push(entry)
     } else if (row.type === '銷貨成本') {
       entry.amount = Math.round((row.debit_balance - row.credit_balance) * 100) / 100
@@ -207,6 +216,15 @@ export function generateProfitLoss(trialBalance, period) {
   const totalOtherExpenses = Math.round(otherExpenses.reduce((s, r) => s + r.amount, 0) * 100) / 100
   const netIncome = Math.round((operatingIncome + totalOtherIncome - totalOtherExpenses) * 100) / 100
 
+  // 綜合損益表擴充（商業會計法對齊）：
+  // - grossRevenue/netRevenue：銷貨退回及折讓列為收入減項（totalRevenue 本即淨額，此處補齊揭露）
+  // - otherComprehensiveIncome：本期其他綜合損益（SME 多為 0，格式先留）
+  const netRevenue = Math.round(revenue.reduce((s, r) => s + r.amount, 0) * 100) / 100
+  const grossRevenue = Math.round((netRevenue + salesReturnsAndAllowances) * 100) / 100
+  const otherComprehensiveIncome = []
+  const totalOtherComprehensiveIncome = 0
+  const comprehensiveIncome = Math.round((netIncome + totalOtherComprehensiveIncome) * 100) / 100
+
   return {
     revenue,
     costOfGoodsSold,
@@ -217,6 +235,286 @@ export function generateProfitLoss(trialBalance, period) {
     otherExpenses,
     netIncome,
     period,
+    // 綜合損益表新增段（additive — 既有欄位不變）
+    grossRevenue,
+    salesReturnsAndAllowances,
+    netRevenue,
+    otherComprehensiveIncome,
+    totalOtherComprehensiveIncome,
+    comprehensiveIncome,
+  }
+}
+
+// ─── 共用：報表取數過濾（免過帳即時報表）───────────────────────
+
+const r2 = (n) => Math.round(n * 100) / 100
+
+/** 餘額在借方的科目類型（其餘視為貸方正常餘額） */
+const DEBIT_NORMAL_TYPES = ['資產', '營業費用', '銷貨成本']
+
+/**
+ * 過濾可入報表的傳票（預設僅已過帳；includeDraft 時加計草稿）
+ * @param {Array<{status: string}>} entries — 傳票清單
+ * @param {{includeDraft?: boolean}} [options]
+ * @returns {Array} 過濾後傳票
+ */
+export function filterPostableEntries(entries, { includeDraft = false } = {}) {
+  return (entries || []).filter(e =>
+    e.status === '已過帳' || (includeDraft && e.status === '草稿')
+  )
+}
+
+/** 依日期區間過濾傳票（from/to 皆為 YYYY-MM-DD，可省略） */
+function filterEntriesByDate(entries, from, to) {
+  return entries.filter(e => {
+    if (from && e.entry_date < from) return false
+    if (to && e.entry_date > to) return false
+    return true
+  })
+}
+
+/** 排序 key：entry_date → entry_number */
+function compareChrono(a, b) {
+  const d = String(a.entry_date || '').localeCompare(String(b.entry_date || ''))
+  if (d !== 0) return d
+  return String(a.entry_number || '').localeCompare(String(b.entry_number || ''))
+}
+
+// ─── 日記帳（Journal Book）────────────────────────────────────
+
+/**
+ * 產生日記帳：依 entry_date + entry_number 排序列示傳票分錄，含日合計/月合計/總計
+ * @param {Array<{id, entry_number, entry_date, description, status}>} entries — 傳票
+ * @param {Array<{entry_id, account_code, account_name, debit, credit, memo?}>} lines — 分錄明細
+ * @param {{from?: string, to?: string, includeDraft?: boolean}} [options]
+ * @returns {{days: Array<{date: string, entries: Array, subtotalDebit: number, subtotalCredit: number}>, months: Array<{month: string, totalDebit: number, totalCredit: number}>, totalDebit: number, totalCredit: number, balanced: boolean, entryCount: number, from: string|null, to: string|null, includeDraft: boolean}}
+ */
+export function generateJournalBook(entries, lines, { from, to, includeDraft = false } = {}) {
+  const usable = filterEntriesByDate(
+    filterPostableEntries(entries, { includeDraft }), from, to
+  ).slice().sort(compareChrono)
+
+  const linesByEntry = {}
+  for (const line of lines || []) {
+    const key = line.entry_id
+    if (!linesByEntry[key]) linesByEntry[key] = []
+    linesByEntry[key].push(line)
+  }
+
+  const dayMap = new Map() // 保持插入順序（已按日期排序）
+  const monthMap = new Map()
+  let totalDebit = 0
+  let totalCredit = 0
+
+  for (const entry of usable) {
+    const entryLines = (linesByEntry[entry.id] || []).map(l => ({
+      account_code: l.account_code,
+      account_name: l.account_name,
+      debit: Number(l.debit) || 0,
+      credit: Number(l.credit) || 0,
+      memo: l.memo ?? l.description ?? '',
+    }))
+    const entryDebit = r2(entryLines.reduce((s, l) => s + l.debit, 0))
+    const entryCredit = r2(entryLines.reduce((s, l) => s + l.credit, 0))
+
+    const date = entry.entry_date
+    if (!dayMap.has(date)) dayMap.set(date, { date, entries: [], subtotalDebit: 0, subtotalCredit: 0 })
+    const day = dayMap.get(date)
+    day.entries.push({
+      id: entry.id,
+      entry_number: entry.entry_number,
+      entry_date: entry.entry_date,
+      description: entry.description || '',
+      status: entry.status,
+      lines: entryLines,
+      totalDebit: entryDebit,
+      totalCredit: entryCredit,
+    })
+    day.subtotalDebit = r2(day.subtotalDebit + entryDebit)
+    day.subtotalCredit = r2(day.subtotalCredit + entryCredit)
+
+    const month = String(date || '').slice(0, 7)
+    if (!monthMap.has(month)) monthMap.set(month, { month, totalDebit: 0, totalCredit: 0 })
+    const m = monthMap.get(month)
+    m.totalDebit = r2(m.totalDebit + entryDebit)
+    m.totalCredit = r2(m.totalCredit + entryCredit)
+
+    totalDebit = r2(totalDebit + entryDebit)
+    totalCredit = r2(totalCredit + entryCredit)
+  }
+
+  return {
+    days: [...dayMap.values()],
+    months: [...monthMap.values()],
+    totalDebit,
+    totalCredit,
+    balanced: r2(totalDebit - totalCredit) === 0,
+    entryCount: usable.length,
+    from: from ?? null,
+    to: to ?? null,
+    includeDraft,
+  }
+}
+
+// ─── 總分類帳/明細帳（General Ledger）─────────────────────────
+
+/**
+ * 產生總分類帳/明細帳：每科目期初餘額 + 逐筆過帳（含逐筆餘額）+ 期末餘額
+ * 餘額符號依正常餘額方向（getAccountType）：資產/費用/成本借方為正，其餘貸方為正
+ * @param {Array} entries — 傳票（含 status/entry_date/entry_number）
+ * @param {Array} lines — 分錄明細（entry_id 對應 entries.id；可含 cost_center）
+ * @param {{accountCodes?: Array<string>, from?: string, to?: string, openingBalances?: Record<string, number>, costCenter?: string, includeDraft?: boolean}} [options]
+ *   - openingBalances：外部提供期初餘額（正常方向為正）；未提供時以 from 之前的分錄推算
+ *   - costCenter：明細帳維度 — 僅計入該成本中心的分錄
+ * @returns {{accounts: Array<{account_code, account_name, type, normal_side, openingBalance, postings: Array<{date, entry_number, description, memo, cost_center, debit, credit, balance}>, totalDebit, totalCredit, closingBalance}>, from, to, costCenter, includeDraft}}
+ */
+export function generateGeneralLedger(entries, lines, {
+  accountCodes, from, to, openingBalances, costCenter, includeDraft = false,
+} = {}) {
+  const usable = filterPostableEntries(entries, { includeDraft })
+  const entryMap = {}
+  for (const e of usable) entryMap[e.id] = e
+
+  // 分錄依所屬傳票日期切成「期初前」與「期間內」
+  const priorLines = []
+  const periodLines = []
+  for (const line of lines || []) {
+    const entry = entryMap[line.entry_id]
+    if (!entry) continue
+    if (costCenter && line.cost_center !== costCenter) continue
+    const date = entry.entry_date
+    if (to && date > to) continue
+    if (from && date < from) { priorLines.push({ line, entry }); continue }
+    periodLines.push({ line, entry })
+  }
+
+  // 決定要出帳的科目
+  const codes = accountCodes && accountCodes.length > 0
+    ? [...accountCodes]
+    : [...new Set([
+        ...periodLines.map(({ line }) => line.account_code),
+        ...Object.keys(openingBalances || {}),
+      ])].sort()
+
+  const nameOf = (code) => {
+    const hit = [...periodLines, ...priorLines]
+      .find(({ line }) => line.account_code === code && line.account_name)
+    if (hit) return hit.line.account_name
+    const seed = CHART_OF_ACCOUNTS.find(a => a.code === code)
+    return seed ? seed.name : code
+  }
+
+  const accounts = []
+  for (const code of codes) {
+    const type = getAccountType(code)
+    const debitNormal = DEBIT_NORMAL_TYPES.includes(type)
+    const signed = (l) => debitNormal
+      ? (Number(l.debit) || 0) - (Number(l.credit) || 0)
+      : (Number(l.credit) || 0) - (Number(l.debit) || 0)
+
+    // 期初：外部提供優先，否則由 from 之前的分錄推算
+    let openingBalance
+    if (openingBalances && openingBalances[code] !== undefined) {
+      openingBalance = r2(Number(openingBalances[code]) || 0)
+    } else {
+      openingBalance = r2(priorLines
+        .filter(({ line }) => line.account_code === code)
+        .reduce((s, { line }) => s + signed(line), 0))
+    }
+
+    const acctLines = periodLines
+      .filter(({ line }) => line.account_code === code)
+      .sort((a, b) => compareChrono(a.entry, b.entry) || ((a.line.id ?? 0) - (b.line.id ?? 0)))
+
+    let running = openingBalance
+    let totalDebit = 0
+    let totalCredit = 0
+    const postings = acctLines.map(({ line, entry }) => {
+      const debit = Number(line.debit) || 0
+      const credit = Number(line.credit) || 0
+      totalDebit = r2(totalDebit + debit)
+      totalCredit = r2(totalCredit + credit)
+      running = r2(running + signed(line))
+      return {
+        date: entry.entry_date,
+        entry_number: entry.entry_number,
+        description: entry.description || '',
+        memo: line.memo ?? '',
+        cost_center: line.cost_center ?? null,
+        debit,
+        credit,
+        balance: running,
+      }
+    })
+
+    if (postings.length === 0 && openingBalance === 0 && !(accountCodes && accountCodes.length > 0)) {
+      continue // 未指定科目時，無交易且無期初的科目不列
+    }
+
+    accounts.push({
+      account_code: code,
+      account_name: nameOf(code),
+      type,
+      normal_side: debitNormal ? 'debit' : 'credit',
+      openingBalance,
+      postings,
+      totalDebit,
+      totalCredit,
+      closingBalance: running,
+    })
+  }
+
+  return {
+    accounts,
+    from: from ?? null,
+    to: to ?? null,
+    costCenter: costCenter ?? null,
+    includeDraft,
+  }
+}
+
+// ─── 營業成本表（Cost of Goods Sold Statement）────────────────
+
+/**
+ * 產生營業成本表：期初存貨 + 本期進貨（− 進貨退出及折讓）− 期末存貨 = 銷貨成本
+ * 期初/期末存貨取 inventory_valuations 月結快照（F-C1），本函式為純計算不取數
+ * @param {{openingInventory?: number, purchases?: number, purchaseReturnsAllowances?: number, closingInventory?: number, period?: string}} params
+ * @returns {{rows: Array<{label: string, amount: number, emphasis?: boolean}>, openingInventory, purchases, purchaseReturnsAllowances, netPurchases, goodsAvailable, closingInventory, costOfGoodsSold, period}}
+ */
+export function generateCostOfGoodsSold({
+  openingInventory = 0,
+  purchases = 0,
+  purchaseReturnsAllowances = 0,
+  closingInventory = 0,
+  period,
+} = {}) {
+  const opening = r2(Number(openingInventory) || 0)
+  const purch = r2(Number(purchases) || 0)
+  const returns = r2(Number(purchaseReturnsAllowances) || 0)
+  const closing = r2(Number(closingInventory) || 0)
+
+  const netPurchases = r2(purch - returns)
+  const goodsAvailable = r2(opening + netPurchases)
+  const costOfGoodsSold = r2(goodsAvailable - closing)
+
+  return {
+    rows: [
+      { label: '期初存貨', amount: opening },
+      { label: '本期進貨', amount: purch },
+      { label: '減：進貨退出及折讓', amount: r2(-returns) },
+      { label: '進貨淨額', amount: netPurchases, emphasis: true },
+      { label: '可供銷售商品成本', amount: goodsAvailable, emphasis: true },
+      { label: '減：期末存貨', amount: r2(-closing) },
+      { label: '銷貨成本', amount: costOfGoodsSold, emphasis: true },
+    ],
+    openingInventory: opening,
+    purchases: purch,
+    purchaseReturnsAllowances: returns,
+    netPurchases,
+    goodsAvailable,
+    closingInventory: closing,
+    costOfGoodsSold,
+    period: period ?? null,
   }
 }
 
@@ -229,11 +527,13 @@ export function generateProfitLoss(trialBalance, period) {
  * @returns {Promise<{accounts: Array, lines: Array}>}
  */
 async function fetchPostedData(asOfDate, startDate) {
-  // 取得已過帳的傳票
+  // 取得已過帳的傳票（顯式限縮本組織 — RLS 之外的第二道防線）
+  const orgId = getTenantOrgId()
   let entryQuery = supabase
     .from('journal_entries')
     .select('id, entry_date')
     .eq('status', '已過帳')
+  if (orgId) entryQuery = entryQuery.eq('organization_id', orgId)
 
   if (asOfDate) {
     entryQuery = entryQuery.lte('entry_date', asOfDate)

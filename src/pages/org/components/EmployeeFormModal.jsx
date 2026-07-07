@@ -1,5 +1,6 @@
 import Modal, { Field } from '../../../components/Modal'
 import SearchableSelect, { empOptions } from '../../../components/SearchableSelect'
+import { useAuth } from '../../../contexts/AuthContext'
 
 const EMPLOYMENT_TYPES = [
   { value: '正職', label: '正職' },
@@ -67,6 +68,7 @@ export default function EmployeeFormModal({
   form, setForm,
   onSubmit,
 }) {
+  const { isSuperAdmin } = useAuth()  // 只有 super_admin 能指派 super_admin（升權防護）
   if (!open) return null
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
@@ -191,7 +193,10 @@ export default function EmployeeFormModal({
               <option value="office_staff">行政人員</option>
               <option value="manager">主管</option>
               <option value="admin">HR 管理員</option>
-              <option value="super_admin">超級管理員</option>
+              {/* 僅 super_admin 可指派 super_admin；或該員工本來就是 super_admin 時仍顯示以正確呈現 */}
+              {(isSuperAdmin || form.role === 'super_admin') && (
+                <option value="super_admin">超級管理員</option>
+              )}
             </select>
             <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>
               影響系統內可進的頁面與按鈕。未指定則依職稱自動判定。

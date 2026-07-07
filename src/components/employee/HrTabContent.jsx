@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Upload, Eye, Plus, X } from 'lucide-react'
 import { getPTAnnualLeaveHours, getAnnualLeaveEntitlement } from '../../lib/leavePolicy'
 import SearchableSelect, { empOptions } from '../SearchableSelect'
+import { useAuth } from '../../contexts/AuthContext'
 
 const maskBank = (v) => v ? '****' + v.slice(-4) : ''
 
@@ -52,6 +53,11 @@ export default function HrTabContent({
   SectionTitle,
   L,
 }) {
+  const { isSuperAdmin } = useAuth()
+  // 僅 super_admin 可指派 super_admin（升權防護）；該員工本來就是 super_admin 時仍保留選項以正確顯示
+  const roleOptions = (roles || []).filter(
+    r => r.name !== 'super_admin' || isSuperAdmin || form.role_id === 1 || form.role === 'super_admin'
+  )
   return (
     <>
       {/* ════════════════════════════════════════
@@ -180,7 +186,7 @@ export default function HrTabContent({
                 if (r) set('role', r.name)
               }}>
               <option value="">— 未指派 —</option>
-              {roles.map(r => <option key={r.id} value={r.id}>{r.name}{r.description ? `（${r.description}）` : ''}</option>)}
+              {roleOptions.map(r => <option key={r.id} value={r.id}>{r.name}{r.description ? `（${r.description}）` : ''}</option>)}
             </select>
           </div>
         </>

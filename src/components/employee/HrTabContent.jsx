@@ -256,11 +256,17 @@ export default function HrTabContent({
               if (cat === 'parttime') {
                 return null  // 時薪制不顯示換算時薪
               }
-              // 月薪制（regular / admin）顯示換算時薪
+              // 月薪制（regular / admin）顯示換算時薪 =（月底薪 + 所有津貼含自訂）/ 30 / 8
+              const n = v => Number(v) || 0
+              const monthlyTotal = n(form.base_salary)
+                + n(form.meal_allowance) + n(form.transport_allowance) + n(form.housing_allowance)
+                + n(form.supervisor_allowance) + n(form.attendance_bonus)
+                + n(form.night_shift_allowance) + n(form.cross_store_allowance)
+                + (form.custom_allowances || []).reduce((s, c) => s + n(c.amount), 0)
               return (
-                <div><div style={L}>換算時薪</div>
+                <div><div style={L}>換算時薪（含津貼）</div>
                   <div className="form-input" style={{ width: '100%', background: 'var(--glass-light)', color: 'var(--text-muted)' }}>
-                    NT$ {form.base_salary ? Math.round(Number(form.base_salary) / 30 / 8) : '—'} /hr
+                    NT$ {form.base_salary ? Math.round(monthlyTotal / 30 / 8) : '—'} /hr
                   </div>
                 </div>
               )

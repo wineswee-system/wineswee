@@ -12,6 +12,7 @@ import SalaryAdjust from '../pages/hr/SalaryAdjust'
 import PayrollAuditLog from '../pages/hr/PayrollAuditLog'
 import Schedule from '../pages/hr/Schedule'
 import Holidays from '../pages/hr/Holidays'
+import DisasterManagement from '../pages/hr/DisasterManagement'
 import ScheduleRules from '../pages/hr/ScheduleRules'
 import Performance from '../pages/hr/Performance'
 import Recruitment from '../pages/hr/Recruitment'
@@ -78,6 +79,7 @@ export default memo(function HRModule() {
       <Route path="salary-audit-log" element={<PayrollAuditLog />} />
       <Route path="schedule" element={<Schedule />} />
       <Route path="holidays" element={<Holidays />} />
+      <Route path="disaster" element={<DisasterManagement />} />
       <Route path="schedule-rules" element={<ScheduleRules />} />
       <Route path="performance" element={<Performance />} />
       <Route path="recruitment" element={<Recruitment />} />

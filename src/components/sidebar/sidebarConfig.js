@@ -268,6 +268,7 @@ export const groupNav = {
         { icon: Calendar, label: '請假日曆', path: '/hr/leave-calendar' },
         { icon: CalendarDays, label: '假別餘額', path: '/hr/leave-balances' },
         { icon: CalendarDays, label: '補休餘額', path: '/hr/comp-time-balance', title: '加班選補休後累積的時數；FIFO 扣，過期月結自動兌現' },
+        { icon: AlertTriangle, label: '天災管理', path: '/hr/disaster', title: '颱風/天災停班宣告、天災津貼匯入、當日出勤' },
         { icon: Upload, label: '資料匯入', path: '/hr/import' },
       ]
     },

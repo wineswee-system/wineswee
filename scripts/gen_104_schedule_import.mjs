@@ -13,7 +13,7 @@ const F_DEF   = 'C:/Users/user/Downloads/104班別.xlsx'
 const NAME_FALLBACK = { '洪伯嘉': 10, '洪友銘': 431 }
 const SKIP_NUM = new Set(['L2026117'])
 // 104班別沒收錄但系統既有定義（來自 20260617120000_backfill_schedule_times）
-const MANUAL_SHIFT = { 'M-Mia蘇東俞': '11:30~20:00' }
+const MANUAL_SHIFT = { 'M-Mia蘇東俞': '11:30~20:00', '微-微風工早': '10:30~16:30' }
 
 // ── 時間正規化 ──
 function normTime(t) {

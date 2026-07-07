@@ -308,6 +308,7 @@ export default function Payroll() {
     ${row('跨區津貼', rec.cross_store_allowance)}
     ${row('伙食津貼', rec.meal_allowance)}
     ${row('交通津貼', rec.transport_allowance)}
+    ${row('天災津貼', rec.disaster_allowance)}
     ${row('全勤獎金', rec.attendance_bonus_earned)}
     ${row('加班費', rec.overtime_pay)}
     ${row('└ 平日加班', rec.overtime_pay_weekday)}

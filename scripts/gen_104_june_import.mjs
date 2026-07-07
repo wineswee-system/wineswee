@@ -20,6 +20,20 @@ const rowsOf = p => {
   const r = xlsx.utils.sheet_to_json(ws, { header: 1, defval: '' }); const h = r[6]
   return r.slice(7).filter(x => x[0]).map(x => Object.fromEntries(h.map((k, i) => [k, x[i]])))
 }
+// 出勤報表是分組格式：只有每人第一天有員編/姓名/部門，底下多天是空的 → forward-fill 前 3 欄
+const rowsOfGrouped = p => {
+  const wb = xlsx.readFile(p); const ws = wb.Sheets[wb.SheetNames[0]]
+  const r = xlsx.utils.sheet_to_json(ws, { header: 1, defval: '' }); const h = r[6]
+  let g0 = '', g1 = '', g2 = ''
+  const out = []
+  for (const x of r.slice(7)) {
+    if (String(x[3]).match(/\d{4}\/\d{1,2}\/\d{1,2}/) === null) continue  // 沒出勤日期的列跳過
+    if (x[0]) { g0 = x[0]; g1 = x[1]; g2 = x[2] }                          // 新員工區塊
+    const row = [...x]; row[0] = g0; row[1] = g1; row[2] = g2
+    out.push(Object.fromEntries(h.map((k, i) => [k, row[i]])))
+  }
+  return out
+}
 const D = s => String(s || '').trim().replace(/\//g, '-')            // 2026/06/01 → 2026-06-01
 const T = s => { s = String(s || '').trim(); return /^\d{1,2}:\d{2}/.test(s) ? s : '' }
 const num = v => { const n = Number(v); return isFinite(n) ? n : null }
@@ -44,7 +58,7 @@ const SKIP_NUM = new Set(['L2026117'])                   // TEST 帳號
 async function main() {
   const sb = createClient('https://mvkvnuxeamahhfahclmi.supabase.co', key)
 
-  const lv = rowsOf(F.leave), ot = rowsOf(F.overtime), at = rowsOf(F.attendance)
+  const lv = rowsOf(F.leave), ot = rowsOf(F.overtime), at = rowsOfGrouped(F.attendance)
   const nums = [...new Set([...lv, ...ot, ...at].map(r => String(r['員工編號']).trim()))]
   const { data: emps } = await sb.from('employees').select('id,name,employee_number,organization_id').in('employee_number', nums)
   const byNum = Object.fromEntries((emps || []).map(e => [e.employee_number, e]))

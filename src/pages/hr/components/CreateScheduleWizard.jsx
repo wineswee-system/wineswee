@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase } from '../../../lib/supabase'
 import { getCycleFor } from '../../../lib/scheduleUtils'
@@ -98,6 +98,13 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
   const wishDates = useRef(new Set())
   const [isSaving, setIsSaving]     = useState(false)
   const [activeStoreTab, setActiveStoreTab] = useState(null)
+
+  // ── Step2 網格：框選 / 焦點 / 快捷鍵（對齊主排班表格的操作手感）──
+  const [focusedCell, setFocusedCell]     = useState(null)  // { r, c }（在當前門市分頁的網格座標）
+  const [selection, setSelection]         = useState(null)  // { anchor:{r,c}, end:{r,c} }
+  const [restClipboard, setRestClipboard] = useState(null)  // 2D：('休假'|'例假'|null)[][]
+  const selectingRef = useRef(false)  // 拖曳選取中
+  const draggedRef   = useRef(false)  // 這次 mousedown 有沒有拖過（拖過就不觸發單格 cycle）
 
   // 草稿續排 session — 中斷後可續排
   const [sessionId, setSessionId] = useState(null)
@@ -322,6 +329,120 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
       return { ...prev, [key]: { 休假: rest, 例假: leave } }
     })
   }
+
+  // ── Step2 網格衍生資料（放 component scope，讓快捷鍵 handler 也拿得到；索引與畫面渲染共用同一份）──
+  const gridStoreId = (activeStoreTab && selectedStoreIds.has(activeStoreTab))
+    ? activeStoreTab : selectedStores[0]?.id || null
+  const gridEmps = storeEmployees[gridStoreId] || []
+  const gridDates = useMemo(() => {
+    const start = storeStartOverrides[gridStoreId] || selectedPeriod?.start || ''
+    const end   = selectedPeriod?.end || ''
+    const out = []
+    if (start && end) {
+      let dd = new Date(start + 'T00:00:00Z'); const de = new Date(end + 'T00:00:00Z')
+      while (dd <= de) { out.push(dd.toISOString().slice(0, 10)); dd.setUTCDate(dd.getUTCDate() + 1) }
+    }
+    return out
+  }, [gridStoreId, storeStartOverrides, selectedPeriod])
+
+  // selection → 正規化 {r0,r1,c0,c1}；inSel 判斷某格是否在框選內
+  const normSel = (sel) => sel ? {
+    r0: Math.min(sel.anchor.r, sel.end.r), r1: Math.max(sel.anchor.r, sel.end.r),
+    c0: Math.min(sel.anchor.c, sel.end.c), c1: Math.max(sel.anchor.c, sel.end.c),
+  } : null
+  const inSel = (r, c) => { const s = normSel(selection); return !!s && r >= s.r0 && r <= s.r1 && c >= s.c0 && c <= s.c1 }
+
+  // 套用假別到範圍：type = '休假' | '例假' | null(清除)
+  const applyRestRange = (r0, r1, c0, c1, type) => {
+    if (!gridStoreId) return
+    const dates = gridDates.slice(c0, c1 + 1)
+    setEmpRestMap(prev => {
+      const next = { ...prev }
+      for (let r = r0; r <= r1; r++) {
+        const emp = gridEmps[r]; if (!emp) continue
+        const key = `${gridStoreId}|${emp.name}`
+        const cur = next[key] || { 休假: [], 例假: [] }
+        const rest = new Set(cur['休假'] || []); const leave = new Set(cur['例假'] || [])
+        for (const d of dates) { rest.delete(d); leave.delete(d); if (type === '休假') rest.add(d); else if (type === '例假') leave.add(d) }
+        next[key] = { 休假: [...rest].sort(), 例假: [...leave].sort() }
+      }
+      return next
+    })
+  }
+  // 有框選 → 套框選；否則套焦點格
+  const applyRestActive = (type) => {
+    const s = normSel(selection)
+    if (s) applyRestRange(s.r0, s.r1, s.c0, s.c1, type)
+    else if (focusedCell) applyRestRange(focusedCell.r, focusedCell.r, focusedCell.c, focusedCell.c, type)
+  }
+  const copyRestSelection = () => {
+    const s = normSel(selection); if (!s || !gridStoreId) return
+    const block = []
+    for (let r = s.r0; r <= s.r1; r++) {
+      const emp = gridEmps[r]; const cur = empRestMap[`${gridStoreId}|${emp?.name}`] || {}
+      const row = []
+      for (let c = s.c0; c <= s.c1; c++) { const d = gridDates[c]; row.push((cur['休假'] || []).includes(d) ? '休假' : (cur['例假'] || []).includes(d) ? '例假' : null) }
+      block.push(row)
+    }
+    setRestClipboard(block)
+  }
+  const pasteRestSelection = () => {
+    if (!restClipboard || !gridStoreId) return
+    const s = normSel(selection); const base = s ? { r: s.r0, c: s.c0 } : focusedCell
+    if (!base) return
+    setEmpRestMap(prev => {
+      const next = { ...prev }
+      restClipboard.forEach((row, dr) => {
+        const emp = gridEmps[base.r + dr]; if (!emp) return
+        const key = `${gridStoreId}|${emp.name}`; const cur = next[key] || { 休假: [], 例假: [] }
+        const rest = new Set(cur['休假'] || []); const leave = new Set(cur['例假'] || [])
+        row.forEach((t, dc) => { const d = gridDates[base.c + dc]; if (!d) return; rest.delete(d); leave.delete(d); if (t === '休假') rest.add(d); else if (t === '例假') leave.add(d) })
+        next[key] = { 休假: [...rest].sort(), 例假: [...leave].sort() }
+      })
+      return next
+    })
+  }
+
+  // 拖曳結束 → 收 selecting；切換門市分頁 / 換步驟 → 清框選與焦點
+  useEffect(() => {
+    const up = () => { selectingRef.current = false }
+    window.addEventListener('mouseup', up)
+    return () => window.removeEventListener('mouseup', up)
+  }, [])
+  useEffect(() => { setSelection(null); setFocusedCell(null) }, [activeStoreTab, step])
+
+  // 快捷鍵（僅 step2 生效，對齊主排班表格：R 休假 / E 例假 / Del 清除 / Ctrl+C·V / 方向鍵）
+  useEffect(() => {
+    if (!open || step !== 2) return
+    const onKey = (e) => {
+      const tag = (e.target.tagName || '').toLowerCase()
+      if (tag === 'input' || tag === 'select' || tag === 'textarea') return
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'C')) { if (selection) { e.preventDefault(); copyRestSelection() } return }
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'v' || e.key === 'V')) { if (restClipboard && (selection || focusedCell)) { e.preventDefault(); pasteRestSelection() } return }
+      if (e.ctrlKey || e.metaKey || e.altKey) return
+      const k = e.key.toLowerCase()
+      if (selection || focusedCell) {
+        if (k === 'r') { e.preventDefault(); applyRestActive('休假'); return }
+        if (k === 'e') { e.preventDefault(); applyRestActive('例假'); return }
+        if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); applyRestActive(null); return }
+      }
+      if (e.key === 'Escape') { e.preventDefault(); if (selection) setSelection(null); else setFocusedCell(null); return }
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+        e.preventDefault()
+        if (!gridEmps.length || !gridDates.length) return
+        const cur = focusedCell || { r: 0, c: 0 }
+        let { r, c } = cur
+        if (e.key === 'ArrowUp')    r = Math.max(0, r - 1)
+        if (e.key === 'ArrowDown')  r = Math.min(gridEmps.length - 1, r + 1)
+        if (e.key === 'ArrowLeft')  c = Math.max(0, c - 1)
+        if (e.key === 'ArrowRight') c = Math.min(gridDates.length - 1, c + 1)
+        setFocusedCell({ r, c }); setSelection(null)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, step, selection, focusedCell, restClipboard, gridEmps, gridDates, gridStoreId, empRestMap])
 
   const handleComplete = async (actionMode) => {
     if (!selectedPeriod || isSaving) return
@@ -708,6 +829,7 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
                     <div style={{ overflowX: 'auto', border: '1px solid var(--border-light)', borderRadius: 8 }}>
                       <div style={{ padding: '6px 10px', fontSize: 11, color: 'var(--text-muted)', borderBottom: '1px solid var(--border-light)', background: 'var(--bg-secondary)' }}>
                         點格子標假：空 →🌙休假 →🛑例假 →空（再點循環）；🔵「希」= 員工已核准的希望休
+                        <span style={{ marginLeft: 8, color: 'var(--text-secondary)' }}>· 拖曳可框選，框選後：<b>R</b> 休假 / <b>E</b> 例假 / <b>Del</b> 清除 / <b>Ctrl+C·V</b> 複製貼上 / 方向鍵移動焦點</span>
                       </div>
                       <table style={{ borderCollapse: 'collapse', fontSize: 12, background: 'var(--bg-card)' }}>
                         <thead>
@@ -738,15 +860,25 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
                                   <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{emp.name}</div>
                                   <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{emp.employment_type}</div>
                                 </td>
-                                {periodDates.map(d => {
+                                {periodDates.map((d, ci) => {
                                   const isRest = restSet.has(d); const isLeave = leaveSet.has(d)
                                   const isWish = wishDates.current.has(`${emp.name}|${d}`)
                                   const dow = new Date(d + 'T00:00:00Z').getUTCDay(); const we = dow === 0 || dow === 6
+                                  const sel = inSel(ri, ci)
+                                  const foc = !!focusedCell && focusedCell.r === ri && focusedCell.c === ci
+                                  const baseBg = isRest ? 'rgba(245,158,11,0.20)' : isLeave ? 'rgba(239,68,68,0.20)' : we ? 'rgba(99,102,241,0.04)' : undefined
                                   return (
                                     <td key={d}
-                                      onClick={() => cycleRestDate(store.id, emp.name, d)}
-                                      title={`${d}${isWish ? '（希望休）' : ''} · 點一下循環：休假→例假→清除`}
-                                      style={{ ...dcell, background: isRest ? 'rgba(245,158,11,0.20)' : isLeave ? 'rgba(239,68,68,0.20)' : we ? 'rgba(99,102,241,0.04)' : undefined }}>
+                                      onMouseDown={e => { e.preventDefault(); draggedRef.current = false; selectingRef.current = true; setFocusedCell({ r: ri, c: ci }); setSelection({ anchor: { r: ri, c: ci }, end: { r: ri, c: ci } }) }}
+                                      onMouseEnter={() => { if (selectingRef.current) { draggedRef.current = true; setSelection(prev => prev ? { ...prev, end: { r: ri, c: ci } } : prev) } }}
+                                      onClick={() => { if (draggedRef.current) { draggedRef.current = false; return } cycleRestDate(store.id, emp.name, d) }}
+                                      title={`${d}${isWish ? '（希望休）' : ''} · 點一下循環：休假→例假→清除；框選後可按 R/E/Del、Ctrl+C·V`}
+                                      style={{ ...dcell,
+                                        background: sel && !isRest && !isLeave ? 'rgba(34,211,238,0.16)' : baseBg,
+                                        outline: foc ? '2px solid var(--accent-cyan)' : sel ? '1px solid rgba(34,211,238,0.55)' : undefined,
+                                        outlineOffset: foc ? '-2px' : '-1px',
+                                        position: (foc || sel) ? 'relative' : undefined, zIndex: (foc || sel) ? 1 : undefined,
+                                      }}>
                                       {isRest ? '🌙' : isLeave ? '🛑' : (isWish ? <span style={{ fontSize: 9, color: 'var(--accent-cyan)', fontWeight: 700 }}>希</span> : '')}
                                     </td>
                                   )

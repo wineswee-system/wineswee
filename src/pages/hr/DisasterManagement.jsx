@@ -52,6 +52,10 @@ export default function DisasterManagement() {
   const [preview, setPreview] = useState(null)        // { rows:[{no,name,date,amount,employee_id,matched}], fileName }
   const [importing, setImporting] = useState(false)
 
+  // 沒來結算
+  const [noShowChecked, setNoShowChecked] = useState(new Set())
+  const [settling, setSettling] = useState(false)
+
   const load = async () => {
     if (!orgId) return
     setLoading(true)
@@ -73,6 +77,29 @@ export default function DisasterManagement() {
     return m
   }, [employees])
   const storeName = (id) => stores.find(s => s.id === id)?.name || `#${id}`
+
+  // 沒來名單：範圍內（門市/全部）當天沒打卡的人
+  const noShowList = useMemo(() => {
+    if (!selected) return []
+    const inScope = selected.store_ids?.length
+      ? employees.filter(e => selected.store_ids.includes(e.store_id))
+      : employees
+    const clockedIds = new Set(attendance.map(a => a.employee_id))
+    const clockedNames = new Set(attendance.map(a => a.employee))
+    return inScope.filter(e => !clockedIds.has(e.id) && !clockedNames.has(e.name))
+  }, [selected, employees, attendance])
+  useEffect(() => { setNoShowChecked(new Set(noShowList.map(e => e.id))) }, [noShowList])
+
+  const settleNoShows = async () => {
+    const ids = [...noShowChecked]
+    if (!ids.length) return toast.warning('沒有勾選要結算的人')
+    setSettling(true)
+    const { data, error } = await supabase.rpc('disaster_settle_no_shows', { p_disaster_id: selected.id, p_employee_ids: ids })
+    setSettling(false)
+    if (error) return toast.error('結算失敗：' + error.message)
+    if (!data?.ok) return toast.error('結算失敗：' + (data?.error || ''))
+    toast.success(`已為 ${data.created} 人產生「${data.leave_type}」假單`)
+  }
 
   // 選中天災日 → 載津貼 + 出勤
   const selectDisaster = async (d) => {
@@ -307,6 +334,39 @@ export default function DisasterManagement() {
                   </div>
                 )}
               </div>
+
+              {/* 沒來人員結算 */}
+              {selected.no_show_handling !== 'paid' && (
+                <div className="card" style={{ padding: 16 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <div style={{ fontWeight: 700 }}>沒來人員結算 — 產生「{selected.no_show_handling === 'annual_leave' ? '特休' : '無薪假'}」假單</div>
+                    {canManage && noShowList.length > 0 && (
+                      <button className="btn btn-primary" disabled={settling} onClick={settleNoShows}>
+                        {settling ? '結算中…' : `結算 ${noShowChecked.size} 人`}
+                      </button>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
+                    範圍內當天沒打卡的人；勾選要結算的，會產生已核准假單（{selected.no_show_handling === 'annual_leave' ? '扣特休、薪照給' : '不支薪、計薪自動扣'}）。重複結算不會重建。
+                  </div>
+                  {noShowList.length === 0 ? (
+                    <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>範圍內全部都有打卡 🎉</div>
+                  ) : (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, maxHeight: 220, overflow: 'auto' }}>
+                      {noShowList.map(e => {
+                        const on = noShowChecked.has(e.id)
+                        return (
+                          <label key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 8px', borderRadius: 6, cursor: 'pointer', fontSize: 12,
+                            background: on ? 'var(--accent-orange-dim)' : 'var(--bg-secondary)', border: `1px solid ${on ? 'var(--accent-orange)' : 'var(--border-subtle)'}` }}>
+                            <input type="checkbox" checked={on} onChange={() => setNoShowChecked(prev => { const n = new Set(prev); if (n.has(e.id)) n.delete(e.id); else n.add(e.id); return n })} />
+                            {e.name}<span style={{ color: 'var(--text-muted)', fontFamily: 'monospace' }}>{e.employee_number || ''}</span>
+                          </label>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
             </>
           )}
         </div>

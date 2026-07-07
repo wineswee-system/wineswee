@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Search, Download, MapPin, Clock, CalendarCheck } from 'lucide-react'
 import { getAttendance, serverClockIn, getActiveEmployees, getDepartments, getStores } from '../../lib/db'
 import { exportAttendancePdf } from '../../lib/exportPdf'
@@ -52,11 +53,13 @@ function ClockModeTags({ inMode, outMode }) {
 
 export default function Attendance() {
   const { profile, isStoreStaff, isManager, hasPermission } = useAuth()
+  const navigate = useNavigate()
   const { handleError } = useErrorHandler('hr')
   const isStaff = isStoreStaff
   const canEditClock = hasPermission('clock.correction_edit')
 
   const [records, setRecords] = useState([])
+  const [overtimes, setOvertimes] = useState([])   // 已核准加班單 → 打卡追蹤獨立加班列
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
   const [stores, setStores] = useState([])
@@ -88,7 +91,11 @@ export default function Attendance() {
       getActiveEmployees('id, name, dept, store, department_id, position, store_id, departments!department_id(name), stores!store_id(name)', orgId),
       getDepartments(orgId),
       getStores(),
-    ]).then(([r, e, d, s]) => {
+      supabase.from('overtime_requests')
+        .select('id, employee, date, start_time, end_time, ot_hours, hours, ot_category, store, status, organization_id')
+        .eq('organization_id', orgId).eq('status', '已核准')
+        .gte('date', `${monthFilter}-01`).lte('date', `${monthFilter}-31`),
+    ]).then(([r, e, d, s, ot]) => {
       let recs = (r.data || []).map(r => ({
         ...r,
         // Edge Function 寫 total_hours；舊資料寫 hours；統一用 hours
@@ -102,6 +109,14 @@ export default function Attendance() {
         return emp?.store === profile.store
       })
       setRecords(recs)
+      // 加班單 → 套跟出勤一樣的可見性（店員只看自己、店長只看自店）
+      let ots = ot.data || []
+      if (isStaff && profile?.name) ots = ots.filter(o => o.employee === profile.name)
+      if (isManager && profile?.store) ots = ots.filter(o => {
+        const emp = (e.data || []).find(emp => emp.name === o.employee)
+        return emp?.store === profile.store
+      })
+      setOvertimes(ots)
       setEmployees(e.data || [])
       setDepartments(d.data || [])
       setStores(s.data || [])
@@ -144,9 +159,33 @@ export default function Attendance() {
   }, [])
   const showNotClockedToday = monthFilter === currentMonth
 
+  // 加班單 → 獨立加班列（起訖時間當打卡、狀態=加班）
+  const otRows = useMemo(() => overtimes
+    .filter(o =>
+      (deptFilter === '' || getEmpDept(o.employee) === deptFilter) &&
+      (storeFilter === '' || getEmpStore(o.employee) === storeFilter) &&
+      (search === '' || o.employee?.includes(search))
+    )
+    .map(o => ({
+      _rowType: 'overtime', id: `ot-${o.id}`, ot_id: o.id,
+      employee: o.employee, date: o.date,
+      clock_in: (o.start_time || '').slice(0, 5) || null,
+      clock_out: (o.end_time || '').slice(0, 5) || null,
+      hours: Number(o.ot_hours ?? o.hours ?? 0),
+      status: '加班', clock_in_mode: 'overtime', clock_out_mode: 'overtime',
+      store: o.store,
+    })),
+    [overtimes, deptFilter, storeFilter, search, getEmpDept, getEmpStore])
+
   const allRows = useMemo(() => {
     const recordRows = filtered.map(r => ({ ...r, _rowType: 'record' }))
-    if (!showNotClockedToday) return recordRows
+    // 正常列 + 加班列合併，同日同人排一起（加班列排在正常列後）
+    const merged = [...recordRows, ...otRows].sort((a, b) =>
+      (b.date || '').localeCompare(a.date || '') ||
+      (a.employee || '').localeCompare(b.employee || '') ||
+      (a._rowType === 'overtime' ? 1 : 0) - (b._rowType === 'overtime' ? 1 : 0)
+    )
+    if (!showNotClockedToday) return merged
     const todayEmpNames = new Set(records.filter(r => r.date === today).map(r => r.employee))
     const notClockedRows = employees
       .filter(e => {
@@ -163,8 +202,8 @@ export default function Attendance() {
         store: e.stores?.name || e.store,
         date: today,
       }))
-    return [...recordRows, ...notClockedRows]
-  }, [filtered, records, employees, storeFilter, deptFilter, search, today, showNotClockedToday])
+    return [...merged, ...notClockedRows]
+  }, [filtered, otRows, records, employees, storeFilter, deptFilter, search, today, showNotClockedToday])
 
   // 出勤紀錄最多數百筆，不需要 virtual scroll，直接 map 避免渲染問題
 
@@ -384,17 +423,18 @@ export default function Attendance() {
               {allRows.map((r) => {
                 const isToday = r.date === today
                 const isNotClocked = r._rowType === 'notClocked'
-                const canClockOut = !isNotClocked && isToday && r.clock_in && !r.clock_out
-                const canClockIn = !isNotClocked && isToday && !r.clock_in
+                const isOvertime = r._rowType === 'overtime'
+                const canClockOut = !isNotClocked && !isOvertime && isToday && r.clock_in && !r.clock_out
+                const canClockIn = !isNotClocked && !isOvertime && isToday && !r.clock_in
                 return (
-                  <div key={r.id} style={{ display: 'grid', gridTemplateColumns: '140px 100px 100px 85px 85px 60px 120px 145px 85px 110px 1fr', alignItems: 'center', borderBottom: '1px solid var(--border-subtle)', opacity: isNotClocked ? 0.75 : 1 }}>
+                  <div key={r.id} style={{ display: 'grid', gridTemplateColumns: '140px 100px 100px 85px 85px 60px 120px 145px 85px 110px 1fr', alignItems: 'center', borderBottom: '1px solid var(--border-subtle)', opacity: isNotClocked ? 0.75 : 1, background: isOvertime ? 'var(--accent-orange-dim)' : undefined }}>
                     <div style={{ padding: '4px 8px', fontWeight: 600, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.employee}</div>
                     <div style={{ padding: '4px 8px', fontSize: 12, color: 'var(--text-muted)' }}>{isNotClocked ? (r.dept || '-') : (getEmpDept(r.employee) || '-')}</div>
                     <div style={{ padding: '4px 8px', fontSize: 13 }}>{r.date}</div>
                     <div style={{ padding: '4px 8px', fontSize: 13 }}>{r.clock_in || '-'}</div>
                     <div style={{ padding: '4px 8px', fontSize: 13 }}>{r.clock_out || '-'}</div>
                     <div style={{ padding: '4px 8px', fontSize: 13 }}>{!isNotClocked && r.hours > 0 ? `${r.hours}h` : '-'}</div>
-                    <div style={{ padding: '4px 8px' }}>{isNotClocked ? <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>-</span> : locationBadge(r)}</div>
+                    <div style={{ padding: '4px 8px' }}>{isNotClocked || isOvertime ? <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{isOvertime ? '加班單' : '-'}</span> : locationBadge(r)}</div>
                     <div style={{ padding: '4px 8px', fontSize: 10, fontFamily: 'monospace', color: 'var(--text-secondary)' }}>
                       {!isNotClocked && r.clock_in_lat != null && r.clock_in_lng != null ? (
                         <a
@@ -421,7 +461,12 @@ export default function Attendance() {
                       {!isNotClocked && <ClockModeTags inMode={r.clock_in_mode} outMode={r.clock_out_mode} />}
                     </div>
                     <div style={{ padding: '4px 8px', display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                      {canEditClock && !isNotClocked && (
+                      {isOvertime && (
+                        <button className="btn btn-secondary" style={{ fontSize: 11, padding: '3px 8px' }} onClick={() => navigate(`/hr/overtime?focus=${r.ot_id}`)}>
+                          ⚡ 查看加班單
+                        </button>
+                      )}
+                      {canEditClock && !isNotClocked && !isOvertime && (
                         <button className="btn btn-secondary" style={{ fontSize: 11, padding: '3px 8px' }} onClick={() => openEdit(r)}>
                           ✏️ 改時間
                         </button>

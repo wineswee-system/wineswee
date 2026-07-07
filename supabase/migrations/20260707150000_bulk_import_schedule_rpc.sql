@@ -30,7 +30,6 @@ BEGIN
       IF p_overwrite THEN
         UPDATE public.schedules SET
           shift          = v_rec->>'shift',
-          store_id       = NULLIF(v_rec->>'store_id','')::int,
           source_store   = NULLIF(v_rec->>'source_store',''),
           month_group    = NULLIF(v_rec->>'month_group',''),
           actual_start   = NULLIF(v_rec->>'actual_start','')::time,
@@ -52,7 +51,7 @@ BEGIN
 
     INSERT INTO public.schedules
       (employee_id, employee, organization_id, date, shift,
-       store_id, source_store, month_group,
+       source_store, month_group,
        actual_start, actual_end, actual_hours,
        shift_2, actual_start_2, actual_end_2, actual_hours_2,
        absence_type, status)
@@ -62,7 +61,6 @@ BEGIN
       NULLIF(v_rec->>'organization_id','')::int,
       v_date,
       v_rec->>'shift',
-      NULLIF(v_rec->>'store_id','')::int,
       NULLIF(v_rec->>'source_store',''),
       NULLIF(v_rec->>'month_group',''),
       NULLIF(v_rec->>'actual_start','')::time,

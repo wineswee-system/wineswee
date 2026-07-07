@@ -255,7 +255,8 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
       if (error.message?.includes('employees_employee_number_key')) {
         toast.error('員工編號已被使用，請換一個編號')
       } else {
-        toast.error('儲存失敗，請稍後再試')
+        // 顯示真正錯誤（RPC 會回 SQLERRM），方便診斷而不是只看到「儲存失敗」
+        toast.error('儲存失敗：' + (error.message || '未知錯誤'))
       }
       setSaving(false); return
     }

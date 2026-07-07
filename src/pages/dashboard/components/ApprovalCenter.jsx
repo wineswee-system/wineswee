@@ -4,6 +4,7 @@ import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../contexts/AuthContext'
 import { usePendingApprovals } from '../../../lib/usePendingApprovals'
 import LoadingSpinner from '../../../components/LoadingSpinner'
+import { toast } from '../../../lib/toast'
 import {
   Users, Wallet, Calendar, ClipboardCheck, CalendarOff,
   ChevronRight, CheckCircle2, Inbox, FileCheck, FileText, ShoppingCart,
@@ -141,6 +142,31 @@ function PendingApprovalsView() {
   const [data, setData] = useState({})
   const [loading, setLoading] = useState(true)
 
+  // 🪶 待我會簽的加簽（web_list_my_extra_assignments）
+  const [extras, setExtras] = useState([])
+  const loadExtras = async () => {
+    const { data: ex } = await supabase.rpc('web_list_my_extra_assignments')
+    setExtras(Array.isArray(ex) ? ex : [])
+  }
+  const approveExtra = async (ex) => {
+    const { error } = await supabase.rpc('process_extra_signer', {
+      p_extra_step_id: ex.id, p_processor_id: profile?.id, p_action: 'approve',
+    })
+    if (error) { toast.error('核准失敗：' + error.message); return }
+    toast.success('已核准會簽')
+    loadExtras(); reload()
+  }
+  const rejectExtra = async (ex) => {
+    const reason = window.prompt('退回原因（必填）：')
+    if (!reason || !reason.trim()) return
+    const { error } = await supabase.rpc('process_extra_signer', {
+      p_extra_step_id: ex.id, p_processor_id: profile?.id, p_action: 'reject', p_reject_reason: reason.trim(),
+    })
+    if (error) { toast.error('退回失敗：' + error.message); return }
+    toast.success('已退回會簽')
+    loadExtras(); reload()
+  }
+
   const reload = async () => {
     if (!profile?.organization_id) return
     setLoading(true)
@@ -180,6 +206,7 @@ function PendingApprovalsView() {
   useEffect(() => {
     if (pendingLoading) return
     reload()
+    loadExtras()
   }, [profile?.organization_id, pendingLoading, pendingByTable]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // 計算各 tab / group 的 count
@@ -231,7 +258,42 @@ function PendingApprovalsView() {
     )
   }
 
-  if (totalCount === 0) {
+  // 🪶 加簽區塊（有待我會簽就顯示，獨立於一般 chain 待簽）
+  const extrasBlock = extras.length > 0 ? (
+    <div style={{
+      background: 'var(--bg-card)', border: '1px solid var(--accent-purple)',
+      borderRadius: 12, overflow: 'hidden', marginBottom: 12,
+    }}>
+      <div style={{ padding: '10px 16px', background: 'var(--accent-purple-dim)', color: 'var(--accent-purple)', fontWeight: 700, fontSize: 14 }}>
+        🪶 待我會簽的加簽（{extras.length}）
+      </div>
+      {extras.map(ex => (
+        <div key={ex.id} style={{
+          display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px',
+          borderTop: '1px solid var(--border-subtle)',
+        }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>
+              {ex.form_label} <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>#{ex.source_id}</span>
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
+              {ex.requester_name} 發起{ex.reason ? ` · ${ex.reason}` : ''}
+            </div>
+          </div>
+          <button onClick={() => approveExtra(ex)} style={{
+            padding: '6px 14px', borderRadius: 8, border: 'none', cursor: 'pointer',
+            background: 'var(--accent-green)', color: '#fff', fontSize: 13, fontWeight: 600,
+          }}>核准</button>
+          <button onClick={() => rejectExtra(ex)} style={{
+            padding: '6px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600,
+            background: 'transparent', color: 'var(--accent-red)', border: '1px solid var(--accent-red)',
+          }}>退回</button>
+        </div>
+      ))}
+    </div>
+  ) : null
+
+  if (totalCount === 0 && extras.length === 0) {
     return (
       <div style={{
         background: 'var(--bg-card)', border: '1px solid var(--border-medium)',
@@ -248,7 +310,13 @@ function PendingApprovalsView() {
     )
   }
 
+  if (totalCount === 0) {
+    return <div>{extrasBlock}</div>
+  }
+
   return (
+    <>
+    {extrasBlock}
     <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 12, overflow: 'hidden' }}>
       {/* Group tabs（橫排）*/}
       <div style={{
@@ -342,6 +410,7 @@ function PendingApprovalsView() {
         )}
       </div>
     </div>
+    </>
   )
 }
 

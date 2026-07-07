@@ -28,6 +28,8 @@ function normTime(t) {
   if (d.length === 4) return d.slice(0, 2) + ':' + d.slice(2) + ':00'
   return null
 }
+const toMin = t => { const [h, m] = t.split(':').map(Number); return h * 60 + m }
+const gapH = (endT, startT) => { let g = toMin(startT) - toMin(endT); if (g < 0) g += 1440; return g / 60 }  // 兩段間隔(h)
 function parseRange(str) {
   str = String(str).trim()
   let m = str.match(/(\d{1,2}:\d{2})\s*[~～-]\s*(?:次日|隔日|次)?\s*(\d{1,2}:\d{2})/)
@@ -98,7 +100,12 @@ async function main() {
         unparse[cell] = (unparse[cell] || 0) + 1; recs.push(base); continue  // 存 shift 字串、無時間，待人工補
       }
       const rec = { ...base, actual_start: segs[0].start, actual_end: segs[0].end }
-      if (segs.length > 1) { rec.shift_2 = workParts[1] || cell; rec.actual_start_2 = segs[1].start; rec.actual_end_2 = segs[1].end }
+      // 只有「恰兩段 + 間隔 3-7h」才當真兩段班（過 _validate_split_shift 守門）；否則併成一段連續班
+      if (segs.length === 2 && gapH(segs[0].end, segs[1].start) >= 3 && gapH(segs[0].end, segs[1].start) <= 7) {
+        rec.shift_2 = workParts[1] || cell; rec.actual_start_2 = segs[1].start; rec.actual_end_2 = segs[1].end
+      } else if (segs.length > 1) {
+        rec.actual_end = segs[segs.length - 1].end  // 併段：頭段起 → 末段迄
+      }
       recs.push(rec)
     }
   }

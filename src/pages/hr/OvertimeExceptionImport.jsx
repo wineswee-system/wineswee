@@ -25,6 +25,34 @@ const CSV_HEADERS = ['員工名稱', '日期', '開始時間', '結束時間', '
 // ot_category 代碼 → 中文（真正算薪的分類，由 classify_ot_category_safe 讀班表+月曆判）
 const CAT_LABEL = { weekday: '平日', restday: '休息日', weekly_off: '例假', holiday: '國定假日' }
 
+// 智慧解析日期 → 'YYYY-MM-DD'（解析不出回 ''）。
+// 支援：2026-06-24 / 2026/6/24 / 2026.6.24 / 6/24（沒年份→補所選月份的年份）/
+//       Excel-Sheets 日期序號 / gviz 的 "Date(2026,5,24)"（月份 0-based）。
+// selMonth 形如 '2026-06'，只借它的「年份」補給沒年份的 M/D。
+function normalizeDate(raw, selMonth) {
+  if (raw == null) return ''
+  const s = String(raw).trim()
+  if (!s) return ''
+  const selY = (selMonth || '').split('-')[0]
+  const pad = n => String(n).padStart(2, '0')
+  let m
+  // gviz date 物件："Date(2026,5,24)" → 月份 0-based
+  if ((m = s.match(/^Date\((\d+),\s*(\d+),\s*(\d+)/))) return `${m[1]}-${pad(+m[2] + 1)}-${pad(+m[3])}`
+  // YYYY-MM-DD / YYYY/M/D / YYYY.M.D
+  if ((m = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/))) return `${m[1]}-${pad(m[2])}-${pad(m[3])}`
+  // M/D / M-D / M.D（沒年份）→ 補所選年份，月日照抄（例：6月分頁的 7/1 spillover 仍為 07-01）
+  if ((m = s.match(/^(\d{1,2})[-/.](\d{1,2})$/)) && selY) return `${selY}-${pad(m[1])}-${pad(m[2])}`
+  // 純數字 = Excel/Sheets 日期序號（1899-12-30 起算）
+  if (/^\d+$/.test(s)) {
+    const serial = Number(s)
+    if (serial > 30 && serial < 100000) return new Date(Date.UTC(1899, 11, 30) + serial * 86400000).toISOString().slice(0, 10)
+  }
+  // 最後才交給 Date 解析（含時間字串等），用本地年月日避免時區位移
+  const d = new Date(s)
+  if (!isNaN(d.getTime())) return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+  return ''
+}
+
 const CSV_TEMPLATE = '﻿' + CSV_HEADERS.join(',') + '\n' +
   '範例：張庭瑋,2026-06-05,18:00,22:00,4,假日,客戶緊急驗收,勞資會議第3次決議\n'
 
@@ -197,7 +225,7 @@ export default function OvertimeExceptionImport() {
       return {
         rowNum:     i + 2,
         name:       cells[headerMap['員工名稱']] || '',
-        date:       cells[headerMap['日期']] || '',
+        date:       normalizeDate(cells[headerMap['日期']] || '', month),
         start_time: headerMap['開始時間'] >= 0 ? cells[headerMap['開始時間']] || '' : '',
         end_time:   headerMap['結束時間'] >= 0 ? cells[headerMap['結束時間']] || '' : '',
         hours:      parseFloat(cells[headerMap['時數']] || '0'),

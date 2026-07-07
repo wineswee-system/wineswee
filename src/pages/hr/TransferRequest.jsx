@@ -213,6 +213,7 @@ export default function TransferRequest() {
       reason: form.reason || null,
       status: '申請中',
       current_step: 0,
+      approval_chain_id: activeChain?.id || null,   // 依申請人身分蓋鏈（HR B 無 auto-fill trigger）
     }
 
     // ── 編輯路徑 ──

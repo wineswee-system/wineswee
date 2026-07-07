@@ -166,6 +166,7 @@ export default function LeaveOfAbsence() {
       organization_id: profile?.organization_id || 1,
       status: '申請中',
       current_step: 0,
+      approval_chain_id: activeChain?.id || null,   // 依申請人身分蓋鏈（HR B 無 auto-fill trigger）
     }
 
     if (editingId) {

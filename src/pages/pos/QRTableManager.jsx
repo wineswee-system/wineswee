@@ -64,7 +64,7 @@ function QRModal({ session, orgName, storeName, storeCity, tableNumber, onClose,
     const pageW  = is58 ? '58mm' : '80mm'
     // QR 尺寸用 mm 精準鎖定：58mm 桌卡固定 20mm×20mm（黑點少不中斷、省紙），80mm 維持大張。
     const qrSize = is58 ? '25mm' : '52mm'
-    const tnumPx = is58 ? '40px' : '52px'
+    const tnumPx = is58 ? '40px' : '50px'
     const win = window.open('', '_blank', 'width=340,height=560')
     if (!win) return
     win.document.write(`<!DOCTYPE html><html>
@@ -77,7 +77,7 @@ function QRModal({ session, orgName, storeName, storeCity, tableNumber, onClose,
     body{font-family:"Noto Sans TC","蘋方","微軟正黑體",sans-serif;
          text-align:center;padding:12px 10px 16px;background:#fff;color:#000;font-weight:700;
          width:${bodyW};max-width:100%;margin:0 auto}
-    .hdr{border:2px solid #000;padding:7px 10px;margin-bottom:8px}
+    .hdr{padding:7px 10px;margin-bottom:8px}
     .hdr-brand{font-size:13px;font-weight:700;letter-spacing:1px;color:#000}
     .hdr-name{font-size:17px;font-weight:900;letter-spacing:2px;margin-top:2px;color:#000}
     .hdr-city{font-size:11px;color:#000;margin-top:2px;letter-spacing:1px}
@@ -412,9 +412,9 @@ function Chip({ label, value, color }) {
 }
 
 export default function QRTableManager() {
-  const { profile } = useAuth()
+  const { profile, organization } = useAuth()
   const orgId  = profile?.organization_id ?? null
-  const orgName = profile?.org?.name ?? ''
+  const orgName = organization?.name ?? ''
 
   const [stores,         setStores]         = useState([])
   const [storeId,        setStoreId]        = useState(null)

@@ -53,15 +53,38 @@ ALTER TABLE public.pos_returns
 CREATE INDEX IF NOT EXISTS idx_pos_returns_txn ON public.pos_returns (transaction_id);
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- 3. inventory_transactions 補租戶欄位（表建立於初始 schema，migrations 未管理）
+-- 3. inventory_transactions：庫存異動稽核表
+--    此表原只存在於初始 schema（ARCHIVE），從無 migration 管理 —
+--    遠端實測不存在（2026-07-07 drift 檢查），但 20260705170000 月結函式
+--    引用它。此處補建（欄位對齊 ARCHIVE 定義）＋ 租戶欄位。
 -- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS public.inventory_transactions (
+  id         SERIAL PRIMARY KEY,
+  sku        TEXT NOT NULL,
+  date       DATE NOT NULL,
+  type       TEXT NOT NULL,                -- IN, OUT
+  qty        NUMERIC(12,2) NOT NULL,
+  unit_cost  NUMERIC(12,2) DEFAULT 0,
+  warehouse  TEXT,
+  reference  TEXT,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+ALTER TABLE public.inventory_transactions
+  ADD COLUMN IF NOT EXISTS organization_id INT;
+
+CREATE INDEX IF NOT EXISTS idx_inv_txn_org_date
+  ON public.inventory_transactions (organization_id, date);
+
+ALTER TABLE public.inventory_transactions ENABLE ROW LEVEL SECURITY;
 DO $$
 BEGIN
-  IF to_regclass('public.inventory_transactions') IS NOT NULL THEN
-    ALTER TABLE public.inventory_transactions
-      ADD COLUMN IF NOT EXISTS organization_id INT;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'inventory_transactions' AND policyname = 'inv_txn_sel') THEN
+    CREATE POLICY inv_txn_sel ON public.inventory_transactions
+      FOR SELECT TO authenticated
+      USING (organization_id IS NULL OR organization_id = auth_org_id());
   END IF;
 END $$;
+-- 寫入僅由 SECURITY DEFINER RPC（pos__adjust_stock 等）進行
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 4. 主管授權 PIN

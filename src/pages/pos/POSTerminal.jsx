@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { RotateCcw, Usb } from 'lucide-react'
+import { RotateCcw, Usb, Store } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { createPOSTransaction, refundPOSTransaction, searchMemberByQuery, getPOSTransactionByNumber, getMemberCoupons } from '../../lib/db'
 import { useTenant } from '../../contexts/TenantContext'
+import { useAuth } from '../../contexts/AuthContext'
 import { getEventBus } from '../../lib/events/index.js'
 import { createPaymentRequest } from '../../lib/payment'
 import { processPayment, confirmPayment, refundPayment, getPaymentMethods, validateEdcFields, recordEdcPayment } from '../../lib/paymentGateway'
@@ -42,9 +43,43 @@ const PAYMENT_METHOD_MAP = GATEWAY_METHODS.map(m => ({
 
 export default function POSTerminal() {
   const { tenant } = useTenant()
+  const { profile, isSuperAdmin, organization } = useAuth()
   const navigate = useNavigate()
   const [products, setProducts] = useState([])
   const [productsLoading, setProductsLoading] = useState(true)
+
+  // ── 門市綁定 ────────────────────────────────────────────────
+  // 員工綁定門市（employees.store_id）→ 鎖定該門市（super_admin 仍可切換）
+  // 跨店員工（store_id 為空）→ 進 POS 前先選門市，選擇記在 sessionStorage（分頁存續）
+  const [stores, setStores] = useState([])
+  const [storeId, setStoreId] = useState(() => {
+    try { return sessionStorage.getItem('pos_store_id') || null } catch { return null }
+  })
+  const storeName = stores.find(s => String(s.id) === String(storeId))?.name ?? ''
+
+  useEffect(() => {
+    const orgId = tenant?.organization_id
+    if (!orgId) return
+    supabase.from('stores').select('id, name').eq('organization_id', orgId).order('name')
+      .then(({ data }) => {
+        const list = data ?? []
+        setStores(list)
+        setStoreId(prev => {
+          const valid = id => id != null && list.some(s => String(s.id) === String(id))
+          const assigned = valid(profile?.store_id) ? profile.store_id : null
+          if (assigned && !isSuperAdmin) return assigned // 一般員工鎖定綁定門市
+          const kept = valid(prev) ? prev : null
+          return kept ?? assigned ?? (isSuperAdmin ? (list[0]?.id ?? null) : null)
+        })
+      })
+  }, [tenant?.organization_id, profile?.store_id, isSuperAdmin])
+
+  useEffect(() => {
+    try {
+      if (storeId) sessionStorage.setItem('pos_store_id', String(storeId))
+      else sessionStorage.removeItem('pos_store_id')
+    } catch {}
+  }, [storeId])
 
   const [search, setSearch] = useState('')
   const [cart, setCart] = useState([])
@@ -162,12 +197,20 @@ export default function POSTerminal() {
       }
     }
 
+    loadProducts()
+  }, [tenant?.organization_id])
+
+  // 套餐/規格是門市層級資料（pos_menu_combos / pos_menu_items 以 store_id 區分）
+  // — 依所選門市載入，切換門市時重載
+  useEffect(() => {
+    if (!storeId) { setCombos([]); setItemVariants({}); return }
+
     const loadCombosAndVariants = async () => {
       try {
         const { data: comboData } = await supabase
           .from('pos_menu_combos')
           .select('*, items:pos_menu_combo_items(*, menu_item:pos_menu_items(name, unit_price))')
-          .eq('store_id', orgId)
+          .eq('store_id', storeId)
           .eq('is_active', true)
           .order('display_order')
         setCombos(comboData || [])
@@ -175,7 +218,7 @@ export default function POSTerminal() {
         const { data: menuItems } = await supabase
           .from('pos_menu_items')
           .select('id')
-          .eq('store_id', orgId)
+          .eq('store_id', storeId)
           .eq('is_active', true)
 
         if (menuItems?.length > 0) {
@@ -197,9 +240,8 @@ export default function POSTerminal() {
       }
     }
 
-    loadProducts()
     loadCombosAndVariants()
-  }, [tenant?.organization_id])
+  }, [storeId])
 
   // Member lookup — identifies customer for loyalty/CRM downstream handlers
   const [selectedMember, setSelectedMember] = useState(null)
@@ -361,7 +403,7 @@ export default function POSTerminal() {
   const currentPaymentLabel = PAYMENT_METHOD_MAP.find(m => m.code === effectivePaymentMethod)?.label || effectivePaymentMethod
 
   const receiptPrintOptions = {
-    companyName: '威士威企業總部',
+    companyName: organization?.name || storeName || '門市',
     companyTaxId: '12345678',
     cashierName: '系統',
     paperWidth: Number(paperWidth),   // 58 | 80 → 收據版面寬度
@@ -425,7 +467,7 @@ export default function POSTerminal() {
       const txnNum = `POS-${String(Date.now()).slice(-6)}`
       queueTransaction({
         transaction_number: txnNum,
-        store: tenant?.store_name || tenant?.name || '威士威企業總部',
+        store: storeName || '門市',
         cashier: '系統',
         items: cart.map(c => ({ name: c.name, qty: c.qty, price: c.price, order_type: c.order_type })),
         subtotal, discount: safeDiscount, tax, total,
@@ -433,7 +475,7 @@ export default function POSTerminal() {
         member_id: selectedMember?.id ?? null,
         points_earned: 0, // 後端以 member_levels 計算
         points_used: pointsUsed,
-        store_id: tenant?.store_id ?? null,
+        store_id: storeId ?? null,
         note: orderNote.trim() || null,
         manual_discount: safeManualDiscount,
         coupon_assignment_id: selectedCoupon?.id ?? null,
@@ -444,7 +486,7 @@ export default function POSTerminal() {
         year: 'numeric', month: '2-digit', day: '2-digit',
         hour: '2-digit', minute: '2-digit', second: '2-digit' }).replace(/\//g, '-')
       setReceiptData({
-        storeName: tenant?.store_name || tenant?.name || '威士威企業總部',
+        storeName: storeName || '門市',
         txnNum,
         invoiceNum: null, // 離線無法配號，同步後由補開流程開立
         paymentId: txnNum,
@@ -501,7 +543,7 @@ export default function POSTerminal() {
       //    會員點數/等級/消費紀錄（member_levels 單一事實來源）、
       //    優惠券單次核銷、分帳驗證、傳票、稽核軌跡
       const { data: txnRecord, error: txnError } = await createPOSTransaction({
-        store: tenant?.store_name || tenant?.name || '威士威企業總部',
+        store: storeName || '門市',
         cashier: '系統',
         items: cart.map(c => ({ name: c.name, qty: c.qty, price: c.price, order_type: c.order_type })),
         subtotal, discount: safeDiscount, tax, total,
@@ -509,7 +551,7 @@ export default function POSTerminal() {
         payment_ref: payResult.paymentId,
         member_id: selectedMember?.id ?? null,
         points_used: pointsUsed,
-        store_id: tenant?.store_id ?? null,
+        store_id: storeId ?? null,
         note: orderNote.trim() || null,
         manual_discount: safeManualDiscount,
         coupon_assignment_id: selectedCoupon?.id ?? null,
@@ -540,7 +582,7 @@ export default function POSTerminal() {
         try {
           await recordEdcPayment({
             organization_id: tenant?.organization_id ?? null,
-            store_id: tenant?.store_id ?? null,
+            store_id: storeId ?? null,
             // 零售交易（pos_transactions INT id）→ transaction_id；
             // 舊寫法塞 order_id（UUID FK）必失敗，卡收從未落庫
             transaction_id: txnRecord?.id ?? null,
@@ -577,14 +619,14 @@ export default function POSTerminal() {
         await bus.publish('pos.transaction.completed', {
           transaction_id: String(newTransactionId),
           transaction_number: txnNum,
-          store: tenant?.store_name || tenant?.name || '威士威企業總部',
+          store: storeName || '門市',
           cashier: '系統',
           total,
           payment_method: currentPaymentLabel,
           items: cart.map(c => ({ name: c.name, qty: c.qty, price: c.price, order_type: c.order_type })),
           customer_id: selectedMember?.id ?? null,
           points_used: pointsUsed,
-          store_id: tenant?.store_id ?? null,
+          store_id: storeId ?? null,
           note: orderNote.trim() || null,
           server_processed: true,
         })
@@ -598,7 +640,7 @@ export default function POSTerminal() {
         year: 'numeric', month: '2-digit', day: '2-digit',
         hour: '2-digit', minute: '2-digit', second: '2-digit' }).replace(/\//g, '-')
       const receipt = {
-        storeName: tenant?.store_name || tenant?.name || '威士威企業總部',
+        storeName: storeName || '門市',
         txnNum,
         invoiceNum,
         paymentId: payResult.paymentId,
@@ -741,7 +783,7 @@ export default function POSTerminal() {
         await bus.publish('pos.transaction.refunded', {
           refund_id: String(data.refund_id),
           original_transaction_id: receiptData.txnNum,
-          store: tenant?.store_name || '門市',
+          store: storeName || '門市',
           customer_id: selectedMember?.id ?? null,
           refund_amount: Number(data.refund_amount),
           reason: '櫃台退款',
@@ -843,7 +885,7 @@ export default function POSTerminal() {
       await bus.publish('pos.transaction.refunded', {
         refund_id: String(data.refund_id),
         original_transaction_id: refundTxnId.trim(),
-        store: tenant?.store_name || '門市',
+        store: storeName || '門市',
         refund_amount: Number(data.refund_amount),
         reason: '顧客退貨',
         items: selectedItems.map(i => ({ name: i.name, qty: i.qty })),
@@ -861,6 +903,46 @@ export default function POSTerminal() {
     setRefundResult(null)
   }
 
+  // 跨店員工（未綁定門市、非 super_admin）→ 先選門市才能進入收銀台
+  if (!storeId && !isSuperAdmin && stores.length > 0) {
+    return (
+      <div className="fade-in" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
+        <div style={{
+          background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)',
+          borderRadius: 16, padding: 32, maxWidth: 420, width: '100%', textAlign: 'center',
+        }}>
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            width: 56, height: 56, borderRadius: '50%',
+            background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)', marginBottom: 16,
+          }}>
+            <Store size={28} />
+          </div>
+          <h3 style={{ color: 'var(--text-primary)', marginBottom: 8 }}>請先選擇門市</h3>
+          <p style={{ color: 'var(--text-secondary)', fontSize: 14, marginBottom: 24 }}>
+            此帳號未綁定單一門市，請先選擇本班次服務的門市
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {stores.map(s => (
+              <button
+                key={s.id}
+                className="btn"
+                onClick={() => setStoreId(s.id)}
+                style={{
+                  background: 'var(--bg-tertiary)', border: '1px solid var(--border-primary)',
+                  color: 'var(--text-primary)', padding: '12px 16px', fontSize: 15, fontWeight: 700,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                }}
+              >
+                <Store size={16} /> {s.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="fade-in">
       <div className="page-header">
@@ -870,6 +952,38 @@ export default function POSTerminal() {
             <p>銷售結帳作業 — 支援多元支付與電子發票</p>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {/* 門市指示 — super_admin 可切換，一般員工唯讀 */}
+            {isSuperAdmin && stores.length > 0 ? (
+              <label style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)',
+                border: '1px solid var(--accent-cyan)', borderRadius: 8,
+                padding: '6px 10px', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+              }} title="切換門市（超級管理員）">
+                <Store size={14} />
+                <select
+                  value={storeId ?? ''}
+                  onChange={e => setStoreId(e.target.value || null)}
+                  style={{
+                    background: 'transparent', border: 'none', color: 'var(--accent-cyan)',
+                    fontSize: 13, fontWeight: 700, cursor: 'pointer', outline: 'none',
+                  }}
+                >
+                  {!storeId && <option value="">選擇門市</option>}
+                  {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </label>
+            ) : storeName ? (
+              <span style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)',
+                border: '1px solid var(--accent-cyan)', borderRadius: 8,
+                padding: '6px 10px', fontSize: 13, fontWeight: 700,
+              }}>
+                <Store size={14} /> {storeName}
+              </span>
+            ) : null}
+
             {'serial' in navigator && (
               <button
                 className="btn"

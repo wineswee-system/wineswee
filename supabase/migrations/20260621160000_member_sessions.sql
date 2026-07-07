@@ -28,8 +28,8 @@ CREATE TABLE IF NOT EXISTS public.member_sessions (
 
 CREATE INDEX IF NOT EXISTS idx_ms_member ON public.member_sessions(member_id);
 CREATE INDEX IF NOT EXISTS idx_ms_token  ON public.member_sessions(token);
-CREATE INDEX IF NOT EXISTS idx_ms_exp    ON public.member_sessions(expires_at)
-  WHERE expires_at > now();
+-- now() 非 IMMUTABLE，不能用於 index predicate（原寫法使本 migration 從未成功套用）
+CREATE INDEX IF NOT EXISTS idx_ms_exp    ON public.member_sessions(expires_at);
 
 ALTER TABLE public.member_sessions ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS ms_staff_sel ON public.member_sessions;

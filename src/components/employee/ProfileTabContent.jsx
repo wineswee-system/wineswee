@@ -48,10 +48,9 @@ export default function ProfileTabContent({
         <>
           <SectionTitle icon="👤" text="姓名" />
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            <div><div style={L}>姓</div><input className="form-input" style={{ width: '100%' }} value={form.last_name || ''} onChange={e => set('last_name', e.target.value)} /></div>
-            <div><div style={L}>名</div><input className="form-input" style={{ width: '100%' }} value={form.first_name || ''} onChange={e => set('first_name', e.target.value)} /></div>
+            <div><div style={L}>姓名</div><input className="form-input" style={{ width: '100%' }} value={form.name || ''} onChange={e => set('name', e.target.value)} /></div>
+            <div><div style={L}>英文名</div><input className="form-input" style={{ width: '100%' }} value={form.name_en || ''} onChange={e => set('name_en', e.target.value)} /></div>
           </div>
-          <div><div style={L}>英文名</div><input className="form-input" style={{ width: '50%' }} value={form.name_en || ''} onChange={e => set('name_en', e.target.value)} /></div>
 
           <SectionTitle icon="📋" text="個人資料" />
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>

@@ -76,11 +76,20 @@ export function findDateOverlap(form, records, editingId = null) {
   if (!form?.start_date) return null
   const startD = new Date(form.start_date)
   const endD = new Date(form.end_date || form.start_date)
+  const toMin = t => { const [h, m] = String(t || '').split(':').map(Number); return (h || 0) * 60 + (m || 0) }
+  // 新單是否「單日小時假」（unit=hour 且沒跨日）
+  const formHourly = form.unit === 'hour' && (!form.end_date || form.end_date === form.start_date)
   return records.find(r => {
     if (r.id === editingId) return false
     if (r.status === '已拒絕' || r.status === '已取消') return false
     const rStart = new Date(r.start_date)
     const rEnd = new Date(r.end_date || r.start_date)
-    return startD <= rEnd && endD >= rStart
+    if (!(startD <= rEnd && endD >= rStart)) return false   // 日期段沒交集 → 一定不衝突
+    // 兩筆都是「同一天的小時假」→ 只在「時間段真的重疊」時才算衝突（同日不同時段可各自請）
+    const rHourly = !!(r.start_time && r.end_time) && (!r.end_date || r.end_date === r.start_date)
+    if (formHourly && rHourly && form.start_date === r.start_date) {
+      return toMin(form.start_time) < toMin(r.end_time) && toMin(form.end_time) > toMin(r.start_time)
+    }
+    return true   // 其一為整天/跨日 → 日期重疊就算衝突（整天假 vs 同日小時假仍衝突）
   }) || null
 }

@@ -28,6 +28,17 @@ const STATUS_BADGE = {
 import { fmtDateTimeTW } from '../lib/datetime'
 const fmtDateTime = fmtDateTimeTW
 
+// requestType → approval_extra_steps.source_table（給加簽關撈用）
+const REQTYPE_TO_TABLE = {
+  leave: 'leave_requests', overtime: 'overtime_requests', trip: 'business_trips',
+  correction: 'clock_corrections', off_request: 'off_requests', expense: 'expense_requests',
+  expense_request: 'expense_requests', expense_settle: 'expense_requests',
+  resignation: 'resignation_requests', transfer: 'personnel_transfer_requests',
+  loa: 'leave_of_absence_requests', headcount: 'headcount_requests',
+  goods_transfer: 'goods_transfer_requests', cover: 'shift_cover_requests',
+  store_audit: 'store_audits', form_submission: 'form_submissions',
+}
+
 /**
  * @param {Object} props
  * @param {boolean} props.open
@@ -105,6 +116,46 @@ export default function ApprovalDetailModal({
       }
     })
   }, [chainSteps, timeline])
+
+  // 加簽關：前端直查 approval_extra_steps 會 permission denied → 走 SECURITY DEFINER RPC
+  const [extraSteps, setExtraSteps] = useState([])
+  useEffect(() => {
+    const st = actions?.sourceTable || REQTYPE_TO_TABLE[requestType]
+    const rid = actions?.row?.id || requestId
+    if (!open || !st || !rid) { setExtraSteps([]); return }
+    let cancelled = false
+    supabase.rpc('list_request_extra_steps', { p_source_table: st, p_source_id: Number(rid) })
+      .then(({ data }) => { if (!cancelled) setExtraSteps(Array.isArray(data) ? data : []) })
+    return () => { cancelled = true }
+  }, [open, requestType, requestId, actions])
+
+  // 把加簽關插進 timeline（插在第 insert_before_step 個實際 chain step 之前）；
+  // 統一由這裡插，略過 caller 自帶的 extra 避免重複。
+  const finalChainSteps = useMemo(() => {
+    if (!extraSteps.length) return mergedChainSteps
+    const toStep = ex => ({
+      kind: 'extra', label: '加簽', name: ex.assignee_name || '',
+      status: ex.status === 'approved' ? 'completed' : ex.status === 'rejected' ? 'rejected' : 'current',
+      completedAt: ex.approved_at, rejectReason: ex.reject_reason || '',
+      extraReason: ex.reason || '', extraRequesterName: ex.requester_name || '',
+    })
+    const byBefore = {}
+    for (const ex of extraSteps) (byBefore[ex.insert_before_step] ||= []).push(ex)
+    const out = []
+    let chainIdx = 0
+    const used = new Set()
+    for (const s of mergedChainSteps) {
+      if (s.kind === 'extra') continue
+      const isChain = !s.isApplicant && s.kind !== 'settle_divider'
+      if (isChain) {
+        for (const ex of (byBefore[chainIdx] || [])) { out.push(toStep(ex)); used.add(ex.id) }
+        chainIdx += 1
+      }
+      out.push(s)
+    }
+    for (const ex of extraSteps) if (!used.has(ex.id)) out.push(toStep(ex))  // insert_before_step 超出鏈長 → 補末端
+    return out
+  }, [mergedChainSteps, extraSteps])
 
   if (!open) return null
 
@@ -275,7 +326,7 @@ export default function ApprovalDetailModal({
               }}>{overallBadge.text}</span>
             </div>
 
-            <ChainTimeline steps={mergedChainSteps} />
+            <ChainTimeline steps={finalChainSteps} />
           </div>
         </div>
 

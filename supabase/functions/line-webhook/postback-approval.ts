@@ -339,10 +339,51 @@ const handleApproveExtra: PostbackHandler = async (params, ctx) => {
   return [txt(`✅ 已核准加簽（#${extraId}）`)];
 };
 
+// ── Handler: 加簽退回（需填原因）──────────────────────────────────────────────
+// postback data: action=reject&type=extra&extra_id=X
+// 設 pending → 下一段使用者打的文字當退回原因 → process_extra_signer reject
+const handleRejectExtra: PostbackHandler = async (params, ctx) => {
+  const extraId = Number(params.extra_id);
+  if (!extraId) return [txt("⚠️ 加簽參數有誤")];
+  if (!ctx.lineUser?.employee_id) {
+    return [txt("❌ 你的 LINE 還沒綁員工，請先 /註冊 姓名")];
+  }
+
+  await setPending(ctx, {
+    action: "extra_reject_reason",
+    extra_step_id: extraId,
+    title: `加簽 #${extraId}`,
+  });
+
+  const quickReasons: Array<{ label: string; reason: string }> = [
+    { label: "不同意", reason: "不同意此加簽" },
+    { label: "資訊不足", reason: "資訊不足，請補充後再簽" },
+    { label: "再溝通", reason: "請先與發起人討論" },
+  ];
+
+  return [{
+    type: "text",
+    text: `❌ 你正在退回加簽（#${extraId}）\n\n下方選常用原因（一鍵送出），或直接打字輸入原因`,
+    quickReply: {
+      items: [
+        ...quickReasons.map(q => ({
+          type: "action",
+          action: { type: "message", label: q.label, text: q.reason },
+        })),
+        {
+          type: "action",
+          action: { type: "postback", label: "取消退回", data: `action=cancel&type=request` },
+        },
+      ],
+    },
+  }];
+};
+
 // ── Register ─────────────────────────────────────────────────────────────────
 
 registerPostback("approve", "request", handleApprove);
 registerPostback("reject",  "request", handleReject);
 registerPostback("cancel",  "request", handleCancel);
 registerPostback("approve", "extra",   handleApproveExtra);  // P3d 加簽核准
+registerPostback("reject",  "extra",   handleRejectExtra);   // 加簽退回（填原因）
 registerPostback("resend",  "request", handleResend);

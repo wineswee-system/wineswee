@@ -61,6 +61,8 @@ export type PendingAction =
       request_id: number;
       title: string;
     }
+  // 加簽退回 — 等使用者打退回原因，再呼叫 process_extra_signer reject
+  | { action: "extra_reject_reason"; extra_step_id: number; title: string }
   // 任務加備註 v2 — 用 numeric task_id (非 short id)
   | { action: "task_note_v2"; task_id: number; title: string }
   // 薪資 PIN 解鎖 — 等使用者打 4-6 位密碼

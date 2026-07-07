@@ -409,6 +409,36 @@ serve(async (req) => {
         await logCommand(db, { channelId, lineUserId, displayName: profile.displayName, commandMatched: "pending_approval_reject_reason", rawInput: rawText, sourceType, groupId, success: true, executionMs: Date.now() - cmdStart });
         await replyAndLog(event.replyToken, [resultMsg], accessToken, db, { channelId, lineUserId, displayName: profile.displayName, sourceType, groupId });
         continue;
+      } else if (pending.action === "extra_reject_reason") {
+        // 加簽退回 — 把使用者打的文字當退回原因，呼叫 process_extra_signer reject
+        const cmdStart = Date.now();
+        await db.from("line_users").update({ pending_action: null }).eq("id", lineUser.id);
+        const reason = rawText.trim();
+        let resultMsg: any;
+        if (!reason) {
+          resultMsg = text("⚠️ 退回原因不能空白，請重新點 [❌ 退回]");
+        } else if (!lineUser.employee_id) {
+          resultMsg = text("你的 LINE 還沒綁員工，請先 /註冊 姓名");
+        } else {
+          const { error } = await db.rpc("process_extra_signer", {
+            p_extra_step_id: pending.extra_step_id,
+            p_processor_id: lineUser.employee_id,
+            p_action: "reject",
+            p_reject_reason: reason,
+          });
+          if (error) {
+            const msg = error.message ?? "未知錯誤";
+            if (msg.includes("加簽紀錄不存在")) resultMsg = text("❌ 加簽紀錄不存在或已被處理");
+            else if (msg.includes("狀態非 pending")) resultMsg = text("❌ 此加簽已被處理或撤銷");
+            else if (msg.includes("只有加簽人本人")) resultMsg = text("❌ 你不是這個加簽的對象");
+            else resultMsg = text(`❌ 退回加簽失敗：${msg}`);
+          } else {
+            resultMsg = text(`❌ 已退回加簽（#${pending.extra_step_id}）\n原因：${reason}`);
+          }
+        }
+        await logCommand(db, { channelId, lineUserId, displayName: profile.displayName, commandMatched: "pending_extra_reject_reason", rawInput: rawText, sourceType, groupId, success: true, executionMs: Date.now() - cmdStart });
+        await replyAndLog(event.replyToken, [resultMsg], accessToken, db, { channelId, lineUserId, displayName: profile.displayName, sourceType, groupId });
+        continue;
       } else if (pending.action === "create_task") {
         const cmdStart = Date.now();
         const stepResult = await handleCreateTaskStep(lineUser, rawText, db, accessToken);

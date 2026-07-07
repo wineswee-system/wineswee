@@ -102,6 +102,7 @@ BEGIN
   END IF;
 
   -- 只有「指派給加簽人」時給核准/退回鈕（走 webhook type=extra postback，process_extra_signer 通用）
+  -- + 「進 LIFF 看詳情」（深連結 ?id=source_id，LIFF 會展開該單）
   IF p_event = 'extra_assigned' THEN
     v_footer_buttons := jsonb_build_array(
       jsonb_build_object('type','button','style','primary','color','#16a34a','height','sm',
@@ -110,6 +111,12 @@ BEGIN
       jsonb_build_object('type','button','style','secondary','height','sm',
         'action', jsonb_build_object('type','postback','label','❌ 退回',
           'data','action=reject&type=extra&extra_id=' || v_extra.id::text,'displayText','退回加簽')));
+    IF p_liff_id IS NOT NULL AND p_liff_id <> '' THEN
+      v_footer_buttons := v_footer_buttons || jsonb_build_array(
+        jsonb_build_object('type','button','style','link','height','sm',
+          'action', jsonb_build_object('type','uri','label','📋 進 LIFF 看詳情',
+            'uri','https://liff.line.me/' || p_liff_id || '?id=' || v_extra.source_id::text)));
+    END IF;
   END IF;
 
   v_bubble := jsonb_build_object(

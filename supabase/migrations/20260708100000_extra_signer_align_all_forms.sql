@@ -18,8 +18,8 @@ AS $function$
     'expense_requests',
     -- 商品調撥
     'goods_transfer_requests',
-    -- 其他 HR 簽核表單（2026-07-08 加入）
-    'off_requests', 'headcount_requests', 'store_audits', 'form_submissions'
+    -- 其他 HR 簽核表單（2026-07-08 加入；希望休 off_requests 刻意不給加簽，不列入）
+    'headcount_requests', 'store_audits', 'form_submissions'
   ]::text[]
 $function$;
 

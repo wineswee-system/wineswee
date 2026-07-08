@@ -323,6 +323,7 @@ export function parseYearMonth(ym) {
 export const ABSENCE_TYPES = {
   WEEKLY_OFF:  '例假',  // 勞基法 §36 一例一休的「例」— 原則不可上班
   REST_DAY:    '休息',  // 勞基法 §36 一例一休的「休」— 可上班但需加班費
+  NATIONAL_HOLIDAY: '國定假',  // §37 國定假日（門市可排在他日；計薪讀班表這天）
   REST:        '休',    // legacy 通用「休」（未明確區分例/休的舊資料）
   COMP_OFF:    '補休',
   SICK:        '病',
@@ -351,6 +352,7 @@ export const ABSENCE_CONFIG = {
   // payRate: 薪資比例 (1.0 全薪、0.5 半薪、0 無薪)
   '例假': { label: '例假',     color: '#dc2626', icon: '🛑', countsAsRest: true,  payRate: 1.0 }, // 原則不准上班（除緊急 §40）
   '休息': { label: '休息',     color: '#6b7280', icon: '🌙', countsAsRest: true,  payRate: 1.0 }, // 可上班需加班費
+  '國定假': { label: '國定假', color: '#06b6d4', icon: '🎌', countsAsRest: false, payRate: 1.0 }, // §37 國定假日（另計，不吃月休配額）
   '休':   { label: '休假',     color: '#6b7280', icon: '😴', countsAsRest: true,  payRate: 1.0 }, // legacy 未明確區分
   '補休': { label: '補休',     color: '#3b82f6', icon: '🔄', countsAsRest: true,  payRate: 1.0 },
   '病':   { label: '病假',     color: '#ef4444', icon: '🏥', countsAsRest: false, payRate: 0.5 }, // 勞基法：普通病假前 30 天半薪

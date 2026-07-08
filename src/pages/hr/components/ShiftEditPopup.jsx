@@ -170,6 +170,7 @@ export default function ShiftEditPopup({ emp, date, shift, storeSettings, schedu
           {[
             { label: '🛑 例假', key: '例假', bg: 'rgba(220,38,38,0.10)', color: '#dc2626' },
             { label: '🌙 休息', key: '休息', bg: 'var(--glass-medium)', color: 'var(--text-muted)' },
+            { label: '🎌 國定假', key: '國定假', bg: 'rgba(6,182,212,0.10)', color: '#06b6d4' },
             { label: '🔄 補休', key: '補休', bg: 'rgba(59,130,246,0.1)', color: '#3b82f6' },
             { label: '🌴 特休', key: '特休', bg: 'rgba(16,185,129,0.08)', color: '#10b981' },
             { label: '🏥 病假', key: '病', bg: 'rgba(239,68,68,0.08)', color: '#ef4444' },

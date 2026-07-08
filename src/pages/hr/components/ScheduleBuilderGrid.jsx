@@ -13,6 +13,7 @@ function getShiftStyle(shiftLabel, shiftDefs) {
     const map = {
       '例假': { background: 'rgba(220,38,38,0.15)', color: '#dc2626', borderColor: 'rgba(220,38,38,0.3)' },
       '休息': { background: 'var(--glass-medium)', color: 'var(--text-muted)', borderColor: 'var(--border-light)' },
+      '國定假': { background: 'rgba(6,182,212,0.15)', color: '#06b6d4', borderColor: 'rgba(6,182,212,0.3)' },
       '補休': { background: 'rgba(59,130,246,0.12)', color: '#3b82f6', borderColor: 'rgba(59,130,246,0.3)' },
       '特休': { background: 'rgba(16,185,129,0.10)', color: '#10b981', borderColor: 'rgba(16,185,129,0.3)' },
       '病': { background: 'rgba(239,68,68,0.10)', color: '#ef4444', borderColor: 'rgba(239,68,68,0.3)' },
@@ -473,6 +474,7 @@ export default function ScheduleBuilderGrid({
           {[
             { label: '例假', color: '#dc2626', bg: 'rgba(220,38,38,0.12)' },
             { label: '休息', color: 'var(--text-muted)', bg: 'var(--glass-medium)' },
+            { label: '國定假', color: '#06b6d4', bg: 'rgba(6,182,212,0.12)' },
             { label: '特休', color: '#10b981', bg: 'rgba(16,185,129,0.10)' },
             { label: '補休', color: '#3b82f6', bg: 'rgba(59,130,246,0.10)' },
           ].map(a => (

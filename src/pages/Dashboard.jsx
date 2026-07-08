@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import TeamDashboard from './dashboard/TeamDashboard'
 import StaffDashboard from './dashboard/components/StaffDashboard'
 import ApprovalCenter from './dashboard/components/ApprovalCenter'
 import { usePendingApprovals } from '../lib/usePendingApprovals'
@@ -582,20 +581,18 @@ function AdminDashboard({ profile }) {
 }
 
 export default function Dashboard() {
-  const { profile, isStoreStaff, isManagerOrAbove, isAdmin } = useAuth()
-  // 角色分流（2026-07-08 調整：TeamDashboard 收斂到 admin+）：
-  //   store_staff              → /portal（員工 portal 是他們的「家」）
-  //   admin / super_admin      → TeamDashboard（團隊視角，資訊較多）
-  //   manager / office_staff   → StaffDashboard（精簡個人視角）
-  //   其餘（無角色）           → AdminDashboard（fallback）
-  if (isStoreStaff) return <Navigate to="/portal" replace />
+  const { profile } = useAuth()
+  // 用 profile.role（employees 文字欄，可靠）分流，不依賴 role_id→roles 的 join（可能沒讀到）：
+  //   store_staff             → /portal（員工 portal 是他們的「家」）
+  //   admin / super_admin     → AdminDashboard（營運/財務總覽，資訊較多）
+  //   manager / office_staff… → StaffDashboard（精簡個人視角）
+  const r = profile?.role || ''
+  if (r === 'store_staff') return <Navigate to="/portal" replace />
 
   // 兩 tab：總覽 + 我的待簽（簽核中心）
-  const inner = isAdmin
-    ? <TeamDashboard />
-    : (profile?.role === 'office_staff' || isManagerOrAbove)
-      ? <StaffDashboard profile={profile} />
-      : <AdminDashboard profile={profile} />
+  const inner = (r === 'admin' || r === 'super_admin')
+    ? <AdminDashboard profile={profile} />
+    : <StaffDashboard profile={profile} />
 
   return <DashboardTabs overview={inner} />
 }

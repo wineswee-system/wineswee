@@ -95,7 +95,7 @@ export default function Projects() {
   }
 
   const handleWfDelete = async (w) => {
-    if (!(await confirm({ message: `確定刪除流程「${w.template_name}」？此操作無法復原。` }))) return
+    if (!(await confirm({ message: `確定刪除流程「${w.template_name}」？底下的步驟任務會一併刪除，此操作無法復原。`, danger: true }))) return
     const { error } = await supabase.from('workflow_instances').delete().eq('id', w.id)
     if (error) { toast('刪除失敗', 'error'); return }
     setWorkflows(prev => prev.filter(x => x.id !== w.id))

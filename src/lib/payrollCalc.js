@@ -259,9 +259,9 @@ export async function computeBatchPayroll({ month, orgId, employees, storeFilter
         return { _pay: pay, _rate_label: label }
       }
       if (cat === 'weekly_off') {
-        // PT ×2；regular/admin ×1（現金）+ 另補一天補休（OT 登錄端處理）
+        // PT ×2；正職(月薪) 前 8h ×1.0、超過 ×2.0（現金）+ 另補一天補休（OT 登錄端處理）
         if (isHourly) return { _pay: Math.ceil(h * hourlyRate * 2), _rate_label: '×2.0' }
-        return { _pay: Math.ceil(h * hourlyRate), _rate_label: '×1.0' }
+        return { _pay: Math.ceil(Math.min(h, 8) * hourlyRate + Math.max(h - 8, 0) * hourlyRate * 2), _rate_label: h <= 8 ? '×1.0' : '×1.0 / ×2.0' }
       }
       if (cat === 'holiday') {
         if (isHourly) return { _pay: Math.ceil(h * hourlyRate * 2), _rate_label: '×2.0' }

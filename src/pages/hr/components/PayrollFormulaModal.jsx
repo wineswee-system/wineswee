@@ -93,7 +93,7 @@ function OvertimeDetailTable({ rows, hourlyRate, isHourly }) {
     if (row._rate_label) return row._rate_label
     const h = row.hours || 0
     const cat = row.category || 'weekday'
-    if (cat === 'weekly_off') return isHourly ? '×2.0' : '×1.0'
+    if (cat === 'weekly_off') return isHourly ? '×2.0' : (h <= 8 ? '×1.0' : '×1.0 / ×2.0')
     if (cat === 'holiday')    return isHourly ? '×2.0' : (h <= 8 ? '固定8h' : '固定8h / ×1.34 / ×1.67')
     if (cat === 'restday')    return isHourly ? '×2.0' : (h <= 2 ? '×1.34' : h <= 8 ? '×1.34 / ×1.67' : '×1.34 / ×1.67 / ×2.67')
     return h <= 2 ? '×1.34' : '×1.34 / ×1.67'
@@ -366,7 +366,7 @@ export default function PayrollFormulaModal({ payroll, month, onClose }) {
                   '三桶階梯倍率：',
                   p.otWeekday > 0 ? '・平日：前 2 小時 × 1.34；超過 2 小時部分 × 1.67' : null,
                   p.otRestday > 0 ? '・休息日：前 2 小時 × 1.34；第 3~8 小時 × 1.67；第 9~12 小時 × 2.67' : null,
-                  p.otWeeklyOff > 0 ? '・例假：月薪 × 1.0；時薪 × 2.0' : null,
+                  p.otWeeklyOff > 0 ? '・例假：月薪 前 8h × 1.0、超過 8h × 2.0；時薪 × 2.0' : null,
                   p.otHoliday > 0 ? '・國定假日加班：加班時數 × 時薪 × 2.0' : null,
                   p.holidayBonus > 0 ? '・國定出勤加給：國定時數 × 時薪 × 1.0' : null,
                 ].filter(Boolean).join('\n')}

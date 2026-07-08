@@ -7,14 +7,15 @@ import { validateClockIn } from '../../lib/clockInValidator'
 import { getRestMinutes } from '../../lib/scheduleUtils'
 
 // 由上下班時間算「淨工時」（扣休息：<5h=0、5~9h=30分、≥9h=60分；跨午夜 +24h）
-function computeNet(inStr, outStr) {
+function computeNet(inStr, outStr, isAdmin = false) {
   if (!inStr || !outStr) return null
   const [ih, im] = inStr.split(':').map(Number)
   const [oh, om] = outStr.split(':').map(Number)
   let mins = (oh * 60 + om) - (ih * 60 + im)
   if (mins < 0) mins += 24 * 60
   const gross = mins / 60
-  const net = gross - getRestMinutes(gross) / 60
+  const rest = isAdmin ? 60 : getRestMinutes(gross)   // 行政午休固定 60 分
+  const net = gross - rest / 60
   return net > 0 ? Math.round(net * 100) / 100 : 0
 }
 import { todayTW, monthStartTW, nowTimeTW } from '../../lib/datetime'
@@ -278,7 +279,10 @@ export default function Attendance() {
       payload.total_hours = Math.round(Number(editHours) * 100) / 100
       payload.hours = payload.total_hours
     } else if (editClockIn && editClockOut) {
-      const net = computeNet(editClockIn, editClockOut)
+      // 行政午休固定 60 分 → 查該員工類別
+      const { data: ssCat } = await supabase.from('salary_structures')
+        .select('employment_category').eq('employee_id', r.employee_id).maybeSingle()
+      const net = computeNet(editClockIn, editClockOut, ssCat?.employment_category === 'admin')
       if (net > 0) { payload.total_hours = net; payload.hours = net }
     }
     const { error } = await supabase.from('attendance_records').update(payload).eq('id', r.id)

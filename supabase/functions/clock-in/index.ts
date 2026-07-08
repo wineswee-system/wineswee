@@ -32,7 +32,8 @@ type ClockMode = typeof VALID_MODES[number]
  *   gross ≥ 9h → 60 分（上限）
  * 跟前端 src/lib/scheduleUtils.js#getRestMinutes 同公式。
  */
-function getRestMinutes(grossHours: number): number {
+function getRestMinutes(grossHours: number, isAdmin = false): number {
+  if (isAdmin) return 60   // 行政午休固定 1 小時（不套門市階梯；早走/短班也一樣）
   if (grossHours <= 0) return 0
   if (grossHours < 5) return 0
   if (grossHours < 9) return 30
@@ -148,6 +149,11 @@ serve(async (req: Request) => {
       const authRole = (jwtAuthEmp?.roles as any)?.name ?? jwtAuthEmp?.role
       if (!ADMIN_ROLES.includes(authRole)) return jsonResp({ error: '無權代替他人打卡' }, 403)
     }
+
+    // ── 行政(admin)午休固定 1 小時 → getRestMinutes 傳 isAdmin ──
+    const { data: empSalary } = await supabase.from('salary_structures')
+      .select('employment_category').eq('employee_id', emp.id).maybeSingle()
+    const isAdminEmp = empSalary?.employment_category === 'admin'
 
     // ── 候選門市清單：主要店 + employees.additional_stores（跨店打卡支援）──
     const STORE_SELECT = 'id, name, lat, lng, clock_radius, allowed_wifi, clock_in_method'
@@ -285,7 +291,7 @@ serve(async (req: Request) => {
         //   一早上班就忘了打下班），不自動補下班以免算出離譜工時 —— 跳過、讓它
         //   走下方正常開新上班，昨天孤兒留給人工/報表處理。
         if (yWorked <= 16 * 60) {
-          const yNet = yWorked - getRestMinutes(yWorked / 60)
+          const yNet = Math.max(0, yWorked - getRestMinutes(yWorked / 60, isAdminEmp))
           const { data: yData, error: yErr } = await supabase.from('attendance_records')
             .update({
               clock_out:      timeStr,
@@ -355,7 +361,7 @@ serve(async (req: Request) => {
       let workedMinutes = currentMinutes - (inH * 60 + inM)
       if (workedMinutes < 0) workedMinutes += 1440
       const grossHours = workedMinutes / 60
-      const netMinutes = workedMinutes - getRestMinutes(grossHours)
+      const netMinutes = Math.max(0, workedMinutes - getRestMinutes(grossHours, isAdminEmp))
 
       const updatePayload: Record<string, unknown> = {
         clock_out:       timeStr,

@@ -179,11 +179,18 @@ export default function Overtime() {
       if (!validateRequired(form, ['employee', 'date', 'store', 'start_time', 'end_time', 'reason'], setErrors)) return
       if (!form.hours || form.hours <= 0) { toast.error('加班時數計算為 0，請檢查起訖時間'); return }
 
-      // ── 勞基法 §32 前端預檢（DB trigger 也會擋；前端只是給即時 feedback）──
-      if (Number(form.hours) > 4) {
-        toast.error(`⛔ 單筆加班不能超過 4 小時（勞基法 §32 日總工時 12 上限）。本次 ${form.hours} 小時，請拆分或走特例匯入。`)
+      // ── 單筆時數 sanity（對齊 DB：四週變形工時，單筆上限 12h；合規由排班檢查把關）──
+      if (Number(form.hours) > 12) {
+        toast.error(`⛔ 單筆加班時數異常（最多 12 小時），本次 ${form.hours} 小時，請確認起訖時間`)
         return
       }
+
+      // ── 同日時段重疊才擋（同日不同時段的加班可各自請；對齊 LIFF）──
+      const toMin = t => { const [h, m] = String(t || '').split(':').map(Number); return (h || 0) * 60 + (m || 0) }
+      const dup = records.find(r => r.id !== editingId && r.employee === form.employee && r.date === form.date
+        && !['已駁回', '已退回', '已拒絕', '已取消'].includes(r.status)
+        && toMin(form.start_time) < toMin(r.end_time) && toMin(form.end_time) > toMin(r.start_time))
+      if (dup) { toast.error(`${form.date} ${dup.start_time}~${dup.end_time} 已有加班（時段重疊）`); return }
 
       // ── 編輯重送路徑 ──
       if (editingId) {
@@ -595,9 +602,7 @@ export default function Overtime() {
             const crossDay = form.start_time && form.end_time
               && (form.end_time <= form.start_time)
 
-            // 勞基法 §32 軟提醒（不擋送單，僅警示）
-            //   單日加班一般 4h、勞資會議同意 12h
-            //   單月加班一般 46h、勞資會議同意 54h（每 3 個月 ≤ 138h）
+            // 本月加班累計（中性顯示；四週變形工時無 4h/46h 週制框架，合規由排班檢查把關）
             let monthUsed = 0
             if (form.employee && form.date && form.date.length >= 7) {
               const ym = form.date.slice(0, 7)
@@ -609,10 +614,6 @@ export default function Overtime() {
                 .reduce((s, r) => s + (Number(r.hours) || 0), 0)
             }
             const monthTotal = monthUsed + (Number(form.hours) || 0)
-            const dailyWarn = (Number(form.hours) || 0) > 4
-            const monthOver46 = monthTotal > 46
-            const monthOver54 = monthTotal > 54
-            const hasWarn = dailyWarn || monthOver46
 
             return (
               <>
@@ -648,30 +649,8 @@ export default function Overtime() {
                   </div>
                   {form.hours > 0 && form.date && (
                     <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-                      本月已累計 <b style={{ color: monthOver46 ? 'var(--accent-orange)' : 'var(--text-secondary)' }}>{monthTotal}h</b>
+                      本月已累計 <b style={{ color: 'var(--text-secondary)' }}>{monthTotal}h</b>
                       <span style={{ opacity: 0.7 }}>（含本筆，已核准+待審）</span>
-                    </div>
-                  )}
-                  {hasWarn && (
-                    <div style={{
-                      marginTop: 8, padding: '8px 12px', borderRadius: 8,
-                      background: monthOver54 ? 'var(--accent-red-dim)' : 'var(--accent-orange-dim)',
-                      color: monthOver54 ? 'var(--accent-red)' : 'var(--accent-orange)',
-                      fontSize: 12, lineHeight: 1.6,
-                      border: `1px solid ${monthOver54 ? 'var(--accent-red)' : 'var(--accent-orange)'}`,
-                    }}>
-                      {dailyWarn && (
-                        <div>⚠️ 單日加班 {form.hours}h 超過勞基法 §32 一般上限 4 小時</div>
-                      )}
-                      {monthOver46 && !monthOver54 && (
-                        <div>⚠️ 本月加班 {monthTotal}h 超過勞基法 §32 一般月上限 46 小時，須有工會 / 勞資會議同意</div>
-                      )}
-                      {monthOver54 && (
-                        <div>🚨 本月加班 {monthTotal}h 超過勞資會議同意上限 54 小時（季合計 ≤ 138h）</div>
-                      )}
-                      <div style={{ fontSize: 11, opacity: 0.85, marginTop: 4, fontWeight: 400 }}>
-                        ※ 僅提示，仍可送出，由主管裁量
-                      </div>
                     </div>
                   )}
                 </Field>

@@ -185,6 +185,19 @@ export default function Overtime() {
         return
       }
 
+      // ── 本月加班上限 46h 硬擋（特例匯入不受此限；DB trigger 也會擋）──
+      const ym = form.date?.slice(0, 7)
+      const monthUsed = records
+        .filter(r => r.employee === form.employee && r.id !== editingId
+          && r.date?.slice(0, 7) === ym
+          && ['已核准', '待審核', '申請中'].includes(r.status)
+          && !r.is_exception)
+        .reduce((s, r) => s + (Number(r.hours) || 0), 0)
+      if (monthUsed + Number(form.hours) > 46) {
+        toast.error(`⛔ 本月加班已達上限（46 小時）。當月已 ${monthUsed} 小時，本次 ${form.hours} 小時，合計 ${monthUsed + Number(form.hours)}`)
+        return
+      }
+
       // ── 同日時段重疊才擋（同日不同時段的加班可各自請；對齊 LIFF）──
       const toMin = t => { const [h, m] = String(t || '').split(':').map(Number); return (h || 0) * 60 + (m || 0) }
       const dup = records.find(r => r.id !== editingId && r.employee === form.employee && r.date === form.date

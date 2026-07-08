@@ -366,15 +366,17 @@ export default function PayrollFormulaModal({ payroll, month, onClose }) {
                   '三桶階梯倍率：',
                   p.otWeekday > 0 ? '・平日：前 2 小時 × 1.34；超過 2 小時部分 × 1.67' : null,
                   p.otRestday > 0 ? '・休息日：前 2 小時 × 1.34；第 3~8 小時 × 1.67；第 9~12 小時 × 2.67' : null,
-                  p.otHoliday > 0 ? '・國定/例假加班：加班時數 × 時薪 × 2.0' : null,
-                  isHourly && p.holidayBonus > 0 ? '・時薪制國定打卡加給：國定打卡時數 × 時薪 × 1.0' : null,
+                  p.otWeeklyOff > 0 ? '・例假：月薪 × 1.0；時薪 × 2.0' : null,
+                  p.otHoliday > 0 ? '・國定假日加班：加班時數 × 時薪 × 2.0' : null,
+                  p.holidayBonus > 0 ? '・國定出勤加給：國定時數 × 時薪 × 1.0' : null,
                 ].filter(Boolean).join('\n')}
                 vars={[
                   { k: '時薪', v: hr },
                   ...(p.otWeekday > 0 ? [{ k: '平日加班時數', v: p.otWeekday }, { k: '平日加班費', v: p.otPayWeekday }] : []),
                   ...(p.otRestday > 0 ? [{ k: '休息日加班時數', v: p.otRestday }, { k: '休息日加班費', v: p.otPayRestday }] : []),
-                  ...(p.otHoliday > 0 ? [{ k: '國定/例假加班時數', v: p.otHoliday }, { k: '國定/例假加班費', v: p.otPayHoliday }] : []),
-                  ...(isHourly && p.holidayBonus > 0 ? [{ k: '國定打卡時數', v: p.holidayHours || 0 }, { k: '國定打卡加給', v: p.holidayBonus }] : []),
+                  ...(p.otWeeklyOff > 0 ? [{ k: '例假加班時數', v: p.otWeeklyOff }, { k: '例假加班費', v: p.otPayWeeklyOff }] : []),
+                  ...(p.otHoliday > 0 ? [{ k: '國定加班時數', v: p.otHoliday }, { k: '國定加班費', v: p.otPayHoliday }] : []),
+                  ...(p.holidayBonus > 0 ? [{ k: '國定出勤加給時數', v: p.holidayHours || 0 }, { k: '國定出勤加給', v: p.holidayBonus }] : []),
                 ]}
               />
             )}

@@ -582,18 +582,19 @@ function AdminDashboard({ profile }) {
 }
 
 export default function Dashboard() {
-  const { profile, isStoreStaff, isManagerOrAbove } = useAuth()
-  // 2026-05-11 角色分流：
-  //   store_staff → 跳到 /portal（員工 portal 是他們的「家」）
-  //   office_staff → 原本的 StaffDashboard（用 admin UI 的員工）
-  //   manager / admin / super_admin → 新的 TeamDashboard（團隊視角）
+  const { profile, isStoreStaff, isManagerOrAbove, isAdmin } = useAuth()
+  // 角色分流（2026-07-08 調整：TeamDashboard 收斂到 admin+）：
+  //   store_staff              → /portal（員工 portal 是他們的「家」）
+  //   admin / super_admin      → TeamDashboard（團隊視角，資訊較多）
+  //   manager / office_staff   → StaffDashboard（精簡個人視角）
+  //   其餘（無角色）           → AdminDashboard（fallback）
   if (isStoreStaff) return <Navigate to="/portal" replace />
 
   // 兩 tab：總覽 + 我的待簽（簽核中心）
-  const inner = profile?.role === 'office_staff' && profile
-    ? <StaffDashboard profile={profile} />
-    : isManagerOrAbove
-      ? <TeamDashboard />
+  const inner = isAdmin
+    ? <TeamDashboard />
+    : (profile?.role === 'office_staff' || isManagerOrAbove)
+      ? <StaffDashboard profile={profile} />
       : <AdminDashboard profile={profile} />
 
   return <DashboardTabs overview={inner} />

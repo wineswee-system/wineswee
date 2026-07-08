@@ -28,7 +28,8 @@ export default function PieceCountModal({ month, employees, orgId, onClose }) {
       const pieceList = (ss || [])
         .map(s => {
           const e = empById.get(s.employee_id)
-          if (!e || e.status !== '在職') return null
+          // employees 已是計薪範圍(在職 OR 當月離職)，不再自己濾 status，否則漏掉當月離職者
+          if (!e) return null
           return { id: s.employee_id, name: e.name, store: e.store, dept: e.dept, rate: Number(s.piece_rate) || 0 }
         })
         .filter(Boolean)
@@ -85,7 +86,7 @@ export default function PieceCountModal({ month, employees, orgId, onClose }) {
           {loading ? (
             <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>載入中…</div>
           ) : list.length === 0 ? (
-            <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>目前沒有「計件」分類的在職員工。<br />（員工分類在員工詳情 → 人事 → 薪資 設為「計件」才會出現在這）</div>
+            <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>此月份沒有「計件」分類的員工（在職或當月離職）。<br />（員工分類在員工詳情 → 人事 → 薪資 設為「計件」才會出現在這）</div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {list.map(p => {

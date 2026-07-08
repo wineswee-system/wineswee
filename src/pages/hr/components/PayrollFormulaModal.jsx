@@ -384,11 +384,12 @@ export default function PayrollFormulaModal({ payroll, month, onClose }) {
               <FormulaRow
                 label="額外加班費"
                 value={p.extra_overtime_pay}
-                formula="倍率算法與「加班費」相同（同三桶階梯）"
+                formula="額外加班費率接續當天加班階梯（額外 = 當天加班+額外 − 只加班）"
                 vars={[
                   ...(p._ot_exc_weekday > 0 ? [{ k: '平日加班時數', v: p._ot_exc_weekday }, { k: '平日加班費', v: p._ot_exc_weekday_pay }] : []),
                   ...(p._ot_exc_restday > 0 ? [{ k: '休息日加班時數', v: p._ot_exc_restday }, { k: '休息日加班費', v: p._ot_exc_restday_pay }] : []),
-                  ...(p._ot_exc_holiday > 0 ? [{ k: '國定/例假加班時數', v: p._ot_exc_holiday }, { k: '國定/例假加班費', v: p._ot_exc_holiday_pay }] : []),
+                  ...(p._ot_exc_weekly_off > 0 ? [{ k: '例假加班時數', v: p._ot_exc_weekly_off }, { k: '例假加班費', v: p._ot_exc_weekly_off_pay }] : []),
+                  ...(p._ot_exc_holiday > 0 ? [{ k: '國定加班時數', v: p._ot_exc_holiday }, { k: '國定加班費', v: p._ot_exc_holiday_pay }] : []),
                 ]}
               />
             )}

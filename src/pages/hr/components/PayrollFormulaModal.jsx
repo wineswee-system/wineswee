@@ -5,12 +5,14 @@ import { fmtNT as fmt } from '../../../lib/currency'
 const CATEGORY_LABEL = {
   weekday: '平日',
   restday: '休息日',
-  holiday: '國定/例假',
+  weekly_off: '例假',
+  holiday: '國定假',
 }
 
 const CATEGORY_COLOR = {
   weekday: 'var(--accent-cyan)',
   restday: 'var(--accent-orange)',
+  weekly_off: 'var(--accent-purple)',
   holiday: 'var(--accent-red)',
 }
 
@@ -72,7 +74,7 @@ function Section({ title, color, children }) {
 }
 
 // 加班明細小表
-function OvertimeDetailTable({ rows, hourlyRate }) {
+function OvertimeDetailTable({ rows, hourlyRate, isHourly }) {
   if (!rows || rows.length === 0) return (
     <div style={{ padding: 12, fontSize: 12, color: 'var(--text-muted)', textAlign: 'center' }}>本月無加班申請</div>
   )
@@ -89,8 +91,12 @@ function OvertimeDetailTable({ rows, hourlyRate }) {
   }
   const rateLabelFor = (row) => {
     if (row._rate_label) return row._rate_label
-    const hours = row.hours || 0
-    return hours <= 2 ? '×1.34' : '×1.34 / ×1.67'
+    const h = row.hours || 0
+    const cat = row.category || 'weekday'
+    if (cat === 'weekly_off') return isHourly ? '×2.0' : '×1.0'
+    if (cat === 'holiday')    return isHourly ? '×2.0' : (h <= 8 ? '固定8h' : '固定8h / ×1.34 / ×1.67')
+    if (cat === 'restday')    return isHourly ? '×2.0' : (h <= 2 ? '×1.34' : h <= 8 ? '×1.34 / ×1.67' : '×1.34 / ×1.67 / ×2.67')
+    return h <= 2 ? '×1.34' : '×1.34 / ×1.67'
   }
 
   const sorted = [...rows].sort((a, b) => (a.date || '').localeCompare(b.date || ''))
@@ -407,14 +413,14 @@ export default function PayrollFormulaModal({ payroll, month, onClose }) {
           {/* ── 加班明細 ── */}
           {(otRows.length > 0) && (
             <Section title="📅 加班明細" color="var(--accent-cyan)">
-              <OvertimeDetailTable rows={otRows} hourlyRate={hr} />
+              <OvertimeDetailTable rows={otRows} hourlyRate={hr} isHourly={isHourly} />
             </Section>
           )}
 
           {/* ── 額外加班明細 ── */}
           {((p._ot_exception_rows || []).length > 0) && (
             <Section title="📅 額外加班明細" color="var(--accent-cyan)">
-              <OvertimeDetailTable rows={p._ot_exception_rows} hourlyRate={hr} />
+              <OvertimeDetailTable rows={p._ot_exception_rows} hourlyRate={hr} isHourly={isHourly} />
             </Section>
           )}
 

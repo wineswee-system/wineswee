@@ -9,6 +9,7 @@ import { confirm } from '../../lib/confirm'
 import SignaturePad from './SignaturePad'
 import SearchableSelect, { empOptions } from '../SearchableSelect'
 import { postBindingFillDone } from '../../lib/embeddedBinding'
+import ExtraSignerControls from '../ExtraSignerControls'
 
 const STATUS_BADGE = {
   '草稿':   { bg: 'var(--bg-secondary)',      color: 'var(--text-muted)' },
@@ -353,14 +354,21 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
           )}
           {/* 「待確認」狀態保留供舊資料相容（新流程已改現場簽名） */}
           {isApproving && (
-            <>
-              <button className="btn btn-warning" onClick={() => handleApprove('reject')} disabled={saving}>
-                <XCircle size={14} /> 退回
-              </button>
-              <button className="btn btn-primary" onClick={() => handleApprove('approve')} disabled={saving}>
-                <CheckCircle2 size={14} /> 核准
-              </button>
-            </>
+            <ExtraSignerControls
+              sourceTable="store_audits"
+              row={{ id: audit.id, current_step: audit.current_step, employee_id: audit.auditor_id }}
+              onChanged={() => { onChanged?.(); load() }}
+              renderNormal={() => (
+                <>
+                  <button className="btn btn-warning" onClick={() => handleApprove('reject')} disabled={saving}>
+                    <XCircle size={14} /> 退回
+                  </button>
+                  <button className="btn btn-primary" onClick={() => handleApprove('approve')} disabled={saving}>
+                    <CheckCircle2 size={14} /> 核准
+                  </button>
+                </>
+              )}
+            />
           )}
           {audit.status === '已退回' && isAuditor && (
             <button className="btn btn-secondary" onClick={handleCancel} disabled={saving}>

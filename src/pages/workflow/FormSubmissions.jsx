@@ -7,6 +7,7 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 import AsyncButton from '../../components/AsyncButton'
 import Modal, { Field, ModalOverlay } from '../../components/Modal'
 import ApprovalDetailModal from '../../components/ApprovalDetailModal'
+import ExtraSignerControls from '../../components/ExtraSignerControls'
 import ChainConfigModal from '../../components/ChainConfigModal'
 import CustomFormFill from './CustomFormFill'
 import { printFormMemo } from '../../lib/printFormMemo'
@@ -561,14 +562,21 @@ export default function FormSubmissions() {
                           </button>
                         )}
                         {canApprove && (
-                          <>
-                            <AsyncButton className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px', color: 'var(--accent-green)' }} onClick={() => handleApprove(s)} busyLabel="處理中…">
-                              <CheckCircle size={11} /> 核准
-                            </AsyncButton>
-                            <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px', color: 'var(--accent-red)' }} onClick={() => setReviewModal(s)}>
-                              <XCircle size={11} /> 駁回
-                            </button>
-                          </>
+                          <ExtraSignerControls
+                            sourceTable="form_submissions"
+                            row={{ id: s.id, current_step: s.current_step, employee_id: s.applicant_id }}
+                            onChanged={load}
+                            renderNormal={() => (
+                              <>
+                                <AsyncButton className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px', color: 'var(--accent-green)' }} onClick={() => handleApprove(s)} busyLabel="處理中…">
+                                  <CheckCircle size={11} /> 核准
+                                </AsyncButton>
+                                <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px', color: 'var(--accent-red)' }} onClick={() => setReviewModal(s)}>
+                                  <XCircle size={11} /> 駁回
+                                </button>
+                              </>
+                            )}
+                          />
                         )}
                         {canCancel && (
                           <AsyncButton className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px' }} onClick={() => handleCancel(s)} busyLabel="處理中…">取消</AsyncButton>

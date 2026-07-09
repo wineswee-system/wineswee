@@ -1,11 +1,12 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { ClipboardCheck, Plus, Search, Settings } from 'lucide-react'
+import { ClipboardCheck, Plus, Search, Settings, Trash2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { ModalOverlay } from '../../components/Modal'
 import { toast } from '../../lib/toast'
+import { confirm } from '../../lib/confirm'
 import StoreAuditDetailModal from '../../components/audit/StoreAuditDetailModal'
 
 const STATUS_BADGE = {
@@ -66,6 +67,20 @@ export default function StoreAudits() {
     setLoading(false)
   }
   useEffect(() => { load() }, [orgId])
+
+  // 刪除草稿（只有草稿可刪；走 SECURITY DEFINER RPC 連子表一起刪）
+  const handleDeleteDraft = async (e, r) => {
+    e.stopPropagation()  // 別觸發開明細
+    const ok = await confirm({ message: `確定刪除草稿稽核單 #${r.id}（${r.store_name}）？此動作無法復原。` })
+    if (!ok) return
+    const { data, error } = await supabase.rpc('delete_store_audit_draft', { p_id: r.id })
+    if (error || !data?.ok) {
+      toast.error('刪除失敗：' + (error?.message || data?.error || '未知'))
+      return
+    }
+    toast.success(`已刪除草稿 #${r.id}`)
+    load()
+  }
 
   const filtered = useMemo(() => {
     let arr = list
@@ -148,11 +163,12 @@ export default function StoreAudits() {
                 <th>扣分 / 得分</th>
                 <th>狀態</th>
                 <th>建立</th>
+                <th style={{ width: 44 }}></th>
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 && (
-                <tr><td colSpan={8} style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>沒有符合的稽核單</td></tr>
+                <tr><td colSpan={9} style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>沒有符合的稽核單</td></tr>
               )}
               {filtered.map(r => {
                 const s = STATUS_BADGE[r.status] || {}
@@ -170,6 +186,14 @@ export default function StoreAudits() {
                       <span style={{ padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700, background: s.bg, color: s.color }}>{r.status}</span>
                     </td>
                     <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{r.created_at?.slice(0, 16).replace('T', ' ')}</td>
+                    <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+                      {r.status === '草稿' && (
+                        <button onClick={e => handleDeleteDraft(e, r)} title="刪除草稿"
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-red)', padding: 4, display: 'inline-flex' }}>
+                          <Trash2 size={15} />
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 )
               })}

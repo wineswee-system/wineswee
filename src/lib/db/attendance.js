@@ -48,6 +48,8 @@ export const getLeaveRequests = (options = {}) => {
     const end = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10)  // 當月最後一天
     q = q.gte('start_date', start).lte('start_date', end)
   }
+  if (options.from) q = q.gte('start_date', options.from)  // 日期區間(依 start_date)
+  if (options.to)   q = q.lte('start_date', options.to)
   return q.limit(options.limit ?? 500)
 }
 
@@ -78,6 +80,11 @@ export const getOvertimeRequests = (options = {}) => {
     // date 跟 request_date 任一落在區間都算（schema drift 相容）
     q = q.or(
       `and(date.gte.${start},date.lte.${end}),and(request_date.gte.${start},request_date.lte.${end})`
+    )
+  }
+  if (options.from && options.to) {  // 日期區間(date 或 request_date 任一落在區間)
+    q = q.or(
+      `and(date.gte.${options.from},date.lte.${options.to}),and(request_date.gte.${options.from},request_date.lte.${options.to})`
     )
   }
   return q.limit(options.limit ?? 2000)

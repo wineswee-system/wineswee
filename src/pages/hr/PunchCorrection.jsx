@@ -4,6 +4,8 @@ import { useReturnNav } from '../../lib/useReturnNav'
 import { Plus, Check, X, Printer, Settings, Paperclip, Search } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
+import DateRangeField from '../../components/DateRangeField'
+import { monthStartTW, todayTW } from '../../lib/datetime'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import AsyncButton from '../../components/AsyncButton'
 import Time24 from '../../components/Time24'
@@ -46,6 +48,8 @@ export default function PunchCorrection() {
   const [showModal, setShowModal] = useState(false)
   const [tab, setTab] = useState('pending')
   const [search, setSearch] = useState('')
+  const [startDate, setStartDate] = useState(() => monthStartTW())  // 日期區間，預設本月1號~今天
+  const [endDate, setEndDate] = useState(() => todayTW())
   const [form, setForm] = useState({ employee: isStaff ? (profile?.name || '') : '', date: '', type: 'clock_out', correction_time: '', reason: '', store: '' })
   const [editingId, setEditingId] = useState(null)
   const [cloneSourceId, setCloneSourceId] = useState(null)  // 複製重送：來源單 id（送出後複製附件）
@@ -320,6 +324,7 @@ export default function PunchCorrection() {
   if (loading) return <LoadingSpinner />
 
   const filtered = corrections.filter(c => {
+    if (c.date && (c.date < startDate || c.date > endDate)) return false  // 日期區間篩選（純檢視用）
     if (tab === 'pending' && c.status !== '待審核') return false
     if (tab === 'approved' && c.status !== '已核准') return false
     if (tab === 'rejected' && c.status !== '已駁回') return false
@@ -374,7 +379,11 @@ export default function PunchCorrection() {
       </div>
 
       <div className="card">
-        <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '12px 16px 0' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', padding: '12px 16px 0' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>📅 日期</span>
+            <DateRangeField start={startDate} end={endDate} onChange={(s, e) => { setStartDate(s); setEndDate(e) }} />
+          </div>
           <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
             <Search size={13} style={{ position: 'absolute', left: 8, color: 'var(--text-muted)', pointerEvents: 'none' }} />
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="搜尋單號" style={{ paddingLeft: 26, paddingRight: search ? 26 : 10, paddingTop: 5, paddingBottom: 5, borderRadius: 6, border: '1px solid var(--border-medium)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: 13, outline: 'none', width: 120 }} />

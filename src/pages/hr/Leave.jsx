@@ -8,6 +8,8 @@ import { getLeaveRequests, createLeaveRequest, updateLeaveStatus, getActiveEmplo
 import { supabase } from '../../lib/supabase'
 import { getSupervisor } from '../../lib/approval'
 import { useAuth } from '../../contexts/AuthContext'
+import DateRangeField from '../../components/DateRangeField'
+import { monthStartTW, todayTW } from '../../lib/datetime'
 import { LEAVE_TYPES, getAnnualLeaveEntitlement, getLeaveTypeInfo, validateLeaveRequest } from '../../lib/leavePolicy'
 import { getEffectiveBenefits, getStoreIdByName } from '../../lib/benefitPolicy'
 import { createApprovalWorkflow, getWorkflowForRecord, advanceWorkflow } from '../../lib/workflowIntegration'
@@ -40,7 +42,8 @@ export default function Leave() {
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
   const [deptFilter, setDeptFilter] = useState('')
-  const [leaveMonth, setLeaveMonth] = useState(() => new Date().toISOString().slice(0, 7))  // 預設當月，只載當月降載量
+  const [startDate, setStartDate] = useState(() => monthStartTW())  // 日期區間，預設本月1號~今天
+  const [endDate, setEndDate] = useState(() => todayTW())
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -123,7 +126,7 @@ export default function Leave() {
   const load = () => {
     const orgId = profile?.organization_id
     return Promise.all([
-      getLeaveRequests({ orgId, month: leaveMonth }),
+      getLeaveRequests({ orgId, from: startDate, to: endDate }),
       getActiveEmployees('id, name, dept, store_id, department_id, position, join_date, phone, signature_url, salary_type, weekly_hours, departments!department_id(name)', orgId),
       getDepartments(orgId),
       getLeaveStepSettings(),
@@ -164,7 +167,7 @@ export default function Leave() {
     })
   }
 
-  useEffect(() => { load() }, [leaveMonth]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { load() }, [startDate, endDate]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const set = (k, v) => {
     setForm(f => ({ ...f, [k]: v }))
@@ -573,8 +576,8 @@ export default function Leave() {
           <option value="">全部部門</option>
           {departments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
         </select>
-        <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap', marginLeft: 8 }}>📅 月份</span>
-        <input type="month" className="form-input" style={{ fontSize: 13 }} value={leaveMonth} onChange={e => setLeaveMonth(e.target.value)} title="只載入該月的請假單" />
+        <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap', marginLeft: 8 }}>📅 日期</span>
+        <DateRangeField start={startDate} end={endDate} onChange={(s, e) => { setStartDate(s); setEndDate(e) }} />
       </div>
 
       <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>

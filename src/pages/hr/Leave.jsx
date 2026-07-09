@@ -591,7 +591,7 @@ export default function Leave() {
         </div>
         <div className="stat-card" style={{ '--card-accent': 'var(--accent-cyan)', '--card-accent-dim': 'var(--accent-cyan-dim)' }}>
           <div className="stat-card-label">本月天數</div>
-          <div className="stat-card-value">{filtered.reduce((s, l) => s + (l.days || 0), 0)}</div>
+          <div className="stat-card-value">{Math.round(filtered.reduce((s, l) => s + (l.days || 0), 0) * 100) / 100}</div>
         </div>
         <div className="stat-card" style={{ '--card-accent': 'var(--accent-purple)', '--card-accent-dim': 'var(--accent-purple-dim)' }}>
           <div className="stat-card-label">假別數</div>

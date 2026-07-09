@@ -108,6 +108,7 @@ export default function SalaryTable({ filtered, expanded, setExpanded, getEmpDep
               <th>加班費</th>
               <th>津貼</th>
               <th>獎金</th>
+              <th style={{ color: 'var(--accent-green)' }}>特休折現</th>
               <th style={{ color: 'var(--accent-orange)' }}>勞保</th>
               <th style={{ color: 'var(--accent-orange)' }}>健保</th>
               <th style={{ color: 'var(--accent-orange)' }}>勞退自提</th>
@@ -118,7 +119,7 @@ export default function SalaryTable({ filtered, expanded, setExpanded, getEmpDep
           </thead>
           <tbody>
             {filtered.length === 0 && (
-              <tr><td colSpan={13} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 32 }}>本月尚無薪資紀錄</td></tr>
+              <tr><td colSpan={14} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 32 }}>本月尚無薪資紀錄</td></tr>
             )}
             {filtered.map(r => {
               const isExpanded = expanded === r.id
@@ -137,6 +138,7 @@ export default function SalaryTable({ filtered, expanded, setExpanded, getEmpDep
                     <td style={{ color: 'var(--accent-cyan)' }}>{r.overtime ? `+${(r.overtime).toLocaleString()}` : '-'}</td>
                     <td style={{ color: 'var(--accent-green)' }}>{r.allowance ? `+${(r.allowance).toLocaleString()}` : '-'}</td>
                     <td style={{ color: 'var(--accent-purple)' }}>{r.bonus ? `+${(r.bonus).toLocaleString()}` : '-'}</td>
+                    <td style={{ color: 'var(--accent-green)', fontSize: 12 }}>{r.unused_leave_payout ? `+${(r.unused_leave_payout).toLocaleString()}` : '-'}</td>
                     <td style={{ color: 'var(--accent-orange)', fontSize: 12 }}>-{(r.labor_insurance || 0).toLocaleString()}</td>
                     <td style={{ color: 'var(--accent-orange)', fontSize: 12 }}>-{(r.health_insurance || 0).toLocaleString()}</td>
                     <td style={{ color: 'var(--accent-orange)', fontSize: 12 }}>{r.pension_self ? `-${r.pension_self.toLocaleString()}` : '-'}</td>
@@ -149,7 +151,7 @@ export default function SalaryTable({ filtered, expanded, setExpanded, getEmpDep
 
                   {isExpanded && (
                     <tr>
-                      <td colSpan={13} style={{ padding: 0 }}>
+                      <td colSpan={14} style={{ padding: 0 }}>
                         <div style={{ background: 'var(--glass-light)', padding: '16px 24px', borderTop: '1px solid var(--border-subtle)' }}>
                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
 

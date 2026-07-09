@@ -279,6 +279,12 @@ export default function SalaryAdjust() {
       other_deduction:      newItem._manualDeductionTotal,
       other_deduction_note: '逐筆調整',
       back_pay_adjustment:  newItem._manualBackpayTotal || 0,
+      // 分項 pass-through（調整不動保費/稅/特休折現，保留存檔值供明細顯示）
+      labor_insurance:      record.labor_insurance     || 0,
+      health_insurance:     record.health_insurance    || 0,
+      pension_self:         record.pension_self        || 0,
+      income_tax:           record.income_tax          || 0,
+      unused_leave_payout:  record.unused_leave_payout || 0,
       allowances_total:     (record.role_allowance || 0) + (record.meal_allowance || 0) + (record.transport_allowance || 0) + newItem.attendance_bonus,
       insurance:            (record.labor_insurance || 0) + (record.health_insurance || 0),
       deductions_total:     newItem.totalDeductions,

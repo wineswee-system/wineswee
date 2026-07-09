@@ -395,6 +395,11 @@ export default function Salary() {
         insurance:            (p.laborInsurance || 0) + (p.healthInsurance || 0),
         deductions_total:     p.totalDeductions       || 0,
         net_salary:           p.netSalary             || 0,
+        labor_insurance:      p.laborInsurance        || 0,
+        health_insurance:     p.healthInsurance       || 0,
+        pension_self:         p.pension               || 0,
+        income_tax:           p.incomeTax             || 0,
+        unused_leave_payout:  p.unused_leave_payout   || 0,
       }))
       // status='draft' → 走 _with_status wrapper；其他 → 既有 v2 行為
       const isDraft = status === 'draft'

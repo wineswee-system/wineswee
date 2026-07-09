@@ -22,6 +22,7 @@ import { todayTW, monthStartTW, nowTimeTW } from '../../lib/datetime'
 import { useAuth } from '../../contexts/AuthContext'
 import { useErrorHandler } from '../../hooks/useErrorHandler'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import DateRangeField from '../../components/DateRangeField'
 import { supabase } from '../../lib/supabase'
 
 // 模式 tag — 對應 Edge Function 的 clock_in_mode / clock_out_mode（2026-05-28 簡化 5 → 2）
@@ -365,11 +366,7 @@ export default function Attendance() {
         alignItems: 'center', flexWrap: 'wrap',
       }}>
         <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>📅 日期</span>
-        <input type="date" className="form-input" style={{ fontSize: 13, minWidth: 150 }}
-          value={startDate} max={endDate || undefined} onChange={e => setStartDate(e.target.value)} />
-        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>～</span>
-        <input type="date" className="form-input" style={{ fontSize: 13, minWidth: 150 }}
-          value={endDate} min={startDate || undefined} onChange={e => setEndDate(e.target.value)} />
+        <DateRangeField start={startDate} end={endDate} onChange={(s, e) => { setStartDate(s); setEndDate(e) }} />
         {!isStaff && <>
           <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>🏪 門市</span>
           <select className="form-input" style={{ fontSize: 13, minWidth: 160 }} value={storeFilter} onChange={e => setStoreFilter(e.target.value)}

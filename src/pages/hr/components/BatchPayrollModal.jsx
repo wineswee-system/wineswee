@@ -286,7 +286,10 @@ export default function BatchPayrollModal({ month, batchPreview, batchSaving, on
                         </td>
                         <td>{p.extra_overtime_pay?.toLocaleString() || 0}</td>
                         <td>{p.policyBonus?.toLocaleString() || 0}</td>
-                        <td style={{ color: 'var(--text-muted)' }}>0</td>{/* 請假折現（特休未休） — Stage #5 補 */}
+                        <td style={{ color: p.unused_leave_payout > 0 ? 'var(--accent-green)' : 'var(--text-muted)' }}
+                            title={p.unused_leave_payout > 0 ? `離職未休特休 ${p.unused_leave_days || 0} 天折現` : ''}>
+                          {p.unused_leave_payout > 0 ? p.unused_leave_payout.toLocaleString() : '-'}
+                        </td>{/* 請假折現（離職未休特休折現，已含在應領） */}
                         {/* 應領 */}
                         <td style={{ background: 'var(--bg-secondary)', fontWeight: 700 }}>{fmt(p.gross)}</td>
                         {/* 扣項 */}
@@ -331,7 +334,7 @@ export default function BatchPayrollModal({ month, batchPreview, batchSaving, on
                     <td style={{ color: 'var(--accent-orange)' }}>{batchPreview.reduce((s, p) => s + (p.comp_time_settled_pay || 0), 0).toLocaleString()}</td>
                     <td>{batchPreview.reduce((s, p) => s + (p.extra_overtime_pay || 0), 0).toLocaleString()}</td>
                     <td>{batchPreview.reduce((s, p) => s + (p.policyBonus || 0), 0).toLocaleString()}</td>
-                    <td>0</td>
+                    <td style={{ color: 'var(--accent-green)' }}>{batchPreview.reduce((s, p) => s + (p.unused_leave_payout || 0), 0).toLocaleString()}</td>
                     <td style={{ background: 'var(--bg-secondary)' }}>{fmt(batchPreview.reduce((s, p) => s + (p.gross || 0), 0))}</td>
                     <td style={{ color: 'var(--text-muted)' }}>—</td>
                     <td style={{ color: 'var(--accent-orange)' }}>-{batchPreview.reduce((s, p) => s + (p.laborInsurance || 0), 0).toLocaleString()}</td>

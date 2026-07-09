@@ -2017,7 +2017,7 @@ export default function Schedule() {
           : (Math.abs(aIdx - eIdx) + 1) * (Math.abs(aDIdx - eDIdx) + 1)
         return (
           <div style={{
-            position: 'fixed', bottom: 20, right: 20, zIndex: 9000,
+            position: 'fixed', bottom: 4, right: 20, zIndex: 9000,
             padding: '8px 14px', borderRadius: 8, fontSize: 13, fontWeight: 600,
             background: 'var(--bg-secondary)', color: 'var(--accent-cyan)',
             border: '1px solid var(--accent-cyan)',

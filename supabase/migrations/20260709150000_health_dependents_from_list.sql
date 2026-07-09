@@ -5,7 +5,7 @@
 
 ALTER TABLE public.employee_dependents ADD COLUMN IF NOT EXISTS health_ins boolean NOT NULL DEFAULT false;
 -- 匯入的眷屬(來源眷屬加保)都是健保眷屬 → 設 true
-UPDATE public.employee_dependents SET health_ins = true WHERE relationship = 眷屬 AND health_ins IS DISTINCT FROM true;
+UPDATE public.employee_dependents SET health_ins = true WHERE relationship = '眷屬' AND health_ins IS DISTINCT FROM true;
 
 CREATE OR REPLACE FUNCTION public._compute_payroll_for_employee(p_emp_id integer, p_period text)
  RETURNS jsonb

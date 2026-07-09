@@ -213,10 +213,10 @@ export default function BatchPayrollModal({ month, batchPreview, batchSaving, on
                     <th>跨店津貼</th>
                     <th>其他津貼</th>
                     <th>加班費</th>
-                    <th title="過期補休自動兌現（已含在加班費內）">過期補休</th>
+                    <th title="過期沒休完的補休自動兌現（已含在加班費內）">補休折現</th>
                     <th>額外加班</th>
                     <th>獎金</th>
-                    <th>請假折現</th>
+                    <th title="離職當月未休完特休折現（已計入應領）">特休折現</th>
                     {/* 應領 */}
                     <th style={{ background: 'var(--bg-secondary)', fontWeight: 700 }}>應領合計</th>
                     {/* 扣項 6 欄 */}

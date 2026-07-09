@@ -76,6 +76,7 @@ const FEATURES = [
   { module: '行政庶務', label: '費用申請-檢視全部人', view: 'expense.view_all', edit: null },
   { module: '行政庶務', label: '費用驗收', view: 'expense.settle_view',  edit: 'expense.settle' },
   { module: '行政庶務', label: '經常性費用', view: 'expense.recurring_view', edit: 'expense.recurring_approve' },
+  { module: '行政庶務', label: '訂購單申請-檢視全部人', view: 'order.view_all', edit: null },
   { module: '行政庶務', label: '會計科目',     view: 'expense.account_view', edit: 'expense.account_edit' },
   { module: '行政庶務', label: '文件',         view: 'doc.view',             edit: 'doc.delete' },
   // 專案流程

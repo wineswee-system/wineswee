@@ -130,7 +130,7 @@ export default function DateRangeField({ start, end, onChange }) {
       {/* 彈窗 */}
       {open && (
         <div style={{
-          position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 50,
+          position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 50,
           background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 12,
           boxShadow: '0 8px 24px rgba(0,0,0,0.18)', padding: 12,
         }}>

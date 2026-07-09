@@ -1233,7 +1233,7 @@ export default function Schedule() {
   const selectedStore = locations.find(s => s.name === storeFilter)
 
   return (
-    <div className="fade-in">
+    <div className="fade-in" style={{ paddingBottom: 72 }}>
       <div className="page-header">
         <div className="page-header-row">
           <div>

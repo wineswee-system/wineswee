@@ -456,6 +456,18 @@ export default function HrTabContent({
             )}
           </div>
 
+          <div style={{ padding: '12px 14px', background: 'var(--bg-card)', borderRadius: 10, marginTop: 10, border: '1px solid var(--border-subtle)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: Number(form.labor_pension_self_rate) > 0 ? 12 : 0 }}>
+              <span style={{ fontSize: 14, fontWeight: 700 }}>勞退自提（員工自願）</span>
+              <Toggle checked={Number(form.labor_pension_self_rate) > 0} onChange={e => set('labor_pension_self_rate', e.target.checked ? 6 : 0)} />
+            </div>
+            {Number(form.labor_pension_self_rate) > 0 && (
+              <div><div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>自提率 (%)</div>
+                <input className="form-input" type="number" min="0" max="6" style={{ width: '50%' }} placeholder="6" value={form.labor_pension_self_rate || ''} onChange={e => set('labor_pension_self_rate', e.target.value)} />
+              </div>
+            )}
+          </div>
+
           {/* ─── 特別休假額度 ─── */}
           {(() => {
             const isPT = (form.employment_category || 'regular') === 'parttime'

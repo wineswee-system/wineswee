@@ -93,6 +93,7 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
   const [skills, setSkills] = useState([])
   const [dependents, setDependents] = useState([])
   const [transfers, setTransfers] = useState([])
+  const [insuranceEvents, setInsuranceEvents] = useState([])
   const [reviews, setReviews] = useState([])
   const [schedPrefs, setSchedPrefs] = useState([])
   const [leaveRecords, setLeaveRecords] = useState([])
@@ -138,10 +139,12 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
       supabase.from('employee_assignments').select('*, departments(name), stores(name), updated_by_emp:updated_by(name)').eq('employee_id', employee.id).order('start_date', { ascending: false }),
       // ★ salary_structures 是薪資真理源（單一表）— 員工檔案頁的薪資 tab 用這個覆蓋舊版 employees 欄位
       supabase.from('salary_structures').select('*').eq('employee_id', employee.id).maybeSingle(),
-    ]).then(([sk, dep, tr, rev, sp, lv, av, ob, asgn, ss]) => {
+      supabase.from('employee_insurance_events').select('*').eq('employee_id', employee.id).order('effective_date', { ascending: false }),
+    ]).then(([sk, dep, tr, rev, sp, lv, av, ob, asgn, ss, insEv]) => {
       setSkills(sk.data || [])
       setDependents(dep.data || [])
       setTransfers(tr.data || [])
+      setInsuranceEvents(insEv.data || [])
       setReviews(rev.data || [])
       setSchedPrefs(sp.data || [])
       setLeaveRecords(lv.data || [])
@@ -661,6 +664,7 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
               targetWorkflows={targetWorkflows} targetWfTasks={targetWfTasks}
               assignments={assignments} transfers={transfers} addTransfer={addTransfer}
               reviews={reviews} addReview={addReview}
+              insuranceEvents={insuranceEvents}
               dependents={dependents}
               showDepForm={showDepForm} setShowDepForm={setShowDepForm}
               depForm={depForm} setDepForm={setDepForm}

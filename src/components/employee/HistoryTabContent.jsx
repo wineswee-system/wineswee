@@ -11,6 +11,7 @@ export default function HistoryTabContent({
   assignments,
   transfers,
   addTransfer,
+  insuranceEvents,
   reviews,
   addReview,
   dependents,
@@ -166,6 +167,19 @@ export default function HistoryTabContent({
             <div key={t.id} style={{ padding: '10px 14px', background: 'var(--bg-card)', borderRadius: 8, marginBottom: 6, border: '1px solid var(--border-subtle)', fontSize: 13 }}>
               <div style={{ fontWeight: 600 }}>{t.transfer_date}</div>
               <div style={{ color: 'var(--text-muted)', marginTop: 2 }}>{t.from_store || '—'} → {t.to_store || '—'}{t.reason && <span> · {t.reason}</span>}</div>
+            </div>
+          ))}
+
+          <SectionTitle icon="🏥" text={`投保異動紀錄 (${(insuranceEvents || []).length})`} />
+          {(insuranceEvents || []).length === 0 ? (
+            <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 20, fontSize: 13 }}>尚無投保異動紀錄</div>
+          ) : (insuranceEvents || []).map(ev => (
+            <div key={ev.id} style={{ padding: '10px 14px', background: 'var(--bg-card)', borderRadius: 8, marginBottom: 6, border: '1px solid var(--border-subtle)', fontSize: 13 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                <span style={{ fontWeight: 600 }}>{ev.event_type}{ev.dependent_name ? ` · ${ev.dependent_name}` : ''}</span>
+                <span style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{ev.effective_date || '—'}</span>
+              </div>
+              {ev.detail && <div style={{ color: 'var(--text-muted)', marginTop: 2 }}>{ev.detail}</div>}
             </div>
           ))}
         </>

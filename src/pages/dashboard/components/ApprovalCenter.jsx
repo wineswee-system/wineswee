@@ -5,6 +5,7 @@ import { useAuth } from '../../../contexts/AuthContext'
 import { usePendingApprovals } from '../../../lib/usePendingApprovals'
 import LoadingSpinner from '../../../components/LoadingSpinner'
 import { toast } from '../../../lib/toast'
+import { confirm } from '../../../lib/confirm'
 import {
   Users, Wallet, Calendar, ClipboardCheck, CalendarOff,
   ChevronRight, CheckCircle2, Inbox, FileCheck, FileText, ShoppingCart,
@@ -26,7 +27,7 @@ const SIGNED_TYPE_ROUTE = {
 }
 const SIGNED_TYPE_LABEL = {
   leave: '請假', overtime: '加班', trip: '出差', correction: '補打卡',
-  expense: '報帳', expense_request: '非經常性費用申請',
+  expense: '經常性費用', expense_request: '非經常性費用申請',
   resignation: '離職', loa: '留停', transfer: '異動', headcount: '人力需求',
   form_submission: '表單申請',
   off_request: '希望休', shift_swap: '換班',
@@ -52,7 +53,7 @@ const GROUPS = [
       { key: 'overtime',     label: '加班',   table: 'overtime_requests',  route: '/hr/overtime',          pendingStatus: '待審核' },
       { key: 'trip',         label: '出差',   table: 'business_trips',     route: '/hr/travel',            pendingStatus: '待審核' },
       { key: 'correction',   label: '補打卡', table: 'clock_corrections',  route: '/hr/punch-correction',  pendingStatus: '待審核' },
-      { key: 'expense',      label: '報帳',   table: 'expenses',           route: '/hr/expenses',          pendingStatus: '待審核' },
+      { key: 'expense',      label: '經常性費用', table: 'expenses',       route: '/hr/expenses',          pendingStatus: '待審核' },
     ],
   },
   {
@@ -250,6 +251,57 @@ function PendingApprovalsView() {
     navigate(`${tabDef.route}?focus=${row.id}&returnTo=/`)
   }
 
+  // ── inline 逐張核准/退回（對齊 LIFF）+ 批次通過 ──
+  // 各 tab.key → 對應通過/退回 RPC。有支援的才顯示 inline 按鈕與勾選批次。
+  const approveAction = async (tabKey, id, action, reason) => {
+    if (['leave', 'overtime', 'trip', 'correction'].includes(tabKey))
+      return supabase.rpc('web_advance_chain_request', { p_type: tabKey, p_id: id, p_action: action, p_reason: reason })
+    if (['expense_request', 'order_request'].includes(tabKey))
+      return supabase.rpc('expense_request_step_advance', { p_id: id, p_action: action, p_reason: reason })
+    if (['expense_settle', 'order_settle'].includes(tabKey))
+      return supabase.rpc('expense_settle_step_advance', { p_id: id, p_action: action, p_reason: reason })
+    // 經常性費用(expenses)是多關鏈但前端只有「直接 update 已核銷」會跳關 → 暫不納入 inline/批次,維持點開操作
+    return { error: { message: '此類型暫不支援 inline 簽核（請點開內容操作）' } }
+  }
+  const tabSupportsInline = (tabKey) =>
+    ['leave', 'overtime', 'trip', 'correction', 'expense_request', 'order_request', 'expense_settle', 'order_settle'].includes(tabKey)
+  const isOk = (res) => !res.error && res.data?.ok !== false
+
+  const [rowBusy, setRowBusy] = useState(null)     // 正在處理的 id
+  const [selected, setSelected] = useState(() => new Set())
+  const [bulkBusy, setBulkBusy] = useState(false)
+  useEffect(() => { setSelected(new Set()) }, [activeTab, activeGroup])
+
+  const toggleSel = (id) => setSelected(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
+
+  const approveRow = async (row, action) => {
+    let reason = null
+    if (action === 'reject') {
+      reason = window.prompt('請輸入退回原因：')
+      if (reason === null) return   // 取消
+    }
+    setRowBusy(row.id)
+    const res = await approveAction(activeTab, row.id, action, reason)
+    setRowBusy(null)
+    if (!isOk(res)) { toast.error((action === 'approve' ? '通過' : '退回') + '失敗：' + (res.error?.message || res.data?.error || '未知')); return }
+    toast.success(action === 'approve' ? '已通過' : '已退回')
+    setSelected(s => { const n = new Set(s); n.delete(row.id); return n })
+    reload()
+  }
+
+  const bulkApprove = async () => {
+    const ids = rows.filter(r => selected.has(r.id)).map(r => r.id)
+    if (!ids.length) return
+    if (!(await confirm({ message: `確定批次通過 ${ids.length} 張「${activeTabDef?.label}」？` }))) return
+    setBulkBusy(true)
+    let ok = 0, fail = 0
+    for (const id of ids) { const res = await approveAction(activeTab, id, 'approve', null); isOk(res) ? ok++ : fail++ }
+    setBulkBusy(false)
+    setSelected(new Set())
+    toast[fail ? 'warning' : 'success'](`批次通過完成：成功 ${ok}${fail ? `、失敗 ${fail}` : ''}`)
+    reload()
+  }
+
   if (loading) {
     return (
       <div style={{ padding: 40, textAlign: 'center' }}>
@@ -398,12 +450,36 @@ function PendingApprovalsView() {
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {tabSupportsInline(activeTab) && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '2px 2px 6px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                  <input type="checkbox"
+                    checked={selected.size > 0 && selected.size === rows.length}
+                    ref={el => { if (el) el.indeterminate = selected.size > 0 && selected.size < rows.length }}
+                    onChange={e => setSelected(e.target.checked ? new Set(rows.map(r => r.id)) : new Set())} />
+                  全選
+                </label>
+                {selected.size > 0 && (
+                  <button onClick={bulkApprove} disabled={bulkBusy} style={{
+                    marginLeft: 'auto', padding: '6px 14px', borderRadius: 8, border: 'none',
+                    cursor: bulkBusy ? 'default' : 'pointer', background: 'var(--accent-green)', color: '#fff',
+                    fontSize: 13, fontWeight: 700, opacity: bulkBusy ? 0.6 : 1,
+                  }}>{bulkBusy ? '處理中…' : `批次通過 (${selected.size})`}</button>
+                )}
+              </div>
+            )}
             {rows.map(row => (
               <ApprovalRow
                 key={`${activeTab}-${row.id}`}
                 row={row} tabDef={activeTabDef}
                 groupColor={activeGroupDef.color}
                 onClick={() => handleRowClick(row, activeTabDef)}
+                inline={tabSupportsInline(activeTab)}
+                checked={selected.has(row.id)}
+                onToggle={() => toggleSel(row.id)}
+                onApprove={() => approveRow(row, 'approve')}
+                onReject={() => approveRow(row, 'reject')}
+                busy={rowBusy === row.id}
               />
             ))}
           </div>
@@ -508,12 +584,13 @@ function getRowDisplay(row, tabKey) {
   }
 }
 
-function ApprovalRow({ row, tabDef, groupColor, onClick }) {
+function ApprovalRow({ row, tabDef, groupColor, onClick, inline, checked, onToggle, onApprove, onReject, busy }) {
   const display = getRowDisplay(row, tabDef.key)
   const daysOpen = row.created_at
     ? Math.floor((Date.now() - new Date(row.created_at).getTime()) / 86400000)
     : 0
   const isOverdue = daysOpen >= 3
+  const stop = (e) => e.stopPropagation()
 
   return (
     <div onClick={onClick} style={{
@@ -526,6 +603,10 @@ function ApprovalRow({ row, tabDef, groupColor, onClick }) {
     }}
     onMouseEnter={(e) => { e.currentTarget.style.borderColor = groupColor }}
     onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border-subtle)' }}>
+      {inline && (
+        <input type="checkbox" checked={!!checked} onClick={stop} onChange={onToggle}
+          style={{ flexShrink: 0, width: 16, height: 16, cursor: 'pointer' }} />
+      )}
       <span style={{
         fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 6,
         background: groupColor, color: '#fff', flexShrink: 0,
@@ -541,11 +622,25 @@ function ApprovalRow({ row, tabDef, groupColor, onClick }) {
         )}
       </div>
       {isOverdue && (
-        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent-red)' }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent-red)', flexShrink: 0 }}>
           🚨 {daysOpen} 天
         </span>
       )}
-      <ChevronRight size={16} color="var(--text-muted)" />
+      {inline ? (
+        <div style={{ display: 'flex', gap: 6, flexShrink: 0 }} onClick={stop}>
+          <button onClick={onApprove} disabled={busy} style={{
+            padding: '5px 12px', borderRadius: 8, border: 'none', cursor: busy ? 'default' : 'pointer',
+            background: 'var(--accent-green)', color: '#fff', fontSize: 12, fontWeight: 700, opacity: busy ? 0.6 : 1,
+          }}>{busy ? '…' : '通過'}</button>
+          <button onClick={onReject} disabled={busy} style={{
+            padding: '5px 12px', borderRadius: 8, cursor: busy ? 'default' : 'pointer',
+            background: 'transparent', color: 'var(--accent-red)', border: '1px solid var(--accent-red)',
+            fontSize: 12, fontWeight: 600, opacity: busy ? 0.6 : 1,
+          }}>退回</button>
+        </div>
+      ) : (
+        <ChevronRight size={16} color="var(--text-muted)" />
+      )}
     </div>
   )
 }

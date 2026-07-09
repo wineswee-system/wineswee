@@ -34,9 +34,21 @@ const PRESETS = [
 
 export default function DateRangeField({ start, end, onChange }) {
   const [open, setOpen] = useState(false)
+  const [align, setAlign] = useState('left')   // 依觸發欄位置自動決定往左/右展開
   const [draft, setDraft] = useState({ s: start || null, e: end || null })
   const [view, setView] = useState(() => (start ? addMonths(parse(start), 0) : new Date(new Date().getFullYear(), new Date().getMonth(), 1)))
   const ref = useRef(null)
+
+  // 開啟時量觸發欄位置：若往右展開會超出視窗右緣 → 改右對齊往左展開
+  const toggleOpen = () => setOpen((o) => {
+    const next = !o
+    if (next && ref.current) {
+      const rect = ref.current.getBoundingClientRect()
+      const POPUP_W = 440
+      setAlign(rect.left + POPUP_W > window.innerWidth ? 'right' : 'left')
+    }
+    return next
+  })
 
   useEffect(() => { setDraft({ s: start || null, e: end || null }) }, [start, end])
 
@@ -109,7 +121,7 @@ export default function DateRangeField({ start, end, onChange }) {
     <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
       {/* 觸發欄 */}
       <div
-        onClick={() => setOpen((o) => !o)}
+        onClick={toggleOpen}
         style={{
           display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
           padding: '6px 10px', fontSize: 13, minWidth: 190,
@@ -130,7 +142,7 @@ export default function DateRangeField({ start, end, onChange }) {
       {/* 彈窗 */}
       {open && (
         <div style={{
-          position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 50,
+          position: 'absolute', top: 'calc(100% + 6px)', [align]: 0, zIndex: 50,
           background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 12,
           boxShadow: '0 8px 24px rgba(0,0,0,0.18)', padding: 12,
         }}>

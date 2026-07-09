@@ -260,11 +260,12 @@ function PendingApprovalsView() {
       return supabase.rpc('expense_request_step_advance', { p_id: id, p_action: action, p_reason: reason })
     if (['expense_settle', 'order_settle'].includes(tabKey))
       return supabase.rpc('expense_settle_step_advance', { p_id: id, p_action: action, p_reason: reason })
-    // 經常性費用(expenses)是多關鏈但前端只有「直接 update 已核銷」會跳關 → 暫不納入 inline/批次,維持點開操作
+    if (tabKey === 'expense')  // 經常性費用(報帳)：走逐關 step-advance（鏈安全）
+      return supabase.rpc('expense_step_advance', { p_id: id, p_action: action, p_reason: reason })
     return { error: { message: '此類型暫不支援 inline 簽核（請點開內容操作）' } }
   }
   const tabSupportsInline = (tabKey) =>
-    ['leave', 'overtime', 'trip', 'correction', 'expense_request', 'order_request', 'expense_settle', 'order_settle'].includes(tabKey)
+    ['leave', 'overtime', 'trip', 'correction', 'expense', 'expense_request', 'order_request', 'expense_settle', 'order_settle'].includes(tabKey)
   const isOk = (res) => !res.error && res.data?.ok !== false
 
   const [rowBusy, setRowBusy] = useState(null)     // 正在處理的 id

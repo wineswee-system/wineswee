@@ -66,9 +66,9 @@ export default function Attendance() {
   const [stores, setStores] = useState([])
   const [deptFilter, setDeptFilter] = useState('')
   const [storeFilter, setStoreFilter] = useState(isManager ? (profile?.store || '') : '')
-  const [monthFilter, setMonthFilter] = useState(() => {
-    const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-  })
+  // 日期區間篩選（預設：本月 1 號 ~ 今天）
+  const [startDate, setStartDate] = useState(() => monthStartTW())
+  const [endDate, setEndDate] = useState(() => todayTW())
   const [search, setSearch] = useState(isStaff ? (profile?.name || '') : '')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -88,14 +88,14 @@ export default function Attendance() {
     const orgId = profile?.organization_id
     setLoading(true)
     Promise.all([
-      getAttendance(null, { orgId, month: monthFilter }),
+      getAttendance(null, { orgId, from: startDate, to: endDate }),
       getActiveEmployees('id, name, dept, store, department_id, position, store_id, departments!department_id(name), stores!store_id(name)', orgId),
       getDepartments(orgId),
       getStores(),
       supabase.from('overtime_requests')
         .select('id, employee, date, start_time, end_time, ot_hours, hours, ot_category, store, status, organization_id')
         .eq('organization_id', orgId).eq('status', '已核准')
-        .gte('date', `${monthFilter}-01`).lte('date', `${monthFilter}-31`),
+        .gte('date', startDate).lte('date', endDate),
     ]).then(([r, e, d, s, ot]) => {
       let recs = (r.data || []).map(r => ({
         ...r,
@@ -127,7 +127,7 @@ export default function Attendance() {
     }).finally(() => {
       setLoading(false)
     })
-  }, [monthFilter, profile?.organization_id])
+  }, [startDate, endDate, profile?.organization_id])
 
   // dept / store 優先用 FK join 出來的名字（departments.name / stores.name），
   // 退而求其次才用 text 欄（e.dept / e.store）— 新匯入員工 text 欄常常是 NULL
@@ -154,11 +154,10 @@ export default function Attendance() {
     [filtered]
   )
 
-  // 「今日未打卡」只在「看當月」時顯示 — 看過去月份時硬塞「今天 未打卡」row 沒意義
-  const currentMonth = useMemo(() => {
-    const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-  }, [])
-  const showNotClockedToday = monthFilter === currentMonth
+  // 「今日未打卡」只在「區間包含今天」時顯示 — 看過去區間時硬塞「今天 未打卡」row 沒意義
+  const showNotClockedToday = useMemo(() => {
+    const t = todayTW(); return startDate <= t && t <= endDate
+  }, [startDate, endDate])
 
   // 加班單 → 獨立加班列（起訖時間當打卡、狀態=加班）
   const otRows = useMemo(() => overtimes
@@ -326,7 +325,7 @@ export default function Attendance() {
             <h2><span className="header-icon">⏰</span> 打卡追蹤</h2>
             <p>員工每日出缺勤即時追蹤（含 GPS 地點 / WiFi IP 驗證）</p>
           </div>
-          <button className="btn btn-secondary" onClick={() => exportAttendancePdf(filtered, { dept: deptFilter, month: monthFilter })}><Download size={14} /> 匯出 PDF</button>
+          <button className="btn btn-secondary" onClick={() => exportAttendancePdf(filtered, { dept: deptFilter, date: `${startDate} ~ ${endDate}` })}><Download size={14} /> 匯出 PDF</button>
         </div>
       </div>
 
@@ -365,9 +364,12 @@ export default function Attendance() {
         background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 10,
         alignItems: 'center', flexWrap: 'wrap',
       }}>
-        <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>📅 月份</span>
-        <input type="month" className="form-input" style={{ fontSize: 13, minWidth: 160 }}
-          value={monthFilter} onChange={e => setMonthFilter(e.target.value)} />
+        <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>📅 日期</span>
+        <input type="date" className="form-input" style={{ fontSize: 13, minWidth: 150 }}
+          value={startDate} max={endDate || undefined} onChange={e => setStartDate(e.target.value)} />
+        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>～</span>
+        <input type="date" className="form-input" style={{ fontSize: 13, minWidth: 150 }}
+          value={endDate} min={startDate || undefined} onChange={e => setEndDate(e.target.value)} />
         {!isStaff && <>
           <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>🏪 門市</span>
           <select className="form-input" style={{ fontSize: 13, minWidth: 160 }} value={storeFilter} onChange={e => setStoreFilter(e.target.value)}

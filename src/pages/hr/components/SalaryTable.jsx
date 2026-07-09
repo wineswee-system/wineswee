@@ -26,6 +26,8 @@ function buildFallbackItems(r, brackets) {
   ]
 }
 
+const OT_CAT_LABEL = { weekday: '平日', restday: '休息日', weekly_off: '例假', holiday: '國定假' }
+
 // ── 完整計算過程（從 _compute_payroll_for_employee 的回傳組）──
 function buildFullItems(d) {
   const items = []
@@ -231,6 +233,28 @@ export default function SalaryTable({ filtered, expanded, setExpanded, getEmpDep
                                   {b.notes && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6, padding: '4px 8px', background: 'var(--glass-light)', borderRadius: 6 }}>說明：{b.notes}</div>}
                                 </div>
                               ))}
+
+                              {/* 加班逐筆明細（合併 legal+exception，逐日逐筆） */}
+                              {detail && [...(detail._ot_rows || []), ...(detail._ot_exception_rows || [])].length > 0 && (
+                                <div style={{ marginTop: 16 }}>
+                                  <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8 }}>🕐 加班逐筆明細</div>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                    {[...(detail._ot_rows || []), ...(detail._ot_exception_rows || [])]
+                                      .sort((a, b) => (a.date || '').localeCompare(b.date || ''))
+                                      .map((ot, i) => (
+                                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 10px', borderRadius: 7, background: 'var(--bg-card)', fontSize: 12 }}>
+                                          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                                            <span style={{ color: 'var(--text-secondary)' }}>{ot.date}</span>
+                                            <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: 'var(--glass-light)', color: 'var(--text-muted)' }}>{OT_CAT_LABEL[ot.category] || ot.category}</span>
+                                            <span style={{ color: 'var(--text-muted)' }}>{n(ot.hours)} 小時</span>
+                                            {ot._rate_label && <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{ot._rate_label}</span>}
+                                          </div>
+                                          <span style={{ color: 'var(--accent-cyan)', fontWeight: 600, whiteSpace: 'nowrap' }}>{fmt(n(ot._pay))}</span>
+                                        </div>
+                                      ))}
+                                  </div>
+                                </div>
+                              )}
 
                               {/* Legal reference */}
                               <div style={{ marginTop: 16 }}>

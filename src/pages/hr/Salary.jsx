@@ -398,24 +398,39 @@ export default function Salary() {
       }))
       // status='draft' → 走 _with_status wrapper；其他 → 既有 v2 行為
       const isDraft = status === 'draft'
-      const data = (await Promise.all(
-        payloads.map(p => isDraft
-          ? supabase.rpc('secure_upsert_salary_v2_with_status', { p_data: p, p_status: 'draft' }).then(({ data: row }) => row)
-          : supabase.rpc('secure_upsert_salary_v2',             { p_data: p })                    .then(({ data: row }) => row)
-        )
-      )).filter(Boolean)
-      if (data) {
-        setRecords(prev => {
-          const existing = new Map(prev.map(r => [`${r.employee}-${r.month}`, r]))
-          data.forEach(d => existing.set(`${d.employee}-${d.month}`, d))
-          return Array.from(existing.values())
-        })
+      const results = await Promise.all(
+        payloads.map(p => (isDraft
+          ? supabase.rpc('secure_upsert_salary_v2_with_status', { p_data: p, p_status: 'draft' })
+          : supabase.rpc('secure_upsert_salary_v2',             { p_data: p })
+        ).then(({ data: row, error }) => ({ row, error, emp: p.employee })))
+      )
+      const data   = results.filter(r => r.row).map(r => r.row)
+      const failed = results.filter(r => r.error)
+      if (failed.length) {
+        console.error('Batch save errors:', failed.map(f => `${f.emp}: ${f.error?.message}`))
+      }
+      // 全部失敗 → 不當成功，保留 modal，把真錯誤秀出來
+      if (data.length === 0) {
+        const msg = failed[0]?.error?.message || '未知錯誤'
+        toast.error(`儲存失敗（0/${payloads.length}）：${msg}`)
+        return
+      }
+      setRecords(prev => {
+        const existing = new Map(prev.map(r => [`${r.employee}-${r.month}`, r]))
+        data.forEach(d => existing.set(`${d.employee}-${d.month}`, d))
+        return Array.from(existing.values())
+      })
+      // 部分失敗 → 提示，但已存的保留
+      if (failed.length) {
+        toast.error(`${data.length}/${payloads.length} 已存；${failed.length} 筆失敗：${failed[0]?.error?.message || ''}`)
       }
       setShowBatchModal(false)
       setBatchPreview([])
       if (isDraft) {
-        toast.success(`已存為草稿，跳到逐筆調整 →`)
+        toast.success(`已存為草稿（${data.length} 筆），跳到逐筆調整 →`)
         navigate(`/hr/salary-adjust?month=${month}`)
+      } else {
+        toast.success(`已確認儲存 ${data.length} 筆`)
       }
     } catch (err) {
       console.error('Batch save failed:', err)

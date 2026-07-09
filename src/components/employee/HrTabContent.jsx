@@ -419,8 +419,9 @@ export default function HrTabContent({
               <Toggle checked={form.labor_insurance || false} onChange={e => set('labor_insurance', e.target.checked)} />
             </div>
             {form.labor_insurance && (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10 }}>
                 <div><div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>投保級距</div><input className="form-input" type="number" style={{ width: '100%' }} placeholder="27600" value={form.labor_ins_grade || ''} onChange={e => set('labor_ins_grade', e.target.value)} /></div>
+                <div><div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>職災級距</div><input className="form-input" type="number" style={{ width: '100%' }} placeholder="同投保級距" value={form.labor_occ_injury_grade || ''} onChange={e => set('labor_occ_injury_grade', e.target.value)} /></div>
                 <div><div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>加保日期</div><input className="form-input" type="date" style={{ width: '100%' }} value={form.labor_ins_start || ''} onChange={e => set('labor_ins_start', e.target.value)} /></div>
                 <div><div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>退保日期</div><input className="form-input" type="date" style={{ width: '100%' }} value={form.labor_ins_end || ''} onChange={e => set('labor_ins_end', e.target.value)} /></div>
               </div>
@@ -433,9 +434,10 @@ export default function HrTabContent({
               <Toggle checked={form.health_insurance || false} onChange={e => set('health_insurance', e.target.checked)} />
             </div>
             {form.health_insurance && (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
                 <div><div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>投保級距</div><input className="form-input" type="number" style={{ width: '100%' }} placeholder="27600" value={form.health_ins_grade || ''} onChange={e => set('health_ins_grade', e.target.value)} /></div>
                 <div><div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>加保日期</div><input className="form-input" type="date" style={{ width: '100%' }} value={form.health_ins_start || ''} onChange={e => set('health_ins_start', e.target.value)} /></div>
+                <div><div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>退保日期</div><input className="form-input" type="date" style={{ width: '100%' }} value={form.health_ins_end || ''} onChange={e => set('health_ins_end', e.target.value)} /></div>
               </div>
             )}
           </div>
@@ -446,8 +448,10 @@ export default function HrTabContent({
               <Toggle checked={form.pension || false} onChange={e => set('pension', e.target.checked)} />
             </div>
             {form.pension && (
-              <div><div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>提繳率 (%)</div>
-                <input className="form-input" type="number" style={{ width: '50%' }} placeholder="6" value={form.pension_rate || 6} onChange={e => set('pension_rate', e.target.value)} />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+                <div><div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>提繳工資級距</div><input className="form-input" type="number" style={{ width: '100%' }} placeholder="同投保級距" value={form.labor_pension_grade || ''} onChange={e => set('labor_pension_grade', e.target.value)} /></div>
+                <div><div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>提繳率 (%)</div><input className="form-input" type="number" style={{ width: '100%' }} placeholder="6" value={form.pension_rate || 6} onChange={e => set('pension_rate', e.target.value)} /></div>
+                <div><div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>加保日期</div><input className="form-input" type="date" style={{ width: '100%' }} value={form.labor_pension_start || ''} onChange={e => set('labor_pension_start', e.target.value)} /></div>
               </div>
             )}
           </div>

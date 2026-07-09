@@ -6,11 +6,11 @@
 UPDATE public.employees e SET
   labor_occ_injury_grade = COALESCE(v.occ, e.labor_occ_injury_grade),
   labor_pension_grade    = COALESCE(v.pension, e.labor_pension_grade),
-  labor_ins_start        = COALESCE(v.ls, e.labor_ins_start),
-  health_ins_start       = COALESCE(v.hs, e.health_ins_start),
-  labor_pension_start    = COALESCE(v.ps, e.labor_pension_start),
-  labor_ins_end          = COALESCE(v.le, e.labor_ins_end),
-  health_ins_end         = COALESCE(v.he, e.health_ins_end)
+  labor_ins_start        = COALESCE(v.ls::date, e.labor_ins_start),
+  health_ins_start       = COALESCE(v.hs::date, e.health_ins_start),
+  labor_pension_start    = COALESCE(v.ps::date, e.labor_pension_start),
+  labor_ins_end          = COALESCE(v.le::date, e.labor_ins_end),
+  health_ins_end         = COALESCE(v.he::date, e.health_ins_end)
 FROM (VALUES
   (10, 50600, 50600, '2026-06-22', '2026-06-22', '2026-06-22', NULL, NULL),
   (48, 29500, 29500, '2022-07-25', '2022-07-25', '2022-07-25', NULL, NULL),

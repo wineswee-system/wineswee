@@ -635,6 +635,10 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
               roles={roles} stores={stores} departments={departments} employees={allEmployees}
               passbookUploading={passbookUploading} handlePassbookUpload={handlePassbookUpload}
               Toggle={Toggle} SectionTitle={SectionTitle} L={L}
+              insuranceEvents={insuranceEvents} dependents={dependents}
+              showDepForm={showDepForm} setShowDepForm={setShowDepForm}
+              depForm={depForm} setDepForm={setDepForm}
+              addDependent={addDependent} deleteDependent={deleteDependent}
             />
           )}
 

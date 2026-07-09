@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Upload, Eye, Plus, X } from 'lucide-react'
+import { Upload, Eye, Plus, X, Trash2 } from 'lucide-react'
 import { getPTAnnualLeaveHours, getAnnualLeaveEntitlement } from '../../lib/leavePolicy'
 import SearchableSelect, { empOptions } from '../SearchableSelect'
 import { useAuth } from '../../contexts/AuthContext'
@@ -43,6 +43,9 @@ export default function HrTabContent({
   isAdmin,
   subTab,
   employee,
+  insuranceEvents = [],
+  dependents = [],
+  showDepForm, setShowDepForm, depForm, setDepForm, addDependent, deleteDependent,
   roles,
   stores,
   departments,
@@ -467,6 +470,56 @@ export default function HrTabContent({
               </div>
             )}
           </div>
+
+          {/* ─── 眷屬 ─── */}
+          <SectionTitle icon="👥" text={`眷屬 (${dependents.length})`} />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+            <button className="btn btn-sm btn-secondary" onClick={() => setShowDepForm && setShowDepForm(!showDepForm)}><Plus size={13} /></button>
+          </div>
+          {showDepForm && setDepForm && (
+            <div style={{ padding: 14, background: 'var(--bg-card)', borderRadius: 10, border: '1px solid var(--accent-cyan)', marginBottom: 10 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+                <div><div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>姓名 *</div><input className="form-input" style={{ width: '100%', fontSize: 12 }} placeholder="眷屬姓名" value={depForm.name} onChange={e => setDepForm(f => ({ ...f, name: e.target.value }))} /></div>
+                <div><div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>關係</div><select className="form-input" style={{ width: '100%', fontSize: 12 }} value={depForm.relationship} onChange={e => setDepForm(f => ({ ...f, relationship: e.target.value }))}><option>配偶</option><option>子女</option><option>父</option><option>母</option><option>其他</option></select></div>
+                <div><div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>身分證字號</div><input className="form-input" style={{ width: '100%', fontSize: 12 }} placeholder="選填" value={depForm.id_number} onChange={e => setDepForm(f => ({ ...f, id_number: e.target.value }))} /></div>
+                <div><div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>出生日期</div><input className="form-input" type="date" style={{ width: '100%', fontSize: 12 }} value={depForm.birth_date} onChange={e => setDepForm(f => ({ ...f, birth_date: e.target.value }))} /></div>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer' }}><input type="checkbox" checked={depForm.health_ins} onChange={e => setDepForm(f => ({ ...f, health_ins: e.target.checked }))} /> 加保健保（眷屬附加）</label>
+                <div style={{ display: 'flex', gap: 6 }}><button className="btn btn-sm btn-secondary" onClick={() => setShowDepForm(false)} style={{ fontSize: 11 }}>取消</button><button className="btn btn-sm btn-primary" onClick={addDependent} style={{ fontSize: 11 }}>新增</button></div>
+              </div>
+            </div>
+          )}
+          {dependents.length === 0 && !showDepForm
+            ? <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 20, fontSize: 13 }}>尚無眷屬</div>
+            : dependents.map(d => (
+              <div key={d.id} style={{ padding: '10px 14px', background: 'var(--bg-card)', borderRadius: 8, marginBottom: 4, border: '1px solid var(--border-subtle)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 13, fontWeight: 600 }}>{d.name}</span>
+                    <span className="badge badge-cyan" style={{ fontSize: 11 }}>{d.relationship || '—'}</span>
+                    {d.health_ins && <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 3, background: 'var(--accent-green-dim)', color: 'var(--accent-green)', fontWeight: 600 }}>健保</span>}
+                  </div>
+                  {deleteDependent && <button onClick={() => deleteDependent(d.id)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', opacity: 0.5 }}><Trash2 size={13} /></button>}
+                </div>
+              </div>
+            ))
+          }
+
+          {/* ─── 投保異動紀錄 ─── */}
+          <SectionTitle icon="🏥" text={`投保異動紀錄 (${insuranceEvents.length})`} />
+          {insuranceEvents.length === 0
+            ? <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 20, fontSize: 13 }}>尚無投保異動紀錄</div>
+            : insuranceEvents.map(ev => (
+              <div key={ev.id} style={{ padding: '10px 14px', background: 'var(--bg-card)', borderRadius: 8, marginBottom: 6, border: '1px solid var(--border-subtle)', fontSize: 13 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                  <span style={{ fontWeight: 600 }}>{ev.event_type}{ev.dependent_name ? ` · ${ev.dependent_name}` : ''}</span>
+                  <span style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{ev.effective_date || '—'}</span>
+                </div>
+                {ev.detail && <div style={{ color: 'var(--text-muted)', marginTop: 2 }}>{ev.detail}</div>}
+              </div>
+            ))
+          }
 
           {/* ─── 特別休假額度 ─── */}
           {(() => {

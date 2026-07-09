@@ -535,7 +535,7 @@ export default function ProjectDetailPanel({
             onDragEnd={() => { setDragWfId(null); setDragOverWfId(null) }}
             onDragOver={e => { e.preventDefault(); setDragOverWfId(w.id) }}
             onDrop={e => { e.preventDefault(); handleWfReorder(dragWfId, w.id); setDragOverWfId(null) }}
-            style={{ marginBottom: 10, padding: '14px 16px', ...(dragOverWfId === w.id && dragWfId !== w.id ? { outline: '2px solid var(--accent-cyan)', outlineOffset: -2 } : {}) }}>
+            style={{ marginBottom: 10, padding: '14px 16px', overflow: wfMenuId === w.id ? 'visible' : undefined, ...(dragOverWfId === w.id && dragWfId !== w.id ? { outline: '2px solid var(--accent-cyan)', outlineOffset: -2 } : {}) }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }} onClick={() => toggleWf(w.id)}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0 }} onClick={e => e.stopPropagation()}>

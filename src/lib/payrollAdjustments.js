@@ -91,7 +91,7 @@ function otPayHoliday(hours, hourly) {
 export function applyAdjustmentsToBatchItem(item, adjustments, context = {}) {
   if (!item) return item
   const list = Array.isArray(adjustments) ? adjustments.filter(a => !a.superseded_at) : []
-  if (list.length === 0) return { ...item, _adjustmentsCount: 0, _manualBonusTotal: 0, _manualDeductionTotal: 0 }
+  if (list.length === 0) return { ...item, _adjustmentsCount: 0, _manualBonusTotal: 0, _manualBackpayTotal: 0, _manualDeductionTotal: 0 }
 
   // ── 1. 計算 effective 聚合值（套用 adjustment 差量）──
   let lateMins     = n(item.lateMins)
@@ -101,6 +101,7 @@ export function applyAdjustmentsToBatchItem(item, adjustments, context = {}) {
   let halfPayHours = n(item.halfPayHours)
   let manualBonus  = 0
   let manualDeduct = 0
+  let manualBackpay = 0
 
   for (const adj of list) {
     const orig = adj.original_value || {}
@@ -135,6 +136,8 @@ export function applyAdjustmentsToBatchItem(item, adjustments, context = {}) {
       }
     } else if (stype === 'manual_bonus' && field === 'amount') {
       manualBonus += n(newV.amount)
+    } else if (stype === 'manual_backpay' && field === 'amount') {
+      manualBackpay += n(newV.amount)
     } else if (stype === 'manual_deduction' && field === 'amount') {
       manualDeduct += n(newV.amount)
     }
@@ -184,6 +187,7 @@ export function applyAdjustmentsToBatchItem(item, adjustments, context = {}) {
     + newOvertimePay
     + n(item.policyBonus)
     + manualBonus
+    + manualBackpay
 
   // ── 5. 重建 totalDeductions ──
   // 保留：勞保+健保+勞退+所得稅+法扣（這些 adjustment 不會動）
@@ -227,6 +231,7 @@ export function applyAdjustmentsToBatchItem(item, adjustments, context = {}) {
     // adjustment 摘要 — 給 UI 顯示用
     _adjustmentsCount:    list.length,
     _manualBonusTotal:    manualBonus,
+    _manualBackpayTotal:  manualBackpay,
     _manualDeductionTotal: manualDeduct,
   }
 }

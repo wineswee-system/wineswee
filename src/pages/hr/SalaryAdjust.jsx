@@ -40,6 +40,7 @@ const SOURCE_LABEL = {
   leave:            '請假',
   overtime:         '加班單',
   manual_bonus:     '一次性紅包',
+  manual_backpay:   '補發前月差額',
   manual_deduction: '一次性扣項',
 }
 
@@ -277,6 +278,7 @@ export default function SalaryAdjust() {
       late_deduction:       newItem.lateDeduction,
       other_deduction:      newItem._manualDeductionTotal,
       other_deduction_note: '逐筆調整',
+      back_pay_adjustment:  newItem._manualBackpayTotal || 0,
       allowances_total:     (record.role_allowance || 0) + (record.meal_allowance || 0) + (record.transport_allowance || 0) + newItem.attendance_bonus,
       insurance:            (record.labor_insurance || 0) + (record.health_insurance || 0),
       deductions_total:     newItem.totalDeductions,
@@ -571,6 +573,7 @@ function EmployeeAdjustmentBody({ record, sourceData, adjustments, onSave, onDel
 
   // ─── Section: manual entries ───
   const manualBonuses    = adjustments.filter(a => a.source_type === 'manual_bonus')
+  const manualBackpays   = adjustments.filter(a => a.source_type === 'manual_backpay')
   const manualDeductions = adjustments.filter(a => a.source_type === 'manual_deduction')
 
   return (
@@ -679,9 +682,9 @@ function EmployeeAdjustmentBody({ record, sourceData, adjustments, onSave, onDel
       </SectionBox>
 
       {/* 自由項：紅包/扣項 */}
-      <SectionBox title="自由項 — 一次性紅包 / 扣項" emptyMsg={null} rows={[1]}>
+      <SectionBox title="自由項 — 紅包 / 補發前月差額 / 扣項" emptyMsg={null} rows={[1]}>
         <ManualEntries
-          existing={[...manualBonuses, ...manualDeductions]}
+          existing={[...manualBonuses, ...manualBackpays, ...manualDeductions]}
           onAdd={(type, amount, label, reason) => onSave({
             source_type: type,  // 'manual_bonus' / 'manual_deduction'
             source_id:   null,
@@ -777,9 +780,9 @@ function ManualEntries({ existing, onAdd, onRemove }) {
       {existing.map(e => (
         <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderBottom: '1px solid var(--border-subtle)' }}>
           <span style={{ padding: '1px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600,
-            color: e.source_type === 'manual_bonus' ? 'var(--accent-green)' : 'var(--accent-red)',
-            background: e.source_type === 'manual_bonus' ? 'var(--accent-green-dim)' : 'var(--accent-red-dim)' }}>
-            {e.source_type === 'manual_bonus' ? '+ 紅包' : '- 扣項'}
+            color: e.source_type === 'manual_deduction' ? 'var(--accent-red)' : 'var(--accent-green)',
+            background: e.source_type === 'manual_deduction' ? 'var(--accent-red-dim)' : 'var(--accent-green-dim)' }}>
+            {e.source_type === 'manual_bonus' ? '+ 紅包' : e.source_type === 'manual_backpay' ? '+ 補發' : '- 扣項'}
           </span>
           <span style={{ flex: 1 }}>
             {e.new_value?.label || '(無註記)'} {e.reason ? ` · ${e.reason}` : ''}
@@ -794,9 +797,10 @@ function ManualEntries({ existing, onAdd, onRemove }) {
         </div>
       ))}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px', flexWrap: 'wrap' }}>
-        <select className="form-input" style={{ fontSize: 12, padding: '4px 8px', width: 90 }}
+        <select className="form-input" style={{ fontSize: 12, padding: '4px 8px', width: 128 }}
           value={type} onChange={e => setType(e.target.value)}>
           <option value="manual_bonus">紅包</option>
+          <option value="manual_backpay">補發前月差額</option>
           <option value="manual_deduction">扣項</option>
         </select>
         <input type="number" placeholder="金額"

@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { Calendar, X, ChevronLeft, ChevronRight } from 'lucide-react'
 
 // 緊湊雙月曆區間選擇器（樣式參考人力銀行的 range picker）
@@ -34,18 +35,23 @@ const PRESETS = [
 
 export default function DateRangeField({ start, end, onChange }) {
   const [open, setOpen] = useState(false)
-  const [align, setAlign] = useState('left')   // 依觸發欄位置自動決定往左/右展開
+  const [coords, setCoords] = useState(null)   // portal fixed 定位 {top, left|right}
   const [draft, setDraft] = useState({ s: start || null, e: end || null })
   const [view, setView] = useState(() => (start ? addMonths(parse(start), 0) : new Date(new Date().getFullYear(), new Date().getMonth(), 1)))
   const ref = useRef(null)
+  const popupRef = useRef(null)
 
-  // 開啟時量觸發欄位置：若往右展開會超出視窗右緣 → 改右對齊往左展開
+  // 開啟時量觸發欄位置 → 用 fixed 定位（portal 到 body，逃離父層 overflow 裁切）
   const toggleOpen = () => setOpen((o) => {
     const next = !o
     if (next && ref.current) {
       const rect = ref.current.getBoundingClientRect()
       const POPUP_W = 440
-      setAlign(rect.left + POPUP_W > window.innerWidth ? 'right' : 'left')
+      const top = rect.bottom + 6
+      // 往右超出視窗 → 右對齊往左展開；否則左對齊
+      setCoords(rect.left + POPUP_W > window.innerWidth
+        ? { top, right: Math.max(8, window.innerWidth - rect.right) }
+        : { top, left: rect.left })
     }
     return next
   })
@@ -54,7 +60,11 @@ export default function DateRangeField({ start, end, onChange }) {
 
   useEffect(() => {
     if (!open) return
-    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    const onDoc = (e) => {
+      if (ref.current && ref.current.contains(e.target)) return
+      if (popupRef.current && popupRef.current.contains(e.target)) return
+      setOpen(false)
+    }
     document.addEventListener('mousedown', onDoc)
     return () => document.removeEventListener('mousedown', onDoc)
   }, [open])
@@ -139,10 +149,12 @@ export default function DateRangeField({ start, end, onChange }) {
         )}
       </div>
 
-      {/* 彈窗 */}
-      {open && (
-        <div style={{
-          position: 'absolute', top: 'calc(100% + 6px)', [align]: 0, zIndex: 50,
+      {/* 彈窗 — portal 到 body + fixed 定位，逃離父層 overflow:hidden 裁切 */}
+      {open && coords && createPortal(
+        <div ref={popupRef} style={{
+          position: 'fixed', top: coords.top,
+          ...(coords.right != null ? { right: coords.right } : { left: coords.left }),
+          zIndex: 1000,
           background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 12,
           boxShadow: '0 8px 24px rgba(0,0,0,0.18)', padding: 12,
         }}>
@@ -174,7 +186,8 @@ export default function DateRangeField({ start, end, onChange }) {
               {total > 0 ? <>共 <b style={{ color: 'var(--accent-cyan)' }}>{total}</b> 日</> : '請選起訖日'}
             </span>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

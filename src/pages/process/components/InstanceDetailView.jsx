@@ -233,17 +233,12 @@ export default function InstanceDetailView({
           <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>{inst.store} · {inst.started_at?.slice(0, 10)}</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 14, alignItems: 'center' }}>
             <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>指派</span>
-            <button className="btn btn-sm btn-secondary" onClick={() => { setEditForm({ assignee: inst.assignee || '', groups: inst.groups || [], project_id: inst.project_id || '', completion_chain_id: inst.completion_chain_id ? String(inst.completion_chain_id) : '' }); setShowEditModal(true) }}>
+            <button className="btn btn-sm btn-secondary" onClick={() => { setEditForm({ assignee: inst.assignee || '', project_id: inst.project_id || '', completion_chain_id: inst.completion_chain_id ? String(inst.completion_chain_id) : '' }); setShowEditModal(true) }}>
               <Pencil size={11} /> 編輯
             </button>
             <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--text-secondary)' }}>
               <User size={13} /> {inst.assignee || '未指定負責人'}
             </div>
-            {(inst.groups || []).map((g, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, padding: '3px 10px', borderRadius: 6, background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)', border: '1px solid rgba(6,182,212,0.2)' }}>
-                <Users size={12} /> {g}
-              </div>
-            ))}
             <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, padding: '3px 10px', borderRadius: 6, background: currentProject ? 'var(--accent-purple-dim)' : 'var(--glass-light)', color: currentProject ? 'var(--accent-purple)' : 'var(--text-muted)', border: currentProject ? '1px solid rgba(168,85,247,0.2)' : '1px solid var(--border-subtle)' }}>
               <FolderOpen size={12} /> {currentProject ? currentProject.name : '未關聯專案'}
             </div>
@@ -957,32 +952,6 @@ export default function InstanceDetailView({
               options={empOptions(employees, { keyBy: 'name' })}
               placeholder="未指定"
             />
-          </Field>
-          <Field label="群組">
-            {lineGroups.length === 0 ? (
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '6px 0' }}>尚無 LINE 群組（由 LINE Webhook 自動建立）</div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 180, overflowY: 'auto', padding: '4px 0' }}>
-                {lineGroups.map(g => {
-                  const checked = (editForm.groups || []).includes(g.group_name)
-                  return (
-                    <label key={g.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', padding: '4px 8px', borderRadius: 6, background: checked ? 'var(--accent-cyan-dim)' : 'transparent', border: checked ? '1px solid rgba(6,182,212,0.2)' : '1px solid transparent' }}>
-                      <input type="checkbox" checked={checked}
-                        onChange={e => setEditForm(f => ({
-                          ...f,
-                          groups: e.target.checked
-                            ? [...(f.groups || []), g.group_name]
-                            : (f.groups || []).filter(x => x !== g.group_name)
-                        }))}
-                        style={{ accentColor: 'var(--accent-cyan)', width: 14, height: 14 }}
-                      />
-                      <Users size={12} style={{ color: 'var(--accent-cyan)', flexShrink: 0 }} />
-                      <span style={{ color: checked ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>{g.group_name}</span>
-                    </label>
-                  )
-                })}
-              </div>
-            )}
           </Field>
           <Field label="所屬專案">
             <select className="form-input" style={{ width: '100%' }} value={editForm.project_id} onChange={e => setEditForm(f => ({ ...f, project_id: e.target.value }))}>

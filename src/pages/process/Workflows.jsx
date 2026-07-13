@@ -80,7 +80,7 @@ export default function Workflows() {
   const [notesStep, setNotesStep] = useState(null)
   const [notesText, setNotesText] = useState('')
   const [showEditModal, setShowEditModal] = useState(false)
-  const [editForm, setEditForm] = useState({ assignee: '', groups: [], project_id: '' })
+  const [editForm, setEditForm] = useState({ assignee: '', project_id: '' })
   const [lineGroups, setLineGroups] = useState([])
 
   // Create / Edit SOP template
@@ -672,7 +672,6 @@ export default function Workflows() {
     const { data } = await updateWorkflowInstance(selectedInstance.id, {
       assignee: editForm.assignee || null,
       department: assigneeDept,
-      groups: editForm.groups.length > 0 ? editForm.groups : null,
       project_id: editForm.project_id ? Number(editForm.project_id) : null,
       completion_chain_id: editForm.completion_chain_id ? Number(editForm.completion_chain_id) : null,
       applicant_emp_id: profile?.id || null,

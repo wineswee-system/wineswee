@@ -85,7 +85,10 @@ export default function BusinessTravel() {
 
   const handleSubmit = async () => {
     if (!validateRequired(form, ['employee', 'destination', 'start_date', 'end_date', 'purpose'], setErrors)) return
-    const payload = { ...form, budget: Number(form.budget) || 0 }
+    // employee_id 一定要帶：NULL 會讓 can_see_request(NULL) 直接回 false（連 admin 都看不到），
+    // 也讓自動套鏈解不出申請人 → 掉到預設 staff 鏈。
+    const empId = employees.find(e => e.name === form.employee)?.id ?? null
+    const payload = { ...form, employee_id: empId, budget: Number(form.budget) || 0 }
 
     // ── 編輯重送路徑 ──
     if (editingId) {

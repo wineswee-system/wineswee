@@ -1,8 +1,9 @@
--- 刪除殘骸假別「2025結算特休」（104 匯入命名不一致的多餘結算列）
--- 2026-07-13  尤致皓年度假勤出現「2025結算特休」1天(已休0),使用者確認刪除。
---   保留:特休假2025結算 / 舊人資系統補休結算(先前指示要留)。
---   僅刪 leave_type 完全等於 '2025結算特休' 者;idempotent(不存在則 0 rows)。
+-- 刪除尤致皓(emp 58)的測試殘骸「2025結算特休」1筆
+-- 2026-07-13  這是當初在 104 測試用的資料(total 1天/已休0),使用者確認刪除。
+--   僅刪這一筆(id=2413,並比對 employee_id/leave_type 防呆);不動其他人、其他結算殘骸。idempotent。
 
 DELETE FROM public.leave_balances
-WHERE year = 2026
-  AND leave_type = '2025結算特休';
+WHERE id = 2413
+  AND employee_id = 58
+  AND leave_type = '2025結算特休'
+  AND year = 2026;

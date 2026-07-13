@@ -131,7 +131,7 @@ export default function LeaveBalances() {
       const orgId = profile?.organization_id
       const yearStart = `${yearFilter}-01-01`
       const yearEnd   = `${yearFilter + 1}-01-01`
-      const [balRes, lrRes, pendRes] = await Promise.all([
+      const [balRes, lrRes, pendRes, compRes] = await Promise.all([
         supabase.from('leave_balances').select('*')
           .eq('year', yearFilter).eq('organization_id', orgId).eq('employee_id', selectedEmpId),
         supabase.from('leave_requests').select('employee_id,type,days,hours,start_date,status')
@@ -140,23 +140,30 @@ export default function LeaveBalances() {
         supabase.from('leave_requests').select('employee_id,type,days,hours,start_date,status')
           .eq('organization_id', orgId).eq('employee_id', selectedEmpId)
           .eq('status', '申請中').gte('start_date', yearStart).lt('start_date', yearEnd),
+        // 補休：改讀 comp_time_ledger（與補休管理 tab / 104 同源，不用 leave_balances 那套髒的）
+        supabase.from('comp_time_ledger').select('hours,hours_used,status')
+          .eq('employee_id', selectedEmpId).eq('status', 'active'),
       ])
       const bals    = balRes.data  || []
       const lrs     = lrRes.data   || []
       const pending = pendRes.data || []
+      const comp    = compRes.data || []
       setDbBalances(bals)
       setLeaveRequests(lrs)
       setPendingRequests(pending)
       const emp = employees.find(e => e.id === selectedEmpId)
-      setTableRows(buildRows(emp, bals, lrs, pending))
+      setTableRows(buildRows(emp, bals, lrs, pending, comp))
       setDataLoading(false)
     }
     load()
   }, [selectedEmpId, yearFilter, employees])
 
   // ── build table rows ──────────────────────────────────────────────────────
-  const buildRows = (emp, bals, lrs, pending) => {
+  const buildRows = (emp, bals, lrs, pending, comp = []) => {
     if (!emp) return []
+    // 補休：以 comp_time_ledger 為準（可休=sum(hours)、已休=sum(hours_used)）
+    const compTotal = comp.reduce((s, c) => s + Number(c.hours || 0), 0)
+    const compUsed  = comp.reduce((s, c) => s + Number(c.hours_used || 0), 0)
     const balByType = {}
     for (const b of bals) balByType[normalizeType(b.leave_type)] = b
 
@@ -202,7 +209,8 @@ export default function LeaveBalances() {
       const notStarted     = dbBal?.period_start && dbBal.period_start > _todayStr
       const effectiveDays  = notStarted ? 0 : (dbTotal > 0 ? dbTotal : computedDays)
       const carryOverDays  = notStarted ? 0 : Number(dbBal?.carry_over_days || 0)
-      const totalHours     = daysToHours(effectiveDays + carryOverDays)
+      // 補休：可休直接用 comp_time_ledger 加總（小時，不經 days 換算）
+      const totalHours     = type === '補休' ? compTotal : daysToHours(effectiveDays + carryOverDays)
 
       // annual period
       let rangeStr = `${yearFilter}/01/01 ～ ${yearFilter}/12/31`
@@ -256,10 +264,12 @@ export default function LeaveBalances() {
       const inAnnual = (lr) => normalizeType(lr.type) === 'annual'
         && lr.start_date && lr.start_date >= annualStartStr && lr.start_date <= annualEndStr
       const sumH = (arr) => arr.reduce((s, lr) => s + (lr.hours ? hoursToHours(lr.hours) : daysToHours(lr.days)), 0)
-      // 已休：有 104 匯入的 leave_balance → 直接讀 used_days（權威）；否則從請假單算
-      const usedH    = dbBal
-        ? daysToHours(Number(dbBal.used_days || 0))
-        : ((type === 'annual' && annualStartStr) ? sumH(lrs.filter(inAnnual)) : (usedByType[type] || 0))
+      // 已休：補休→comp_time_ledger；有 104 leave_balance→讀 used_days；否則從請假單算
+      const usedH    = type === '補休'
+        ? compUsed
+        : (dbBal
+          ? daysToHours(Number(dbBal.used_days || 0))
+          : ((type === 'annual' && annualStartStr) ? sumH(lrs.filter(inAnnual)) : (usedByType[type] || 0)))
       const pendH    = (type === 'annual' && annualStartStr) ? sumH(pending.filter(inAnnual)) : (pendByType[type] || 0)
       const remH     = totalHours - usedH
       const canApply = Math.max(0, remH - pendH)

@@ -82,6 +82,7 @@ const FEATURES = [
   // 專案流程
   { module: '專案流程', label: '專案',         view: 'project.view',         edit: 'project.manage' },
   { module: '專案流程', label: '任務指派',     view: null,                   edit: 'task.assign' },
+  { module: '專案流程', label: '門市稽核-檢視全部人', view: 'liff.store_audit.view_all', edit: null },
   { module: '專案流程', label: '簽核鏈設定',   view: 'approval_chain.view',  edit: 'approval_chain.edit' },
   { module: '專案流程', label: '簽核代理設定', view: null,                   edit: 'approval.delegate_manage' },
   // 系統設定

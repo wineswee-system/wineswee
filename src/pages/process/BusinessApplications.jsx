@@ -1,6 +1,6 @@
 ﻿import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Wallet, Receipt, FileText, ClipboardList, Package, ShoppingCart } from 'lucide-react'
+import { Wallet, Receipt, FileText, ClipboardList, Package, ShoppingCart, Building2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -19,6 +19,7 @@ const FIXED_EXPENSE = [
 
 const FIXED_NON_EXPENSE = [
   { icon: Package, name: '商品調撥', desc: '總倉 ↔ 門市 / 跨門市調貨 → 申請審核 + 驗收兩階段', action: '/process/transfer-requests', color: 'var(--accent-orange)', dim: 'var(--accent-orange-dim)', tag: '兩階段' },
+  { icon: Building2, name: '跨部門工單', desc: '請其他部門協助處理事項 → 受理排程 → 完成結案', action: '/process/work-orders', color: 'var(--accent-blue)', dim: 'var(--accent-blue-dim)', tag: '派工' },
 ]
 
 const COLOR_MAP = {

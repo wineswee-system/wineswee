@@ -200,7 +200,20 @@ BEGIN
   );
 END $function$;
 
--- ⑥ 現有四月設為已發布（員工維持看得到四月）；六月 published_at 為 NULL → 自動隱藏
+-- ⑥ 員工 LIFF 歷史薪資列表：只列已發布月份（LIFF /salary 頁走這支）
+CREATE OR REPLACE FUNCTION public.liff_list_my_salary(p_line_user_id text)
+ RETURNS json
+ LANGUAGE sql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  SELECT COALESCE(json_agg(row_to_json(s.*) ORDER BY s.month DESC), '[]'::json)
+  FROM public.salary_records s
+  WHERE s.employee_id = (SELECT id FROM public._liff_resolve_employee(p_line_user_id))
+    AND s.published_at IS NOT NULL          -- ★ 只列已發布月份（草稿不外洩）
+$function$;
+
+-- ⑦ 現有四月設為已發布（員工維持看得到四月）；六月 published_at 為 NULL → 自動隱藏
 UPDATE public.salary_records
    SET published_at = now()
  WHERE month = '2026-04' AND organization_id = 1 AND published_at IS NULL;

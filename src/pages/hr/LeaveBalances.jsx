@@ -19,7 +19,7 @@ const TYPE_CODE = Object.fromEntries(Object.entries(TYPE_LABEL).map(([k, v]) => 
 const LEGAL_LIMITS = {
   sick: 30, personal: 14, menstrual: 1,  // 1 day/month × 12 months
   marriage: 8, bereavement: 8, family_care: 7,
-  paternity: 7, prenatal: 5,
+  paternity: 7, prenatal: 7,  // 產檢假 2022 修法 5→7 天（性平法 §15）
 }
 // 這些假別沒有固定年度天數，只在有資料時才顯示
 const EVENT_BASED = new Set(['official', 'maternity', 'parental', 'occupational', 'unpaid'])

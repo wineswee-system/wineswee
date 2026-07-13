@@ -745,8 +745,14 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
 
     setSaving(false)
     setShowSettleModal(false)
+    // openSettle 為了讓 handleSettle 讀 req 也 setShowDetail(req),但沒建 detailChainSteps；
+    // 核銷 modal 一關,底下那個「空 chain」的明細(showDetail && !showSettleModal)就會露出來
+    // 顯示「尚未設定簽核鏈」→ 一併關掉,別讓殘影跳出來。
+    setShowDetail(null)
+    setDetailChainSteps([])
     load()
     postBindingFillDone(null)  // 任務 iframe inline（核銷段）：通知父視窗完成
+    returnNav()  // 從「待送驗收」點來的(帶 returnTo)→ 送完自動回儀表板；無 returnTo 則 no-op
   }
 
   // 核銷簽核：呼叫 RPC 推 settle chain 一步；最後一關通過 → 開分錄 + 已核銷

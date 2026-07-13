@@ -6,7 +6,7 @@ import { getEmployees, getDepartments, getProjectSections, createProjectSection,
 import { useRealtimeTasks, useRealtimeWorkflowInstances } from '../../lib/hooks/useRealtimeSync'
 import { useAuth } from '../../contexts/AuthContext'
 import { useAuditLog } from '../../lib/useAuditLog'
-import { notifyTaskAssignee } from '../../lib/lineNotify'
+import { notifyTaskAssignee, notifyProjectMembers } from '../../lib/lineNotify'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { confirm } from '../../lib/confirm'
 import ProjectDetailPanel from './components/ProjectDetailPanel'
@@ -781,6 +781,9 @@ export default function Projects() {
       if (deployForm.owner) {
         notifyTaskAssignee(deployForm.owner, `專案「${deployForm.name}」已建立`, '專案部署', null).catch(() => {})
       }
+
+      // 通知專案成員：凡在此專案任一流程被指派任務者，各發一則彙總（聚合/去重/站內通知由 RPC 處理）
+      notifyProjectMembers({ id: project.id, name: project.name, store: project.store }).catch(() => {})
 
       setShowDeployModal(false)
       setDeployTpl(null)

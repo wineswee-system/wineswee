@@ -6,8 +6,10 @@ import {
   Plus, ChevronRight, ChevronDown, Check, Clock, Pause, Ban, Play,
   MessageSquare, Workflow, CheckSquare, Edit3, Trash2, FolderOpen,
   Users, GitBranch, MoreVertical, GripVertical,
-  TrendingDown, DollarSign,
+  TrendingDown, DollarSign, Send,
 } from 'lucide-react'
+import { notifyProjectMembers } from '../../../lib/lineNotify'
+import { toast } from '../../../lib/toast'
 import TaskDetailPanel from '../../../components/TaskDetailPanel'
 import TaskQuickCreateModal from '../../../components/tasks/TaskQuickCreateModal'
 import ProjectMembers from '../../../components/tasks/ProjectMembers'
@@ -508,9 +510,22 @@ export default function ProjectDetailPanel({
         <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-secondary)' }}>
           <Workflow size={15} /> 流程（{pWorkflows.length}）
         </span>
-        <button className="btn btn-secondary" style={{ fontSize: 12, padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 4 }} onClick={() => openWorkflowModal(p)}>
-          <Plus size={12} /> 連結 / 建立流程
-        </button>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button className="btn btn-secondary" style={{ fontSize: 12, padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 4 }}
+            title="通知此專案內所有被指派任務的人（一人一則彙總，強制重發）"
+            onClick={async () => {
+              const res = await notifyProjectMembers(
+                { id: p.id, name: p.name, store: p.store },
+                { force: true }
+              )
+              toast.success(`已通知 ${res?.notified || 0} 位成員`)
+            }}>
+            <Send size={12} /> 通知成員
+          </button>
+          <button className="btn btn-secondary" style={{ fontSize: 12, padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 4 }} onClick={() => openWorkflowModal(p)}>
+            <Plus size={12} /> 連結 / 建立流程
+          </button>
+        </div>
       </div>
 
       {pWorkflows.length === 0 ? (

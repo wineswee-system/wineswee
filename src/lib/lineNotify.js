@@ -507,6 +507,69 @@ export async function notifyTaskStarted(assigneeName, taskTitle, instanceName, t
 }
 
 /**
+ * 通知某人：他被安排到某專案（彙總卡，一人一則）。
+ * @param {string} assigneeName
+ * @param {object} project - { id, name, dept, store }
+ * @param {number} taskCount - 他在此專案的任務數
+ */
+export async function notifyProjectMember(assigneeName, project, taskCount) {
+  if (!assigneeName || !project) return { ok: false, reason: 'no_input' }
+  const account = await resolveLineAccount(assigneeName)
+  if (!account.lineUserId) return { ok: false, reason: 'no_line_user_id' }
+  const liffUrl = getLiffTaskUrl(null, account.liffId) // LIFF 我的任務
+  const sub = [project.dept, project.store].filter(Boolean).join(' · ')
+  const messages = [{
+    type: 'flex',
+    altText: `📁 你被安排到專案：${project.name}`,
+    contents: {
+      type: 'bubble', size: 'kilo',
+      header: {
+        type: 'box', layout: 'vertical', backgroundColor: LC.brand, paddingAll: '14px',
+        contents: [{ type: 'text', text: '📁 專案任務安排', color: '#ffffff', weight: 'bold', size: 'md' }],
+      },
+      body: {
+        type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '14px',
+        contents: [
+          { type: 'text', text: project.name, weight: 'bold', size: 'sm', wrap: true, color: '#111827' },
+          ...(sub ? [{ type: 'text', text: sub, size: 'xs', color: '#6B7280', wrap: true }] : []),
+          { type: 'box', layout: 'baseline', margin: 'md', contents: [
+            { type: 'text', text: '👤 你被安排', size: 'xs', color: '#6B7280', flex: 0 },
+            { type: 'text', text: `${taskCount} 項任務`, size: 'sm', weight: 'bold', color: LC.brand, margin: 'sm' },
+          ] },
+          { type: 'text', text: '請前往查看並開始處理', size: 'xs', color: '#6B7280', margin: 'sm', wrap: true },
+        ],
+      },
+      footer: {
+        type: 'box', layout: 'vertical', paddingAll: '12px',
+        contents: [{ type: 'button', style: 'primary', color: LC.brand, height: 'sm',
+          action: { type: 'uri', label: '前往查看', uri: liffUrl } }],
+      },
+    },
+  }]
+  return sendLinePush(account.lineUserId, messages)
+}
+
+/**
+ * 專案成員通知（聚合）：專案內每個被指派任務的人各發一則彙總，一人一則、去重。
+ * 聚合+去重+站內通知由 RPC notify_project_members(SECURITY DEFINER)處理（繞 RLS），
+ * 此處只依回傳名單逐人發 LINE 彙總卡。
+ * @param {object} project - { id, name, store }
+ * @param {object} [opts]  - { force } force=true 強制重發（手動按鈕用）
+ */
+export async function notifyProjectMembers(project, { force = false } = {}) {
+  if (!project?.id) return { notified: 0, reason: 'no_project' }
+  const { data, error } = await supabase.rpc('notify_project_members', {
+    p_project_id: project.id, p_force: force,
+  })
+  if (error || !Array.isArray(data)) return { notified: 0, error }
+  // 站內通知已由 RPC 寫入；逐人發 LINE 彙總卡
+  for (const row of data) {
+    await notifyProjectMember(row.employee_name, project, row.task_count).catch(() => {})
+  }
+  return { notified: data.length }
+}
+
+/**
  * Send a single carousel push to one assignee covering all their due/overdue tasks.
  * @param {string} assigneeName
  * @param {Array} tasks - each: { id, title, due_date, description, notes, store, isOverdue, approvalRequired, instanceName? }

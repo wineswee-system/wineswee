@@ -21,7 +21,6 @@ const LEAVE_TYPE_MAP = {
   '喪假': 'bereavement',
   '工傷假': 'occupational',
   '家庭照顧假': 'family_care', '家假': 'family_care',
-  '心理健康假': 'mental_health',
   '產檢假': 'prenatal',
   '育嬰假': 'parental',
   '哺乳假': 'nursing', '護理假': 'nursing',

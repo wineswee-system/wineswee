@@ -10,7 +10,7 @@ const TYPE_LABEL = {
   annual: '特休假', '補休': '補休', sick: '病假', personal: '事假',
   menstrual: '生理假', marriage: '婚假', bereavement: '喪假',
   official: '公假', maternity: '產假', paternity: '陪產假',
-  parental: '育嬰假', family_care: '家庭照顧假', mental_health: '心理假',
+  parental: '育嬰假', family_care: '家庭照顧假',
   occupational: '公傷病假', prenatal: '產檢假', unpaid: '無薪假',
 }
 const TYPE_CODE = Object.fromEntries(Object.entries(TYPE_LABEL).map(([k, v]) => [v, k]))
@@ -18,7 +18,7 @@ const TYPE_CODE = Object.fromEntries(Object.entries(TYPE_LABEL).map(([k, v]) => 
 // legal limits in DAYS (per year, except menstrual which is per month)
 const LEGAL_LIMITS = {
   sick: 30, personal: 14, menstrual: 1,  // 1 day/month × 12 months
-  marriage: 8, bereavement: 8, mental_health: 3, family_care: 7,
+  marriage: 8, bereavement: 8, family_care: 7,
   paternity: 7, prenatal: 5,
 }
 // 這些假別沒有固定年度天數，只在有資料時才顯示
@@ -27,7 +27,7 @@ const EVENT_BASED = new Set(['official', 'maternity', 'parental', 'occupational'
 const ANNUAL_TYPES = [
   'annual', '補休', 'sick', 'personal', 'menstrual',
   'marriage', 'bereavement', 'official', 'maternity', 'paternity', 'unpaid',
-  'family_care', 'mental_health', 'occupational', 'prenatal', 'parental',
+  'family_care', 'occupational', 'prenatal', 'parental',
 ]
 
 const daysToHours = (d) => Math.round(Number(d || 0) * 8)

@@ -367,7 +367,6 @@ export const ABSENCE_CONFIG = {
   '工傷': { label: '公傷病假', color: '#dc2626', icon: '🚑', countsAsRest: false, payRate: 1.0 }, // 勞基法 §59：原領工資補償
   '陪產': { label: '陪產假',   color: '#0891b2', icon: '👨‍👶', countsAsRest: false, payRate: 1.0 }, // 性平法：5 天全薪
   '家':   { label: '家庭照顧假', color: '#7c3aed', icon: '🏠', countsAsRest: false, payRate: 0   }, // 性平法：每年 7 天，無薪
-  '心':   { label: '心理健康假', color: '#059669', icon: '💚', countsAsRest: false, payRate: 1.0 }, // 企業自訂
   '產檢': { label: '產檢假',   color: '#db2777', icon: '🤰', countsAsRest: false, payRate: 1.0 }, // 性平法：5 次全薪
   '育嬰': { label: '育嬰假',   color: '#ea580c', icon: '👶', countsAsRest: false, payRate: 0   }, // 性平法：無薪育嬰留職停薪
   // 邊界日 — 演算法用，員工尚未/不再服務於公司，countsAsRest=false 避免吃月休配額

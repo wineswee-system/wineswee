@@ -35,7 +35,6 @@ const ABSENCE_MAP = {
   '產檢假':     '產檢',
   '工傷假':     '工傷',
   '家庭照顧假': '家',
-  '心理健康假': '心',
   '會議':       '會議',
 }
 const OFF_LABELS = new Set(Object.keys(ABSENCE_MAP))

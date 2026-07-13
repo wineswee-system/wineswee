@@ -16,7 +16,7 @@ describe('LEAVE_TYPES', () => {
     const expectedCodes = [
       'annual', 'sick', 'personal', 'official', 'maternity', 'paternity',
       'parental', 'menstrual', 'marriage', 'bereavement', 'family_care',
-      'mental_health', 'occupational', 'nursing', 'prenatal',
+      'occupational', 'nursing', 'prenatal',
     ]
     // At least 15 types (some might be combined)
     expect(LEAVE_TYPES.length).toBeGreaterThanOrEqual(15)
@@ -251,13 +251,6 @@ describe('validateLeaveRequest', () => {
     const ok = validateLeaveRequest({ type: 'marriage', days: 8, usedDays: 0 })
     expect(ok.valid).toBe(true)
     const over = validateLeaveRequest({ type: 'marriage', days: 1, usedDays: 8 })
-    expect(over.valid).toBe(false)
-  })
-
-  it('mental health leave max 3 days', () => {
-    const ok = validateLeaveRequest({ type: 'mental_health', days: 1, usedDays: 2 })
-    expect(ok.valid).toBe(true)
-    const over = validateLeaveRequest({ type: 'mental_health', days: 1, usedDays: 3 })
     expect(over.valid).toBe(false)
   })
 

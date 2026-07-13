@@ -1240,6 +1240,65 @@ function buildStoreAuditNotification(
 // Main Handler
 // ══════════════════════════════════════════════════════════════
 
+// ── 跨部門工單通知卡 ──
+function buildWorkOrderNotification(
+  type: string,
+  details: {
+    id: number; title: string; requester_name?: string; requester_department?: string;
+    target_department?: string; assignee_name?: string; priority?: string;
+    expected_due_date?: string; scheduled_due_date?: string; reject_reason?: string;
+    liff_id?: string | null;
+  },
+) {
+  const prLabel = details.priority === "high" ? "🔴 高" : details.priority === "low" ? "🔵 低" : "🟠 中";
+  const cfgMap: Record<string, { title: string; color: string; lead: string }> = {
+    created:   { title: "📋 新工單指派", color: "#2563EB", lead: `${details.requester_department || ""}·${details.requester_name || ""} 請你部門處理` },
+    accepted:  { title: "✅ 工單已受理", color: "#2563EB", lead: `${details.target_department || ""} 已受理，排定 ${details.scheduled_due_date || "—"} 完成` },
+    completed: { title: "🎉 工單已完成", color: "#0891B2", lead: `${details.assignee_name || details.target_department || ""} 回報完成，請確認結案` },
+    rejected:  { title: "↩️ 工單被退回", color: "#DC2626", lead: `原因：${details.reject_reason || "—"}` },
+    confirmed: { title: "🏁 工單已結案", color: "#16A34A", lead: `申請人已確認結案` },
+  };
+  const cfg = cfgMap[type] || { title: "工單通知", color: "#2563EB", lead: "" };
+
+  const row = (label: string, value: unknown) => ({
+    type: "box", layout: "horizontal", spacing: "sm",
+    contents: [
+      { type: "text", text: label, size: "sm", color: "#999999", flex: 2 },
+      { type: "text", text: String(value ?? "—"), size: "sm", color: "#333333", flex: 4, wrap: true, align: "end" },
+    ],
+  });
+
+  const body: any[] = [
+    { type: "text", text: details.title || "（未命名）", weight: "bold", size: "md", wrap: true },
+    ...(cfg.lead ? [{ type: "text", text: cfg.lead, size: "sm", color: "#666666", wrap: true, margin: "sm" }] : []),
+    { type: "separator", margin: "md" },
+    row("目標部門", details.target_department),
+    row("承辦人", details.assignee_name || "未指派"),
+    row("優先", prLabel),
+    row("期望完成", details.expected_due_date),
+  ];
+  if (details.scheduled_due_date && details.scheduled_due_date !== "—") body.push(row("排定完成", details.scheduled_due_date));
+
+  const footer: any[] = [];
+  if (details.liff_id) {
+    footer.push({
+      type: "button", style: "primary", color: cfg.color, height: "sm",
+      action: { type: "uri", label: "前往工單", uri: `https://liff.line.me/${details.liff_id}?to=${encodeURIComponent(`/work-orders?focus=${details.id}`)}` },
+    });
+  }
+
+  return {
+    type: "flex", altText: `${cfg.title}：${details.title || ""}`,
+    contents: {
+      type: "bubble", size: "kilo",
+      header: { type: "box", layout: "vertical", backgroundColor: cfg.color, paddingAll: "14px",
+        contents: [{ type: "text", text: cfg.title, color: "#ffffff", weight: "bold", size: "md" }] },
+      body: { type: "box", layout: "vertical", spacing: "xs", paddingAll: "14px", contents: body },
+      ...(footer.length ? { footer: { type: "box", layout: "vertical", paddingAll: "12px", contents: footer } } : {}),
+    },
+  };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -1468,7 +1527,8 @@ serve(async (req) => {
       || type === "goods_transfer_extra_assigned"
       || type === "goods_transfer_extra_approved_back"
       || type === "goods_transfer_rejected"
-      || type === "goods_transfer_approved";
+      || type === "goods_transfer_approved"
+      || type.startsWith("work_order_");
     const acct = needsLiff ? await resolveLineAccount(db, employee_id) : null;
     const lineUserId = acct ? acct.lineUserId : await resolveLineId(db, employee_id);
     if (!lineUserId) {
@@ -1593,6 +1653,8 @@ serve(async (req) => {
       message = buildInterviewCompleted({ ...details, liff_id: acct?.liffId || null });
     } else if (type === "task_mentioned") {
       message = buildTaskMentioned({ ...details, liff_id: acct?.liffId || null });
+    } else if (type.startsWith("work_order_")) {
+      message = buildWorkOrderNotification(type.replace("work_order_", ""), { ...details, liff_id: acct?.liffId || null });
     } else {
       return new Response(JSON.stringify({ error: `Unknown type: ${type}` }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },

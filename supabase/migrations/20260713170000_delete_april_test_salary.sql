@@ -17,4 +17,8 @@ DELETE FROM public.payroll_runs    WHERE pay_period = '2026-04';
 DELETE FROM public.salary_records
  WHERE month IN ('2025-12', '2026-01', '2026-02', '2026-03') AND organization_id = 1;
 
+-- 髒資料:2026-13(不存在的月份13)測試 run 及其明細
+DELETE FROM public.payroll_records WHERE pay_period = '2026-13';
+DELETE FROM public.payroll_runs    WHERE pay_period = '2026-13';
+
 NOTIFY pgrst, 'reload schema';

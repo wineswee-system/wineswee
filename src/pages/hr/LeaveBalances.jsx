@@ -77,7 +77,9 @@ export default function LeaveBalances() {
   const [cashoutLoading, setCashoutLoading] = useState(false)
   const [cashoutSaving, setCashoutSaving] = useState(false)
 
-  const normalizeType = (t) => TYPE_CODE[t] || t
+  // 特休多種寫法（annual / 特休假 / 特休 / 特別休假）統一歸 annual
+  const ANNUAL_ALIASES = new Set(['annual', '特休假', '特休', '特別休假'])
+  const normalizeType = (t) => (ANNUAL_ALIASES.has(t) ? 'annual' : (TYPE_CODE[t] || t))
 
   const calcStatutoryLeave = (emp) => {
     if (!emp?.join_date) return null
@@ -202,13 +204,17 @@ export default function LeaveBalances() {
       let rangeStr = `${yearFilter}/01/01 ～ ${yearFilter}/12/31`
       let periodLabel = `${yearFilter} 年`
 
+      let annualStartStr = null, annualEndStr = null
       if (type === 'annual') {
         if (emp.join_date) {
           const join = new Date(emp.join_date)
           const startYear = new Date(yearFilter, join.getMonth(), join.getDate())
           const endYear   = new Date(yearFilter + 1, join.getMonth(), join.getDate() - 1)
-          const fmt = (d) => `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`
-          rangeStr = `${fmt(startYear)} ～ ${fmt(endYear)}`
+          const pad2 = (n) => String(n).padStart(2, '0')
+          const iso = (d) => `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`
+          annualStartStr = iso(startYear)
+          annualEndStr   = iso(endYear)
+          rangeStr = `${annualStartStr.replace(/-/g,'/')} ～ ${annualEndStr.replace(/-/g,'/')}`
         }
         periodLabel = `${yearFilter} 年`
       }
@@ -237,8 +243,12 @@ export default function LeaveBalances() {
         continue
       }
 
-      const usedH    = usedByType[type]  || 0
-      const pendH    = pendByType[type]  || 0
+      // 特休：已休/簽核中只算落在「可休區間」內的（避免把上一週年年度的特休算進本期）
+      const inAnnual = (lr) => normalizeType(lr.type) === 'annual'
+        && lr.start_date && lr.start_date >= annualStartStr && lr.start_date <= annualEndStr
+      const sumH = (arr) => arr.reduce((s, lr) => s + (lr.hours ? hoursToHours(lr.hours) : daysToHours(lr.days)), 0)
+      const usedH    = (type === 'annual' && annualStartStr) ? sumH(lrs.filter(inAnnual))     : (usedByType[type] || 0)
+      const pendH    = (type === 'annual' && annualStartStr) ? sumH(pending.filter(inAnnual)) : (pendByType[type] || 0)
       const remH     = totalHours - usedH
       const canApply = Math.max(0, remH - pendH)
 

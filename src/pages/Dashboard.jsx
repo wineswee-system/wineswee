@@ -4,8 +4,9 @@ import { useAuth } from '../contexts/AuthContext'
 import StaffDashboard from './dashboard/components/StaffDashboard'
 import ApprovalCenter from './dashboard/components/ApprovalCenter'
 import SettleTodoView from './dashboard/components/SettleTodoView'
+import WorkOrderTodoView from './dashboard/components/WorkOrderTodoView'
 import { usePendingApprovals } from '../lib/usePendingApprovals'
-import { LayoutDashboard, FileCheck, Send } from 'lucide-react'
+import { LayoutDashboard, FileCheck, Send, Building2 } from 'lucide-react'
 import {
   Users, CheckCircle, AlertTriangle, TrendingUp, Target,
   ArrowUpRight, ArrowDownRight, Clock, Briefcase, CalendarCheck,
@@ -605,6 +606,7 @@ function DashboardTabs({ overview }) {
   // 載入完才做決定，避免閃爍
   const [tab, setTab] = useState('overview')
   const [settleCount, setSettleCount] = useState(0)
+  const [woCount, setWoCount] = useState(0)
   useEffect(() => {
     if (!pendingLoading && totalPending > 0 && tab === 'overview') {
       setTab('approvals')
@@ -614,6 +616,7 @@ function DashboardTabs({ overview }) {
   // 待送驗收數（badge 用）— 進站先撈一次
   useEffect(() => {
     supabase.rpc('web_list_my_settle_todos').then(({ data }) => setSettleCount(Array.isArray(data) ? data.length : 0))
+    supabase.rpc('web_list_my_work_order_todos').then(({ data }) => setWoCount(Array.isArray(data) ? data.length : 0))
   }, [])
 
   return (
@@ -642,6 +645,12 @@ function DashboardTabs({ overview }) {
           label="待送驗收"
           badge={settleCount}
         />
+        <DashboardTabButton
+          active={tab === 'workorders'} onClick={() => setTab('workorders')}
+          icon={<Building2 size={16} />}
+          label="工單待辦"
+          badge={woCount}
+        />
         {/* 打卡快速入口 — 跳到 /portal 用完整 GPS / 模式 picker */}
         <button
           onClick={() => navigate('/portal')}
@@ -663,6 +672,7 @@ function DashboardTabs({ overview }) {
         {tab === 'overview' && overview}
         {tab === 'approvals' && <ApprovalCenter />}
         {tab === 'settle' && <SettleTodoView onCount={setSettleCount} />}
+        {tab === 'workorders' && <WorkOrderTodoView onCount={setWoCount} />}
       </div>
     </div>
   )

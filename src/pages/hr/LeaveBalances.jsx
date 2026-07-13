@@ -196,7 +196,8 @@ export default function LeaveBalances() {
       else if (type === 'menstrual') computedDays = 12  // annual total (12 × 1 day)
       else computedDays = LEGAL_LIMITS[type] ?? 0
 
-      const effectiveDays  = dbTotal > 0 ? Math.max(dbTotal, computedDays) : computedDays
+      // 有 DB 餘額(104 匯入為準) → 直接用；否則用法定計算值
+      const effectiveDays  = dbTotal > 0 ? dbTotal : computedDays
       const carryOverDays  = Number(dbBal?.carry_over_days || 0)
       const totalHours     = daysToHours(effectiveDays + carryOverDays)
 
@@ -247,7 +248,10 @@ export default function LeaveBalances() {
       const inAnnual = (lr) => normalizeType(lr.type) === 'annual'
         && lr.start_date && lr.start_date >= annualStartStr && lr.start_date <= annualEndStr
       const sumH = (arr) => arr.reduce((s, lr) => s + (lr.hours ? hoursToHours(lr.hours) : daysToHours(lr.days)), 0)
-      const usedH    = (type === 'annual' && annualStartStr) ? sumH(lrs.filter(inAnnual))     : (usedByType[type] || 0)
+      // 已休：有 104 匯入的 leave_balance → 直接讀 used_days（權威）；否則從請假單算
+      const usedH    = dbBal
+        ? daysToHours(Number(dbBal.used_days || 0))
+        : ((type === 'annual' && annualStartStr) ? sumH(lrs.filter(inAnnual)) : (usedByType[type] || 0))
       const pendH    = (type === 'annual' && annualStartStr) ? sumH(pending.filter(inAnnual)) : (pendByType[type] || 0)
       const remH     = totalHours - usedH
       const canApply = Math.max(0, remH - pendH)
@@ -263,6 +267,24 @@ export default function LeaveBalances() {
         totalHours, usedHours: usedH, remainingHours: remH,
         pendingHours: pendH, canApplyHours: canApply,
         dbId: dbBal?.id, isManual: dbTotal > 0,
+      })
+    }
+
+    // 殘骸/非標準假別（104 舊系統結算等，不在 ANNUAL_TYPES）→ 直接以 leave_balances 顯示
+    const standardSet = new Set(ANNUAL_TYPES)
+    for (const [lt, b] of Object.entries(balByType)) {
+      if (standardSet.has(lt)) continue
+      const total = daysToHours(Number(b.total_days || 0) + Number(b.carry_over_days || 0))
+      const used  = daysToHours(Number(b.used_days || 0))
+      if (total === 0 && used === 0) continue
+      rows.push({
+        _key: lt, type: lt, isMonthly: false,
+        label: TYPE_LABEL[lt] || lt,
+        period: `${yearFilter} 年`,
+        range: b.expires_at ? `～ ${String(b.expires_at).replace(/-/g, '/')}` : `${yearFilter}/01/01 ～ ${yearFilter}/12/31`,
+        totalHours: total, usedHours: used, remainingHours: total - used,
+        pendingHours: 0, canApplyHours: Math.max(0, total - used),
+        dbId: b.id, isManual: true,
       })
     }
 

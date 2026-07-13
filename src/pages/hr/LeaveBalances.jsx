@@ -32,6 +32,7 @@ const ANNUAL_TYPES = [
 
 const daysToHours = (d) => Math.round(Number(d || 0) * 8)
 const hoursToHours = (h) => Math.round(Number(h || 0))
+const _todayStr = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` })()
 
 export default function LeaveBalances() {
   const { profile, isAdmin } = useAuth()
@@ -197,8 +198,10 @@ export default function LeaveBalances() {
       else computedDays = LEGAL_LIMITS[type] ?? 0
 
       // 有 DB 餘額(104 匯入為準) → 直接用；否則用法定計算值
-      const effectiveDays  = dbTotal > 0 ? dbTotal : computedDays
-      const carryOverDays  = Number(dbBal?.carry_over_days || 0)
+      // 可休期間起日 > 今天(未生效，如新人特休尚未滿6月)→ 可休算 0，只看當下能休的
+      const notStarted     = dbBal?.period_start && dbBal.period_start > _todayStr
+      const effectiveDays  = notStarted ? 0 : (dbTotal > 0 ? dbTotal : computedDays)
+      const carryOverDays  = notStarted ? 0 : Number(dbBal?.carry_over_days || 0)
       const totalHours     = daysToHours(effectiveDays + carryOverDays)
 
       // annual period
@@ -218,6 +221,11 @@ export default function LeaveBalances() {
           rangeStr = `${annualStartStr.replace(/-/g,'/')} ～ ${annualEndStr.replace(/-/g,'/')}`
         }
         periodLabel = `${yearFilter} 年`
+      }
+
+      // 有 104 匯入的可休期間 → 顯示它的起迄（優先於前端自算）
+      if (dbBal?.period_start && dbBal?.expires_at) {
+        rangeStr = `${dbBal.period_start.replace(/-/g, '/')} ～ ${dbBal.expires_at.replace(/-/g, '/')}`
       }
 
       if (type === 'menstrual') {
@@ -274,14 +282,18 @@ export default function LeaveBalances() {
     const standardSet = new Set(ANNUAL_TYPES)
     for (const [lt, b] of Object.entries(balByType)) {
       if (standardSet.has(lt)) continue
-      const total = daysToHours(Number(b.total_days || 0) + Number(b.carry_over_days || 0))
+      const notStarted = b.period_start && b.period_start > _todayStr
+      const total = notStarted ? 0 : daysToHours(Number(b.total_days || 0) + Number(b.carry_over_days || 0))
       const used  = daysToHours(Number(b.used_days || 0))
       if (total === 0 && used === 0) continue
+      const rng = b.period_start && b.expires_at
+        ? `${b.period_start.replace(/-/g, '/')} ～ ${b.expires_at.replace(/-/g, '/')}`
+        : (b.expires_at ? `～ ${String(b.expires_at).replace(/-/g, '/')}` : `${yearFilter}/01/01 ～ ${yearFilter}/12/31`)
       rows.push({
         _key: lt, type: lt, isMonthly: false,
         label: TYPE_LABEL[lt] || lt,
         period: `${yearFilter} 年`,
-        range: b.expires_at ? `～ ${String(b.expires_at).replace(/-/g, '/')}` : `${yearFilter}/01/01 ～ ${yearFilter}/12/31`,
+        range: rng,
         totalHours: total, usedHours: used, remainingHours: total - used,
         pendingHours: 0, canApplyHours: Math.max(0, total - used),
         dbId: b.id, isManual: true,

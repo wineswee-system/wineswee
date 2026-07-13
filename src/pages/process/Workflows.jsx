@@ -1236,6 +1236,7 @@ export default function Workflows() {
   const HR_TEMPLATE_SET = new Set(HR_APPROVAL_TEMPLATE_NAMES)
   const filteredInstances = instances.filter(i => {
     if (HR_TEMPLATE_SET.has(i.template_name)) return false
+    if (i.project_id) return false  // 專案內流程只在專案頁顯示，流程管理不列（避免混亂）
     if (search) {
       const s = search.toLowerCase()
       // 流程本身：名稱、wf-ID、負責人

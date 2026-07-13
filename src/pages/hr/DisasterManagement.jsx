@@ -45,7 +45,8 @@ export default function DisasterManagement() {
 
   // 宣告 modal
   const [showDecl, setShowDecl] = useState(false)
-  const [form, setForm] = useState({ disaster_type: '颱風', date: '', store_ids: [], no_show_handling: 'paid', note: '' })
+  const EMPTY_FORM = { disaster_type: '颱風', start_date: '', start_time: '00:00', end_date: '', end_time: '23:59', store_ids: [], no_show_handling: 'paid', note: '' }
+  const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
 
   // 匯入
@@ -78,6 +79,21 @@ export default function DisasterManagement() {
   }, [employees])
   const storeName = (id) => stores.find(s => s.id === id)?.name || `#${id}`
 
+  // 宣告 row → 起訖日（fallback 單一 date，向下相容舊 row）
+  const dRange = (d) => ({
+    start: d?.start_at ? d.start_at.slice(0, 10) : d?.date,
+    end:   d?.end_at ? d.end_at.slice(0, 10) : d?.date,
+  })
+  // 顯示區間文字：YYYY-MM-DD HH:mm ~ …（同一天只顯示結束時間）
+  const fmtRange = (d) => {
+    if (!d?.start_at) return d?.date || ''
+    const s = d.start_at.slice(0, 16).replace('T', ' ')
+    if (!d.end_at) return s
+    return d.end_at.slice(0, 10) === d.start_at.slice(0, 10)
+      ? `${s} ~ ${d.end_at.slice(11, 16)}`
+      : `${s} ~ ${d.end_at.slice(0, 16).replace('T', ' ')}`
+  }
+
   // 沒來名單：範圍內（門市/全部）當天沒打卡的人
   const noShowList = useMemo(() => {
     if (!selected) return []
@@ -105,10 +121,11 @@ export default function DisasterManagement() {
   const selectDisaster = async (d) => {
     setSelected(d)
     setPreview(null)
+    const { start, end } = dRange(d)
     const [aRes, attRes] = await Promise.all([
-      supabase.from('disaster_allowances').select('*').eq('organization_id', orgId).eq('date', d.date),
-      supabase.from('attendance_records').select('employee, employee_id, clock_in, clock_out, store, total_hours')
-        .eq('date', d.date).not('clock_in', 'is', null),
+      supabase.from('disaster_allowances').select('*').eq('organization_id', orgId).gte('date', start).lte('date', end),
+      supabase.from('attendance_records').select('employee, employee_id, clock_in, clock_out, store, total_hours, date')
+        .gte('date', start).lte('date', end).not('clock_in', 'is', null),
     ])
     setAllowances(aRes.data || [])
     // 若宣告限門市，出勤只留那幾家
@@ -122,12 +139,21 @@ export default function DisasterManagement() {
 
   // ── 宣告 ──
   const submitDecl = async () => {
-    if (!form.date) { toast.warning('請選日期'); return false }
+    if (!form.start_date) { toast.warning('請選開始日期'); return false }
+    const startDate = form.start_date
+    const startTime = form.start_time || '00:00'
+    const endDate   = form.end_date || startDate
+    const endTime   = form.end_time || '23:59'
+    const start_at = `${startDate}T${startTime}:00`
+    const end_at   = `${endDate}T${endTime}:00`
+    if (end_at < start_at) { toast.warning('結束時間不能早於開始時間'); return false }  // ISO 字串可直接比大小
     setSaving(true)
     const { data, error } = await supabase.from('disaster_days').insert({
       organization_id: orgId,
       disaster_type: form.disaster_type,
-      date: form.date,
+      date: startDate,              // 主日=開始日（向下相容：allowances/attendance 主鍵、顯示 fallback）
+      start_at,
+      end_at,
       store_ids: form.store_ids.length ? form.store_ids : null,
       no_show_handling: form.no_show_handling,
       note: form.note || null,
@@ -137,12 +163,12 @@ export default function DisasterManagement() {
     if (error) { toast.error('宣告失敗：' + error.message); return false }
     setDisasters(prev => [data, ...prev])
     setShowDecl(false)
-    setForm({ disaster_type: '颱風', date: '', store_ids: [], no_show_handling: 'paid', note: '' })
-    toast.success('已宣告天災日')
+    setForm(EMPTY_FORM)
+    toast.success('已宣告天災')
   }
 
   const deleteDecl = async (d) => {
-    if (!(await confirm({ message: `刪除 ${d.date} ${d.disaster_type} 宣告？（該日津貼不會自動刪）` }))) return
+    if (!(await confirm({ message: `刪除 ${fmtRange(d)} ${d.disaster_type} 宣告？（該區間津貼不會自動刪）` }))) return
     const { error } = await supabase.from('disaster_days').delete().eq('id', d.id)
     if (error) return toast.error('刪除失敗：' + error.message)
     setDisasters(prev => prev.filter(x => x.id !== d.id))
@@ -229,9 +255,9 @@ export default function DisasterManagement() {
               style={{ padding: '10px 12px', borderRadius: 8, marginBottom: 6, cursor: 'pointer',
                 border: `1px solid ${selected?.id === d.id ? 'var(--accent-cyan)' : 'var(--border-subtle)'}`,
                 background: selected?.id === d.id ? 'var(--accent-cyan-dim)' : 'var(--bg-secondary)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontWeight: 700 }}>{d.date}</span>
-                <span className="badge badge-info">{d.disaster_type}</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontWeight: 700, fontSize: 12 }}>{fmtRange(d)}</span>
+                <span className="badge badge-info" style={{ flexShrink: 0 }}>{d.disaster_type}</span>
               </div>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
                 <MapPin size={10} />{d.store_ids?.length ? d.store_ids.map(storeName).join('、') : '全公司'}
@@ -258,7 +284,7 @@ export default function DisasterManagement() {
               {/* 津貼匯入 */}
               <div className="card" style={{ padding: 16 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                  <div style={{ fontWeight: 700 }}><FileSpreadsheet size={15} style={{ verticalAlign: -2, marginRight: 5, color: 'var(--accent-green)' }} />天災津貼 — {selected.date}</div>
+                  <div style={{ fontWeight: 700 }}><FileSpreadsheet size={15} style={{ verticalAlign: -2, marginRight: 5, color: 'var(--accent-green)' }} />天災津貼 — {fmtRange(selected)}</div>
                   {canManage && (
                     <label className="btn btn-secondary" style={{ cursor: 'pointer', fontSize: 13 }}>
                       <Upload size={14} /> 匯入 Excel
@@ -318,7 +344,7 @@ export default function DisasterManagement() {
 
               {/* 當日出勤名單 */}
               <div className="card" style={{ padding: 16 }}>
-                <div style={{ fontWeight: 700, marginBottom: 10 }}><Users size={15} style={{ verticalAlign: -2, marginRight: 5, color: 'var(--accent-orange)' }} />當日出勤（有打卡） — {attendance.length} 人</div>
+                <div style={{ fontWeight: 700, marginBottom: 10 }}><Users size={15} style={{ verticalAlign: -2, marginRight: 5, color: 'var(--accent-orange)' }} />區間出勤（有打卡） — {attendance.length} 人</div>
                 {attendance.length === 0 ? (
                   <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>當日無人打卡</div>
                 ) : (
@@ -347,7 +373,7 @@ export default function DisasterManagement() {
                     )}
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
-                    範圍內當天沒打卡的人；勾選要結算的，會產生已核准假單（{selected.no_show_handling === 'annual_leave' ? '扣特休、薪照給' : '不支薪、計薪自動扣'}）。重複結算不會重建。
+                    範圍內整段期間都沒打卡的人；勾選要結算的，會為<b>區間內每一天</b>各產一張已核准假單（{selected.no_show_handling === 'annual_leave' ? '扣特休、薪照給' : '不支薪、計薪自動扣'}）。重複結算不會重建。
                   </div>
                   {noShowList.length === 0 ? (
                     <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>範圍內全部都有打卡 🎉</div>
@@ -375,14 +401,23 @@ export default function DisasterManagement() {
       {/* 宣告 modal */}
       {showDecl && (
         <Modal title="新增天災宣告" onClose={() => setShowDecl(false)} onSubmit={submitDecl} submitting={saving}>
+          <Field label="類型">
+            <select className="form-input" style={{ width: '100%' }} value={form.disaster_type} onChange={e => setForm(f => ({ ...f, disaster_type: e.target.value }))}>
+              {TYPE_OPTS.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </Field>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="類型">
-              <select className="form-input" style={{ width: '100%' }} value={form.disaster_type} onChange={e => setForm(f => ({ ...f, disaster_type: e.target.value }))}>
-                {TYPE_OPTS.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
+            <Field label="開始日期" required>
+              <input type="date" className="form-input" style={{ width: '100%' }} value={form.start_date} onChange={e => setForm(f => ({ ...f, start_date: e.target.value }))} />
             </Field>
-            <Field label="日期" required>
-              <input type="date" className="form-input" style={{ width: '100%' }} value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
+            <Field label="開始時間" required>
+              <input type="time" className="form-input" style={{ width: '100%' }} value={form.start_time} onChange={e => setForm(f => ({ ...f, start_time: e.target.value }))} />
+            </Field>
+            <Field label="結束日期" required>
+              <input type="date" className="form-input" style={{ width: '100%' }} value={form.end_date} min={form.start_date || undefined} onChange={e => setForm(f => ({ ...f, end_date: e.target.value }))} />
+            </Field>
+            <Field label="結束時間" required>
+              <input type="time" className="form-input" style={{ width: '100%' }} value={form.end_time} onChange={e => setForm(f => ({ ...f, end_time: e.target.value }))} />
             </Field>
           </div>
           <Field label="沒來上班的處理（套用該日全員）">

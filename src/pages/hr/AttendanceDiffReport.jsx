@@ -37,6 +37,11 @@ export default function AttendanceDiffReport() {
   const [month, setMonth] = useState(last.getMonth() + 1)
   const [storeId, setStoreId] = useState('')
   const [stores, setStores] = useState([])
+  // 篩選器
+  const [filterType, setFilterType] = useState('')      // 差異類型
+  const [filterNotify, setFilterNotify] = useState('')  // '' / 'pending' / 'notified'
+  const [searchName, setSearchName] = useState('')
+  const [minDiff, setMinDiff] = useState(0)
   const [report, setReport] = useState([])
   const [loading, setLoading] = useState(true)
   const [detailEmp, setDetailEmp] = useState(null)
@@ -76,6 +81,18 @@ export default function AttendanceDiffReport() {
       totalDiff: withDiff.reduce((s, r) => s + Number(r.diff_count || 0), 0),
     }
   }, [report])
+
+  // 套用篩選（純前端）
+  const filteredReport = useMemo(() => {
+    return report.filter(r => {
+      if (searchName && !(r.employee_name || '').includes(searchName)) return false
+      if (filterNotify === 'pending' && (Number(r.diff_count) === 0 || r.notified)) return false
+      if (filterNotify === 'notified' && !r.notified) return false
+      if (minDiff > 0 && Number(r.diff_count || 0) < minDiff) return false
+      if (filterType && !(r.type_counts && Number(r.type_counts[filterType] || 0) > 0)) return false
+      return true
+    })
+  }, [report, searchName, filterNotify, minDiff, filterType])
 
   const openDetail = async (emp) => {
     setDetailEmp(emp)
@@ -203,6 +220,42 @@ export default function AttendanceDiffReport() {
           <option value="">全部門市</option>
           {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
+
+        {/* 差異類型 */}
+        <select value={filterType} onChange={e => setFilterType(e.target.value)}
+          style={{ padding: '6px 12px', borderRadius: 6, fontSize: 13, background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}>
+          <option value="">全部差異類型</option>
+          {Object.entries(TYPE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+        </select>
+
+        {/* 通知狀態 */}
+        <select value={filterNotify} onChange={e => setFilterNotify(e.target.value)}
+          style={{ padding: '6px 12px', borderRadius: 6, fontSize: 13, background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}>
+          <option value="">全部通知狀態</option>
+          <option value="pending">未通知</option>
+          <option value="notified">已通知</option>
+        </select>
+
+        {/* 差異筆數門檻 */}
+        <select value={minDiff} onChange={e => setMinDiff(Number(e.target.value))}
+          style={{ padding: '6px 12px', borderRadius: 6, fontSize: 13, background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}>
+          <option value={0}>不限筆數</option>
+          <option value={1}>≥ 1 筆</option>
+          <option value={5}>≥ 5 筆</option>
+          <option value={10}>≥ 10 筆</option>
+          <option value={20}>≥ 20 筆</option>
+        </select>
+
+        {/* 員工搜尋 */}
+        <input type="text" value={searchName} onChange={e => setSearchName(e.target.value)} placeholder="🔍 搜尋員工姓名"
+          style={{ padding: '6px 12px', borderRadius: 6, fontSize: 13, background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)', minWidth: 150 }} />
+
+        {(filterType || filterNotify || minDiff > 0 || searchName) && (
+          <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: 12 }}
+            onClick={() => { setFilterType(''); setFilterNotify(''); setMinDiff(0); setSearchName('') }}>
+            <X size={12} /> 清除篩選（{filteredReport.length}/{report.length}）
+          </button>
+        )}
       </div>
 
       {/* 統計卡 */}
@@ -245,11 +298,16 @@ export default function AttendanceDiffReport() {
             <tbody>
               {loading ? (
                 <tr><td colSpan="5" style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)' }}>載入中…</td></tr>
-              ) : report.length === 0 ? (
+              ) : filteredReport.length === 0 ? (
                 <tr><td colSpan="5" style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)' }}>無資料</td></tr>
-              ) : report.map(r => (
+              ) : filteredReport.map(r => (
                 <tr key={r.employee_id} style={{ opacity: r.diff_count > 0 ? 1 : 0.5 }}>
-                  <td>{r.employee_name}</td>
+                  <td>
+                    {r.employee_name}
+                    {r.is_resigned && (
+                      <span style={{ marginLeft: 6, padding: '1px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600, background: 'var(--accent-orange-dim)', color: 'var(--accent-orange)' }}>離職</span>
+                    )}
+                  </td>
                   <td style={{ color: 'var(--text-secondary)' }}>{r.store_name || '—'}</td>
                   <td style={{ textAlign: 'center' }}>
                     {r.diff_count > 0 ? (

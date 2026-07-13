@@ -196,6 +196,8 @@ export default function LeaveBalances() {
       if (type === 'paternity' && gender === '女') continue
 
       const dbBal  = balByType[type]
+      // 可休期間已過(expires_at < 今天)→ 不顯示(補休除外,走 comp_time_ledger)
+      if (type !== '補休' && dbBal?.expires_at && dbBal.expires_at < _todayStr) continue
       const dbTotal = Number(dbBal?.total_days || 0)
       let computedDays = 0
 
@@ -292,6 +294,7 @@ export default function LeaveBalances() {
     const standardSet = new Set(ANNUAL_TYPES)
     for (const [lt, b] of Object.entries(balByType)) {
       if (standardSet.has(lt)) continue
+      if (b.expires_at && b.expires_at < _todayStr) continue  // 期間已過 → 不顯示(如謀職假5/31已過)
       const notStarted = b.period_start && b.period_start > _todayStr
       const total = notStarted ? 0 : daysToHours(Number(b.total_days || 0) + Number(b.carry_over_days || 0))
       const used  = daysToHours(Number(b.used_days || 0))

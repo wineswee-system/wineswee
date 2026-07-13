@@ -507,20 +507,20 @@ export async function notifyTaskStarted(assigneeName, taskTitle, instanceName, t
 }
 
 /**
- * 通知某人：他被安排到某專案（彙總卡，一人一則）。
+ * 通知某人：他被安排到某專案（彙總卡，一人一則，列出所有任務名稱）。
  * @param {string} assigneeName
- * @param {object} project - { id, name, dept, store }
- * @param {number} taskCount - 他在此專案的任務數
+ * @param {object} project - { id, name, store }
+ * @param {string[]} taskTitles - 他在此專案的任務名稱陣列
  */
-export async function notifyProjectMember(assigneeName, project, taskCount) {
+export async function notifyProjectMember(assigneeName, project, taskTitles) {
   if (!assigneeName || !project) return { ok: false, reason: 'no_input' }
   const account = await resolveLineAccount(assigneeName)
   if (!account.lineUserId) return { ok: false, reason: 'no_line_user_id' }
-  const liffUrl = getLiffTaskUrl(null, account.liffId) // LIFF 我的任務
-  const sub = [project.dept, project.store].filter(Boolean).join(' · ')
+  const titles = Array.isArray(taskTitles) ? taskTitles.filter(Boolean) : []
+  const sub = project.store || ''
   const messages = [{
     type: 'flex',
-    altText: `📁 你被安排到專案：${project.name}`,
+    altText: `📁 你被安排到專案：${project.name}（${titles.length} 項任務）`,
     contents: {
       type: 'bubble', size: 'kilo',
       header: {
@@ -532,17 +532,10 @@ export async function notifyProjectMember(assigneeName, project, taskCount) {
         contents: [
           { type: 'text', text: project.name, weight: 'bold', size: 'sm', wrap: true, color: '#111827' },
           ...(sub ? [{ type: 'text', text: sub, size: 'xs', color: '#6B7280', wrap: true }] : []),
-          { type: 'box', layout: 'baseline', margin: 'md', contents: [
-            { type: 'text', text: '👤 你被安排', size: 'xs', color: '#6B7280', flex: 0 },
-            { type: 'text', text: `${taskCount} 項任務`, size: 'sm', weight: 'bold', color: LC.brand, margin: 'sm' },
-          ] },
-          { type: 'text', text: '請前往查看並開始處理', size: 'xs', color: '#6B7280', margin: 'sm', wrap: true },
+          { type: 'separator', margin: 'md' },
+          { type: 'text', text: `你被安排 ${titles.length} 項任務：`, size: 'xs', color: '#6B7280', margin: 'md' },
+          ...titles.map(t => ({ type: 'text', text: `• ${t}`, size: 'sm', wrap: true, color: '#111827', margin: 'sm' })),
         ],
-      },
-      footer: {
-        type: 'box', layout: 'vertical', paddingAll: '12px',
-        contents: [{ type: 'button', style: 'primary', color: LC.brand, height: 'sm',
-          action: { type: 'uri', label: '前往查看', uri: liffUrl } }],
       },
     },
   }]
@@ -562,9 +555,9 @@ export async function notifyProjectMembers(project, { force = false } = {}) {
     p_project_id: project.id, p_force: force,
   })
   if (error || !Array.isArray(data)) return { notified: 0, error }
-  // 站內通知已由 RPC 寫入；逐人發 LINE 彙總卡
+  // 站內通知已由 RPC 寫入；逐人發 LINE 彙總卡（列出所有任務名稱）
   for (const row of data) {
-    await notifyProjectMember(row.employee_name, project, row.task_count).catch(() => {})
+    await notifyProjectMember(row.employee_name, project, row.task_titles).catch(() => {})
   }
   return { notified: data.length }
 }

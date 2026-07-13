@@ -3,8 +3,9 @@ import { Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import StaffDashboard from './dashboard/components/StaffDashboard'
 import ApprovalCenter from './dashboard/components/ApprovalCenter'
+import SettleTodoView from './dashboard/components/SettleTodoView'
 import { usePendingApprovals } from '../lib/usePendingApprovals'
-import { LayoutDashboard, FileCheck } from 'lucide-react'
+import { LayoutDashboard, FileCheck, Send } from 'lucide-react'
 import {
   Users, CheckCircle, AlertTriangle, TrendingUp, Target,
   ArrowUpRight, ArrowDownRight, Clock, Briefcase, CalendarCheck,
@@ -603,12 +604,17 @@ function DashboardTabs({ overview }) {
   // 預設：有待簽 → 直接顯示我的待簽；沒有 → 總覽
   // 載入完才做決定，避免閃爍
   const [tab, setTab] = useState('overview')
+  const [settleCount, setSettleCount] = useState(0)
   useEffect(() => {
     if (!pendingLoading && totalPending > 0 && tab === 'overview') {
       setTab('approvals')
     }
     // 只在首次載入完成時自動切，後續使用者切走不再自動切回
   }, [pendingLoading]) // eslint-disable-line react-hooks/exhaustive-deps
+  // 待送驗收數（badge 用）— 進站先撈一次
+  useEffect(() => {
+    supabase.rpc('web_list_my_settle_todos').then(({ data }) => setSettleCount(Array.isArray(data) ? data.length : 0))
+  }, [])
 
   return (
     <div>
@@ -630,6 +636,12 @@ function DashboardTabs({ overview }) {
           label="我的待簽"
           badge={totalPending}
         />
+        <DashboardTabButton
+          active={tab === 'settle'} onClick={() => setTab('settle')}
+          icon={<Send size={16} />}
+          label="待送驗收"
+          badge={settleCount}
+        />
         {/* 打卡快速入口 — 跳到 /portal 用完整 GPS / 模式 picker */}
         <button
           onClick={() => navigate('/portal')}
@@ -650,6 +662,7 @@ function DashboardTabs({ overview }) {
       <div style={{ padding: tab === 'approvals' ? 24 : '20px 0 0 0' }}>
         {tab === 'overview' && overview}
         {tab === 'approvals' && <ApprovalCenter />}
+        {tab === 'settle' && <SettleTodoView onCount={setSettleCount} />}
       </div>
     </div>
   )

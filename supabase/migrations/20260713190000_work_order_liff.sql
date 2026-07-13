@@ -166,7 +166,14 @@ BEGIN
         AND (w.requester_id = emp.id OR w.assignee_id = emp.id
              OR (v_dept IS NOT NULL AND w.target_department_id = v_dept)
              OR (v_dept IS NOT NULL AND w.requester_department_id = v_dept))
-    ));
+    ),
+    -- 開單表單下拉用
+    'departments', (SELECT COALESCE(json_agg(json_build_object('id', d.id, 'name', d.name) ORDER BY d.name), '[]'::json)
+                      FROM public.departments d WHERE d.organization_id = emp.organization_id),
+    'stores',      (SELECT COALESCE(json_agg(json_build_object('id', s.id, 'name', s.name) ORDER BY s.name), '[]'::json)
+                      FROM public.stores s WHERE s.organization_id = emp.organization_id),
+    'employees',   (SELECT COALESCE(json_agg(json_build_object('id', e.id, 'name', e.name, 'department_id', e.department_id) ORDER BY e.name), '[]'::json)
+                      FROM public.employees e WHERE e.organization_id = emp.organization_id AND e.status = '在職'));
 END $$;
 
 CREATE OR REPLACE FUNCTION public.liff_get_work_order(p_line_user_id text, p_id int)

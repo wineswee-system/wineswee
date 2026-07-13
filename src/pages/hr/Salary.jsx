@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Download, Plus, Calculator, Pencil, Landmark, Package, Send } from 'lucide-react'
+import { Download, Plus, Calculator, Pencil, Landmark, Package, Send, Megaphone } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { calculateLaborInsurance, calculateHealthInsurance, calculateLaborPension, calculateMonthlyWithholding, calculateNetSalary, calculateInServiceDays } from '../../lib/payroll'
@@ -122,6 +122,7 @@ export default function Salary() {
   const [stores, setStores] = useState([])
   const [loading, setLoading] = useState(true)
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7))
+  const [publishing, setPublishing] = useState(false)
   const [expanded, setExpanded] = useState(null)
   const [showModal, setShowModal] = useState(false)
   const [editingRecord, setEditingRecord] = useState(null)
@@ -246,6 +247,10 @@ export default function Salary() {
     (deptFilter === '' || (empNameMap[r.employee]?.dept || '') === deptFilter) &&
     (storeFilter === '' || (empNameMap[r.employee]?.store || '') === storeFilter)
   ), [records, month, deptFilter, storeFilter, empNameMap])
+
+  // 當月是否「已發布給員工」：該月所有 salary_records 都 finalized 才算（草稿/半套 → 未發布）
+  const monthRows = useMemo(() => records.filter(r => r.month === month), [records, month])
+  const monthPublished = monthRows.length > 0 && monthRows.every(r => r.status === 'finalized')
 
   // Stats — derived from filtered; recomputed only when filtered changes
   const { totalGross, totalDeductionsSum, totalNet, employeeCount } = useMemo(() => ({
@@ -448,6 +453,27 @@ export default function Salary() {
   const handleBatchSave        = () => handleBatchSaveCore('finalized')
   const handleBatchSaveAsDraft = () => handleBatchSaveCore('draft')
 
+  // ── 發布 / 取消發布本月薪資給員工（控制員工 LINE 薪資卡可見性；不動資料本身）──
+  const handlePublishMonth = async () => {
+    const rpc  = monthPublished ? 'unpublish_salary_month' : 'publish_salary_month'
+    const verb = monthPublished ? '取消發布' : '發布'
+    if (!monthRows.length) { toast.warning(`${month} 尚無薪資紀錄，請先計薪`); return }
+    if (!(await confirm({
+      message: monthPublished
+        ? `取消發布 ${month}？員工的 LINE 薪資卡將立即看不到此月（資料保留）。`
+        : `發布 ${month} 給員工？員工的 LINE 薪資卡會看到此月的薪資。`
+    }))) return
+    setPublishing(true)
+    const { data, error } = await supabase.rpc(rpc, { p_month: month, p_org: profile?.organization_id ?? null })
+    setPublishing(false)
+    if (error) { toast.error(`${verb}失敗：${error.message}`); return }
+    if (!data?.ok) { toast.error(`${verb}失敗：${data?.error === 'NOT_AUTHORIZED' ? '權限不足' : data?.error}`); return }
+    // 樂觀更新：把當月 records 狀態同步（免整頁重載）
+    const newStatus = monthPublished ? 'draft' : 'finalized'
+    setRecords(prev => prev.map(r => r.month === month ? { ...r, status: newStatus } : r))
+    toast.success(`已${verb} ${month}（${data.published ?? data.unpublished ?? 0} 筆）`)
+  }
+
   // ── 發送薪資條 LINE（依當月 salary_records 的人，逐人用引擎重算）──
   const handleSendPayslips = async () => {
     const targets = filtered.length
@@ -559,6 +585,13 @@ export default function Salary() {
               {canBank && (
                 <button className="btn btn-secondary" onClick={handleExportTransfer}>
                   <Download size={14} /> 匯出代發薪檔
+                </button>
+              )}
+              {canSendPayslip && (
+                <button className="btn btn-secondary" onClick={handlePublishMonth} disabled={publishing}
+                  style={monthPublished ? { color: 'var(--accent-green)', borderColor: 'var(--accent-green)' } : { color: 'var(--accent-cyan)' }}
+                  title={monthPublished ? '員工已可在 LINE 薪資卡看到本月，點此取消發布' : '發布後員工才能在 LINE 薪資卡看到本月（草稿不外洩）'}>
+                  <Megaphone size={14} /> {publishing ? '處理中…' : monthPublished ? `${month} 已發布 · 取消` : '發布給員工'}
                 </button>
               )}
               {canSendPayslip && (

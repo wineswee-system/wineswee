@@ -248,9 +248,9 @@ export default function Salary() {
     (storeFilter === '' || (empNameMap[r.employee]?.store || '') === storeFilter)
   ), [records, month, deptFilter, storeFilter, empNameMap])
 
-  // 當月是否「已發布給員工」：該月所有 salary_records 都 finalized 才算（草稿/半套 → 未發布）
+  // 當月是否「已發布給員工」：該月所有 salary_records 都有 published_at（獨立於結算 status）
   const monthRows = useMemo(() => records.filter(r => r.month === month), [records, month])
-  const monthPublished = monthRows.length > 0 && monthRows.every(r => r.status === 'finalized')
+  const monthPublished = monthRows.length > 0 && monthRows.every(r => r.published_at)
 
   // Stats — derived from filtered; recomputed only when filtered changes
   const { totalGross, totalDeductionsSum, totalNet, employeeCount } = useMemo(() => ({
@@ -468,9 +468,9 @@ export default function Salary() {
     setPublishing(false)
     if (error) { toast.error(`${verb}失敗：${error.message}`); return }
     if (!data?.ok) { toast.error(`${verb}失敗：${data?.error === 'NOT_AUTHORIZED' ? '權限不足' : data?.error}`); return }
-    // 樂觀更新：把當月 records 狀態同步（免整頁重載）
-    const newStatus = monthPublished ? 'draft' : 'finalized'
-    setRecords(prev => prev.map(r => r.month === month ? { ...r, status: newStatus } : r))
+    // 樂觀更新：把當月 records 的 published_at 同步（免整頁重載）
+    const newPub = monthPublished ? null : new Date().toISOString()
+    setRecords(prev => prev.map(r => r.month === month ? { ...r, published_at: newPub } : r))
     toast.success(`已${verb} ${month}（${data.published ?? data.unpublished ?? 0} 筆）`)
   }
 

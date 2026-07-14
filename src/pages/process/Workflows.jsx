@@ -1184,7 +1184,7 @@ export default function Workflows() {
 
   // ── Archive / Delete instance ──
   const handleArchiveInstance = async (inst) => {
-    if (!(await confirm({ message: `確定封存「${inst.template_name}」？封存後會從進行中清單移除，可從「封存流程」分頁查看。` }))) return
+    if (!(await confirm({ message: `確定封存「${inst.template_name}」？封存後會從進行中清單移除，可從「已完成流程」分頁查看。` }))) return
     const archivedAt = new Date().toISOString()
     const { data, error } = await supabase.from('workflow_instances')
       .update({
@@ -1401,7 +1401,7 @@ export default function Workflows() {
           { key: 'notstarted', label: `⏳ 未開始 (${notStartedInstances.length})` },
           { key: 'templates', label: `📁 流程範本 (${templates.length})` },
           { key: 'ai', label: '🤖 AI 助手' },
-          { key: 'archived', label: `📦 封存流程 (${archivedInstances.length})` },
+          { key: 'archived', label: `✅ 已完成流程 (${archivedInstances.length})` },
         ].map(t => (
           <button key={t.key} onClick={() => setTab(t.key)} style={{
             padding: '8px 20px', fontSize: 13, fontWeight: 600, cursor: 'pointer',

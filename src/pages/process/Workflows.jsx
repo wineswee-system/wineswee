@@ -168,14 +168,27 @@ export default function Workflows() {
     }
   }, [instances, searchParams]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 從工單「轉流程」跳來(?link_work_order=N) → 直接開新增流程選單(one-shot),不用自己找
+  // 從工單「轉流程」跳來(?link_work_order=N) → 直接開新增流程選單(one-shot)+ 存工單 id(存 state 避免導航洗掉)
   const woLinkMenuRef = useRef(false)
+  const [linkWoId, setLinkWoId] = useState(null)
   useEffect(() => {
-    if (searchParams.get('link_work_order') && !woLinkMenuRef.current) {
+    const w = searchParams.get('link_work_order')
+    if (w && !woLinkMenuRef.current) {
       woLinkMenuRef.current = true
+      setLinkWoId(w)
       setShowNewWorkflowMenu(true)
     }
   }, [searchParams]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 建好流程實例後回填綁定工單(範本部署 + 空白流程 兩條路徑共用)
+  const linkWorkOrderToInstance = async (instanceId) => {
+    if (!linkWoId) return
+    const { data: lk } = await supabase.rpc('link_work_order_workflow', { p_id: Number(linkWoId), p_workflow_instance_id: instanceId })
+    if (lk?.ok) toast.success(`已綁定工單 #${linkWoId}，流程全部完成後工單自動結案`)
+    else toast.error('工單綁定失敗：' + (lk?.error || '未知'))
+    setLinkWoId(null)
+    setSearchParams(sp => { const x = new URLSearchParams(sp); x.delete('link_work_order'); return x }, { replace: true })
+  }
 
   // ── Helpers ──
   const getInstanceTasks = (instId) => tasks.filter(t => t.workflow_instance_id === instId).sort((a, b) => (a.step_order || 0) - (b.step_order || 0))
@@ -919,6 +932,7 @@ export default function Workflows() {
       setBlankWorkflowForm({ name: '', store: '', assignee: '', due_date: '', planned_start_date: '', planned_end_date: '', priority: '中', notes: '', completion_chain_id: '' })
       setShowBlankWorkflowModal(false)
       setSelectedInstance(data)
+      await linkWorkOrderToInstance(data.id)  // 從工單轉流程跳來 → 綁定
     }
   }
 
@@ -1160,13 +1174,7 @@ export default function Workflows() {
           instance,  // 給「查看流程」按鈕跳轉用
         })
         // 若從跨部門工單「轉流程」跳來 → 部署完成後回填綁定,工單完成改由此流程完成後自動觸發
-        const linkWoId = searchParams.get('link_work_order')
-        if (linkWoId) {
-          const { data: linkRes } = await supabase.rpc('link_work_order_workflow', { p_id: Number(linkWoId), p_workflow_instance_id: instance.id })
-          if (linkRes?.ok) toast.success(`已綁定工單 #${linkWoId}，流程全部完成後工單自動結案`)
-          else toast.error('工單綁定失敗：' + (linkRes?.error || '未知'))
-          setSearchParams(sp => { const x = new URLSearchParams(sp); x.delete('link_work_order'); return x }, { replace: true })
-        }
+        await linkWorkOrderToInstance(instance.id)
       }
     } catch (err) {
       toast.error('部署失敗：' + (err.message || '未知錯誤'))

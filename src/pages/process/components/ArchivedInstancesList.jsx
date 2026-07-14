@@ -8,7 +8,7 @@ export default function ArchivedInstancesList({ instances, getStats, onSelect, o
       {instances.map(inst => {
         const stats = getStats(inst.id)
         return (
-          <div key={inst.id} className="card" style={{ marginBottom: 12, cursor: 'pointer', opacity: 0.7 }} onClick={() => onSelect(inst)}>
+          <div key={inst.id} className="card" style={{ marginBottom: 10, cursor: 'pointer', opacity: 0.8, padding: '14px 18px', borderRadius: 10 }} onClick={() => onSelect(inst)}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 15, fontWeight: 700, wordBreak: 'break-word' }}>{inst.template_name}</div>

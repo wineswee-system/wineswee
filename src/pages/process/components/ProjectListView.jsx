@@ -155,7 +155,6 @@ export default function ProjectListView({
           { key: 'active',     label: `進行中專案 (${activeCount})`,    color: 'var(--accent-cyan)' },
           { key: 'templates',  label: `專案模板 (${templates.length})`, color: 'var(--accent-purple)' },
           { key: 'completed',  label: `已完成 (${completedCount})`,     color: 'var(--accent-green)' },
-          { key: 'archived',   label: `封存 (${archivedCount})`,        color: 'var(--accent-red)' },
         ].map(t => (
           <button key={t.key} onClick={() => setTab(t.key)} style={{
             padding: '8px 20px', borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: 'pointer',

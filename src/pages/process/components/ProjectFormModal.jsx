@@ -7,7 +7,7 @@ import BlankWorkflowModal from './BlankWorkflowModal'
 
 const emptyWf = () => ({ name: '', store: '', assignee: '', planned_start_date: '', planned_end_date: '', priority: '中', due_date: '', completion_chain_id: '', notes: '' })
 
-const STATUS_KEYS = ['規劃中', '進行中', '已完成', '暫停', '已取消']
+const STATUS_KEYS = ['規劃中', '進行中', '已完成']
 const PRIORITY_COLORS = { '高': 'var(--accent-red)', '中': 'var(--accent-yellow)', '低': 'var(--accent-green)' }
 
 export default function ProjectFormModal({

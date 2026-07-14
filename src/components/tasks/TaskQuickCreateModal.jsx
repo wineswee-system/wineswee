@@ -18,7 +18,7 @@ import BoundFormsField from './BoundFormsField'
  */
 export default function TaskQuickCreateModal({
   open, title = '新增任務', employees = [], stores = [],
-  defaultStore = '', approvalChains = [], onClose, onSubmit,
+  defaultStore = '', approvalChains = [], departments = [], onClose, onSubmit,
 }) {
   const [form, setForm] = useState(initialForm(defaultStore))
   const [saving, setSaving] = useState(false)
@@ -187,6 +187,18 @@ export default function TaskQuickCreateModal({
         employees={employees}
         defaultAssigneeId={employees.find(e => e.name === form.assignee)?.id || null}
       />
+
+      {/* 指派其他部門處理（開跨部門工單） */}
+      <div style={{ marginTop: 14, padding: 12, borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-secondary)' }}>
+        <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>🏢 指派其他部門處理（選填）</div>
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
+          選了目標部門 → 這個任務會自動開一張<b>跨部門工單</b>給對方。對方受理處理完成後，此任務<b>自動關閉</b>（在那之前不能手動改完成）。
+        </div>
+        <select className="form-input" style={{ width: '100%' }} value={form.target_department_id} onChange={e => set('target_department_id', e.target.value)}>
+          <option value="">不指派其他部門（一般任務）</option>
+          {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+        </select>
+      </div>
     </Modal>
   )
 }
@@ -196,6 +208,7 @@ function initialForm(defaultStore) {
     title: '', description: '', assignee: '', store: defaultStore || '',
     priority: '中', planned_start: '', due_date: '', role: '',
     required_forms: [],
+    target_department_id: '',   // 指派其他部門 → 建跨部門工單
     // 簽核設定（對齊獨立任務頁）
     approval_mode: 'none', confirmation_approvers: [], confirmation_mode: 'parallel', approval_chain_id: '',
   }

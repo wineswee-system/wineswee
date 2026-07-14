@@ -1053,6 +1053,7 @@ export default function ProjectDetailPanel({
         employees={employees}
         stores={stores}
         approvalChains={approvalChains}
+        departments={departments}
         onClose={() => setAddingTaskWfId(null)}
         onSubmit={(formData) => handleAddTaskToWorkflow(addingTaskWfId, formData)}
       />
@@ -1064,6 +1065,7 @@ export default function ProjectDetailPanel({
         employees={employees}
         stores={stores}
         approvalChains={approvalChains}
+        departments={departments}
         onClose={() => setAddingDirectTask(false)}
         onSubmit={(formData) => handleAddDirectTask(formData)}
       />

@@ -603,6 +603,10 @@ export default function Projects() {
       })
       if (q) setSelfFillQueue(q)
     }
+    // 指派其他部門 → 這個任務自動開一張跨部門工單（對方完成後任務自動關）
+    if (fd.target_department_id) {
+      await handleTaskToWorkOrder(data.id, { target_department_id: fd.target_department_id, expected_due_date: fd.due_date || null, priority: null })
+    }
     setTasks(prev => [...prev, data])
     if (!formData) {
       // inline path: 清空 state
@@ -662,6 +666,10 @@ export default function Projects() {
         onDraftError: (f, e) => toast.error(`「${f.label}」表單送出失敗：` + (e.message || '未知錯誤')),
       })
       if (q) setSelfFillQueue(q)
+    }
+    // 指派其他部門 → 這個任務自動開一張跨部門工單（對方完成後任務自動關）
+    if (fd.target_department_id) {
+      await handleTaskToWorkOrder(data.id, { target_department_id: fd.target_department_id, expected_due_date: fd.due_date || null, priority: null })
     }
     setTasks(prev => [...prev, data])
     return true

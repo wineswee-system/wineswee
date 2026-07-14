@@ -24,6 +24,7 @@ export function bindingFillPath(b, bindings = []) {
     : b.form_type === 'expense'         ? `/process/expenses?new=1&binding_id=${b.id}`
     : b.form_type === 'store_audit'     ? `/process/store-audits?new=1&binding_id=${b.id}`
     : (b.form_type === 'goods_transfer' || b.form_type === 'goods_transfer_apply') ? `/process/transfer-requests?new=1&binding_id=${b.id}`
+    : b.form_type === 'work_order'      ? `/process/work-orders?new=1&binding_id=${b.id}`
     : `/process/forms/custom/${b.form_template_id}?binding_id=${b.id}`
 }
 
@@ -44,6 +45,8 @@ export function bindingViewPath(b) {
     return `/process/order-requests?focus=${b.form_id}`
   if (b.form_type === 'form_submission')
     return `/process/form-submissions?focus=${b.form_id}`
+  if (b.form_type === 'work_order')
+    return `/process/work-orders?focus=${b.form_id}`
   return null
 }
 

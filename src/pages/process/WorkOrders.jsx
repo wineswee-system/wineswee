@@ -9,6 +9,7 @@ import Modal, { Field } from '../../components/Modal'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
+import { postBindingFillDone } from '../../lib/embeddedBinding'
 
 const PRIORITY = {
   high:   { label: '高', color: 'var(--accent-red)',    dim: 'var(--accent-red-dim)' },
@@ -69,6 +70,13 @@ export default function WorkOrders() {
     if (row) { setDetail(row); setSearchParams(sp => { const x = new URLSearchParams(sp); x.delete('focus'); return x }, { replace: true }) }
   }, [orders, searchParams]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ?new=1&binding_id=N（任務綁定「跨部門工單」填寫）→ 自動開開單 modal
+  useEffect(() => {
+    if (searchParams.get('new') === '1' && searchParams.get('binding_id') && !loading) {
+      setForm(emptyForm); setShowCreate(true)
+    }
+  }, [searchParams, loading]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const myId = me?.id
   const myDept = me?.department_id
 
@@ -85,8 +93,27 @@ export default function WorkOrders() {
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
+  const bindingId = searchParams.get('binding_id')
+
   const submitCreate = async () => {
     if (!form.target_department_id) { toast.warning('請選目標部門'); return false }
+    // ── 綁定模式:從任務綁定「跨部門工單」填寫過來 → 開工單並連回綁定(主旨/說明取任務) ──
+    if (bindingId) {
+      const { data, error } = await supabase.rpc('create_work_order_for_binding', {
+        p_binding_id: Number(bindingId),
+        p_target_department_id: Number(form.target_department_id),
+        p_priority: form.priority,
+        p_expected_due_date: form.expected_due_date || null,
+      })
+      if (error) { toast.error('開工單失敗：' + error.message); return false }
+      if (!data?.ok) { toast.error('開工單失敗：' + (data?.error === 'ALREADY_FILLED' ? '此綁定已開過工單' : data?.error || '未知')); return false }
+      toast.success('已開工單並綁定任務')
+      setShowCreate(false); setForm(emptyForm)
+      postBindingFillDone(Number(bindingId))  // 任務 iframe inline:通知父視窗完成
+      setSearchParams(sp => { const x = new URLSearchParams(sp); x.delete('new'); x.delete('binding_id'); return x }, { replace: true })
+      load()
+      return
+    }
     if (!form.title.trim()) { toast.warning('請填主旨'); return false }
     if (!form.expected_due_date) { toast.warning('請選期望完成日'); return false }
     const { data, error } = await supabase.rpc('create_work_order', {
@@ -193,7 +220,12 @@ export default function WorkOrders() {
       </div>
 
       {showCreate && (
-        <Modal title="新增跨部門工單" onClose={() => setShowCreate(false)} onSubmit={submitCreate} successMessage="工單已送出，等待目標部門受理">
+        <Modal title={bindingId ? '為任務開跨部門工單' : '新增跨部門工單'} onClose={() => setShowCreate(false)} onSubmit={submitCreate} successMessage="工單已送出，等待目標部門受理">
+          {bindingId && (
+            <div style={{ marginBottom: 12, padding: '8px 12px', borderRadius: 8, background: 'var(--accent-blue-dim)', color: 'var(--accent-blue)', fontSize: 12 }}>
+              🔗 這是<b>任務綁定</b>的工單 —— 主旨/說明沿用任務內容，只要選目標部門即可。對方完成後，任務的這項綁定自動完成。
+            </div>
+          )}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Field label="目標部門" required>
               <select className="form-input" style={{ width: '100%' }} value={form.target_department_id} onChange={e => set('target_department_id', e.target.value)}>
@@ -210,12 +242,16 @@ export default function WorkOrders() {
               />
             </Field>
           </div>
-          <Field label="主旨" required>
-            <input className="form-input" style={{ width: '100%' }} placeholder="例：中秋檔期門市海報設計" value={form.title} onChange={e => set('title', e.target.value)} />
-          </Field>
-          <Field label="詳細說明">
-            <textarea className="form-input" style={{ width: '100%', minHeight: 80, resize: 'vertical' }} placeholder="具體需求、規格、數量、用途…" value={form.description} onChange={e => set('description', e.target.value)} />
-          </Field>
+          {!bindingId && (
+            <>
+              <Field label="主旨" required>
+                <input className="form-input" style={{ width: '100%' }} placeholder="例：中秋檔期門市海報設計" value={form.title} onChange={e => set('title', e.target.value)} />
+              </Field>
+              <Field label="詳細說明">
+                <textarea className="form-input" style={{ width: '100%', minHeight: 80, resize: 'vertical' }} placeholder="具體需求、規格、數量、用途…" value={form.description} onChange={e => set('description', e.target.value)} />
+              </Field>
+            </>
+          )}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
             <Field label="優先級" required>
               <select className="form-input" style={{ width: '100%' }} value={form.priority} onChange={e => set('priority', e.target.value)}>

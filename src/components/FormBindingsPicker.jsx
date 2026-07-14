@@ -52,6 +52,7 @@ export default function FormBindingsPicker({ value = [], onChange, readonly = fa
           { form_type: 'goods_transfer',  form_template_id: null, icon: '📦', label: '商品調撥（整單）', group: '非費用' },
           { form_type: 'goods_transfer_apply',   form_template_id: null, icon: '📝', label: '調撥-申請步驟', group: '非費用' },
           { form_type: 'goods_transfer_receipt', form_template_id: null, icon: '✅', label: '調撥-入庫驗收步驟', group: '非費用' },
+          { form_type: 'work_order',      form_template_id: null, icon: '🏢', label: '跨部門工單', group: '非費用' },
           ...customForms,
         ])
       })

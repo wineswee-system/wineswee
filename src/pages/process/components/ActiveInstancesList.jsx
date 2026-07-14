@@ -50,15 +50,6 @@ export default function ActiveInstancesList({ instances, getStats, onSelect, onA
                   <span style={{ fontSize: 15, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {inst.template_name}
                   </span>
-                  {isComplete && (
-                    <span style={{
-                      fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4,
-                      background: 'var(--accent-green-dim)', color: 'var(--accent-green)',
-                      display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0,
-                    }}>
-                      <CheckCircle2 size={10} /> 可封存
-                    </span>
-                  )}
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 22, marginBottom: hasMeta ? 6 : 0 }}>
                   {inst.store ? `${inst.store} · ` : ''}{inst.started_at?.slice(0, 10)}
@@ -135,14 +126,6 @@ export default function ActiveInstancesList({ instances, getStats, onSelect, onA
                       boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
                     }}
                   >
-                    <button
-                      onClick={() => { setMenuOpenId(null); onArchive?.(inst) }}
-                      style={menuItemStyle('var(--text-primary)')}
-                      onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-secondary)'}
-                      onMouseLeave={e => e.currentTarget.style.background = 'none'}
-                    >
-                      <Archive size={14} /> 封存
-                    </button>
                     <button
                       onClick={() => { setMenuOpenId(null); onDelete?.(inst) }}
                       style={menuItemStyle('var(--accent-red)')}

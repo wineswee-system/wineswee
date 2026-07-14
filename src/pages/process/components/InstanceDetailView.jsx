@@ -258,14 +258,6 @@ export default function InstanceDetailView({
           {menuOpen && (
             <div style={{ position: 'absolute', top: 'calc(100% + 4px)', right: 0, background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 8, padding: 4, minWidth: 130, zIndex: 200, boxShadow: '0 8px 24px rgba(0,0,0,0.35)' }}>
               <button
-                onClick={() => { setMenuOpen(false); onArchive?.(inst) }}
-                style={{ width: '100%', padding: '8px 12px', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-primary)', borderRadius: 6, textAlign: 'left' }}
-                onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-secondary)'}
-                onMouseLeave={e => e.currentTarget.style.background = 'none'}
-              >
-                <Archive size={14} /> 封存
-              </button>
-              <button
                 onClick={() => { setMenuOpen(false); onDelete?.(inst) }}
                 style={{ width: '100%', padding: '8px 12px', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--accent-red)', borderRadius: 6, textAlign: 'left' }}
                 onMouseEnter={e => e.currentTarget.style.background = 'var(--accent-red-dim)'}

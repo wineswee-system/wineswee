@@ -6,6 +6,15 @@
 -- ① 工單回連綁定
 ALTER TABLE public.work_orders ADD COLUMN IF NOT EXISTS linked_binding_id int REFERENCES public.task_form_bindings(id) ON DELETE SET NULL;
 
+-- ①b 放寬 task_form_bindings 表級 CHECK 讓 work_order 型別可存(否則函式放行、表仍擋)
+ALTER TABLE public.task_form_bindings DROP CONSTRAINT IF EXISTS task_form_bindings_form_type_check;
+ALTER TABLE public.task_form_bindings ADD CONSTRAINT task_form_bindings_form_type_check
+  CHECK (form_type IN (
+    'expense_request', 'expense', 'form_submission', 'store_audit', 'goods_transfer',
+    'expense_apply', 'expense_settle', 'goods_transfer_apply', 'goods_transfer_receipt',
+    'order_request', 'order_apply', 'order_settle', 'work_order'
+  ));
+
 -- ② create_task_form_binding 允許 work_order 型別（其餘逐字保留原行為）
 CREATE OR REPLACE FUNCTION public.create_task_form_binding(p_task_id integer, p_form_type text, p_form_template_id integer DEFAULT NULL::integer, p_fill_mode text DEFAULT 'self'::text, p_assignee_id integer DEFAULT NULL::integer)
  RETURNS json LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'

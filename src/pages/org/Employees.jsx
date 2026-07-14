@@ -13,6 +13,8 @@ import { empLabel } from '../../lib/empLabel'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 
 import EmployeeFormModal from './components/EmployeeFormModal'
+import PositionManagerModal from './components/PositionManagerModal'
+import { loadPositions, DEFAULT_POSITIONS } from '../../lib/positions'
 import ResignRehireModal from './components/ResignRehireModal'
 import OffboardingModal from '../../components/OffboardingModal'
 import ProxyManagementModal from '../../components/ProxyManagementModal'
@@ -32,44 +34,8 @@ const EMPLOYMENT_TYPES = [
 ]
 
 // 標準化職稱（manager = 有審核權限）
-const POSITIONS = [
-  { label: '總經理', level: 'admin' },
-  { label: '副總經理', level: 'admin' },
-  { label: '總監', level: 'manager' },
-  { label: '經理', level: 'manager' },
-  { label: '副理', level: 'manager' },
-  { label: '主管', level: 'manager' },
-  { label: '店長', level: 'manager' },
-  { label: '副店長', level: 'manager' },
-  { label: '組長', level: 'manager' },
-  { label: '資深工程師', level: 'office_staff' },
-  { label: '工程師', level: 'office_staff' },
-  { label: '專員', level: 'office_staff' },
-  { label: '行政助理', level: 'office_staff' },
-  { label: '會計', level: 'office_staff' },
-  { label: '儲備幹部', level: 'store_staff' },
-  { label: '業務代表', level: 'store_staff' },
-  { label: '門市人員', level: 'store_staff' },
-  { label: '收銀員', level: 'store_staff' },
-  { label: '倉管人員', level: 'store_staff' },
-  { label: '助理', level: 'store_staff' },
-  { label: '實習生', level: 'store_staff' },
-]
-
-const PosSelect = ({ value, onChange }) => (
-  <select className="form-input" style={{ width: '100%' }} value={value} onChange={onChange}>
-    <option value="">— 不選 —</option>
-    <optgroup label="管理職">
-      {POSITIONS.filter(p => ['admin', 'manager'].includes(p.level)).map(p => <option key={p.label} value={p.label}>{p.label}</option>)}
-    </optgroup>
-    <optgroup label="行政職">
-      {POSITIONS.filter(p => p.level === 'office_staff').map(p => <option key={p.label} value={p.label}>{p.label}</option>)}
-    </optgroup>
-    <optgroup label="門市職">
-      {POSITIONS.filter(p => p.level === 'store_staff').map(p => <option key={p.label} value={p.label}>{p.label}</option>)}
-    </optgroup>
-  </select>
-)
+// 職位清單改由 positions 表載入（見 src/lib/positions.js）；下拉在 EmployeeFormModal / HrTabContent。
+// 這裡只需 level→role 對應(handleSubmit)，用載入的 positions state。
 
 export default function Employees() {
   const { profile, hasPermission } = useAuth()
@@ -78,6 +44,8 @@ export default function Employees() {
   const canEditStructure = hasPermission('org.structure.edit') // 部門 / 組織編輯
   const [offboardingFor, setOffboardingFor] = useState(null)  // { employee, date, reason }
   const [showProxyMgmt, setShowProxyMgmt] = useState(false)
+  const [showPosMgr, setShowPosMgr] = useState(false)
+  const [positions, setPositions] = useState(DEFAULT_POSITIONS)   // 職位清單(DB,含 level→role)
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
   const [locations, setLocations] = useState([])
@@ -175,6 +143,8 @@ export default function Employees() {
   const deptName = (id) => departments.find(d => d.id === id)?.name || ''
   const storeName = (id) => locations.find(l => l.id === id)?.name || ''
 
+  useEffect(() => { loadPositions().then(setPositions) }, [])
+
   useEffect(() => {
     Promise.all([
       getEmployeesList(),
@@ -206,7 +176,7 @@ export default function Employees() {
     if (!form.name || !form.email) return
     try {
       const avatar = AVATARS[Math.floor(Math.random() * AVATARS.length)]
-      const posInfo = POSITIONS.find(p => p.label === form.position)
+      const posInfo = positions.find(p => p.label === form.position)
       // 角色：UI 手動指定優先；沒指定則 fallback 用 position 推
       const role = form.role || posInfo?.level || 'store_staff'
       const ROLE_ID_MAP = { super_admin: 1, admin: 2, manager: 3, office_staff: 4, store_staff: 5 }
@@ -448,6 +418,7 @@ export default function Employees() {
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="btn btn-secondary" onClick={() => setShowProxyMgmt(true)}><ArrowRightLeft size={14} /> 代理管理</button>
+            {canEditEmp && <button className="btn btn-secondary" onClick={() => setShowPosMgr(true)}><Plus size={14} /> 職位管理</button>}
             {canEditEmp && <button className="btn btn-secondary" onClick={() => setShowCsvImport(true)}><Upload size={14} /> 匯入指派 CSV</button>}
             {canEditEmp && <button className="btn btn-primary" onClick={() => setShowModal(true)}><Plus size={14} /> 新增員工（到職）</button>}
           </div>
@@ -845,6 +816,12 @@ export default function Employees() {
           onClose={() => setShowProxyMgmt(false)}
         />
       )}
+
+      <PositionManagerModal
+        open={showPosMgr}
+        onClose={() => setShowPosMgr(false)}
+        onSaved={() => loadPositions().then(setPositions)}
+      />
 
       {/* 離職交接 Modal（填完日期原因後出現）*/}
       {offboardingFor && (

@@ -1,6 +1,8 @@
+import { useState, useEffect } from 'react'
 import Modal, { Field } from '../../../components/Modal'
 import SearchableSelect, { empOptions } from '../../../components/SearchableSelect'
 import { useAuth } from '../../../contexts/AuthContext'
+import { loadPositions, groupPositions, DEFAULT_POSITIONS } from '../../../lib/positions'
 
 const EMPLOYMENT_TYPES = [
   { value: '正職', label: '正職' },
@@ -10,43 +12,15 @@ const EMPLOYMENT_TYPES = [
   { value: '派遣', label: '派遣' },
 ]
 
-const POSITIONS = [
-  { label: '總經理', level: 'admin' },
-  { label: '副總經理', level: 'admin' },
-  { label: '總監', level: 'manager' },
-  { label: '經理', level: 'manager' },
-  { label: '企劃經理', level: 'manager' },
-  { label: '副理', level: 'manager' },
-  { label: '主管', level: 'manager' },
-  { label: '店長', level: 'manager' },
-  { label: '副店長', level: 'manager' },
-  { label: '組長', level: 'manager' },
-  { label: '資深工程師', level: 'office_staff' },
-  { label: '工程師', level: 'office_staff' },
-  { label: '專員', level: 'office_staff' },
-  { label: '行政助理', level: 'office_staff' },
-  { label: '會計', level: 'office_staff' },
-  { label: '儲備幹部', level: 'store_staff' },
-  { label: '業務代表', level: 'store_staff' },
-  { label: '門市人員', level: 'store_staff' },
-  { label: '收銀員', level: 'store_staff' },
-  { label: '倉管人員', level: 'store_staff' },
-  { label: '助理', level: 'store_staff' },
-  { label: '實習生', level: 'store_staff' },
-]
-
-const PosSelect = ({ value, onChange }) => (
+// 職位清單改由 positions 表載入(src/lib/positions.js);依 category 分組。
+const PosSelect = ({ value, onChange, positions }) => (
   <select className="form-input" style={{ width: '100%' }} value={value} onChange={onChange}>
     <option value="">— 不選 —</option>
-    <optgroup label="管理職">
-      {POSITIONS.filter(p => ['admin', 'manager'].includes(p.level)).map(p => <option key={p.label} value={p.label}>{p.label}</option>)}
-    </optgroup>
-    <optgroup label="行政職">
-      {POSITIONS.filter(p => p.level === 'office_staff').map(p => <option key={p.label} value={p.label}>{p.label}</option>)}
-    </optgroup>
-    <optgroup label="門市職">
-      {POSITIONS.filter(p => p.level === 'store_staff').map(p => <option key={p.label} value={p.label}>{p.label}</option>)}
-    </optgroup>
+    {groupPositions(positions).map(g => (
+      <optgroup key={g.group} label={g.group}>
+        {g.opts.map(p => <option key={p.label} value={p.label}>{p.label}</option>)}
+      </optgroup>
+    ))}
   </select>
 )
 
@@ -70,6 +44,8 @@ export default function EmployeeFormModal({
   onSubmit,
 }) {
   const { isSuperAdmin } = useAuth()  // 只有 super_admin 能指派 super_admin（升權防護）
+  const [positions, setPositions] = useState(DEFAULT_POSITIONS)
+  useEffect(() => { loadPositions().then(setPositions) }, [])
   if (!open) return null
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
@@ -138,24 +114,20 @@ export default function EmployeeFormModal({
             })
           }}>
             <option value="">請選擇</option>
-            <optgroup label="管理職">
-              {POSITIONS.filter(p => ['admin', 'manager'].includes(p.level)).map(p => <option key={p.label} value={p.label}>{p.label}</option>)}
-            </optgroup>
-            <optgroup label="行政職">
-              {POSITIONS.filter(p => p.level === 'office_staff').map(p => <option key={p.label} value={p.label}>{p.label}</option>)}
-            </optgroup>
-            <optgroup label="門市職">
-              {POSITIONS.filter(p => p.level === 'store_staff').map(p => <option key={p.label} value={p.label}>{p.label}</option>)}
-            </optgroup>
+            {groupPositions(positions).map(g => (
+              <optgroup key={g.group} label={g.group}>
+                {g.opts.map(p => <option key={p.label} value={p.label}>{p.label}</option>)}
+              </optgroup>
+            ))}
           </select>
         </Field>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
         <Field label="副職稱">
-          <PosSelect value={form.position_secondary} onChange={e => set('position_secondary', e.target.value)} />
+          <PosSelect value={form.position_secondary} onChange={e => set('position_secondary', e.target.value)} positions={positions} />
         </Field>
         <Field label="第三職稱">
-          <PosSelect value={form.position_third} onChange={e => set('position_third', e.target.value)} />
+          <PosSelect value={form.position_third} onChange={e => set('position_third', e.target.value)} positions={positions} />
         </Field>
       </div>
       <Field label="門市 / 分店">

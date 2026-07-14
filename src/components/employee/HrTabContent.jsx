@@ -3,16 +3,14 @@ import { Upload, Eye, Plus, X, Trash2 } from 'lucide-react'
 import { getPTAnnualLeaveHours, getAnnualLeaveEntitlement } from '../../lib/leavePolicy'
 import SearchableSelect, { empOptions } from '../SearchableSelect'
 import { useAuth } from '../../contexts/AuthContext'
+import { loadPositions, groupPositions, DEFAULT_POSITIONS } from '../../lib/positions'
 
 const maskBank = (v) => v ? '****' + v.slice(-4) : ''
 
-const POSITION_OPTS = [
-  { group: '管理職', opts: ['總經理', '副總經理', '執行長', '總監', '經理', '企劃經理', '副理', '主管', '副主管', '店長', '副店長', '資深店長', '督導', '組長', '主任'] },
-  { group: '行政職', opts: ['資深工程師', '工程師', '專員', '行政助理', '會計', '儲備幹部', '業務代表'] },
-  { group: '門市職', opts: ['門市人員', '門市正職人員', '門市兼職人員', '正職人員', '兼職人員', '收銀員', '倉管人員', '助理', '實習生'] },
-]
-
+// 職位清單改由 positions 表載入(後台「職位管理」可自編);見 src/lib/positions.js。
 function PositionCombo({ value, onChange, placeholder }) {
+  const [positions, setPositions] = useState(DEFAULT_POSITIONS)
+  useEffect(() => { loadPositions().then(setPositions) }, [])
   return (
     <select
       className="form-input"
@@ -21,9 +19,9 @@ function PositionCombo({ value, onChange, placeholder }) {
       onChange={e => onChange(e.target.value)}
     >
       <option value="">{placeholder || '— 不選 —'}</option>
-      {POSITION_OPTS.map(g => (
+      {groupPositions(positions).map(g => (
         <optgroup key={g.group} label={g.group}>
-          {g.opts.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+          {g.opts.map(p => <option key={p.label} value={p.label}>{p.label}</option>)}
         </optgroup>
       ))}
     </select>

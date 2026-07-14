@@ -43,10 +43,10 @@ export function validateShiftChange({
     return s?.shift || null
   }
 
-  // H2: 單日排班上限 11h（10 工作 + 1 休息）
+  // H2: 單日排班上限 12h（11 工作 + 1 休息，四週變形）
   const hours = getShiftHours(shiftDef)
   if (hours > DAILY_MAX_SPAN_HOURS) {
-    errors.push(`單日工時 ${hours.toFixed(1)}h 超過上限 ${DAILY_MAX_SPAN_HOURS}h（10 工作 + 1 休息）`)
+    errors.push(`單日工時 ${hours.toFixed(1)}h 超過上限 ${DAILY_MAX_SPAN_HOURS}h（11 工作 + 1 休息）`)
   }
 
   // H3: Consecutive work days ≤ 6

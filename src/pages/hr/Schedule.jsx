@@ -5,7 +5,7 @@ import { supabase } from '../../lib/supabase'
 import { validateSchedule } from '../../lib/laborLaw'
 import { gatherSchedulingData, runAiSchedule, runMonthlyAiSchedule, fixViolations } from '../../lib/schedulingAi'
 import { runProgrammaticSchedule, runMonthlyProgrammaticSchedule } from '../../lib/schedulingAlgo'
-import { parseTime, getMonthDates, getWeekDates, isAbsence, formatYearMonth, parseYearMonth, getDayLabel, listCyclesInRange, getCycleFor, validateLeisureQuota, validateMonthlyOvertime, validateNightShiftProtection, validateHolidayWork } from '../../lib/scheduleUtils'
+import { parseTime, getMonthDates, getWeekDates, isAbsence, formatYearMonth, parseYearMonth, getDayLabel, listCyclesInRange, getCycleFor, validateLeisureQuota, validateMonthlyOvertime, validateNightShiftProtection } from '../../lib/scheduleUtils'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import MonthScheduleTable from './components/MonthScheduleTable'
@@ -370,14 +370,15 @@ export default function Schedule() {
         startDate: activeStart,
         endDate: activeEnd,
         shiftDefs,
+        employees,   // 兼職跳過例假/休息檢查
       })
       const otResult = validateMonthlyOvertime({ schedules, shiftDefs })
       const nightResult = validateNightShiftProtection({ schedules, employees, shiftDefs })
-      const holidayResult = validateHolidayWork({ schedules, holidaySet: new Set(holidays) })
+      // 國定假可自選,不再提醒（拿掉 validateHolidayWork）
       setCompliance({
-        errors: [...baseResult.errors, ...quotaResult.errors, ...otResult.errors, ...nightResult.errors, ...holidayResult.errors],
-        warnings: [...baseResult.warnings, ...quotaResult.warnings, ...otResult.warnings, ...nightResult.warnings, ...holidayResult.warnings],
-        isValid: baseResult.errors.length + quotaResult.errors.length + otResult.errors.length + nightResult.errors.length + holidayResult.errors.length === 0,
+        errors: [...baseResult.errors, ...quotaResult.errors, ...otResult.errors, ...nightResult.errors],
+        warnings: [...baseResult.warnings, ...quotaResult.warnings, ...otResult.warnings, ...nightResult.warnings],
+        isValid: baseResult.errors.length + quotaResult.errors.length + otResult.errors.length + nightResult.errors.length === 0,
       })
     }, 250)
     return () => clearTimeout(timer)

@@ -69,6 +69,7 @@ export default function ScheduleBuilderGrid({
       startDate: dates[0],
       endDate: dates[dates.length - 1],
       shiftDefs,
+      employees,   // 兼職跳過例假/休息檢查
     })
     const ot = validateMonthlyOvertime({ schedules, shiftDefs })
     const night = validateNightShiftProtection({ schedules, employees, shiftDefs })

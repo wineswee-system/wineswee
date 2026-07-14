@@ -244,8 +244,8 @@ export function validateSchedule(schedules, weekDates, shiftDefs = []) {
   const warnings = []
   const errors = []
 
-  // 單日排班上限（gross span，actual_start→actual_end）：最多 11h = 10 工作 + 1 休息
-  const DAILY_MAX_SPAN_HOURS = 11
+  // 單日排班上限（gross span，actual_start→actual_end）：最多 12h = 11 工作 + 1 休息（四週變形）
+  const DAILY_MAX_SPAN_HOURS = 12
 
   // 'HH:MM[:SS]' → 小數小時（如 '12:30' → 12.5）；無法解析回 null
   const _hm = (t) => {
@@ -306,7 +306,7 @@ export function validateSchedule(schedules, weekDates, shiftDefs = []) {
           employee: emp,
           constraint: 'H2',
           law: '單日工時上限',
-          message: `${emp} ${s.date} 班次「${s.shift}」單日 ${hours.toFixed(1)}h 超過上限 ${DAILY_MAX_SPAN_HOURS}h（10 工作 + 1 休息）`,
+          message: `${emp} ${s.date} 班次「${s.shift}」單日 ${hours.toFixed(1)}h 超過上限 ${DAILY_MAX_SPAN_HOURS}h（11 工作 + 1 休息）`,
           severity: 'error',
         })
       }

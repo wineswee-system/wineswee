@@ -453,8 +453,8 @@ export const WEEKLY_STANDARD_HOURS = 40
 /** Daily max hours (勞基法 §30 + §32) */
 export const DAILY_MAX_HOURS = 12
 
-/** 單日排班上限（公司規定）：最多 11h = 10 工作 + 1 休息。比 §32 的 12h 更嚴，全系統用這個。 */
-export const DAILY_MAX_SPAN_HOURS = 11
+/** 單日排班上限（公司規定，四週變形）：最多 12h = 11 工作 + 1 休息。全系統用這個。 */
+export const DAILY_MAX_SPAN_HOURS = 12
 
 /** Daily max NORMAL hours for flexible work systems (勞基法 §30-3) */
 export const DAILY_MAX_NORMAL_HOURS_FLEX = 10
@@ -647,11 +647,18 @@ export function listCyclesInRange(rangeStart, rangeEnd, system, anchorDate) {
 // @param anchorDate - 變形工時 cycle 起算日 'YYYY-MM-DD'（標準工時可省）
 // @param startDate, endDate - 檢查範圍 'YYYY-MM-DD'
 // @returns { errors: [{ employee, constraint, law, message, severity }], warnings: [] }
-export function validateLeisureQuota({ schedules, workHourSystem, anchorDate, startDate, endDate, shiftDefs = [] }) {
+export function validateLeisureQuota({ schedules, workHourSystem, anchorDate, startDate, endDate, shiftDefs = [], employees = [] }) {
   const errors = []
   const warnings = []
   if (!schedules || schedules.length === 0) return { errors, warnings }
   if (!startDate || !endDate) return { errors, warnings }
+
+  // 兼職不檢查例假/休息（PT 不需排例假、休息）→ 名單先建好,迴圈內跳過
+  const ptNames = new Set(
+    (employees || [])
+      .filter(e => e.employment_type === '兼職' || e.employment_type === 'PT' || e.employment_category === 'parttime')
+      .map(e => e.name)
+  )
 
   const isWeeklyOff = s => s === '例假'
   const isRestDay = s => s === '休息' || s === '休' // legacy 休 算休息
@@ -684,6 +691,7 @@ export function validateLeisureQuota({ schedules, workHourSystem, anchorDate, st
   })
 
   for (const [empName, scheds] of Object.entries(byEmp)) {
+    if (ptNames.has(empName)) continue   // 兼職不排例假/休息 → 跳過整段配額檢查
     const checkRange = (rangeStart, rangeEnd, label, minWeeklyOff, minRestDays) => {
       const inRange = scheds.filter(s => s.date >= rangeStart && s.date <= rangeEnd)
       const woCount = inRange.filter(s => isWeeklyOff(s.shift)).length

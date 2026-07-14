@@ -1,6 +1,6 @@
--- 工單綁流程也要自動完成 — 2026-07-14
+-- 工單綁流程也要自動完成 + 綁定完成直接結案 — 2026-07-14
 -- 問題:系統沒有「流程全任務完成→流程已完成」機制,所以 trg_wo_workflow_autocomplete(監 workflow_instances.status)
---   永遠不觸發。改成:tasks 完成觸發器同時處理專案 + 流程 —— 流程全任務完成→流程設已完成+工單完成。
+--   永遠不觸發。改成:tasks 完成觸發器同時處理專案 + 流程 —— 全任務完成→專案/流程設已完成 + 工單「直接已結案」(全自動,不用申請人再確認,與任務綁定那條一致)。
 -- 重寫 _trg_wo_project_autocomplete(原只做專案),加流程分支。trg_wo_workflow_autocomplete 保留(其他途徑設已完成時仍有效)。
 
 CREATE OR REPLACE FUNCTION public._trg_wo_project_autocomplete()
@@ -21,7 +21,7 @@ BEGIN
         FROM public.tasks WHERE project_id = NEW.project_id AND archived_at IS NULL;
       IF v_total > 0 AND v_done = v_total THEN
         UPDATE public.projects SET status = '已完成', progress = 100, updated_at = now() WHERE id = NEW.project_id;
-        UPDATE public.work_orders SET status = '已完成', completed_at = now(), updated_at = now() WHERE id = v_wo_id;
+        UPDATE public.work_orders SET status = '已結案', completed_at = now(), confirmed_at = now(), updated_at = now() WHERE id = v_wo_id;
       END IF;
     END IF;
   END IF;
@@ -36,7 +36,7 @@ BEGIN
         FROM public.tasks WHERE workflow_instance_id = NEW.workflow_instance_id AND archived_at IS NULL;
       IF v_total > 0 AND v_done = v_total THEN
         UPDATE public.workflow_instances SET status = '已完成', completed_at = now() WHERE id = NEW.workflow_instance_id;
-        UPDATE public.work_orders SET status = '已完成', completed_at = now(), updated_at = now() WHERE id = v_wo_id;
+        UPDATE public.work_orders SET status = '已結案', completed_at = now(), confirmed_at = now(), updated_at = now() WHERE id = v_wo_id;
       END IF;
     END IF;
   END IF;

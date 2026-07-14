@@ -39,6 +39,9 @@ const REQTYPE_TO_TABLE = {
   store_audit: 'store_audits', form_submission: 'form_submissions',
 }
 
+// "10:57:00" → "10:57"（給加班當天班表/打卡顯示用）
+const hhmm = (t) => (t ? String(t).slice(0, 5) : '')
+
 /**
  * @param {Object} props
  * @param {boolean} props.open
@@ -89,6 +92,16 @@ export default function ApprovalDetailModal({
       if (error) { console.warn('get_approval_timeline failed:', error); return }
       setTimeline(Array.isArray(data) ? data : [])
     })
+    return () => { cancelled = true }
+  }, [open, requestType, requestId])
+
+  // 加班單：自動帶入加班當天的班表 + 打卡（審核時對照,判斷加班合不合理）
+  const [otDay, setOtDay] = useState(null)
+  useEffect(() => {
+    if (!open || requestType !== 'overtime' || !requestId) { setOtDay(null); return }
+    let cancelled = false
+    supabase.rpc('get_overtime_day_context', { p_overtime_id: Number(requestId) })
+      .then(({ data }) => { if (!cancelled) setOtDay(data || null) })
     return () => { cancelled = true }
   }, [open, requestType, requestId])
 
@@ -263,6 +276,40 @@ export default function ApprovalDetailModal({
                 </div>
               </div>
             ))}
+
+            {/* 加班當天出勤（審核參考）— 自動帶入班表 + 打卡 */}
+            {requestType === 'overtime' && otDay && (
+              <div style={{ marginBottom: 18, padding: 12, borderRadius: 10, background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  📋 加班當天出勤（審核參考）
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>當天班表</div>
+                    <div style={{ fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.6 }}>
+                      {(otDay.schedule || []).length === 0
+                        ? <span style={{ color: 'var(--text-muted)' }}>無排班</span>
+                        : otDay.schedule.map((s, i) => (
+                            <div key={i}>{s.absence_type ? s.absence_type : `${s.shift || ''} ${hhmm(s.actual_start)}–${hhmm(s.actual_end)}`.trim()}</div>
+                          ))}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>當天打卡</div>
+                    <div style={{ fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.6 }}>
+                      {!otDay.attendance
+                        ? <span style={{ color: 'var(--text-muted)' }}>無打卡</span>
+                        : <>
+                            上班 {hhmm(otDay.attendance.clock_in) || '—'} / 下班 {hhmm(otDay.attendance.clock_out) || <span style={{ color: 'var(--accent-orange)' }}>尚未下班</span>}
+                            {otDay.attendance.total_hours ? <span style={{ color: 'var(--text-muted)' }}>（{otDay.attendance.total_hours}h）</span> : null}
+                            {otDay.attendance.is_late && otDay.attendance.late_minutes > 0
+                              ? <span style={{ color: 'var(--accent-red)' }}>・遲到 {otDay.attendance.late_minutes} 分</span> : null}
+                          </>}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Attachments */}
             <div style={{ marginBottom: 18 }}>

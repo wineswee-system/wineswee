@@ -15,6 +15,7 @@ const POSITIONS = [
   { label: '副總經理', level: 'admin' },
   { label: '總監', level: 'manager' },
   { label: '經理', level: 'manager' },
+  { label: '企劃經理', level: 'manager' },
   { label: '副理', level: 'manager' },
   { label: '主管', level: 'manager' },
   { label: '店長', level: 'manager' },

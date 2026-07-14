@@ -9,12 +9,12 @@ export default function ArchivedInstancesList({ instances, getStats, onSelect, o
         const stats = getStats(inst.id)
         return (
           <div key={inst.id} className="card" style={{ marginBottom: 12, cursor: 'pointer', opacity: 0.7 }} onClick={() => onSelect(inst)}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <div style={{ fontSize: 15, fontWeight: 700 }}>{inst.template_name}</div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{inst.store} · 完成：{inst.completed_at?.slice(0, 10)}</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 15, fontWeight: 700, wordBreak: 'break-word' }}>{inst.template_name}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{inst.store ? `${inst.store} · ` : ''}完成：{inst.completed_at?.slice(0, 10)}</div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
                 <span style={{ color: 'var(--accent-green)', fontWeight: 700, fontSize: 13 }}>✅ 已完成 ({stats.total} 步)</span>
                 {onDelete && (
                   <button

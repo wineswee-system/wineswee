@@ -693,7 +693,6 @@ BEGIN
         ) y
       ) q WHERE em > 0), '[]'::jsonb)
   );
-END $function$
-
+END $function$;
 
 NOTIFY pgrst, 'reload schema';

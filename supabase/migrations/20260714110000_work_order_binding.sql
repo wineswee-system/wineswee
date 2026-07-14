@@ -84,10 +84,12 @@ BEGIN
   RETURN json_build_object('ok', true, 'binding_id', v_id, 'reused', false);
 END $function$;
 
--- ③ 填綁定=開工單(核心 actor 版):填目標部門 → 建工單 + 回連綁定
-CREATE OR REPLACE FUNCTION public._wo_for_binding(p_binding_id int, p_actor int, p_target_department_id int, p_priority text, p_expected_due_date date, p_assignee_id int)
-RETURNS json LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
-DECLARE b public.task_form_bindings; v_task public.tasks; v_res json; v_wo_id int; v_prio text; v_due date;
+-- ③ 填綁定=開工單(核心 actor 版):填完整欄位 → 建工單 + 回連綁定(標題/說明選填,沿用任務當後備)
+CREATE OR REPLACE FUNCTION public._wo_for_binding(
+  p_binding_id int, p_actor int, p_target_department_id int,
+  p_title text, p_description text, p_priority text, p_expected_due_date date, p_store_id int, p_assignee_id int
+) RETURNS json LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE b public.task_form_bindings; v_task public.tasks; v_res json; v_wo_id int; v_prio text; v_due date; v_title text; v_desc text;
 BEGIN
   IF p_actor IS NULL THEN RETURN json_build_object('ok', false, 'error', 'NOT_AUTHENTICATED'); END IF;
   IF p_target_department_id IS NULL THEN RETURN json_build_object('ok', false, 'error', 'MISSING_FIELDS'); END IF;
@@ -95,10 +97,11 @@ BEGIN
   IF b.id IS NULL OR b.form_type <> 'work_order' THEN RETURN json_build_object('ok', false, 'error', 'NOT_FOUND'); END IF;
   IF b.form_id IS NOT NULL THEN RETURN json_build_object('ok', false, 'error', 'ALREADY_FILLED'); END IF;
   SELECT * INTO v_task FROM public.tasks WHERE id = b.task_id;
-  v_prio := COALESCE(NULLIF(p_priority,''), 'medium');
-  v_due  := COALESCE(p_expected_due_date, v_task.due_date::date);
-  v_res := public._wo_create(p_actor, p_target_department_id, COALESCE(NULLIF(v_task.title,''), '跨部門工單'),
-             COALESCE(NULLIF(v_task.description,''), v_task.notes, ''), v_prio, v_due, NULL, p_assignee_id, '[]'::jsonb);
+  v_prio  := COALESCE(NULLIF(p_priority,''), 'medium');
+  v_due   := COALESCE(p_expected_due_date, v_task.due_date::date);
+  v_title := COALESCE(NULLIF(btrim(p_title),''), NULLIF(v_task.title,''), '跨部門工單');
+  v_desc  := COALESCE(NULLIF(p_description,''), NULLIF(v_task.description,''), v_task.notes, '');
+  v_res := public._wo_create(p_actor, p_target_department_id, v_title, v_desc, v_prio, v_due, p_store_id, p_assignee_id, '[]'::jsonb);
   IF NOT COALESCE((v_res->>'ok')::boolean, false) THEN RETURN v_res; END IF;
   v_wo_id := (v_res->>'id')::int;
   UPDATE public.work_orders SET linked_binding_id = p_binding_id WHERE id = v_wo_id;
@@ -106,20 +109,20 @@ BEGIN
   RETURN json_build_object('ok', true, 'work_order_id', v_wo_id, 'binding_id', p_binding_id);
 END $$;
 
-CREATE OR REPLACE FUNCTION public.create_work_order_for_binding(p_binding_id int, p_target_department_id int, p_priority text DEFAULT NULL, p_expected_due_date date DEFAULT NULL, p_assignee_id int DEFAULT NULL)
+CREATE OR REPLACE FUNCTION public.create_work_order_for_binding(p_binding_id int, p_target_department_id int, p_title text DEFAULT NULL, p_description text DEFAULT NULL, p_priority text DEFAULT NULL, p_expected_due_date date DEFAULT NULL, p_store_id int DEFAULT NULL, p_assignee_id int DEFAULT NULL)
 RETURNS json LANGUAGE sql SECURITY DEFINER SET search_path = public AS $$
-  SELECT public._wo_for_binding(p_binding_id, public.current_employee_id(), p_target_department_id, p_priority, p_expected_due_date, p_assignee_id);
+  SELECT public._wo_for_binding(p_binding_id, public.current_employee_id(), p_target_department_id, p_title, p_description, p_priority, p_expected_due_date, p_store_id, p_assignee_id);
 $$;
-CREATE OR REPLACE FUNCTION public.liff_create_work_order_for_binding(p_line_user_id text, p_binding_id int, p_target_department_id int, p_priority text DEFAULT NULL, p_expected_due_date date DEFAULT NULL, p_assignee_id int DEFAULT NULL)
+CREATE OR REPLACE FUNCTION public.liff_create_work_order_for_binding(p_line_user_id text, p_binding_id int, p_target_department_id int, p_title text DEFAULT NULL, p_description text DEFAULT NULL, p_priority text DEFAULT NULL, p_expected_due_date date DEFAULT NULL, p_store_id int DEFAULT NULL, p_assignee_id int DEFAULT NULL)
 RETURNS json LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE emp public.employees;
 BEGIN
   SELECT * INTO emp FROM public._liff_resolve_employee(p_line_user_id);
   IF emp.id IS NULL THEN RETURN json_build_object('ok', false, 'error', 'EMPLOYEE_NOT_FOUND'); END IF;
-  RETURN public._wo_for_binding(p_binding_id, emp.id, p_target_department_id, p_priority, p_expected_due_date, p_assignee_id);
+  RETURN public._wo_for_binding(p_binding_id, emp.id, p_target_department_id, p_title, p_description, p_priority, p_expected_due_date, p_store_id, p_assignee_id);
 END $$;
-GRANT EXECUTE ON FUNCTION public.create_work_order_for_binding(int, int, text, date, int) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.liff_create_work_order_for_binding(text, int, int, text, date, int) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.create_work_order_for_binding(int, int, text, text, text, date, int, int) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.liff_create_work_order_for_binding(text, int, int, text, text, text, date, int, int) TO anon, authenticated;
 
 -- ④ 工單狀態 → 綁定狀態同步(比照 _sync_goods_transfer_bindings)
 CREATE OR REPLACE FUNCTION public._sync_work_order_bindings(rec public.work_orders)

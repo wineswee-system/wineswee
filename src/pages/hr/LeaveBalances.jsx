@@ -30,8 +30,9 @@ const ANNUAL_TYPES = [
   'family_care', 'occupational', 'prenatal', 'parental',
 ]
 
-const daysToHours = (d) => Math.round(Number(d || 0) * 8)
-const hoursToHours = (h) => Math.round(Number(h || 0))
+// 0.5h 級距(104 有半小時假;整數四捨五入會吃掉 0.5h)
+const daysToHours = (d) => Math.round(Number(d || 0) * 8 * 2) / 2
+const hoursToHours = (h) => Math.round(Number(h || 0) * 2) / 2
 const _todayStr = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` })()
 
 export default function LeaveBalances() {

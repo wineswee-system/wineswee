@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { X, Plus, Save, Trash2 } from 'lucide-react'
+import { X, Plus, Save, Trash2, GripVertical } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
 import { loadPositions, LEVEL_LABELS } from '../../../lib/positions'
 import LoadingSpinner from '../../../components/LoadingSpinner'
@@ -15,6 +15,7 @@ export default function PositionManagerModal({ open, onClose, onSaved }) {
   const [loading, setLoading] = useState(true)
   const [msg, setMsg] = useState(null)
   const [busy, setBusy] = useState(null)   // 正在存/刪的 key
+  const [dragKey, setDragKey] = useState(null)
 
   const reload = async () => {
     setLoading(true)
@@ -61,6 +62,23 @@ export default function PositionManagerModal({ open, onClose, onSaved }) {
     await reload(); onSaved?.()
   }
 
+  // 拖曳排序:把 dragKey 移到 targetKey 的位置 → 重編 sort_order → 存(reorder_positions)
+  const handleDrop = async (targetKey) => {
+    const from = rows.findIndex(r => r._key === dragKey)
+    const to = rows.findIndex(r => r._key === targetKey)
+    setDragKey(null)
+    if (from < 0 || to < 0 || from === to) return
+    const next = [...rows]
+    const [moved] = next.splice(from, 1)
+    next.splice(to, 0, moved)
+    const renum = next.map((r, i) => ({ ...r, sort_order: (i + 1) * 10 }))
+    setRows(renum)
+    const ids = renum.filter(r => r.id != null).map(r => r.id)
+    const { data, error } = await supabase.rpc('reorder_positions', { p_ids: ids })
+    if (error || !data?.ok) setMsg({ type: 'error', text: '排序儲存失敗' + (data?.error === 'NOT_AUTHORIZED' ? '：需管理員權限' : '') })
+    else { setMsg({ type: 'success', text: '順序已更新' }); onSaved?.() }
+  }
+
   const cell = { padding: '6px 8px', borderBottom: '1px solid var(--border-subtle)', verticalAlign: 'middle' }
   const inp = { width: '100%', padding: '5px 8px', fontSize: 13, background: 'var(--bg-input)', border: '1px solid var(--border-medium)', borderRadius: 6, color: 'var(--text-primary)' }
 
@@ -73,7 +91,7 @@ export default function PositionManagerModal({ open, onClose, onSaved }) {
           <div>
             <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>職位管理</div>
             <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
-              新增／改名／排序／停用職稱。<b>角色對應</b>決定新進員工未手動指定角色時的預設系統權限。
+              新增／改名／停用職稱，<b>拖曳左側握把</b>調整下拉出現順序（自動儲存）。<b>角色對應</b>決定新進員工未手動指定角色時的預設系統權限。
             </div>
           </div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', padding: 4 }}><X size={20} /></button>
@@ -95,17 +113,24 @@ export default function PositionManagerModal({ open, onClose, onSaved }) {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr style={{ color: 'var(--text-muted)', fontSize: 11, textAlign: 'left' }}>
+                  <th style={{ ...cell, width: 30 }}></th>
                   <th style={{ ...cell, width: 130 }}>分組</th>
                   <th style={{ ...cell }}>職稱</th>
                   <th style={{ ...cell, width: 200 }}>角色對應（權限）</th>
-                  <th style={{ ...cell, width: 70 }}>排序</th>
                   <th style={{ ...cell, width: 64 }}>啟用</th>
                   <th style={{ ...cell, width: 96 }}>操作</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map(r => (
-                  <tr key={r._key} style={{ opacity: r.is_active ? 1 : 0.5 }}>
+                  <tr key={r._key}
+                    onDragOver={e => e.preventDefault()}
+                    onDrop={() => handleDrop(r._key)}
+                    style={{ opacity: r.is_active ? 1 : 0.5, background: dragKey === r._key ? 'var(--bg-secondary)' : undefined }}>
+                    <td style={{ ...cell, width: 30, textAlign: 'center', cursor: 'grab' }}
+                      draggable onDragStart={() => setDragKey(r._key)} onDragEnd={() => setDragKey(null)} title="拖曳調整順序">
+                      <GripVertical size={15} style={{ color: 'var(--text-muted)' }} />
+                    </td>
                     <td style={cell}>
                       <input list="pos-cat-list" style={inp} value={r.category || ''} onChange={e => edit(r._key, 'category', e.target.value)} />
                     </td>
@@ -116,9 +141,6 @@ export default function PositionManagerModal({ open, onClose, onSaved }) {
                       <select style={inp} value={r.level} onChange={e => edit(r._key, 'level', e.target.value)}>
                         {LEVELS.map(l => <option key={l} value={l}>{LEVEL_LABELS[l]}</option>)}
                       </select>
-                    </td>
-                    <td style={cell}>
-                      <input type="number" style={{ ...inp, width: 60 }} value={r.sort_order ?? ''} onChange={e => edit(r._key, 'sort_order', e.target.value)} />
                     </td>
                     <td style={{ ...cell, textAlign: 'center' }}>
                       <input type="checkbox" checked={!!r.is_active} onChange={e => edit(r._key, 'is_active', e.target.checked)} style={{ width: 16, height: 16, cursor: 'pointer' }} />

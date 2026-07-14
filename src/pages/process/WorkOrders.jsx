@@ -319,13 +319,9 @@ function WorkOrderDetail({ order: o, me, isAdmin, employees, storeName, onClose,
     if (reason === null) return
     await call('reject_work_order', { p_id: o.id, p_reason: reason }, '已退回')
   }
-  const toProject = async () => {
-    if (!(await confirm({ message: '把這張工單轉成「專案」執行？轉了之後，工單完成改由專案內所有任務完成後自動關閉，不能再手動回報完成。' }))) return
-    const { data, error } = await supabase.rpc('convert_work_order_to_project', { p_id: o.id })
-    if (error) { toast.error(error.message); return }
-    if (!data?.ok) { toast.error(data?.error === 'ALREADY_LINKED' ? '已經綁過了' : data?.error || '轉換失敗'); return }
-    toast.success('已轉為專案，接著到專案加任務')
-    navigate(`/process/projects?focus=${data.project_id}`)
+  const toProject = () => {
+    // 對齊轉流程:導到新增專案畫面,真的建了才綁(建立畫面 onClose 取消 → 工單不變,可反悔)
+    navigate(`/process/projects?link_work_order=${o.id}`)
   }
   const toWorkflow = () => {
     // 導到工作流部署精靈,帶工單 id → 部署完成後回填綁定
@@ -393,9 +389,13 @@ function WorkOrderDetail({ order: o, me, isAdmin, employees, storeName, onClose,
           o.linked_type ? (
             <div style={{ padding: 12, borderRadius: 8, background: 'var(--accent-blue-dim)', fontSize: 12, color: 'var(--text-secondary)' }}>
               已轉<b>{o.linked_type === 'project' ? '專案' : '流程'}</b>執行 —— 工單完成由裡面任務全數完成後<b>自動關閉</b>，不需（也不能）手動回報。
-              <div style={{ marginTop: 8 }}>
+              <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
                 <button className="btn btn-secondary btn-sm" onClick={() => navigate(o.linked_type === 'project' ? `/process/projects?focus=${o.linked_project_id}` : '/process/workflows')}>
                   前往{o.linked_type === 'project' ? '專案' : '流程'}
+                </button>
+                <button className="btn btn-secondary btn-sm" style={{ color: 'var(--accent-red)' }}
+                  onClick={async () => { if (await confirm({ message: '解除轉換？工單會回到單純「處理中」，可重新選轉專案/流程或回報完成（已建的專案/流程不會刪）。' })) call('unlink_work_order_execution', { p_id: o.id }, '已解除轉換') }}>
+                  解除轉換
                 </button>
               </div>
             </div>

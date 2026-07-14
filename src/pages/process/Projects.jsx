@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { toast } from '../../lib/toast'
 import { supabase } from '../../lib/supabase'
@@ -170,6 +170,15 @@ export default function Projects() {
     load()
     return true
   }
+
+  // 從工單「轉專案」跳來(?link_work_order=N) → 開新增專案 modal(one-shot,取消不重開;建了才綁)
+  const woLinkOpenedRef = useRef(false)
+  useEffect(() => {
+    if (searchParams.get('link_work_order') && !woLinkOpenedRef.current) {
+      woLinkOpenedRef.current = true
+      setEditingId(null); setForm(emptyForm); setShowModal(true)
+    }
+  }, [searchParams]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const load = async () => {
     const orgId = profile?.organization_id
@@ -434,6 +443,14 @@ export default function Projects() {
           }
         }
         if (pendingWfAttach.length > 0 || pendingWfCreate.length > 0 || pendingTasks.length > 0) load()
+        // 從工單「轉專案」跳來 → 建完專案後綁定工單(工單完成改由專案任務全完成連動)
+        const linkWoId = searchParams.get('link_work_order')
+        if (linkWoId) {
+          const { data: lk } = await supabase.rpc('link_work_order_project', { p_id: Number(linkWoId), p_project_id: data.id })
+          if (lk?.ok) toast.success(`已綁定工單 #${linkWoId}，專案任務全完成後工單自動結案`)
+          else toast.error('工單綁定失敗：' + (lk?.error || '未知'))
+          setSearchParams(sp => { const x = new URLSearchParams(sp); x.delete('link_work_order'); return x }, { replace: true })
+        }
       }
     }
     setShowModal(false)

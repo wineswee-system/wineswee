@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { toast } from '../../lib/toast'
 import {
@@ -167,6 +167,15 @@ export default function Workflows() {
       setSearchParams(sp => { const x = new URLSearchParams(sp); x.delete('focus'); return x }, { replace: true })
     }
   }, [instances, searchParams]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 從工單「轉流程」跳來(?link_work_order=N) → 直接開新增流程選單(one-shot),不用自己找
+  const woLinkMenuRef = useRef(false)
+  useEffect(() => {
+    if (searchParams.get('link_work_order') && !woLinkMenuRef.current) {
+      woLinkMenuRef.current = true
+      setShowNewWorkflowMenu(true)
+    }
+  }, [searchParams]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Helpers ──
   const getInstanceTasks = (instId) => tasks.filter(t => t.workflow_instance_id === instId).sort((a, b) => (a.step_order || 0) - (b.step_order || 0))

@@ -9,6 +9,7 @@ import TaskContextMenu from '../../../components/ui/TaskContextMenu'
 import Modal, { Field } from '../../../components/Modal'
 import SearchableSelect, { empOptions } from '../../../components/SearchableSelect'
 import TaskDetailPanel from '../../../components/TaskDetailPanel'
+import TaskDiscussionModal from '../../../components/TaskDiscussionModal'
 import BoundFormsField from '../../../components/tasks/BoundFormsField'
 import WorkflowDagView from '../../../components/tasks/WorkflowDagView'
 
@@ -130,6 +131,7 @@ export default function InstanceDetailView({
   const [dragStepId, setDragStepId] = useState(null)
   const [dragOverStepId, setDragOverStepId] = useState(null)
   const [activeTab, setActiveTab] = useState('steps')  // 'steps' | 'dag' | 'board'
+  const [discussStep, setDiscussStep] = useState(null)  // 討論小視窗
   const [boardDragId, setBoardDragId] = useState(null)
   const [boardDragSrcStatus, setBoardDragSrcStatus] = useState(null)
   const [boardOverCol, setBoardOverCol] = useState(null)
@@ -644,7 +646,7 @@ export default function InstanceDetailView({
                     <td>
                       <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
                         <button className="btn btn-sm btn-secondary" style={{ padding: '4px 8px', fontSize: 11 }}
-                          onClick={e => { e.stopPropagation(); setNotesStep(step); setNotesText(step.notes || ''); setShowNotesModal(true) }}>📝 備註</button>
+                          onClick={e => { e.stopPropagation(); setDiscussStep(step) }}>💬 討論</button>
                         {step.confirmation_status === 'approved' ? (
                           <span style={{ fontSize: 11, color: 'var(--accent-green)', fontWeight: 600, whiteSpace: 'nowrap' }}>
                             ✅ {step.confirmed_by} {step.confirmed_at?.slice(0, 10)}
@@ -718,10 +720,8 @@ export default function InstanceDetailView({
       )}
 
       {/* Modals */}
-      {showNotesModal && notesStep && (
-        <Modal title={`📝 備註 — ${notesStep.title}`} onClose={() => setShowNotesModal(false)} onSubmit={onSaveNotes}>
-          <textarea className="form-input" style={{ width: '100%', minHeight: 120, resize: 'vertical' }} placeholder="輸入備註內容..." value={notesText} onChange={e => setNotesText(e.target.value)} />
-        </Modal>
+      {discussStep && (
+        <TaskDiscussionModal task={discussStep} onClose={() => setDiscussStep(null)} />
       )}
       {showAddTaskModal && (
         <Modal title="新增任務" onClose={() => { setAddTaskErrors({}); setShowAddTaskModal(false) }} onSubmit={handleAddTask}>

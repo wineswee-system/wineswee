@@ -1150,6 +1150,14 @@ export default function Workflows() {
           targetName: targetEmp?.name || null,
           instance,  // 給「查看流程」按鈕跳轉用
         })
+        // 若從跨部門工單「轉流程」跳來 → 部署完成後回填綁定,工單完成改由此流程完成後自動觸發
+        const linkWoId = searchParams.get('link_work_order')
+        if (linkWoId) {
+          const { data: linkRes } = await supabase.rpc('link_work_order_workflow', { p_id: Number(linkWoId), p_workflow_instance_id: instance.id })
+          if (linkRes?.ok) toast.success(`已綁定工單 #${linkWoId}，流程全部完成後工單自動結案`)
+          else toast.error('工單綁定失敗：' + (linkRes?.error || '未知'))
+          setSearchParams(sp => { const x = new URLSearchParams(sp); x.delete('link_work_order'); return x }, { replace: true })
+        }
       }
     } catch (err) {
       toast.error('部署失敗：' + (err.message || '未知錯誤'))
@@ -1312,6 +1320,11 @@ export default function Workflows() {
   // ════════════════════════════════════════════════════════════
   return (
     <div className="fade-in">
+      {searchParams.get('link_work_order') && (
+        <div style={{ margin: '0 0 14px', padding: '10px 14px', borderRadius: 10, background: 'var(--accent-purple-dim)', color: 'var(--accent-purple)', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+          🔗 正在為<b>工單 #{searchParams.get('link_work_order')}</b>建立流程 —— 選一個範本部署，完成後會自動綁定，流程全跑完工單就自動結案。
+        </div>
+      )}
       <div className="page-header">
         <div className="page-header-row">
           <div>

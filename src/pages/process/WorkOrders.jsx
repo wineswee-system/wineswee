@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import { Plus, Search, X as XIcon, Send, Inbox, List, Flag, Building2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -249,6 +249,7 @@ export default function WorkOrders() {
 
 // ── 明細 + 動作 ──
 function WorkOrderDetail({ order: o, me, isAdmin, employees, storeName, onClose, onChanged }) {
+  const navigate = useNavigate()
   const [accepting, setAccepting] = useState(false)
   const [acceptForm, setAcceptForm] = useState({ assignee_id: o.assignee_id ? String(o.assignee_id) : '', scheduled_due_date: o.scheduled_due_date || o.expected_due_date || '' })
 
@@ -282,6 +283,18 @@ function WorkOrderDetail({ order: o, me, isAdmin, employees, storeName, onClose,
     if (reason === null) return
     await call('reject_work_order', { p_id: o.id, p_reason: reason }, '已退回')
   }
+  const toProject = async () => {
+    if (!(await confirm({ message: '把這張工單轉成「專案」執行？轉了之後，工單完成改由專案內所有任務完成後自動關閉，不能再手動回報完成。' }))) return
+    const { data, error } = await supabase.rpc('convert_work_order_to_project', { p_id: o.id })
+    if (error) { toast.error(error.message); return }
+    if (!data?.ok) { toast.error(data?.error === 'ALREADY_LINKED' ? '已經綁過了' : data?.error || '轉換失敗'); return }
+    toast.success('已轉為專案，接著到專案加任務')
+    navigate(`/process/projects?focus=${data.project_id}`)
+  }
+  const toWorkflow = () => {
+    // 導到工作流部署精靈,帶工單 id → 部署完成後回填綁定
+    navigate(`/process/workflows?link_work_order=${o.id}`)
+  }
 
   const Row = ({ label, children }) => (
     <div style={{ display: 'flex', gap: 10, padding: '6px 0', borderBottom: '1px solid var(--border-subtle)' }}>
@@ -304,6 +317,7 @@ function WorkOrderDetail({ order: o, me, isAdmin, employees, storeName, onClose,
       <Row label="期望完成">{o.expected_due_date}</Row>
       <Row label="排定完成">{o.scheduled_due_date || <span style={{ color: 'var(--text-muted)' }}>—（受理時填）</span>}</Row>
       {o.store_id && <Row label="關聯門市">{storeName(o.store_id)}</Row>}
+      {o.linked_type && <Row label="執行方式">已轉{o.linked_type === 'project' ? '專案' : '流程'}{(o.linked_project_id || o.linked_workflow_instance_id) ? ` #${o.linked_project_id || o.linked_workflow_instance_id}` : ''}（完成由裡面任務決定）</Row>}
       <Row label="說明"><span style={{ whiteSpace: 'pre-wrap' }}>{o.description || '—'}</span></Row>
       {o.reject_reason && <Row label="退回原因"><span style={{ color: 'var(--accent-red)' }}>{o.reject_reason}</span></Row>}
 
@@ -338,12 +352,25 @@ function WorkOrderDetail({ order: o, me, isAdmin, employees, storeName, onClose,
           )
         )}
 
-        {/* 處理中：承辦/目標部門 回報完成 / 退回 */}
+        {/* 處理中：綁了專案/流程 → 顯示連結、完成自動;沒綁 → 回報完成 / 轉專案 / 轉流程 / 退回 */}
         {o.status === '處理中' && (isAssignee || isTargetDept || isAdmin) && (
-          <div style={{ display: 'flex', gap: 8 }}>
-            <AsyncButton className="btn btn-primary btn-sm" onClick={() => call('complete_work_order', { p_id: o.id }, '已回報完成')} busyLabel="處理中…">回報完成</AsyncButton>
-            <button className="btn btn-secondary btn-sm" style={{ color: 'var(--accent-red)' }} onClick={doReject}>退回</button>
-          </div>
+          o.linked_type ? (
+            <div style={{ padding: 12, borderRadius: 8, background: 'var(--accent-blue-dim)', fontSize: 12, color: 'var(--text-secondary)' }}>
+              已轉<b>{o.linked_type === 'project' ? '專案' : '流程'}</b>執行 —— 工單完成由裡面任務全數完成後<b>自動關閉</b>，不需（也不能）手動回報。
+              <div style={{ marginTop: 8 }}>
+                <button className="btn btn-secondary btn-sm" onClick={() => navigate(o.linked_type === 'project' ? `/process/projects?focus=${o.linked_project_id}` : '/process/workflows')}>
+                  前往{o.linked_type === 'project' ? '專案' : '流程'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <AsyncButton className="btn btn-primary btn-sm" onClick={() => call('complete_work_order', { p_id: o.id }, '已回報完成')} busyLabel="處理中…">回報完成</AsyncButton>
+              <button className="btn btn-secondary btn-sm" style={{ color: 'var(--accent-cyan)' }} onClick={toProject}>轉專案執行</button>
+              <button className="btn btn-secondary btn-sm" style={{ color: 'var(--accent-purple)' }} onClick={toWorkflow}>轉流程執行</button>
+              <button className="btn btn-secondary btn-sm" style={{ color: 'var(--accent-red)' }} onClick={doReject}>退回</button>
+            </div>
+          )
         )}
 
         {/* 已完成：申請人確認結案 */}

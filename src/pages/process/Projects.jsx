@@ -156,6 +156,21 @@ export default function Projects() {
     setExpenses(prev => prev.map(e => e.id === expenseId ? { ...e, project_id: projectId ?? null } : e))
   }, [])
 
+  // 把專案裡的任務「指派給其他部門」→ 建跨部門工單雙向綁定(工單完成→任務自動完成)
+  const handleTaskToWorkOrder = async (taskId, { target_department_id, expected_due_date, priority }) => {
+    const { data, error } = await supabase.rpc('create_work_order_for_task', {
+      p_task_id: taskId,
+      p_target_department_id: Number(target_department_id),
+      p_expected_due_date: expected_due_date || null,
+      p_priority: priority || null,
+    })
+    if (error) { toast.error('開工單失敗：' + error.message); return false }
+    if (!data?.ok) { toast.error('開工單失敗：' + (data?.error === 'ALREADY_LINKED' ? '此任務已開過工單' : data?.error === 'TASK_DONE' ? '任務已完成' : data?.error)); return false }
+    toast.success('已為此任務開跨部門工單，對方完成後任務自動關閉')
+    load()
+    return true
+  }
+
   const load = async () => {
     const orgId = profile?.organization_id
     if (!orgId) return // Auth not ready; re-triggered when profile resolves (see useEffect below)
@@ -990,6 +1005,7 @@ export default function Projects() {
         allExpenses={expenses}
         onLinkExpense={setExpenseProject}
         onUnlinkExpense={(id) => setExpenseProject(id, null)}
+        onTaskWorkOrder={handleTaskToWorkOrder}
       />
       {selfFillQueue && (
         <SelfFillQueue bindings={selfFillQueue.bindings} allBindings={selfFillQueue.all} onDone={() => setSelfFillQueue(null)} />

@@ -241,9 +241,13 @@ export default function ProjectDetailPanel({
   allExpenses = [],
   onLinkExpense,
   onUnlinkExpense,
+  onTaskWorkOrder,
 }) {
   const [detailTab, setDetailTab] = useState('overview')
   const [selectedTask, setSelectedTask] = useState(null)
+  const [woTask, setWoTask] = useState(null)   // 任務→開工單 modal
+  const [woForm, setWoForm] = useState({ target_department_id: '', expected_due_date: '', priority: 'medium' })
+  const [woBusy, setWoBusy] = useState(false)
   const [editWfOpen, setEditWfOpen] = useState(false)
   const [editWfForm, setEditWfForm] = useState({})
 
@@ -686,6 +690,15 @@ export default function ProjectDetailPanel({
                     }}>{t.title}</span>
                     <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap', minWidth: 60 }}>{t.assignee || '—'}</span>
                     <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap', minWidth: 60 }}>{t.due_date || '—'}</span>
+                    {t.work_order_id ? (
+                      <span title="已指派其他部門（跨部門工單），對方完成後自動關閉" style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 5, background: 'var(--accent-blue-dim)', color: 'var(--accent-blue)', whiteSpace: 'nowrap', flexShrink: 0 }}>🏢 工單</span>
+                    ) : (t.status !== '已完成' && onTaskWorkOrder && (
+                      <button onClick={(e) => { e.stopPropagation(); setWoForm({ target_department_id: '', expected_due_date: t.due_date || '', priority: t.priority === '高' ? 'high' : t.priority === '低' ? 'low' : 'medium' }); setWoTask(t) }}
+                        title="指派給其他部門（開跨部門工單，對方完成後任務自動關閉）"
+                        style={{ fontSize: 10, fontWeight: 600, padding: '3px 7px', borderRadius: 5, border: '1px solid var(--border-medium)', background: 'var(--bg-secondary)', color: 'var(--accent-cyan)', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                        🏢 派他部門
+                      </button>
+                    ))}
                     <select
                       value={t.status}
                       onClick={e => e.stopPropagation()}
@@ -753,6 +766,15 @@ export default function ProjectDetailPanel({
                     <span style={{ fontSize: 10, fontWeight: 600, color: PRIORITY_COLORS[t.priority], minWidth: 20 }}>{t.priority}</span>
                     <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap', minWidth: 60 }}>{t.assignee || '—'}</span>
                     <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap', minWidth: 60 }}>{t.due_date || '—'}</span>
+                    {t.work_order_id ? (
+                      <span title="已指派其他部門（跨部門工單），對方完成後自動關閉" style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 5, background: 'var(--accent-blue-dim)', color: 'var(--accent-blue)', whiteSpace: 'nowrap', flexShrink: 0 }}>🏢 工單</span>
+                    ) : (t.status !== '已完成' && onTaskWorkOrder && (
+                      <button onClick={(e) => { e.stopPropagation(); setWoForm({ target_department_id: '', expected_due_date: t.due_date || '', priority: t.priority === '高' ? 'high' : t.priority === '低' ? 'low' : 'medium' }); setWoTask(t) }}
+                        title="指派給其他部門（開跨部門工單，對方完成後任務自動關閉）"
+                        style={{ fontSize: 10, fontWeight: 600, padding: '3px 7px', borderRadius: 5, border: '1px solid var(--border-medium)', background: 'var(--bg-secondary)', color: 'var(--accent-cyan)', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                        🏢 派他部門
+                      </button>
+                    ))}
                     <select
                       value={t.status}
                       onClick={e => e.stopPropagation()}
@@ -1045,6 +1067,47 @@ export default function ProjectDetailPanel({
         onClose={() => setAddingDirectTask(false)}
         onSubmit={(formData) => handleAddDirectTask(formData)}
       />
+
+      {/* 任務 → 指派其他部門（開跨部門工單） */}
+      {woTask && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={() => setWoTask(null)}>
+          <div onClick={e => e.stopPropagation()} style={{ width: 'min(440px, 100%)', background: 'var(--bg-card)', borderRadius: 14, padding: 20, border: '1px solid var(--border-medium)' }}>
+            <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>🏢 指派給其他部門</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 14 }}>
+              為任務「{woTask.title}」開一張跨部門工單。對方部門完成後，這個任務會<b>自動關閉</b>（在那之前不能手動改完成）。
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 5 }}>目標部門 *</div>
+              <select className="form-input" style={{ width: '100%' }} value={woForm.target_department_id} onChange={e => setWoForm(f => ({ ...f, target_department_id: e.target.value }))}>
+                <option value="">請選擇…</option>
+                {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+              </select>
+            </div>
+            <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 5 }}>優先級</div>
+                <select className="form-input" style={{ width: '100%' }} value={woForm.priority} onChange={e => setWoForm(f => ({ ...f, priority: e.target.value }))}>
+                  <option value="high">高</option><option value="medium">中</option><option value="low">低</option>
+                </select>
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 5 }}>期望完成日</div>
+                <input type="date" className="form-input" style={{ width: '100%' }} value={woForm.expected_due_date} onChange={e => setWoForm(f => ({ ...f, expected_due_date: e.target.value }))} />
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="btn btn-secondary" onClick={() => setWoTask(null)}>取消</button>
+              <button className="btn btn-primary" disabled={woBusy} onClick={async () => {
+                if (!woForm.target_department_id) { return }
+                setWoBusy(true)
+                const ok = await onTaskWorkOrder(woTask.id, woForm)
+                setWoBusy(false)
+                if (ok) setWoTask(null)
+              }}>{woBusy ? '處理中…' : '開工單'}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

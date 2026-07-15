@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
+import { useNavigate } from 'react-router-dom'
 import { X, Pencil, Save, Trash2, Bell, Copy, Info, Activity as ActivityIcon } from 'lucide-react'
 import InputModal from './ui/InputModal'
 import SearchableSelect, { empOptions } from './SearchableSelect'
@@ -37,6 +38,7 @@ export default function TaskDetailPanel({
   mode = 'modal',
 }) {
   const { profile } = useAuth()
+  const navigate = useNavigate()
   const { logAction, logFieldChange } = useAuditLog()
   const [form, setForm] = useState({})
   const [editingTitle, setEditingTitle] = useState(false)
@@ -59,6 +61,24 @@ export default function TaskDetailPanel({
   const [newConfirmApprover, setNewConfirmApprover] = useState('')
   const [newConfirmPriority, setNewConfirmPriority] = useState('中')
   const [saving, setSaving] = useState(false)
+
+  // 跨部門工單狀態（此任務若已「派他部門」，讀工單資訊給檢視者看）
+  const [workOrder, setWorkOrder] = useState(null)
+  useEffect(() => {
+    let alive = true
+    if (!task?.work_order_id) { setWorkOrder(null); return }
+    ;(async () => {
+      const { data: wo } = await supabase.from('work_orders').select('*').eq('id', task.work_order_id).maybeSingle()
+      if (!alive || !wo) { if (alive) setWorkOrder(null); return }
+      let deptName = ''
+      if (wo.target_department_id) {
+        const { data: d } = await supabase.from('departments').select('name').eq('id', wo.target_department_id).maybeSingle()
+        deptName = d?.name || ''
+      }
+      if (alive) setWorkOrder({ ...wo, _deptName: deptName })
+    })()
+    return () => { alive = false }
+  }, [task?.work_order_id])
 
   // Relations tab data
   const [sopTemplates, setSopTemplates] = useState([])
@@ -424,6 +444,42 @@ export default function TaskDetailPanel({
           {/* ═══ Basic Tab ═══ */}
           {activeTab === 'basic' && (
             <>
+              {workOrder && (() => {
+                const st = workOrder.status || '處理中'
+                const stc = st === '已完成' || st === '已結案' ? { c: 'var(--accent-green)', b: 'var(--accent-green-dim)' }
+                  : st === '已取消' ? { c: 'var(--accent-red)', b: 'var(--accent-red-dim)' }
+                  : { c: 'var(--accent-orange)', b: 'var(--accent-orange-dim)' }
+                const assigneeName = workOrder.assignee_id ? (employees?.find(e => e.id === workOrder.assignee_id)?.name || `#${workOrder.assignee_id}`) : '（未指定，由該部門認領）'
+                const done = st === '已完成' || st === '已結案'
+                return (
+                  <div style={{ ...sectionStyle, border: '1px solid var(--accent-blue)', background: 'var(--accent-blue-dim)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                      <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--accent-blue)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        🏢 此任務已派他部門（跨部門工單 #{workOrder.id}）
+                      </div>
+                      <span style={{ fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 6, background: stc.b, color: stc.c }}>{st}</span>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px 16px', fontSize: 13 }}>
+                      <div><span style={{ color: 'var(--text-muted)' }}>目標部門：</span><b>{workOrder._deptName || '—'}</b></div>
+                      <div><span style={{ color: 'var(--text-muted)' }}>承辦人：</span>{assigneeName}</div>
+                      {workOrder.expected_due_date && <div><span style={{ color: 'var(--text-muted)' }}>期望完成：</span>{workOrder.expected_due_date}</div>}
+                      {workOrder.scheduled_date && <div><span style={{ color: 'var(--text-muted)' }}>對方排定：</span>{workOrder.scheduled_date}</div>}
+                      <div><span style={{ color: 'var(--text-muted)' }}>建立：</span>{fmtDateTimeTW(workOrder.created_at)}</div>
+                      {done && workOrder.completed_at && <div><span style={{ color: 'var(--text-muted)' }}>完成：</span>{fmtDateTimeTW(workOrder.completed_at)}</div>}
+                    </div>
+                    <div style={{ marginTop: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                        {done ? '✓ 對方已完成，此任務已自動關閉。' : '對方完成工單後，此任務會自動變「已完成」。'}
+                      </span>
+                      <button
+                        onClick={() => { onClose?.(); navigate(`/process/work-orders?focus=${workOrder.id}`) }}
+                        style={{ fontSize: 12, fontWeight: 700, padding: '5px 12px', borderRadius: 6, border: '1px solid var(--accent-blue)', background: 'transparent', color: 'var(--accent-blue)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                        查看工單 →
+                      </button>
+                    </div>
+                  </div>
+                )
+              })()}
               <div style={sectionStyle}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 0.6fr 1fr', gap: 12 }}>
                   <div>
@@ -809,6 +865,7 @@ function TaskTimeBlock({ task }) {
 
 // ─── 子任務 Tab ───
 function SubtasksTab({ task, linkedChecklists, checklistItemsMap, setChecklistItemsMap, employees = [] }) {
+  const { profile } = useAuth()
   const [childTasks, setChildTasks] = useState([])
   const [addingChild, setAddingChild] = useState(false)
   const [newChildTitle, setNewChildTitle] = useState('')

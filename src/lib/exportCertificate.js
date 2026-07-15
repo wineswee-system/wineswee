@@ -63,10 +63,11 @@ export function exportEmployeeCertificate({ type, employee = {}, org = {} }) {
   /* 浮水印:logo 做成大淡印章疊在最下方 */
   .watermark { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 880px; height: auto; opacity: 0.10; pointer-events: none; z-index: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .sign, .date { position: relative; z-index: 1; }
-  .org-head { text-align: center; font-size: 36px; font-weight: 700; letter-spacing: 2px; }
+  .org-head { text-align: center; font-size: 40px; font-weight: 700; letter-spacing: 2px; }
   .logo { max-height: 120px; margin: 0 auto 12px; align-self: center; }
-  h1.title { text-align: center; font-size: 26px; letter-spacing: 8px; margin: 36px 0 40px; font-weight: 700; }
-  .body { font-size: 17px; line-height: 2.4; text-align: center; text-indent: 0; }
+  h1.title { text-align: center; font-size: 30px; letter-spacing: 8px; margin: 36px 0 40px; font-weight: 700; }
+  /* 正文:字大一階 + 垂直置中於頁面中央 */
+  .body { margin-top: auto; font-size: 20px; line-height: 2.4; text-align: center; text-indent: 0; }
   .body b { font-weight: 700; }
   /* 公司資訊:左對齊、放大、更靠左、撐到中偏下 */
   .sign { margin-top: auto; margin-left: -16px; font-size: 18px; line-height: 2.2; width: fit-content; max-width: 100%; text-align: left; white-space: nowrap; }

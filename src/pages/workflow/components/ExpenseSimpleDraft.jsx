@@ -16,7 +16,9 @@ import { useAuth } from '../../../contexts/AuthContext'
 const emptyItem = () => ({ name: '', qty: 1, unit_price: '', subtotal: 0 })
 
 export default function ExpenseSimpleDraft({ initialDraft, onCapture, onClose }) {
-  const { profile } = useAuth()
+  const { profile, isAdmin } = useAuth()
+  // 黑色科目限 財務部(25)/人資部(26)/admin;一般員工(含manager/店長)只看紅色
+  const canSeeRestrictedAccounts = isAdmin || [25, 26].includes(profile?.department_id)
   const [employees, setEmployees] = useState([])
   const [accounts, setAccounts] = useState([])
   const [form, setForm] = useState(() => initialDraft?.payload || { employee: profile?.name || '', category: '', date: '', description: '', receipt: true })
@@ -30,7 +32,11 @@ export default function ExpenseSimpleDraft({ initialDraft, onCapture, onClose })
     if (orgId) empQ = empQ.eq('organization_id', orgId)
     Promise.all([empQ, getAccounts(orgId)]).then(([eRes, aRes]) => {
       const emps = eRes?.data || []
-      const accs = aRes?.data || []
+      const accsRaw = aRes?.data || []
+      const hasScope = accsRaw.some(a => a.pick_scope)
+      const accs = hasScope
+        ? accsRaw.filter(a => a.pick_scope === 'all' || (a.pick_scope === 'restricted' && canSeeRestrictedAccounts))
+        : accsRaw
       setEmployees(emps)
       setAccounts(accs)
       setForm(f => ({ ...f, employee: f.employee || profile?.name || emps[0]?.name || '', category: f.category || accs[0]?.name || '' }))

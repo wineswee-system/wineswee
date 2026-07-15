@@ -33,7 +33,7 @@ function buildCats(items) {
   })
   return Object.values(cats).sort((a, b) => (CAT_ORDER[a.code] || 99) - (CAT_ORDER[b.code] || 99))
 }
-const groupDeduct = (grp) => grp.items.filter(i => i.passed === false).reduce((s, i) => s + (i.deduct_score || 0), 0)
+const groupDeduct = (grp) => grp.items.reduce((s, i) => s + (i.deduct_score || 0), 0)
 const catMax = (cat) => cat.order.reduce((s, g) => s + (cat.groups[g].allot || 0), 0)
 const catDeduct = (cat) => cat.order.reduce((s, g) => s + groupDeduct(cat.groups[g]), 0)
 const catScore = (cat) => Math.max(0, catMax(cat) - catDeduct(cat))
@@ -42,7 +42,7 @@ function computeScores(items) {
   const cats = buildCats(items)
   const scored = cats.filter(c => catMax(c) > 0)
   const avg = scored.length ? Math.round(scored.reduce((s, c) => s + catScore(c), 0) / scored.length * 100) / 100 : 0
-  const totalDed = items.filter(i => i.passed === false).reduce((s, i) => s + (i.deduct_score || 0), 0)
+  const totalDed = items.reduce((s, i) => s + (i.deduct_score || 0), 0)
   return { avg, totalDed }
 }
 
@@ -99,11 +99,9 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
   const scored = cats.filter(c => catMax(c) > 0)
   const avgScore = scored.length ? Math.round(scored.reduce((s, c) => s + catScore(c), 0) / scored.length * 100) / 100 : 0
 
-  // 統計
-  const passed = items.filter(i => i.passed === true).length
-  const failed = items.filter(i => i.passed === false).length
-  const partial = items.filter(i => i.partial === true).length
-  const pending = items.filter(i => i.passed === null && !i.partial).length
+  // 統計（評分制：只看有沒有扣分）
+  const deductedCount = items.filter(i => (i.deduct_score || 0) > 0).length
+  const totalDeducted = items.reduce((s, i) => s + (i.deduct_score || 0), 0)
 
   // ─── 草稿：編輯項目（並即時把總平均/總扣分寫回單頭）───
   const updateItem = async (itemId, patch) => {
@@ -139,7 +137,6 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
 
   // ─── 送出 ───
   const handleSubmit = async () => {
-    if (pending > 0) { toast.warning(`還有 ${pending} 項未評核`); return }
     if (onDuty.length === 0) { toast.warning('請至少選 1 名當班人員'); return }
     const unsigned = onDuty.filter(d => !d.signature_data_url)
     if (unsigned.length > 0) {
@@ -148,6 +145,8 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
     }
     setSaving(true)
     try {
+      // 評分制：沒扣分的項目視為合格，避免撞 submit 的未評核檢查
+      await supabase.from('store_audit_items').update({ passed: true }).eq('audit_id', auditId).is('passed', null)
       const uploaded = await Promise.all(onDuty.map(async d => ({
         employee_id: d.employee_id,
         employee_name: d.employee_name,
@@ -239,10 +238,8 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
         {/* 統計 + 總平均 */}
         <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', background: 'var(--bg-secondary)', display: 'flex', gap: 16, fontSize: 13, alignItems: 'center', flexWrap: 'wrap' }}>
           <span>共 {items.length} 項</span>
-          <span style={{ color: 'var(--accent-green)' }}>✓ {passed}</span>
-          {partial > 0 && <span style={{ color: 'var(--accent-purple)' }}>△ {partial}</span>}
-          <span style={{ color: 'var(--accent-red)' }}>✗ {failed}</span>
-          {pending > 0 && <span style={{ color: 'var(--accent-orange)' }}>未評核 {pending}</span>}
+          <span style={{ color: deductedCount > 0 ? 'var(--accent-red)' : 'var(--text-muted)' }}>扣分 {deductedCount} 項</span>
+          <span style={{ color: 'var(--text-secondary)' }}>總扣 {totalDeducted}</span>
           {/* 各類得分 */}
           <div style={{ display: 'flex', gap: 8, marginLeft: 8, flexWrap: 'wrap' }}>
             {scored.map(c => (
@@ -287,7 +284,7 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
                           item={item}
                           employees={employees}
                           editable={isDraft}
-                          maxDeduct={(grp.allot || 0) - (gd - (item.passed === false ? (item.deduct_score || 0) : 0))}
+                          maxDeduct={(grp.allot || 0) - (gd - (item.deduct_score || 0))}
                           onChange={p => updateItem(item.id, p)}
                         />
                       ))}
@@ -443,19 +440,19 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
   )
 }
 
-// ─── 評核項目單列 ───
+// ─── 評核項目單列（評分制：填扣分 + 說明）───
 function ItemRow({ item, employees, editable, maxDeduct, onChange }) {
   const empOpts = useMemo(() => empOptions(employees, { keyBy: 'id' }), [employees])
   const [uploading, setUploading] = useState(false)
-  const failed = item.passed === false
-  const isPartial = item.partial === true
-  const isText = item.input_type === 'text'
+  const deducted = item.deduct_score || 0
+  const hasDeduct = deducted > 0
   const attachments = Array.isArray(item.attachments) ? item.attachments : []
 
   const setDeduct = (raw) => {
     let v = Math.max(0, Math.floor(Number(raw) || 0))
     if (v > maxDeduct) { v = Math.max(0, maxDeduct); toast.warning(`此群組最多再扣 ${Math.max(0, maxDeduct)} 分`) }
-    onChange({ deduct_score: v })
+    // 有扣分 → passed=false（供 submit 計 total_deducted）；0 → 合格
+    onChange({ deduct_score: v, passed: v > 0 ? false : true })
   }
 
   const handleFiles = async (e) => {
@@ -485,72 +482,54 @@ function ItemRow({ item, employees, editable, maxDeduct, onChange }) {
   return (
     <div style={{
       padding: '6px 4px', borderBottom: '1px solid var(--border)', fontSize: 13,
-      background: failed ? 'var(--accent-red-dim)' : isPartial ? 'var(--accent-purple-dim)' : 'transparent',
+      background: hasDeduct ? 'var(--accent-red-dim)' : 'transparent',
     }}>
+      {/* 內容 + 扣分 */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8, alignItems: 'center' }}>
         <div style={{ minWidth: 0 }}>
           {item.is_star && <Star size={12} style={{ color: 'var(--accent-orange)', verticalAlign: 'middle', marginRight: 4 }} fill="var(--accent-orange)" />}
           {item.item_text}
           {item.is_star && <span style={{ fontSize: 10, color: 'var(--accent-orange)', marginLeft: 4 }}>可開罰</span>}
         </div>
-        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-          {editable ? (
-            <>
-              <button
-                onClick={() => onChange({ passed: true, partial: false, deduct_score: 0 })}
-                style={btnStyle(item.passed === true, 'var(--accent-green)')}
-              >合格</button>
-              <button
-                onClick={() => onChange({ passed: null, partial: true, deduct_score: 0 })}
-                style={btnStyle(isPartial, 'var(--accent-purple)')}
-                title="不適用 / 不扣分"
-              >△</button>
-              <button
-                onClick={() => onChange({ passed: false, partial: false })}
-                style={btnStyle(item.passed === false, 'var(--accent-red)')}
-              >不合格</button>
-            </>
-          ) : (
-            <span style={{
-              padding: '3px 8px', borderRadius: 4, fontSize: 11, fontWeight: 700,
-              background: item.passed === true ? 'var(--accent-green-dim)' : item.passed === false ? 'var(--accent-red-dim)' : isPartial ? 'var(--accent-purple-dim)' : 'var(--bg-primary)',
-              color: item.passed === true ? 'var(--accent-green)' : item.passed === false ? 'var(--accent-red)' : isPartial ? 'var(--accent-purple)' : 'var(--text-muted)',
-            }}>
-              {item.passed === true ? '✓ 合格' : item.passed === false ? `✗ 扣 ${item.deduct_score || 0}` : isPartial ? '△' : '—'}
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* 打字題：內容輸入框（一律顯示） */}
-      {isText && (
-        editable ? (
-          <input
-            className="form-input"
-            value={item.remark || ''}
-            onChange={e => onChange({ remark: e.target.value })}
-            placeholder="請輸入抽查 / 說明內容"
-            style={{ width: '100%', fontSize: 12, marginTop: 4 }}
-          />
-        ) : (
-          item.remark && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 3, padding: '3px 8px', background: 'var(--bg-secondary)', borderRadius: 4 }}>{item.remark}</div>
-        )
-      )}
-
-      {/* 不合格：扣分 + 責任人 + 說明 + 附件 */}
-      {failed && editable && (
-        <div style={{ marginTop: 6, display: 'grid', gap: 6 }}>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <label style={{ fontSize: 12, color: 'var(--text-muted)' }}>扣分</label>
+        {editable ? (
+          <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>扣</span>
             <input
               type="number" min={0} max={Math.max(0, maxDeduct)}
-              value={item.deduct_score || 0}
+              value={deducted || ''}
+              placeholder="0"
               onChange={e => setDeduct(e.target.value)}
               className="form-input"
-              style={{ width: 80, fontSize: 12 }}
+              style={{ width: 56, fontSize: 13, textAlign: 'center', padding: '4px 6px', color: hasDeduct ? 'var(--accent-red)' : 'var(--text-primary)', fontWeight: hasDeduct ? 700 : 400 }}
             />
-            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>（此群組最多再扣 {Math.max(0, maxDeduct)}）</span>
           </div>
+        ) : (
+          <span style={{
+            padding: '3px 8px', borderRadius: 4, fontSize: 11, fontWeight: 700,
+            background: hasDeduct ? 'var(--accent-red-dim)' : 'var(--accent-green-dim)',
+            color: hasDeduct ? 'var(--accent-red)' : 'var(--accent-green)',
+          }}>
+            {hasDeduct ? `扣 ${deducted}` : '✓'}
+          </span>
+        )}
+      </div>
+
+      {/* 說明（每一項都能填）*/}
+      {editable ? (
+        <input
+          className="form-input"
+          value={item.remark || ''}
+          onChange={e => onChange({ remark: e.target.value })}
+          placeholder={item.input_type === 'text' ? '請填寫抽查 / 內容' : '說明（可留白）'}
+          style={{ width: '100%', fontSize: 12, marginTop: 4, background: 'var(--bg-secondary)' }}
+        />
+      ) : (
+        item.remark && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 3, padding: '3px 8px', background: 'var(--bg-secondary)', borderRadius: 4 }}>說明：{item.remark}</div>
+      )}
+
+      {/* 有扣分：責任人 + 附件 */}
+      {hasDeduct && editable && (
+        <div style={{ marginTop: 6, display: 'grid', gap: 6 }}>
           <SearchableSelect
             value={item.responsible_employee_id || ''}
             onChange={(v) => {
@@ -560,16 +539,6 @@ function ItemRow({ item, employees, editable, maxDeduct, onChange }) {
             options={empOpts}
             placeholder="責任人（可留白）"
           />
-          {!isText && (
-            <input
-              className="form-input"
-              value={item.remark || ''}
-              onChange={e => onChange({ remark: e.target.value })}
-              placeholder="說明 / 缺失描述（可留白）"
-              style={{ width: '100%', fontSize: 12 }}
-            />
-          )}
-          {/* 附件照片 */}
           <div>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span><Paperclip size={11} style={{ verticalAlign: 'middle', marginRight: 3 }} />附件照片（{attachments.length}/15）</span>
@@ -594,11 +563,10 @@ function ItemRow({ item, employees, editable, maxDeduct, onChange }) {
         </div>
       )}
 
-      {/* 唯讀：不合格細節 */}
-      {failed && !editable && (
+      {/* 唯讀：有扣分細節 */}
+      {hasDeduct && !editable && (item.responsible_employee_name || attachments.length > 0) && (
         <div style={{ marginTop: 4, marginLeft: 8, fontSize: 11, color: 'var(--text-muted)' }}>
-          {item.responsible_employee_name && <span>責任人：{item.responsible_employee_name}　</span>}
-          {!isText && item.remark && <span>說明：{item.remark}</span>}
+          {item.responsible_employee_name && <span>責任人：{item.responsible_employee_name}</span>}
           {attachments.length > 0 && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(60px, 1fr))', gap: 4, marginTop: 4 }}>
               {attachments.map((url, i) => (
@@ -610,14 +578,6 @@ function ItemRow({ item, employees, editable, maxDeduct, onChange }) {
       )}
     </div>
   )
-}
-
-function btnStyle(active, color) {
-  return {
-    padding: '4px 8px', fontSize: 11, borderRadius: 4, cursor: 'pointer', border: 'none', minWidth: 26, fontWeight: 700,
-    background: active ? color : 'var(--bg-primary)',
-    color: active ? '#fff' : 'var(--text-muted)',
-  }
 }
 
 function NoteField({ label, value, editable, onChange }) {

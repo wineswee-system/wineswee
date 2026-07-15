@@ -2,7 +2,7 @@
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useReturnNav } from '../../lib/useReturnNav'
 import { Plus, Printer, Settings, Paperclip, Search, X, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
-import { getExpenses, createExpense, updateExpenseStatus, getAccounts } from '../../lib/db'
+import { getExpenses, createExpense, getAccounts } from '../../lib/db'
 import { createApprovalWorkflow } from '../../lib/workflowIntegration'
 import { supabase } from '../../lib/supabase'
 import { getEventBus } from '../../lib/events/index.js'
@@ -267,19 +267,26 @@ export default function Expenses() {
     }
   }
 
+  // 走逐關簽核鏈(expense_step_advance):最後一關才已核銷,不再一鍵繞過鏈
   const handleApprove = async (id) => {
-    const { data } = await updateExpenseStatus(id, '已核銷')
-    if (data) {
-      setExpenses(prev => prev.map(e => e.id === id ? data : e))
+    const { data, error } = await supabase.rpc('expense_step_advance', { p_id: id, p_action: 'approve', p_reason: null })
+    if (error || !data?.ok) {
+      const msg = data?.error === 'NOT_AUTHORIZED_FOR_STEP' ? '你不是這關的簽核人'
+        : data?.error === 'PENDING_EXTRA_SIGNER' ? '有加簽進行中,請等加簽人簽完'
+        : data?.error === 'NOT_PENDING' ? '此單非待審核狀態' : (data?.error || error?.message || '簽核失敗')
+      toast.error('簽核失敗：' + msg)
+      return
+    }
+    await load()
+    if (data.fully_approved) {
+      const exp = expenses.find(e => e.id === id)
       getEventBus().publish('hr.expense.approved', {
-        expense_id: data.id,
-        employee: data.employee,
-        category: data.category,
-        amount: data.amount,
-        description: data.description,
-        date: data.date,
+        expense_id: id, employee: exp?.employee, category: exp?.category,
+        amount: exp?.amount, description: exp?.description, date: exp?.date,
       }, { source: 'Expenses.jsx' })
-      toast.success('已驗收')
+      toast.success('已驗收（全部簽核完成）')
+    } else {
+      toast.success('已簽核，往下一關')
     }
   }
 
@@ -287,8 +294,9 @@ export default function Expenses() {
     const reason = reasonArg ?? prompt('請輸入駁回原因：')
     if (reason === null) return
     if (!reason.trim()) { toast.warning('請填寫駁回原因'); return }
-    const { data } = await updateExpenseStatus(id, '已駁回', reason.trim())
-    if (data) setExpenses(prev => prev.map(e => e.id === id ? data : e))
+    const { data, error } = await supabase.rpc('expense_step_advance', { p_id: id, p_action: 'reject', p_reason: reason.trim() })
+    if (error || !data?.ok) { toast.error('駁回失敗：' + (data?.error || error?.message || '')); return }
+    await load()
   }
 
   const handleDelete = async (row) => {

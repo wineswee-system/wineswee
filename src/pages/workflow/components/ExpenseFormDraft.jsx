@@ -22,7 +22,9 @@ const emptyItem = () => ({ name: '', qty: '', unit_price: '', subtotal: 0 })
 
 // docType：'expense'(費用申請) | 'order'(叫貨申請) — 寫進 payload 區分同表資料
 export default function ExpenseFormDraft({ initialDraft, onCapture, onClose, busy = false, docType = 'expense' }) {
-  const { profile } = useAuth()
+  const { profile, isAdmin } = useAuth()
+  // 黑色科目限 財務部(25)/人資部(26)/admin;一般員工(含manager/店長)只看紅色
+  const canSeeRestrictedAccounts = isAdmin || [25, 26].includes(profile?.department_id)
   const [accounts, setAccounts] = useState([])
   const [currencies, setCurrencies] = useState([])
   const [employees, setEmployees] = useState([])
@@ -45,7 +47,11 @@ export default function ExpenseFormDraft({ initialDraft, onCapture, onClose, bus
       : supabase.from('departments').select('id, name, manager_id').order('name')
     Promise.all([getAccounts(orgId), empQuery, supabase.from('stores').select('id, name, manager_id').order('name'), getCurrencies(), deptQuery])
       .then(([accRes, empRes, storeRes, curRes, deptRes]) => {
-        setAccounts(accRes?.data || [])
+        const accsRaw = accRes?.data || []
+        const hasScope = accsRaw.some(a => a.pick_scope)
+        setAccounts(hasScope
+          ? accsRaw.filter(a => a.pick_scope === 'all' || (a.pick_scope === 'restricted' && canSeeRestrictedAccounts))
+          : accsRaw)
         setEmployees((empRes?.data || []).filter(e => e.status === '在職'))
         setStores(storeRes?.data || [])
         setCurrencies(curRes?.data || [])

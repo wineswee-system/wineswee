@@ -61,7 +61,9 @@ const verb = (s, doc) => doc?.settleVerb === '驗收'
   : s
 export default function ExpenseRequests({ docType = 'expense' } = {}) {
   const DOC = DOC_CFG[docType] || DOC_CFG.expense
-  const { profile, hasPermission } = useAuth()
+  const { profile, hasPermission, isAdmin } = useAuth()
+  // 黑色(restricted)科目只給 財務部(25)/人力資源管理部(26)/admin;一般員工(含manager/店長)只看紅色(all)
+  const canSeeRestrictedAccounts = isAdmin || [25, 26].includes(profile?.department_id)
   const canDeleteAll = hasPermission('hr_form.delete_all')
   const { canApprove } = usePendingApprovals()
   const navigate = useNavigate()
@@ -127,7 +129,12 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
         : supabase.from('departments').select('id, name, manager_id').order('name')),
     ])
     setRequests(reqRes.data || [])
-    setAccounts(accRes.data || [])
+    // 依可選範圍過濾:all全體 / restricted限財務人資admin / null背景GL不可選;未跑migration則全顯示
+    const accsRaw = accRes.data || []
+    const hasScope = accsRaw.some(a => a.pick_scope)
+    setAccounts(hasScope
+      ? accsRaw.filter(a => a.pick_scope === 'all' || (a.pick_scope === 'restricted' && canSeeRestrictedAccounts))
+      : accsRaw)
     setCurrencies(curRes?.data || [])
     setEmployees((empRes.data || []).filter(e => e.status === '在職'))
     setStores(storeRes?.data || [])

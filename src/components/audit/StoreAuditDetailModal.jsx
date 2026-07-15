@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { X, CheckCircle2, XCircle, RotateCcw, Send, Edit3, Paperclip } from 'lucide-react'
+import { X, CheckCircle2, XCircle, RotateCcw, Send, Star, Paperclip } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../LoadingSpinner'
@@ -19,6 +19,33 @@ const STATUS_BADGE = {
   '已退回': { bg: 'var(--accent-red-dim)',    color: 'var(--accent-red)' },
 }
 
+const CAT_ORDER = { '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6 }
+
+// 依 item_no 排序 → 兩層分組：大類 → 關聯群組
+function buildCats(items) {
+  const cats = {}
+  ;[...items].sort((a, b) => (a.item_no || 0) - (b.item_no || 0)).forEach(item => {
+    const c = item.category_code || '?'
+    if (!cats[c]) cats[c] = { code: c, name: item.category_name, groups: {}, order: [] }
+    const g = item.relation_group || '—'
+    if (!cats[c].groups[g]) { cats[c].groups[g] = { name: g, allot: item.group_allot || 0, items: [] }; cats[c].order.push(g) }
+    cats[c].groups[g].items.push(item)
+  })
+  return Object.values(cats).sort((a, b) => (CAT_ORDER[a.code] || 99) - (CAT_ORDER[b.code] || 99))
+}
+const groupDeduct = (grp) => grp.items.filter(i => i.passed === false).reduce((s, i) => s + (i.deduct_score || 0), 0)
+const catMax = (cat) => cat.order.reduce((s, g) => s + (cat.groups[g].allot || 0), 0)
+const catDeduct = (cat) => cat.order.reduce((s, g) => s + groupDeduct(cat.groups[g]), 0)
+const catScore = (cat) => Math.max(0, catMax(cat) - catDeduct(cat))
+
+function computeScores(items) {
+  const cats = buildCats(items)
+  const scored = cats.filter(c => catMax(c) > 0)
+  const avg = scored.length ? Math.round(scored.reduce((s, c) => s + catScore(c), 0) / scored.length * 100) / 100 : 0
+  const totalDed = items.filter(i => i.passed === false).reduce((s, i) => s + (i.deduct_score || 0), 0)
+  return { avg, totalDed }
+}
+
 export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
   const { profile } = useAuth()
   const [loading, setLoading] = useState(true)
@@ -28,7 +55,7 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
   const [onDuty, setOnDuty] = useState([])
   const [chainSteps, setChainSteps] = useState([])
   const [employees, setEmployees] = useState([])
-  const [signingIdx, setSigningIdx] = useState(null)  // 哪位當班人員正在簽名
+  const [signingIdx, setSigningIdx] = useState(null)
   const employeeOptions = useMemo(() => empOptions(employees, { keyBy: 'id' }), [employees])
 
   const load = useCallback(async () => {
@@ -68,34 +95,27 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
   const isApproving = audit.status === '申請中'
   const isAuditor = profile?.id === audit.auditor_id
 
-  // 群組化 items，依一二三四五六正確排序
-  const CATEGORY_ORDER = { '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6 }
-  const grouped = Object.fromEntries(
-    Object.entries(
-      items.reduce((acc, item) => {
-        const k = item.category_code
-        if (!acc[k]) acc[k] = { name: item.category_name, items: [] }
-        acc[k].items.push(item)
-        return acc
-      }, {})
-    ).sort(([a], [b]) => (CATEGORY_ORDER[a] || 99) - (CATEGORY_ORDER[b] || 99))
-  )
+  const cats = buildCats(items)
+  const scored = cats.filter(c => catMax(c) > 0)
+  const avgScore = scored.length ? Math.round(scored.reduce((s, c) => s + catScore(c), 0) / scored.length * 100) / 100 : 0
 
   // 統計
   const passed = items.filter(i => i.passed === true).length
   const failed = items.filter(i => i.passed === false).length
-  // △（partial）：不扣分，不算未評核
   const partial = items.filter(i => i.partial === true).length
   const pending = items.filter(i => i.passed === null && !i.partial).length
-  const deducted = items.filter(i => i.passed === false).reduce((s, i) => s + (i.deduct_score || 0), 0)
 
-  // ─── 草稿：編輯項目 ───
+  // ─── 草稿：編輯項目（並即時把總平均/總扣分寫回單頭）───
   const updateItem = async (itemId, patch) => {
-    const item = items.find(i => i.id === itemId)
-    if (!item) return
-    setItems(prev => prev.map(i => i.id === itemId ? { ...i, ...patch } : i))
+    const next = items.map(i => i.id === itemId ? { ...i, ...patch } : i)
+    setItems(next)
     const { error } = await supabase.from('store_audit_items').update(patch).eq('id', itemId)
-    if (error) toast.error('更新失敗：' + error.message)
+    if (error) { toast.error('更新失敗：' + error.message); return }
+    const { avg, totalDed } = computeScores(next)
+    if (avg !== audit.avg_score || totalDed !== audit.total_deducted) {
+      setAudit(a => ({ ...a, avg_score: avg, total_deducted: totalDed }))
+      supabase.from('store_audits').update({ avg_score: avg, total_deducted: totalDed }).eq('id', auditId)
+    }
   }
 
   const updateAudit = async (patch) => {
@@ -104,9 +124,7 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
     if (error) toast.error('更新失敗：' + error.message)
   }
 
-  // base64 dataUrl → Blob → 上傳 Storage → 回傳公開 URL
   const uploadSignature = async (dataUrl, audId, empId) => {
-    // 已經是 URL 直接回傳（重簽情境）
     if (dataUrl.startsWith('http')) return dataUrl
     if (!dataUrl.startsWith('data:image')) throw new Error('簽名格式錯誤')
     const blob = await (await fetch(dataUrl)).blob()
@@ -130,7 +148,6 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
     }
     setSaving(true)
     try {
-      // 平行上傳所有簽名
       const uploaded = await Promise.all(onDuty.map(async d => ({
         employee_id: d.employee_id,
         employee_name: d.employee_name,
@@ -144,7 +161,7 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
       if (!data?.ok) throw new Error(data?.error || 'unknown')
       toast.success(data.event === 'auto_approved_no_chain' ? '已核准（無簽核鏈設定）' : '已送出，進入簽核流程')
       onChanged?.(); load()
-      postBindingFillDone(null)  // 任務 iframe inline（稽核送審）：通知父視窗完成
+      postBindingFillDone(null)
     } catch (err) {
       toast.error('送出失敗：' + (err.message || err))
     } finally {
@@ -159,7 +176,7 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
       reason = prompt('退回原因？')
       if (!reason?.trim()) return
     } else {
-      const ok = await confirm({ message: '確認核准此份稽核單？核准後缺失將自動同步至業績獎金' })
+      const ok = await confirm({ message: '確認核准此份稽核單？' })
       if (!ok) return
     }
     setSaving(true)
@@ -173,7 +190,6 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
     onChanged?.(); load()
   }
 
-  // ─── 退回 → 重編 ───
   const handleCancel = async () => {
     const ok = await confirm({ message: '把單退回草稿狀態重新編輯？' })
     if (!ok) return
@@ -197,10 +213,11 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
   const removeOnDuty = (idx) => setOnDuty(prev => prev.filter((_, i) => i !== idx))
 
   const s = STATUS_BADGE[audit.status] || {}
+  const scoreColor = avgScore >= 90 ? 'var(--accent-green)' : avgScore >= 70 ? 'var(--accent-orange)' : 'var(--accent-red)'
 
   return (
     <ModalOverlay onClose={onClose}>
-      <div className="card" style={{ width: 'min(900px, 96vw)', maxHeight: '92vh', display: 'flex', flexDirection: 'column' }}>
+      <div className="card" style={{ width: 'min(980px, 96vw)', maxHeight: '92vh', display: 'flex', flexDirection: 'column' }}>
         {/* Header */}
         <div style={{ padding: 16, borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
@@ -219,30 +236,64 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
           </button>
         </div>
 
-        {/* 統計列 */}
-        <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', background: 'var(--bg-secondary)', display: 'flex', gap: 16, fontSize: 13 }}>
+        {/* 統計 + 總平均 */}
+        <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', background: 'var(--bg-secondary)', display: 'flex', gap: 16, fontSize: 13, alignItems: 'center', flexWrap: 'wrap' }}>
           <span>共 {items.length} 項</span>
-          <span style={{ color: 'var(--accent-green)' }}>✓ 合格 {passed}</span>
+          <span style={{ color: 'var(--accent-green)' }}>✓ {passed}</span>
           {partial > 0 && <span style={{ color: 'var(--accent-purple)' }}>△ {partial}</span>}
-          <span style={{ color: 'var(--accent-red)' }}>✗ 不合格 {failed}</span>
+          <span style={{ color: 'var(--accent-red)' }}>✗ {failed}</span>
           {pending > 0 && <span style={{ color: 'var(--accent-orange)' }}>未評核 {pending}</span>}
-          <span style={{ marginLeft: 'auto', fontWeight: 700, color: deducted > 0 ? 'var(--accent-red)' : 'var(--text-secondary)' }}>
-            扣分：{deducted} / {audit.total_max_score}
+          {/* 各類得分 */}
+          <div style={{ display: 'flex', gap: 8, marginLeft: 8, flexWrap: 'wrap' }}>
+            {scored.map(c => (
+              <span key={c.code} style={{ fontSize: 11, padding: '2px 6px', borderRadius: 4, background: 'var(--bg-primary)', color: 'var(--text-secondary)' }}>
+                {c.name} {catScore(c)}
+              </span>
+            ))}
+          </div>
+          <span style={{ marginLeft: 'auto', fontWeight: 700, fontSize: 15, color: scoreColor }}>
+            總平均 {avgScore}
           </span>
         </div>
 
         {/* 主體 - 雙欄 */}
-        <div style={{ flex: 1, overflowY: 'auto', display: 'grid', gridTemplateColumns: '1fr 280px', gap: 0 }}>
+        <div style={{ flex: 1, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 280px', gap: 0 }}>
           {/* 左：評核項目 */}
           <div style={{ padding: 16, borderRight: '1px solid var(--border)', overflowY: 'auto' }}>
-            {Object.entries(grouped).map(([code, group]) => (
-              <div key={code} style={{ marginBottom: 20 }}>
-                <h4 style={{ margin: '0 0 8px', color: 'var(--text-secondary)', fontSize: 13, padding: '4px 0', borderBottom: '2px solid var(--border)' }}>
-                  {code}、{group.name}（共 {group.items.length} 項，最高扣 {group.items.reduce((s, i) => s + i.deduct_score, 0)} 分）
+            {cats.map(cat => (
+              <div key={cat.code} style={{ marginBottom: 22 }}>
+                <h4 style={{ margin: '0 0 8px', display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', color: 'var(--text-primary)', fontSize: 15, padding: '4px 0', borderBottom: '2px solid var(--accent-cyan)' }}>
+                  <span>{cat.code}、{cat.name}</span>
+                  {catMax(cat) > 0 && (
+                    <span style={{ fontSize: 12, fontWeight: 700, color: catDeduct(cat) > 0 ? 'var(--accent-red)' : 'var(--accent-green)' }}>
+                      {catScore(cat)} / {catMax(cat)}
+                    </span>
+                  )}
                 </h4>
-                {group.items.map(item => (
-                  <ItemRow key={item.id} item={item} employees={employees} editable={isDraft} onChange={p => updateItem(item.id, p)} />
-                ))}
+                {cat.order.map(gName => {
+                  const grp = cat.groups[gName]
+                  const gd = groupDeduct(grp)
+                  return (
+                    <div key={gName} style={{ marginBottom: 12 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', padding: '4px 6px', background: 'var(--bg-secondary)', borderRadius: 4, marginBottom: 4 }}>
+                        <span>{grp.name}</span>
+                        <span style={{ color: gd > 0 ? 'var(--accent-red)' : 'var(--text-muted)' }}>
+                          配分 {grp.allot}{gd > 0 ? ` · 已扣 ${gd}` : ''}
+                        </span>
+                      </div>
+                      {grp.items.map(item => (
+                        <ItemRow
+                          key={item.id}
+                          item={item}
+                          employees={employees}
+                          editable={isDraft}
+                          maxDeduct={(grp.allot || 0) - (gd - (item.passed === false ? (item.deduct_score || 0) : 0))}
+                          onChange={p => updateItem(item.id, p)}
+                        />
+                      ))}
+                    </div>
+                  )
+                })}
               </div>
             ))}
 
@@ -284,7 +335,7 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
                         </div>
                       ) : (
                         <button className="btn btn-sm btn-primary" style={{ width: '100%', fontSize: 11, padding: '4px' }} onClick={() => setSigningIdx(idx)}>
-                          <Edit3 size={12} /> 請當班人員簽名
+                          請當班人員簽名
                         </button>
                       )
                     )}
@@ -352,7 +403,6 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
               <Send size={14} /> 送出（待當班確認）
             </button>
           )}
-          {/* 「待確認」狀態保留供舊資料相容（新流程已改現場簽名） */}
           {isApproving && (
             <ExtraSignerControls
               sourceTable="store_audits"
@@ -394,13 +444,19 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
 }
 
 // ─── 評核項目單列 ───
-function ItemRow({ item, employees, editable, onChange }) {
+function ItemRow({ item, employees, editable, maxDeduct, onChange }) {
   const empOpts = useMemo(() => empOptions(employees, { keyBy: 'id' }), [employees])
   const [uploading, setUploading] = useState(false)
   const failed = item.passed === false
   const isPartial = item.partial === true
-  const showRemark = item.category_code === '五' && item.item_no === 6
+  const isText = item.input_type === 'text'
   const attachments = Array.isArray(item.attachments) ? item.attachments : []
+
+  const setDeduct = (raw) => {
+    let v = Math.max(0, Math.floor(Number(raw) || 0))
+    if (v > maxDeduct) { v = Math.max(0, maxDeduct); toast.warning(`此群組最多再扣 ${Math.max(0, maxDeduct)} 分`) }
+    onChange({ deduct_score: v })
+  }
 
   const handleFiles = async (e) => {
     const files = Array.from(e.target.files || [])
@@ -424,148 +480,144 @@ function ItemRow({ item, employees, editable, onChange }) {
       e.target.value = ''
     }
   }
-
   const removeAttachment = (url) => onChange({ attachments: attachments.filter(u => u !== url) })
 
   return (
     <div style={{
-      padding: '8px 4px', borderBottom: '1px solid var(--border)', fontSize: 13,
-      background: failed ? 'var(--accent-red-subtle)' : isPartial ? 'var(--accent-purple-dim)' : 'transparent',
+      padding: '6px 4px', borderBottom: '1px solid var(--border)', fontSize: 13,
+      background: failed ? 'var(--accent-red-dim)' : isPartial ? 'var(--accent-purple-dim)' : 'transparent',
     }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '32px 1fr auto auto', gap: 8, alignItems: 'center' }}>
-        <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>{item.item_no}</div>
-        <div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8, alignItems: 'center' }}>
+        <div style={{ minWidth: 0 }}>
+          {item.is_star && <Star size={12} style={{ color: 'var(--accent-orange)', verticalAlign: 'middle', marginRight: 4 }} fill="var(--accent-orange)" />}
           {item.item_text}
-          {failed && editable && (
-            <div style={{ width: '100%', marginTop: 4 }}>
-              <SearchableSelect
-                value={item.responsible_employee_id || ''}
-                onChange={(v) => {
-                  const emp = employees.find(x => x.id === Number(v))
-                  onChange({ responsible_employee_id: emp?.id || null, responsible_employee_name: emp?.name || null })
-                }}
-                options={empOpts}
-                placeholder="未指定責任人（算當班全體）"
-              />
-            </div>
-          )}
-          {failed && !editable && item.responsible_employee_name && (
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>責任人：{item.responsible_employee_name}</div>
-          )}
+          {item.is_star && <span style={{ fontSize: 10, color: 'var(--accent-orange)', marginLeft: 4 }}>可開罰</span>}
         </div>
-        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>扣 {item.deduct_score}</div>
-        <div style={{ display: 'flex', gap: 4 }}>
+        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
           {editable ? (
             <>
               <button
-                onClick={() => onChange({ passed: true, partial: false })}
-                style={{
-                  padding: '4px 8px', fontSize: 11, borderRadius: 4, cursor: 'pointer', border: 'none',
-                  background: item.passed === true ? 'var(--accent-green)' : 'var(--bg-primary)',
-                  color: item.passed === true ? '#fff' : 'var(--text-muted)',
-                }}
+                onClick={() => onChange({ passed: true, partial: false, deduct_score: 0 })}
+                style={btnStyle(item.passed === true, 'var(--accent-green)')}
               >合格</button>
               <button
-                onClick={() => onChange({ passed: null, partial: true })}
-                style={{
-                  padding: '4px 8px', fontSize: 11, borderRadius: 4, cursor: 'pointer',
-                  border: isPartial ? '1.5px solid var(--accent-purple)' : 'none',
-                  background: isPartial ? 'var(--accent-purple)' : 'var(--bg-primary)',
-                  color: isPartial ? '#fff' : 'var(--text-muted)',
-                  fontWeight: 700, minWidth: 26,
-                }}
-                title="△（不扣分）"
+                onClick={() => onChange({ passed: null, partial: true, deduct_score: 0 })}
+                style={btnStyle(isPartial, 'var(--accent-purple)')}
+                title="不適用 / 不扣分"
               >△</button>
               <button
                 onClick={() => onChange({ passed: false, partial: false })}
-                style={{
-                  padding: '4px 8px', fontSize: 11, borderRadius: 4, cursor: 'pointer', border: 'none',
-                  background: item.passed === false ? 'var(--accent-red)' : 'var(--bg-primary)',
-                  color: item.passed === false ? '#fff' : 'var(--text-muted)',
-                }}
+                style={btnStyle(item.passed === false, 'var(--accent-red)')}
               >不合格</button>
             </>
           ) : (
             <span style={{
               padding: '3px 8px', borderRadius: 4, fontSize: 11, fontWeight: 700,
-              background: item.passed === true ? 'var(--accent-green-dim)'
-                : item.passed === false ? 'var(--accent-red-dim)'
-                : isPartial ? 'var(--accent-purple-dim)'
-                : 'var(--bg-primary)',
-              color: item.passed === true ? 'var(--accent-green)'
-                : item.passed === false ? 'var(--accent-red)'
-                : isPartial ? 'var(--accent-purple)'
-                : 'var(--text-muted)',
+              background: item.passed === true ? 'var(--accent-green-dim)' : item.passed === false ? 'var(--accent-red-dim)' : isPartial ? 'var(--accent-purple-dim)' : 'var(--bg-primary)',
+              color: item.passed === true ? 'var(--accent-green)' : item.passed === false ? 'var(--accent-red)' : isPartial ? 'var(--accent-purple)' : 'var(--text-muted)',
             }}>
-              {item.passed === true ? '✓ 合格'
-                : item.passed === false ? '✗ 不合格'
-                : isPartial ? '△'
-                : '—'}
+              {item.passed === true ? '✓ 合格' : item.passed === false ? `✗ 扣 ${item.deduct_score || 0}` : isPartial ? '△' : '—'}
             </span>
           )}
         </div>
       </div>
-      {showRemark && (
-        <div style={{ marginTop: 6, marginLeft: 40 }}>
-          {/* 備註 */}
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 3 }}>備註（現場數量 / 差異說明）</div>
-          {editable ? (
-            <textarea
+
+      {/* 打字題：內容輸入框（一律顯示） */}
+      {isText && (
+        editable ? (
+          <input
+            className="form-input"
+            value={item.remark || ''}
+            onChange={e => onChange({ remark: e.target.value })}
+            placeholder="請輸入抽查 / 說明內容"
+            style={{ width: '100%', fontSize: 12, marginTop: 4 }}
+          />
+        ) : (
+          item.remark && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 3, padding: '3px 8px', background: 'var(--bg-secondary)', borderRadius: 4 }}>{item.remark}</div>
+        )
+      )}
+
+      {/* 不合格：扣分 + 責任人 + 說明 + 附件 */}
+      {failed && editable && (
+        <div style={{ marginTop: 6, display: 'grid', gap: 6 }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <label style={{ fontSize: 12, color: 'var(--text-muted)' }}>扣分</label>
+            <input
+              type="number" min={0} max={Math.max(0, maxDeduct)}
+              value={item.deduct_score || 0}
+              onChange={e => setDeduct(e.target.value)}
               className="form-input"
-              rows={2}
+              style={{ width: 80, fontSize: 12 }}
+            />
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>（此群組最多再扣 {Math.max(0, maxDeduct)}）</span>
+          </div>
+          <SearchableSelect
+            value={item.responsible_employee_id || ''}
+            onChange={(v) => {
+              const emp = employees.find(x => x.id === Number(v))
+              onChange({ responsible_employee_id: emp?.id || null, responsible_employee_name: emp?.name || null })
+            }}
+            options={empOpts}
+            placeholder="責任人（可留白）"
+          />
+          {!isText && (
+            <input
+              className="form-input"
               value={item.remark || ''}
               onChange={e => onChange({ remark: e.target.value })}
-              placeholder="例：商品A 盤點11支，系統顯示10支"
+              placeholder="說明 / 缺失描述（可留白）"
               style={{ width: '100%', fontSize: 12 }}
             />
-          ) : (
-            item.remark
-              ? <div style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', padding: '4px 8px', background: 'var(--bg-secondary)', borderRadius: 4 }}>{item.remark}</div>
-              : <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>—</div>
           )}
-
           {/* 附件照片 */}
-          <div style={{ marginTop: 8 }}>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span><Paperclip size={11} style={{ verticalAlign: 'middle', marginRight: 3 }} />附件照片（{attachments.length}/15）</span>
-              {editable && attachments.length < 15 && (
-                <label style={{ cursor: uploading ? 'default' : 'pointer', fontSize: 11, color: uploading ? 'var(--text-muted)' : 'var(--accent-cyan)', display: 'flex', alignItems: 'center', gap: 3 }}>
-                  {uploading ? '上傳中...' : '＋ 新增附件'}
+              {attachments.length < 15 && (
+                <label style={{ cursor: uploading ? 'default' : 'pointer', fontSize: 11, color: uploading ? 'var(--text-muted)' : 'var(--accent-cyan)' }}>
+                  {uploading ? '上傳中...' : '＋ 新增'}
                   <input type="file" multiple accept="image/*" style={{ display: 'none' }} onChange={handleFiles} disabled={uploading} />
                 </label>
               )}
             </div>
-            {attachments.length > 0 ? (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(68px, 1fr))', gap: 4 }}>
+            {attachments.length > 0 && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(60px, 1fr))', gap: 4 }}>
                 {attachments.map((url, i) => (
                   <div key={url} style={{ position: 'relative', aspectRatio: '1', borderRadius: 4, overflow: 'hidden', background: 'var(--bg-secondary)' }}>
-                    <img
-                      src={url} alt={`附件 ${i + 1}`}
-                      style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'pointer', display: 'block' }}
-                      onClick={() => window.open(url, '_blank')}
-                    />
-                    {editable && (
-                      <button
-                        onClick={() => removeAttachment(url)}
-                        style={{ position: 'absolute', top: 2, right: 2, background: 'rgba(0,0,0,0.65)', border: 'none', borderRadius: '50%', width: 18, height: 18, color: '#fff', cursor: 'pointer', fontSize: 13, lineHeight: '18px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                      >×</button>
-                    )}
+                    <img src={url} alt={`附件 ${i + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'pointer', display: 'block' }} onClick={() => window.open(url, '_blank')} />
+                    <button onClick={() => removeAttachment(url)} style={{ position: 'absolute', top: 2, right: 2, background: 'rgba(0,0,0,0.65)', border: 'none', borderRadius: '50%', width: 18, height: 18, color: '#fff', cursor: 'pointer', fontSize: 13, lineHeight: '18px', padding: 0 }}>×</button>
                   </div>
                 ))}
               </div>
-            ) : editable ? (
-              <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, height: 48, border: '1px dashed var(--border)', borderRadius: 6, cursor: uploading ? 'default' : 'pointer', fontSize: 12, color: 'var(--text-muted)' }}>
-                <Paperclip size={14} /> {uploading ? '上傳中...' : '點此新增現場照片（最多 15 張）'}
-                <input type="file" multiple accept="image/*" style={{ display: 'none' }} onChange={handleFiles} disabled={uploading} />
-              </label>
-            ) : (
-              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>—</div>
             )}
           </div>
         </div>
       )}
+
+      {/* 唯讀：不合格細節 */}
+      {failed && !editable && (
+        <div style={{ marginTop: 4, marginLeft: 8, fontSize: 11, color: 'var(--text-muted)' }}>
+          {item.responsible_employee_name && <span>責任人：{item.responsible_employee_name}　</span>}
+          {!isText && item.remark && <span>說明：{item.remark}</span>}
+          {attachments.length > 0 && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(60px, 1fr))', gap: 4, marginTop: 4 }}>
+              {attachments.map((url, i) => (
+                <img key={url} src={url} alt={`附件 ${i + 1}`} style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', borderRadius: 4, cursor: 'pointer' }} onClick={() => window.open(url, '_blank')} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
+}
+
+function btnStyle(active, color) {
+  return {
+    padding: '4px 8px', fontSize: 11, borderRadius: 4, cursor: 'pointer', border: 'none', minWidth: 26, fontWeight: 700,
+    background: active ? color : 'var(--bg-primary)',
+    color: active ? '#fff' : 'var(--text-muted)',
+  }
 }
 
 function NoteField({ label, value, editable, onChange }) {

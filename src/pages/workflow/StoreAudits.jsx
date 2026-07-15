@@ -54,7 +54,7 @@ export default function StoreAudits() {
     setLoading(true)
     const [a, s, c] = await Promise.all([
       supabase.from('store_audits')
-        .select('id, store_id, store_name, audit_date, shift, auditor_name, status, total_max_score, total_deducted, created_at, approved_at')
+        .select('id, store_id, store_name, audit_date, shift, auditor_name, status, avg_score, total_deducted, created_at, approved_at')
         .eq('organization_id', orgId)
         .order('id', { ascending: false }),
       supabase.from('stores').select('id, name').eq('organization_id', orgId).order('name'),
@@ -160,7 +160,7 @@ export default function StoreAudits() {
                 <th>稽核日期</th>
                 <th>班次</th>
                 <th>稽核員</th>
-                <th>扣分 / 得分</th>
+                <th>總平均</th>
                 <th>狀態</th>
                 <th>建立</th>
                 <th style={{ width: 44 }}></th>
@@ -179,8 +179,8 @@ export default function StoreAudits() {
                     <td>{r.audit_date}</td>
                     <td>{r.shift || '—'}</td>
                     <td>{r.auditor_name}</td>
-                    <td style={{ color: r.total_deducted > 0 ? 'var(--accent-red)' : 'var(--text-muted)' }}>
-                      {r.total_deducted > 0 ? `-${r.total_deducted}` : '0'} / {(r.total_max_score || 0) - (r.total_deducted || 0)}
+                    <td style={{ fontWeight: 700, color: r.avg_score >= 90 ? 'var(--accent-green)' : r.avg_score >= 70 ? 'var(--accent-orange)' : r.avg_score > 0 ? 'var(--accent-red)' : 'var(--text-muted)' }}>
+                      {r.avg_score > 0 ? r.avg_score : '—'}
                     </td>
                     <td>
                       <span style={{ padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700, background: s.bg, color: s.color }}>{r.status}</span>
@@ -233,12 +233,13 @@ export default function StoreAudits() {
   )
 }
 
-// ─── 新增稽核單 modal（只填表頭，建立後自動帶 42 個項目）─────
+// ─── 新增稽核單 modal（只填表頭，建立後自動帶 142 個評核項目）─────
 function NewAuditModal({ stores, boundChainId, orgId, auditor, bindingId, onClose, onCreated }) {
   const today = new Date().toISOString().slice(0, 10)
   const [storeId, setStoreId] = useState('')
   const [date, setDate] = useState(today)
-  const [shift, setShift] = useState('')
+  const [shifts, setShifts] = useState([])
+  const toggleShift = (sh) => setShifts(prev => prev.includes(sh) ? prev.filter(x => x !== sh) : [...prev, sh])
   const [arrive, setArrive] = useState('')
   const [depart, setDepart] = useState('')
   const [saving, setSaving] = useState(false)
@@ -253,7 +254,7 @@ function NewAuditModal({ stores, boundChainId, orgId, auditor, bindingId, onClos
       store_id: Number(storeId),
       store_name: store?.name || '',
       audit_date: date,
-      shift: shift || null,
+      shift: shifts.length ? shifts.join('、') : null,
       arrive_time: arrive || null,
       depart_time: depart || null,
       auditor_id: auditor?.id || null,
@@ -282,17 +283,27 @@ function NewAuditModal({ stores, boundChainId, orgId, auditor, bindingId, onClos
               {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <div>
-              <label style={{ fontSize: 12, color: 'var(--text-secondary)' }}>稽核日期 <span style={{ color: 'var(--accent-red)' }}>*</span></label>
-              <input type="date" className="form-input" value={date} onChange={e => setDate(e.target.value)} style={{ width: '100%' }} />
-            </div>
-            <div>
-              <label style={{ fontSize: 12, color: 'var(--text-secondary)' }}>班次</label>
-              <select className="form-input" value={shift} onChange={e => setShift(e.target.value)} style={{ width: '100%' }}>
-                <option value="">未指定</option>
-                {SHIFTS.map(s => <option key={s}>{s}</option>)}
-              </select>
+          <div>
+            <label style={{ fontSize: 12, color: 'var(--text-secondary)' }}>稽核日期 <span style={{ color: 'var(--accent-red)' }}>*</span></label>
+            <input type="date" className="form-input" value={date} onChange={e => setDate(e.target.value)} style={{ width: '100%' }} />
+          </div>
+          <div>
+            <label style={{ fontSize: 12, color: 'var(--text-secondary)' }}>視察班別（可複選）</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+              {SHIFTS.map(sh => {
+                const on = shifts.includes(sh)
+                return (
+                  <button key={sh} type="button" onClick={() => toggleShift(sh)}
+                    style={{
+                      padding: '6px 12px', borderRadius: 6, fontSize: 12, cursor: 'pointer', fontWeight: 600,
+                      border: on ? '1px solid var(--accent-cyan)' : '1px solid var(--border)',
+                      background: on ? 'var(--accent-cyan-dim)' : 'var(--bg-secondary)',
+                      color: on ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+                    }}>
+                    {on ? '✓ ' : ''}{sh}
+                  </button>
+                )
+              })}
             </div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>

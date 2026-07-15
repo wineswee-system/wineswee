@@ -24,7 +24,9 @@ const CATEGORIES = ['交通', '住宿', '餐飲', '設備', '其他']
 const emptyItem = () => ({ name: '', qty: 1, unit_price: '', subtotal: 0 })
 
 export default function Expenses() {
-  const { profile, hasPermission } = useAuth()
+  const { profile, hasPermission, isAdmin } = useAuth()
+  // 黑色(限制)科目:只給 財務部(25)/人力資源管理部(26)/admin 看;一般員工只看紅色(all)
+  const canSeeRestrictedAccounts = isAdmin || [25, 26].includes(profile?.department_id)
   const canDeleteAll = hasPermission('hr_form.delete_all')
   const { canApprove } = usePendingApprovals()
   const navigate = useNavigate()
@@ -113,7 +115,13 @@ export default function Expenses() {
       getAccounts(orgId),
     ]).then(([ex, e, d, orgRes, accRes]) => {
       const emps = e.data || []
-      const accs = accRes?.data || []
+      const accsRaw = accRes?.data || []
+      // 依可選範圍過濾:pick_scope=all 全體 / restricted 限財務人資admin / null=背景GL不可選。
+      // 若尚未跑 migration(全無 pick_scope)→ 維持舊行為全顯示,避免下拉空掉。
+      const hasScope = accsRaw.some(a => a.pick_scope)
+      const accs = hasScope
+        ? accsRaw.filter(a => a.pick_scope === 'all' || (a.pick_scope === 'restricted' && canSeeRestrictedAccounts))
+        : accsRaw
       setExpenses(ex.data || [])
       setEmployees(emps)
       setDepartments(d.data || [])

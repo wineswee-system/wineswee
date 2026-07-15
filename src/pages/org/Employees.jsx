@@ -274,6 +274,12 @@ export default function Employees() {
     if (type === 'separation' && !emp.resign_date) { toast.error('此員工沒有離職日，無法開立離職證明'); return }
     const { data: full } = await supabase.from('employees')
       .select('id_number, birth_date').eq('id', emp.id).maybeSingle()
+    // 薪資 = 本薪 + 所有固定津貼(給在職證明用)
+    const { data: ss } = await supabase.from('salary_structures')
+      .select('base_salary, meal_allowance, role_allowance, supervisor_allowance, night_shift_allowance, cross_store_allowance, transport_allowance, attendance_bonus')
+      .eq('employee_id', emp.id).maybeSingle()
+    const salary = ss ? ['base_salary', 'meal_allowance', 'role_allowance', 'supervisor_allowance', 'night_shift_allowance', 'cross_store_allowance', 'transport_allowance', 'attendance_bonus']
+      .reduce((s, k) => s + Number(ss[k] || 0), 0) : 0
     exportEmployeeCertificate({
       type,
       employee: {
@@ -285,6 +291,7 @@ export default function Employees() {
         position: emp.position,
         dept: deptName(emp.department_id) || emp.dept,
         store: storeName(emp.store_id) || emp.store,
+        salary,
       },
       org: orgInfo || {},
     })

@@ -46,9 +46,11 @@ export function exportEmployeeCertificate({ type, employee = {}, org = {} }) {
   // 正文分行顯示（身分證/出生日期各自一行）；離職證明依勞基法精神只記事實
   const idLine = idNo ? `身分證字號：${esc(idNo)}<br>` : ''
   const birthLine = birthD ? `出生日期：${esc(birthD)}<br>` : ''
+  const salary = Number(employee.salary || 0)   // 本薪 + 所有津貼(呼叫端算好傳入)
+  const salaryLine = salary > 0 ? `月薪　<b>NT$ ${salary.toLocaleString('en-US')}</b><br>` : ''
   const body = isSep
-    ? `茲證明　<b>${esc(empName)}</b>　君<br>${idLine}${birthLine}自　<b>${esc(joinD)}</b>　起至　<b>${esc(resignD)}</b>　止<br>任職於本公司，擔任　<b>${esc(role)}</b><br>現已離職，特此證明。`
-    : `茲證明　<b>${esc(empName)}</b>　君<br>${idLine}${birthLine}自　<b>${esc(joinD)}</b>　起<br>任職於本公司，現擔任　<b>${esc(role)}</b><br>目前仍在職，特此證明。`
+    ? `茲證明　<b>${esc(empName)}</b>　君<br>${idLine}${birthLine}自　<b>${esc(joinD)}</b>　起至　<b>${esc(resignD)}</b>　止<br>任職於本公司，擔任　<b>${esc(role)}</b><br>${salaryLine}現已離職，特此證明。`
+    : `茲證明　<b>${esc(empName)}</b>　君<br>${idLine}${birthLine}自　<b>${esc(joinD)}</b>　起<br>任職於本公司，現擔任　<b>${esc(role)}</b><br>${salaryLine}目前仍在職，特此證明。`
 
   const html = `<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8">
 <title>${esc(title)} - ${esc(empName)}</title>
@@ -58,9 +60,8 @@ export function exportEmployeeCertificate({ type, employee = {}, org = {} }) {
   .toolbar { text-align: center; margin-bottom: 16px; }
   .toolbar button { padding: 10px 20px; background: #0e7490; color: #fff; border: none; border-radius: 8px; font-size: 14px; cursor: pointer; font-weight: 600; font-family: inherit; }
   .page { max-width: 760px; margin: 0 auto; padding: 56px 64px; border: 1px solid #ddd; min-height: 250mm; display: flex; flex-direction: column; }
-  .org-head { text-align: center; font-size: 22px; font-weight: 700; letter-spacing: 2px; }
-  .org-tax { text-align: center; font-size: 12px; color: #555; margin-top: 4px; }
-  .logo { display: block; max-height: 64px; margin: 0 auto 8px; }
+  .org-head { text-align: center; font-size: 36px; font-weight: 700; letter-spacing: 2px; }
+  .logo { max-height: 120px; margin: 0 0 12px; align-self: flex-start; }
   h1.title { text-align: center; font-size: 26px; letter-spacing: 8px; margin: 36px 0 40px; font-weight: 700; }
   .body { font-size: 17px; line-height: 2.4; text-align: center; text-indent: 0; }
   .body b { font-weight: 700; }
@@ -76,7 +77,6 @@ export function exportEmployeeCertificate({ type, employee = {}, org = {} }) {
   <div class="page">
     ${org.logo_url ? `<img class="logo" src="${esc(org.logo_url)}" alt="logo">` : ''}
     <div class="org-head">${esc(org.name || '')}</div>
-    ${org.tax_id ? `<div class="org-tax">統一編號：${esc(org.tax_id)}</div>` : ''}
     <h1 class="title">${esc(title)}</h1>
     <div class="body">${body}</div>
     <div class="sign">

@@ -61,7 +61,7 @@ export function exportEmployeeCertificate({ type, employee = {}, org = {} }) {
   .toolbar button { padding: 10px 20px; background: #0e7490; color: #fff; border: none; border-radius: 8px; font-size: 14px; cursor: pointer; font-weight: 600; font-family: inherit; }
   .page { max-width: 760px; margin: 0 auto; padding: 56px 64px; border: 1px solid #ddd; min-height: 250mm; display: flex; flex-direction: column; }
   .org-head { text-align: center; font-size: 36px; font-weight: 700; letter-spacing: 2px; }
-  .logo { max-height: 120px; margin: 0 0 12px; align-self: flex-start; }
+  .logo { max-height: 120px; margin: 0 auto 12px; align-self: center; }
   h1.title { text-align: center; font-size: 26px; letter-spacing: 8px; margin: 36px 0 40px; font-weight: 700; }
   .body { font-size: 17px; line-height: 2.4; text-align: center; text-indent: 0; }
   .body b { font-weight: 700; }

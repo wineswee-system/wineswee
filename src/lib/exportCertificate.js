@@ -70,7 +70,8 @@ export function exportEmployeeCertificate({ type, employee = {}, org = {} }) {
   .sign .seal { color: #b91c1c; }
   /* 日期:置中、推到頁面最底 */
   .date { margin-top: auto; padding-top: 32px; text-align: center; font-size: 16px; }
-  @media print { .toolbar { display: none; } .page { border: none; padding: 40px 56px; } body { padding: 0; } }
+  @page { size: A4; margin: 0; }
+  @media print { .toolbar { display: none; } .page { border: none; padding: 64px 64px; } body { padding: 0; } }
 </style></head>
 <body>
   <div class="toolbar"><button onclick="window.print()">🖨️ 列印 / 另存為 PDF</button></div>

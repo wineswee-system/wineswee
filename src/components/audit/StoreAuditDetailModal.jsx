@@ -294,7 +294,6 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
                         <ItemRow
                           key={item.id}
                           item={item}
-                          employees={employees}
                           editable={isDraft}
                           maxDeduct={(grp.allot || 0) - (gd - (item.deduct_score || 0))}
                           onChange={p => updateItem(item.id, p)}
@@ -315,6 +314,14 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
               <NoteField label="公司建議 / 活動安排事項" value={audit.notes_suggestions} editable={isDraft}
                 onChange={v => updateAudit({ notes_suggestions: v })} />
             </div>
+
+            {/* 整張稽核單共用照片（最多 20 張）*/}
+            <AuditPhotos
+              auditId={auditId}
+              photos={Array.isArray(audit.photos) ? audit.photos : []}
+              editable={isDraft}
+              onChange={photos => updateAudit({ photos })}
+            />
           </div>
 
           {/* 右：當班人員 + 簽核流程 */}
@@ -452,13 +459,10 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
   )
 }
 
-// ─── 評核項目單列（評分制：填扣分 + 說明）───
-function ItemRow({ item, employees, editable, maxDeduct, onChange }) {
-  const empOpts = useMemo(() => empOptions(employees, { keyBy: 'id' }), [employees])
-  const [uploading, setUploading] = useState(false)
+// ─── 評核項目單列（評分制：只填扣分；責任人看當班簽名、照片看整張統計）───
+function ItemRow({ item, editable, maxDeduct, onChange }) {
   const deducted = item.deduct_score || 0
   const hasDeduct = deducted > 0
-  const attachments = Array.isArray(item.attachments) ? item.attachments : []
 
   const setDeduct = (raw) => {
     let v = Math.max(0, Math.floor(Number(raw) || 0))
@@ -466,30 +470,6 @@ function ItemRow({ item, employees, editable, maxDeduct, onChange }) {
     // 有扣分 → passed=false（供 submit 計 total_deducted）；0 → 合格
     onChange({ deduct_score: v, passed: v > 0 ? false : true })
   }
-
-  const handleFiles = async (e) => {
-    const files = Array.from(e.target.files || [])
-    if (!files.length) return
-    const remaining = 20 - attachments.length
-    if (remaining <= 0) { toast.warning('最多 20 張附件'); e.target.value = ''; return }
-    setUploading(true)
-    try {
-      const urls = await Promise.all(files.slice(0, remaining).map(async (file) => {
-        const ext = file.name.split('.').pop() || 'jpg'
-        const path = `${item.audit_id}/${item.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
-        const { error } = await supabase.storage.from('audit-photos').upload(path, file, { upsert: false })
-        if (error) throw error
-        return supabase.storage.from('audit-photos').getPublicUrl(path).data.publicUrl
-      }))
-      onChange({ attachments: [...attachments, ...urls] })
-    } catch (err) {
-      toast.error('上傳失敗：' + err.message)
-    } finally {
-      setUploading(false)
-      e.target.value = ''
-    }
-  }
-  const removeAttachment = (url) => onChange({ attachments: attachments.filter(u => u !== url) })
 
   return (
     <div style={{
@@ -540,56 +520,66 @@ function ItemRow({ item, employees, editable, maxDeduct, onChange }) {
           item.remark && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 3, padding: '3px 8px', background: 'var(--bg-secondary)', borderRadius: 4 }}>{item.remark}</div>
         )
       )}
+    </div>
+  )
+}
 
-      {/* 有扣分：責任人 + 附件 */}
-      {hasDeduct && editable && (
-        <div style={{ marginTop: 6, display: 'grid', gap: 6 }}>
-          <SearchableSelect
-            value={item.responsible_employee_id || ''}
-            onChange={(v) => {
-              const emp = employees.find(x => x.id === Number(v))
-              onChange({ responsible_employee_id: emp?.id || null, responsible_employee_name: emp?.name || null })
-            }}
-            options={empOpts}
-            placeholder="責任人（可留白）"
-          />
-          <div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span><Paperclip size={11} style={{ verticalAlign: 'middle', marginRight: 3 }} />附件照片（{attachments.length}/20）</span>
-              {attachments.length < 20 && (
-                <label style={{ cursor: uploading ? 'default' : 'pointer', fontSize: 11, color: uploading ? 'var(--text-muted)' : 'var(--accent-cyan)' }}>
-                  {uploading ? '上傳中...' : '＋ 新增'}
-                  <input type="file" multiple accept="image/*" style={{ display: 'none' }} onChange={handleFiles} disabled={uploading} />
-                </label>
+// ─── 整張稽核單共用照片區（最多 20 張）───
+function AuditPhotos({ auditId, photos, editable, onChange }) {
+  const [uploading, setUploading] = useState(false)
+  const handleFiles = async (e) => {
+    const files = Array.from(e.target.files || [])
+    if (!files.length) return
+    const remaining = 20 - photos.length
+    if (remaining <= 0) { toast.warning('最多 20 張照片'); e.target.value = ''; return }
+    setUploading(true)
+    try {
+      const urls = await Promise.all(files.slice(0, remaining).map(async (file) => {
+        const ext = file.name.split('.').pop() || 'jpg'
+        const path = `${auditId}/audit/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
+        const { error } = await supabase.storage.from('audit-photos').upload(path, file, { upsert: false })
+        if (error) throw error
+        return supabase.storage.from('audit-photos').getPublicUrl(path).data.publicUrl
+      }))
+      onChange([...photos, ...urls])
+    } catch (err) {
+      toast.error('上傳失敗：' + err.message)
+    } finally {
+      setUploading(false)
+      e.target.value = ''
+    }
+  }
+  const removePhoto = (url) => onChange(photos.filter(u => u !== url))
+
+  if (!editable && photos.length === 0) return null
+  return (
+    <div style={{ marginTop: 16 }}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span><Paperclip size={13} style={{ verticalAlign: 'middle', marginRight: 4 }} />稽核照片（{photos.length}/20）</span>
+        {editable && photos.length < 20 && (
+          <label style={{ cursor: uploading ? 'default' : 'pointer', fontSize: 12, color: uploading ? 'var(--text-muted)' : 'var(--accent-cyan)' }}>
+            {uploading ? '上傳中...' : '＋ 新增照片'}
+            <input type="file" multiple accept="image/*" style={{ display: 'none' }} onChange={handleFiles} disabled={uploading} />
+          </label>
+        )}
+      </div>
+      {photos.length > 0 ? (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(84px, 1fr))', gap: 6 }}>
+          {photos.map((url, i) => (
+            <div key={url} style={{ position: 'relative', aspectRatio: '1', borderRadius: 6, overflow: 'hidden', background: 'var(--bg-secondary)' }}>
+              <img src={url} alt={`照片 ${i + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'pointer', display: 'block' }} onClick={() => window.open(url, '_blank')} />
+              {editable && (
+                <button onClick={() => removePhoto(url)} style={{ position: 'absolute', top: 2, right: 2, background: 'rgba(0,0,0,0.65)', border: 'none', borderRadius: '50%', width: 20, height: 20, color: '#fff', cursor: 'pointer', fontSize: 14, lineHeight: '20px', padding: 0 }}>×</button>
               )}
             </div>
-            {attachments.length > 0 && (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(60px, 1fr))', gap: 4 }}>
-                {attachments.map((url, i) => (
-                  <div key={url} style={{ position: 'relative', aspectRatio: '1', borderRadius: 4, overflow: 'hidden', background: 'var(--bg-secondary)' }}>
-                    <img src={url} alt={`附件 ${i + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'pointer', display: 'block' }} onClick={() => window.open(url, '_blank')} />
-                    <button onClick={() => removeAttachment(url)} style={{ position: 'absolute', top: 2, right: 2, background: 'rgba(0,0,0,0.65)', border: 'none', borderRadius: '50%', width: 18, height: 18, color: '#fff', cursor: 'pointer', fontSize: 13, lineHeight: '18px', padding: 0 }}>×</button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          ))}
         </div>
-      )}
-
-      {/* 唯讀：有扣分細節 */}
-      {hasDeduct && !editable && (item.responsible_employee_name || attachments.length > 0) && (
-        <div style={{ marginTop: 4, marginLeft: 8, fontSize: 11, color: 'var(--text-muted)' }}>
-          {item.responsible_employee_name && <span>責任人：{item.responsible_employee_name}</span>}
-          {attachments.length > 0 && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(60px, 1fr))', gap: 4, marginTop: 4 }}>
-              {attachments.map((url, i) => (
-                <img key={url} src={url} alt={`附件 ${i + 1}`} style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', borderRadius: 4, cursor: 'pointer' }} onClick={() => window.open(url, '_blank')} />
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+      ) : editable ? (
+        <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, height: 56, border: '1px dashed var(--border)', borderRadius: 6, cursor: uploading ? 'default' : 'pointer', fontSize: 13, color: 'var(--text-muted)' }}>
+          <Paperclip size={15} /> {uploading ? '上傳中...' : '點此新增稽核照片（最多 20 張）'}
+          <input type="file" multiple accept="image/*" style={{ display: 'none' }} onChange={handleFiles} disabled={uploading} />
+        </label>
+      ) : null}
     </div>
   )
 }

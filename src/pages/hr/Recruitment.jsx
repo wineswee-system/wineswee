@@ -552,12 +552,14 @@ export default function Recruitment() {
       evaluation_template_id: jobForm.evaluation_template_id ? Number(jobForm.evaluation_template_id) : null,
     }
     if (editingJob) {
-      const { data } = await updateRecruitmentJob(editingJob.id, payload)
+      const { data, error } = await updateRecruitmentJob(editingJob.id, payload)
+      if (error) { toast.error('儲存失敗：' + error.message); return }
       if (data) { setJobs(prev => prev.map(j => j.id === editingJob.id ? data : j)); setShowJobModal(false); setEditingJob(null) }
     } else {
-      const { data } = await createRecruitmentJob({
+      const { data, error } = await createRecruitmentJob({
         ...payload, applicants: 0, status: '招募中', organization_id: orgId,
       })
+      if (error) { toast.error('新增失敗：' + error.message); return }
       if (data) { setJobs(prev => [...prev, data]); setShowJobModal(false) }
     }
   }

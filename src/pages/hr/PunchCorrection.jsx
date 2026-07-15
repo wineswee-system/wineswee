@@ -290,10 +290,15 @@ export default function PunchCorrection() {
 
   // 撤回：申請人取消自己待審核的申請（移至最近刪除，可復原）
   const handleWithdraw = async (row) => {
+    if (row.status !== '待審核') { toast.error('這張已審核完成，無法撤回'); return }
     if (!(await confirm({ message: '撤回這張補打卡申請？（會移到最近刪除，可復原）' }))) return
     const { error } = await supabase.rpc('soft_delete_request', { p_table: 'clock_corrections', p_id: row.id, p_deleted_by: profile?.id ?? null })
-    if (error) { toast.error('撤回失敗：' + error.message); return }
-    toast.success('已撤回')
+    if (error) {
+      const m = error.message || ''
+      toast.error(/permission|denied|policy/i.test(m) ? '撤回失敗：權限不足（只能撤回自己的待審核申請）' : '撤回失敗：' + m)
+      return
+    }
+    toast.success('已撤回，可到「最近刪除」復原')
     load()
   }
 

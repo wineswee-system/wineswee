@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import StaffDashboard from './dashboard/components/StaffDashboard'
+import TeamDashboard from './dashboard/TeamDashboard'
 import ApprovalCenter from './dashboard/components/ApprovalCenter'
 import SettleTodoView from './dashboard/components/SettleTodoView'
 import WorkOrderTodoView from './dashboard/components/WorkOrderTodoView'
@@ -586,14 +587,14 @@ export default function Dashboard() {
   const { profile } = useAuth()
   // 用 profile.role（employees 文字欄，可靠）分流，不依賴 role_id→roles 的 join（可能沒讀到）：
   //   store_staff             → /portal（員工 portal 是他們的「家」）
-  //   admin / super_admin     → AdminDashboard（營運/財務總覽，資訊較多）
+  //   admin / super_admin     → TeamDashboard（人·HR / 事·流程 + 我的待辦任務）
   //   manager / office_staff… → StaffDashboard（精簡個人視角）
   const r = profile?.role || ''
   if (r === 'store_staff') return <Navigate to="/portal" replace />
 
   // 兩 tab：總覽 + 我的待簽（簽核中心）
   const inner = (r === 'admin' || r === 'super_admin')
-    ? <AdminDashboard profile={profile} />
+    ? <TeamDashboard />
     : <StaffDashboard profile={profile} />
 
   return <DashboardTabs overview={inner} />

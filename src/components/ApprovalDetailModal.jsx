@@ -122,8 +122,16 @@ export default function ApprovalDetailModal({
       // 不蓋過 caller 已算好的 durationText（buildChainBasedSteps 對加簽 step
       // 自己算 duration，RPC 不一定有對應 entry）
       // exited_at = 該關核准/駁回、移交下一關的時間 → 當作「這關幾點簽的」completedAt 顯示
+      // 用時間軸實際進/出站重算狀態:chain 推進不一定同步更新 workflow_steps.status
+      //   → 已簽的關會卡在 current(空心)。已出站=已簽核(實心) / 已進站未出站=當前這關。
+      let liveStatus = s.status
+      if (s.status !== 'rejected') {
+        if (t.exited_at) liveStatus = 'completed'
+        else if (t.entered_at && s.status !== 'completed') liveStatus = 'current'
+      }
       return {
         ...s,
+        status: liveStatus,
         durationText: s.durationText || t.duration_text,
         completedAt: s.completedAt || t.exited_at || null,
       }

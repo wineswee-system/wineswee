@@ -258,48 +258,15 @@ export default function PunchCorrection() {
   const openClonePunch = (c) => { openEditPunch(c); setEditingId(null); setCloneSourceId(c.id); loadCarriedFormAttachments('correction', c.id).then(setCarriedAtts) }
 
   const handleApprove = async (id) => {
-    const correction = corrections.find(c => c.id === id)
     const { data: result, error } = await supabase.rpc('web_advance_chain_request', {
       p_type: 'correction', p_id: id, p_action: 'approve',
     })
     if (error) { toast.error('操作失敗：' + error.message); return }
     if (!result?.ok) { toast.error('操作失敗：' + (result?.error || '未知')); return }
-
-    if (result.event === 'approved' && correction) {
-      // Write correction back to attendance_records
-      const matchField = correction.employee_id ? 'employee_id' : 'employee'
-      const matchValue = correction.employee_id || correction.employee
-      const { data: existing } = await supabase.from('attendance_records')
-        .select('*').eq(matchField, matchValue).eq('date', correction.date).maybeSingle()
-      if (existing) {
-        const update = {}
-        if (normalizeType(correction.type) === 'clock_in') {
-          update.clock_in = correction.correction_time
-        } else {
-          update.clock_out = correction.correction_time
-        }
-        const finalIn = update.clock_in || existing.clock_in
-        const finalOut = update.clock_out || existing.clock_out
-        if (finalIn && finalOut) {
-          const [inH, inM] = finalIn.split(':').map(Number)
-          const [outH, outM] = finalOut.split(':').map(Number)
-          let diff = (outH * 60 + outM) - (inH * 60 + inM)
-          if (diff < 0) diff += 24 * 60
-          update.hours = Math.round(diff / 60 * 10) / 10
-        }
-        update.status = existing.status === '未打卡' ? '補登' : existing.status
-        await supabase.from('attendance_records').update(update).eq('id', existing.id)
-      } else {
-        const newRecord = { employee: correction.employee, date: correction.date, status: '補登' }
-        if (normalizeType(correction.type) === 'clock_in') {
-          newRecord.clock_in = correction.correction_time
-        } else {
-          newRecord.clock_out = correction.correction_time
-        }
-        await supabase.from('attendance_records').insert(newRecord)
-      }
-    }
+    // 寫回 attendance 交給 DB 觸發器 trg_apply_correction_on_approve（讀最新 correction_time）。
+    //   前端不再自己寫 → 避免拿到「編輯前的舊時間」覆蓋掉觸發器剛寫的新時間。
     setCorrections(prev => prev.map(c => c.id === id ? { ...c, status: result.status } : c))
+    if (result.event === 'approved') load()
   }
 
   const handleReject = async (id, reasonArg) => {
@@ -318,6 +285,15 @@ export default function PunchCorrection() {
     const { error } = await supabase.rpc('soft_delete_request', { p_table: 'clock_corrections', p_id: row.id, p_deleted_by: profile?.id ?? null })
     if (error) { toast.error('刪除失敗：' + error.message); return }
     toast.success('已移至最近刪除')
+    load()
+  }
+
+  // 撤回：申請人取消自己待審核的申請（移至最近刪除，可復原）
+  const handleWithdraw = async (row) => {
+    if (!(await confirm({ message: '撤回這張補打卡申請？（會移到最近刪除，可復原）' }))) return
+    const { error } = await supabase.rpc('soft_delete_request', { p_table: 'clock_corrections', p_id: row.id, p_deleted_by: profile?.id ?? null })
+    if (error) { toast.error('撤回失敗：' + error.message); return }
+    toast.success('已撤回')
     load()
   }
 
@@ -422,9 +398,17 @@ export default function PunchCorrection() {
                           {c.reject_reason && <div style={{ color: 'var(--accent-red)' }}>原因：{c.reject_reason}</div>}
                         </span>
                       )}
-                      {['待審核','申請中','已駁回','已退回'].includes(c.status) && (canEditClock || c.employee === profile?.name) && (
+                      {/* 編輯：駁回/退回可重送；待審核/申請中只在「還沒人簽核」(current_step=0)時可編輯,有人簽過就鎖 */}
+                      {(['已駁回','已退回'].includes(c.status) || (['待審核','申請中'].includes(c.status) && (c.current_step ?? 0) === 0))
+                        && (canEditClock || c.employee === profile?.name) && (
                         <button className="btn btn-sm btn-primary" style={{ padding: '4px 8px', fontSize: 11, background: 'var(--accent-orange)' }} onClick={() => openEditPunch(c)}>
                           ✏️ {(['已駁回','已退回'].includes(c.status)) ? '編輯重送' : '編輯'}
+                        </button>
+                      )}
+                      {/* 撤回：申請人取消自己待審核的申請 */}
+                      {c.employee === profile?.name && c.status === '待審核' && (
+                        <button className="btn btn-sm btn-secondary" style={{ padding: '4px 8px', fontSize: 11, color: 'var(--accent-red)' }} onClick={() => handleWithdraw(c)} title="撤回這張待審核申請">
+                          ↩ 撤回
                         </button>
                       )}
                       {c.employee === profile?.name && (

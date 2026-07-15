@@ -749,35 +749,31 @@ export default function Recruitment() {
     }
   }
 
-  // 指定簽核人核准 / 駁回錄取簽呈
+  // 指定簽核人核准 / 駁回錄取簽呈 — 走 SECURITY DEFINER RPC(原子 + DB 把關誰能簽)
   const handleApproveOffer = async (ol) => {
-    const { data, error } = await updateOfferLetter(ol.id, {
-      status: '已核准', approved_at: new Date().toISOString(),
-    })
-    if (error) { toast.error('核准失敗：' + error.message); return }
-    if (data) {
-      setOfferLetters(prev => prev.map(x => x.id === ol.id ? { ...x, ...data } : x))
-      const cand = candidates.find(c => c.id === ol.candidate_id)
-      const hist = [...(cand?.stage_history || []), { stage: '已錄取', changed_at: new Date().toISOString() }]
-      await updateCandidate(ol.candidate_id, { stage: '已錄取', hire_status: '已核准', stage_history: hist })
-      setCandidates(prev => prev.map(c => c.id === ol.candidate_id ? { ...c, stage: '已錄取', hire_status: '已核准', stage_history: hist } : c))
-      if (selectedCand?.id === ol.candidate_id) setSelectedCand(s => ({ ...s, stage: '已錄取', hire_status: '已核准', stage_history: hist }))
-      toast.success('已核准錄取')
+    const { data, error } = await supabase.rpc('approve_offer_letter', { p_id: ol.id, p_action: 'approve' })
+    if (error || data?.ok === false) {
+      toast.error('核准失敗：' + (error?.message || data?.error || '未知')); return
     }
+    setOfferLetters(prev => prev.map(x => x.id === ol.id ? { ...x, status: '已核准', approved_at: new Date().toISOString() } : x))
+    const cand = candidates.find(c => c.id === ol.candidate_id)
+    const hist = [...(cand?.stage_history || []), { stage: '已錄取', changed_at: new Date().toISOString() }]
+    setCandidates(prev => prev.map(c => c.id === ol.candidate_id ? { ...c, stage: '已錄取', hire_status: '已核准', stage_history: hist } : c))
+    if (selectedCand?.id === ol.candidate_id) setSelectedCand(s => ({ ...s, stage: '已錄取', hire_status: '已核准', stage_history: hist }))
+    toast.success('已核准錄取')
   }
 
   const handleRejectOffer = async (ol) => {
     const reason = window.prompt('請輸入駁回原因：')
     if (reason === null) return
-    const { data, error } = await updateOfferLetter(ol.id, { status: '已駁回', reject_reason: reason || null })
-    if (error) { toast.error('駁回失敗：' + error.message); return }
-    if (data) {
-      setOfferLetters(prev => prev.map(x => x.id === ol.id ? { ...x, ...data } : x))
-      await updateCandidate(ol.candidate_id, { hire_status: '已駁回' })
-      setCandidates(prev => prev.map(c => c.id === ol.candidate_id ? { ...c, hire_status: '已駁回' } : c))
-      if (selectedCand?.id === ol.candidate_id) setSelectedCand(s => ({ ...s, hire_status: '已駁回' }))
-      toast('已駁回錄取簽呈')
+    const { data, error } = await supabase.rpc('approve_offer_letter', { p_id: ol.id, p_action: 'reject', p_reason: reason || null })
+    if (error || data?.ok === false) {
+      toast.error('駁回失敗：' + (error?.message || data?.error || '未知')); return
     }
+    setOfferLetters(prev => prev.map(x => x.id === ol.id ? { ...x, status: '已駁回', reject_reason: reason } : x))
+    setCandidates(prev => prev.map(c => c.id === ol.candidate_id ? { ...c, hire_status: '已駁回' } : c))
+    if (selectedCand?.id === ol.candidate_id) setSelectedCand(s => ({ ...s, hire_status: '已駁回' }))
+    toast('已駁回錄取簽呈')
   }
 
   const handlePrintOffer = (ol) =>

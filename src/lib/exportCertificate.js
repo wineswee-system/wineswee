@@ -43,15 +43,12 @@ export function exportEmployeeCertificate({ type, employee = {}, org = {} }) {
     return
   }
 
-  // 個資括號：身分證字號 + 出生日期
-  const pinfo = [idNo && `身分證字號：${esc(idNo)}`, birthD && `出生日期：${esc(birthD)}`]
-    .filter(Boolean).join('、')
-  const pinfoStr = pinfo ? `（${pinfo}）` : ''
-
-  // 正文（離職證明依勞基法精神：只記事實、不載離職原因等不利事項）
+  // 正文分行顯示（身分證/出生日期各自一行）；離職證明依勞基法精神只記事實
+  const idLine = idNo ? `身分證字號：${esc(idNo)}<br>` : ''
+  const birthLine = birthD ? `出生日期：${esc(birthD)}<br>` : ''
   const body = isSep
-    ? `茲證明　<b>${esc(empName)}</b>　君${pinfoStr}，自　<b>${esc(joinD)}</b>　起至　<b>${esc(resignD)}</b>　止任職於本公司，擔任　<b>${esc(role)}</b>，現已離職，特此證明。`
-    : `茲證明　<b>${esc(empName)}</b>　君${pinfoStr}，自　<b>${esc(joinD)}</b>　起任職於本公司，現擔任　<b>${esc(role)}</b>，目前仍在職，特此證明。`
+    ? `茲證明　<b>${esc(empName)}</b>　君<br>${idLine}${birthLine}自　<b>${esc(joinD)}</b>　起至　<b>${esc(resignD)}</b>　止<br>任職於本公司，擔任　<b>${esc(role)}</b><br>現已離職，特此證明。`
+    : `茲證明　<b>${esc(empName)}</b>　君<br>${idLine}${birthLine}自　<b>${esc(joinD)}</b>　起<br>任職於本公司，現擔任　<b>${esc(role)}</b><br>目前仍在職，特此證明。`
 
   const html = `<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8">
 <title>${esc(title)} - ${esc(empName)}</title>
@@ -65,10 +62,10 @@ export function exportEmployeeCertificate({ type, employee = {}, org = {} }) {
   .org-tax { text-align: center; font-size: 12px; color: #555; margin-top: 4px; }
   .logo { display: block; max-height: 64px; margin: 0 auto 8px; }
   h1.title { text-align: center; font-size: 26px; letter-spacing: 8px; margin: 36px 0 40px; font-weight: 700; }
-  .body { font-size: 17px; line-height: 2.4; text-align: justify; text-indent: 0; }
+  .body { font-size: 17px; line-height: 2.4; text-align: center; text-indent: 0; }
   .body b { font-weight: 700; }
-  /* 公司資訊:左對齊、撐到中偏下 */
-  .sign { margin-top: auto; font-size: 15px; line-height: 2.1; width: fit-content; max-width: 100%; text-align: left; white-space: nowrap; }
+  /* 公司資訊:左對齊、放大、更靠左、撐到中偏下 */
+  .sign { margin-top: auto; margin-left: -16px; font-size: 18px; line-height: 2.2; width: fit-content; max-width: 100%; text-align: left; white-space: nowrap; }
   .sign .seal { color: #b91c1c; }
   /* 日期:置中、推到頁面最底 */
   .date { margin-top: auto; padding-top: 32px; text-align: center; font-size: 16px; }

@@ -46,6 +46,7 @@ const FEATURES = [
   { module: '排班管理', label: '排班',            view: 'schedule.view_all', edit: 'schedule.edit' },
   { module: '排班管理', label: '排班演算法',      view: null, edit: 'schedule.algo' },
   { module: '排班管理', label: '排班規則 / 班別', view: null, edit: 'schedule.rule_edit' },
+  { module: '排班管理', label: '鎖定 / 解鎖班表', view: null, edit: 'schedule.lock' },
   // HR 表單
   { module: 'HR 表單', label: '審核 HR 表單',     view: 'hr_form.view', edit: 'hr_form.approve' },
   { module: 'HR 表單', label: 'HR 表單範本',      view: null,           edit: 'hr_form.template_edit' },

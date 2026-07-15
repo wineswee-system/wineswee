@@ -59,6 +59,8 @@ export default function Schedule() {
   // 儲備幹部則用 position_permissions 對職位授權開通（可排自己門市）。
   const canEditSchedule = isAdmin || isSuperAdmin || hasPermission('schedule.edit')
   const canUseAISchedule = isAdmin || isSuperAdmin || hasPermission('schedule.algo')
+  // 鎖定 / 解鎖班表：需 schedule.lock 權限（預設 admin/super_admin，可在權限頁授權他人）
+  const canLockSchedule = isAdmin || isSuperAdmin || hasPermission('schedule.lock')
   // 可排「全部門市」：admin/super_admin，或被授予 schedule.view_all（如營運部經理）
   const canScheduleAllStores = isAdmin || isSuperAdmin || hasPermission('schedule.view_all')
 
@@ -348,7 +350,7 @@ export default function Schedule() {
 
   // 解鎖整月（admin / super_admin only）
   const handleUnlockMonth = async (month) => {
-    if (!isAdmin || !currentStore) return
+    if (!canLockSchedule || !currentStore) return
     if (!(await confirm({ message: `確定解鎖「${currentStore.name}」${month}？\n\n解鎖後該月可再編輯。注意：薪資結算前請再鎖回。` }))) return
     const { error } = await supabase.rpc('unlock_schedule_month', { p_store_id: currentStore.id, p_month: month })
     if (error) { toast.error('解鎖失敗：' + error.message); return }
@@ -1264,7 +1266,7 @@ export default function Schedule() {
                     }} title={locked ? `${m} 班表已鎖定，薪資可結算` : `${m} 尚未鎖定`}>
                       {locked ? `🔒 ${m} 已鎖定` : `🔓 ${m} 未鎖定`}
                     </span>
-                    {!locked && canEditSchedule && (
+                    {!locked && canLockSchedule && (
                       <button onClick={() => handleLockMonth(m)} style={{
                         display: 'inline-flex', alignItems: 'center', gap: 5,
                         padding: '7px 16px', borderRadius: 8, fontSize: 13, fontWeight: 700, lineHeight: 1,
@@ -1272,13 +1274,13 @@ export default function Schedule() {
                         border: '1px solid var(--accent-green)', cursor: 'pointer',
                       }} title={`鎖定 ${m} 班表（鎖定後該月薪資才能結算）`}>🔒 鎖定 {m}</button>
                     )}
-                    {locked && isAdmin && (
+                    {locked && canLockSchedule && (
                       <button onClick={() => handleUnlockMonth(m)} style={{
                         display: 'inline-flex', alignItems: 'center', gap: 5,
                         padding: '7px 16px', borderRadius: 8, fontSize: 13, fontWeight: 700, lineHeight: 1,
                         background: 'rgba(245,158,11,0.12)', color: 'var(--accent-orange)',
                         border: '1px solid var(--accent-orange)', cursor: 'pointer',
-                      }} title="解鎖（admin 才看得到）">🔓 解鎖 {m}</button>
+                      }} title="解鎖（需鎖定/解鎖班表權限）">🔓 解鎖 {m}</button>
                     )}
                   </span>
                 )

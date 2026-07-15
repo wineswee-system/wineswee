@@ -59,9 +59,9 @@ export function exportEmployeeCertificate({ type, employee = {}, org = {} }) {
   body { font-family: "Microsoft JhengHei","PingFang TC","Noto Sans TC","Heiti TC",sans-serif; color: #111; margin: 0; padding: 32px; }
   .toolbar { text-align: center; margin-bottom: 16px; }
   .toolbar button { padding: 10px 20px; background: #0e7490; color: #fff; border: none; border-radius: 8px; font-size: 14px; cursor: pointer; font-weight: 600; font-family: inherit; }
-  .page { position: relative; max-width: 760px; margin: 0 auto; padding: 56px 64px; border: 1px solid #ddd; min-height: 250mm; display: flex; flex-direction: column; }
-  /* 浮水印:logo 做成淡印章疊在最下方 */
-  .watermark { position: absolute; left: 50%; bottom: 48px; transform: translateX(-50%); max-height: 240px; opacity: 0.12; pointer-events: none; z-index: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .page { position: relative; max-width: 760px; margin: 0 auto; padding: 56px 64px; border: 1px solid #ddd; min-height: 262mm; display: flex; flex-direction: column; }
+  /* 浮水印:logo 做成大淡印章疊在最下方 */
+  .watermark { position: absolute; left: 50%; bottom: 60px; transform: translateX(-50%); max-height: 460px; opacity: 0.10; pointer-events: none; z-index: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .sign, .date { position: relative; z-index: 1; }
   .org-head { text-align: center; font-size: 36px; font-weight: 700; letter-spacing: 2px; }
   .logo { max-height: 120px; margin: 0 auto 12px; align-self: center; }
@@ -71,8 +71,8 @@ export function exportEmployeeCertificate({ type, employee = {}, org = {} }) {
   /* 公司資訊:左對齊、放大、更靠左、撐到中偏下 */
   .sign { margin-top: auto; margin-left: -16px; font-size: 18px; line-height: 2.2; width: fit-content; max-width: 100%; text-align: left; white-space: nowrap; }
   .sign .seal { color: #b91c1c; }
-  /* 日期:置中、推到頁面最底 */
-  .date { margin-top: auto; padding-top: 32px; text-align: center; font-size: 16px; }
+  /* 日期:緊貼公司資訊下方、與其一起沉到頁面最底 */
+  .date { margin-top: 20px; text-align: center; font-size: 16px; }
   @page { size: A4; margin: 0; }
   @media print { .toolbar { display: none; } .page { border: none; padding: 64px 64px; } body { padding: 0; } }
 </style></head>

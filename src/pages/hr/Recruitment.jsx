@@ -514,7 +514,7 @@ export default function Recruitment() {
     const blacklisted = matches.some(c => c.stage === '淘汰')
     return { matches, blacklisted }
   }, [candForm.email, candForm.phone, candidates, editingCand])
-  const [offerForm,   setOfferForm]   = useState({ template_id: '', position: '', dept: '', salary: '', start_date: '', probation_days: 90, approver_id: '' })
+  const [offerForm,   setOfferForm]   = useState({ template_id: '', position: '', dept: '', salary: '', start_date: '', probation_days: 90, approver_ids: [] })
   const [searchQuery, setSearchQuery] = useState('')
 
   const [editingTpl, setEditingTpl] = useState(null)  // null=list, 'new'=new, obj=editing
@@ -698,7 +698,7 @@ export default function Recruitment() {
       salary:         '',
       start_date:     '',
       probation_days: 90,
-      approver_id:    '',
+      approver_ids:   [],
     })
     setShowOfferModal(true)
   }
@@ -706,7 +706,7 @@ export default function Recruitment() {
   const handleCreateOffer = async () => {
     if (!offerTarget) return
     if (!offerForm.position) { toast('請填寫職位'); return }
-    if (!offerForm.approver_id) { toast('請指定簽核人'); return }
+    if (!offerForm.approver_ids.length) { toast('請至少指定一位簽核人'); return }
     const tpl = offerTemplates.find(t => t.id === Number(offerForm.template_id))
     const filled = tpl ? fillTemplate(tpl.body_html, {
       candidate_name: offerTarget.name,
@@ -728,13 +728,19 @@ export default function Recruitment() {
       salary:          offerForm.salary ? Number(offerForm.salary) : null,
       start_date:      offerForm.start_date || null,
       probation_days:  Number(offerForm.probation_days),
-      approver_id:     Number(offerForm.approver_id),
       status:          '待審',
       organization_id: orgId,
       created_by:      profile?.id || null,
     })
     if (olErr) { toast.error('建立失敗：' + olErr.message); return }
     if (ol) {
+      // 掛動態簽核鏈(挑的人+順序)
+      const { data: chainRes, error: chainErr } = await supabase.rpc('set_offer_approval_chain', {
+        p_offer_id: ol.id, p_approver_ids: offerForm.approver_ids.map(Number),
+      })
+      if (chainErr || chainRes?.ok === false) {
+        toast.error('建立簽核鏈失敗：' + (chainErr?.message || chainRes?.error || '未知')); return
+      }
       const offerCand = candidates.find(c => c.id === offerTarget.id)
       const stage_history = [...(offerCand?.stage_history || []), { stage: '錄取決定', changed_at: new Date().toISOString() }]
       await updateCandidate(offerTarget.id, { hire_status: '待審', stage: '錄取決定', stage_history })
@@ -743,36 +749,38 @@ export default function Recruitment() {
       ))
       if (selectedCand?.id === offerTarget.id)
         setSelectedCand(s => ({ ...s, hire_status: '待審', stage: '錄取決定', stage_history }))
-      setOfferLetters(prev => [...prev, ol])
+      // 重抓錄取(帶簽核步驟)
+      const { data: fresh } = await getOfferLetters(orgId)
+      setOfferLetters(fresh || [])
       setShowOfferModal(false)
-      toast('錄取簽呈已建立，待指定簽核人審核')
+      toast.success('錄取簽呈已建立，已進第 1 關簽核')
     }
   }
 
-  // 指定簽核人核准 / 駁回錄取簽呈 — 走 SECURITY DEFINER RPC(原子 + DB 把關誰能簽)
+  // 錄取簽核鏈:當關簽核人核准/駁回 → advance_offer_approval RPC 推進(原子 + DB 把關)
+  const refreshOffersAndCands = async () => {
+    const [{ data: freshO }, { data: freshC }] = await Promise.all([getOfferLetters(orgId), getCandidates(orgId)])
+    setOfferLetters(freshO || [])
+    setCandidates(freshC || [])
+    if (selectedCand) { const u = (freshC || []).find(c => c.id === selectedCand.id); if (u) setSelectedCand(u) }
+  }
   const handleApproveOffer = async (ol) => {
-    const { data, error } = await supabase.rpc('approve_offer_letter', { p_id: ol.id, p_action: 'approve' })
+    const { data, error } = await supabase.rpc('advance_offer_approval', { p_offer_id: ol.id, p_action: 'approve' })
     if (error || data?.ok === false) {
       toast.error('核准失敗：' + (error?.message || data?.error || '未知')); return
     }
-    setOfferLetters(prev => prev.map(x => x.id === ol.id ? { ...x, status: '已核准', approved_at: new Date().toISOString() } : x))
-    const cand = candidates.find(c => c.id === ol.candidate_id)
-    const hist = [...(cand?.stage_history || []), { stage: '已錄取', changed_at: new Date().toISOString() }]
-    setCandidates(prev => prev.map(c => c.id === ol.candidate_id ? { ...c, stage: '已錄取', hire_status: '已核准', stage_history: hist } : c))
-    if (selectedCand?.id === ol.candidate_id) setSelectedCand(s => ({ ...s, stage: '已錄取', hire_status: '已核准', stage_history: hist }))
-    toast.success('已核准錄取')
+    await refreshOffersAndCands()
+    toast.success(data.final ? '已核准，錄取完成' : '已核准，進下一關')
   }
 
   const handleRejectOffer = async (ol) => {
     const reason = window.prompt('請輸入駁回原因：')
     if (reason === null) return
-    const { data, error } = await supabase.rpc('approve_offer_letter', { p_id: ol.id, p_action: 'reject', p_reason: reason || null })
+    const { data, error } = await supabase.rpc('advance_offer_approval', { p_offer_id: ol.id, p_action: 'reject', p_reason: reason || null })
     if (error || data?.ok === false) {
       toast.error('駁回失敗：' + (error?.message || data?.error || '未知')); return
     }
-    setOfferLetters(prev => prev.map(x => x.id === ol.id ? { ...x, status: '已駁回', reject_reason: reason } : x))
-    setCandidates(prev => prev.map(c => c.id === ol.candidate_id ? { ...c, hire_status: '已駁回' } : c))
-    if (selectedCand?.id === ol.candidate_id) setSelectedCand(s => ({ ...s, hire_status: '已駁回' }))
+    await refreshOffersAndCands()
     toast('已駁回錄取簽呈')
   }
 
@@ -1388,14 +1396,36 @@ export default function Recruitment() {
                 {offerLetters.length === 0 && (
                   <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>尚無錄取通知</td></tr>
                 )}
-                {offerLetters.map(ol => (
+                {offerLetters.map(ol => {
+                  const steps = (ol.steps || []).slice().sort((a, b) => a.step_order - b.step_order)
+                  const cur = steps.find(s => s.step_order === ol.current_step && s.status === '待審')
+                  const canSignNow = ol.status === '待審' && cur && (cur.approver_id === profile?.id || canManage)
+                  return (
                   <tr key={ol.id}>
                     <td style={{ fontWeight: 600 }}>{ol.candidates?.name || '—'}</td>
                     <td>{ol.position}</td>
                     <td>{ol.dept || '—'}</td>
                     <td>{ol.salary ? `NT$ ${Number(ol.salary).toLocaleString()}` : '—'}</td>
                     <td>{fmtDate(ol.start_date)}</td>
-                    <td>{ol.approver?.name || '—'}</td>
+                    <td>
+                      {steps.length === 0 ? '—' : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          {steps.map(s => {
+                            const active = s.step_order === ol.current_step && ol.status === '待審'
+                            const color = s.status === '已核准' ? 'var(--accent-green)'
+                              : s.status === '已駁回' ? 'var(--accent-red)'
+                              : active ? 'var(--accent-orange)' : 'var(--text-muted)'
+                            const mark = s.status === '已核准' ? '✓' : s.status === '已駁回' ? '✕' : active ? '●' : '○'
+                            return (
+                              <div key={s.step_order} style={{ fontSize: 11, display: 'flex', gap: 5, alignItems: 'center', color }}>
+                                <span>{mark}</span>
+                                <span>{s.step_order}. {s.approver?.name || '—'}{active ? '（待簽）' : ''}</span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </td>
                     <td>
                       <span className={`badge ${
                         ol.status === '已核准' ? 'badge-success' :
@@ -1406,7 +1436,7 @@ export default function Recruitment() {
                     </td>
                     <td>
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                        {ol.status === '待審' && (ol.approver_id === profile?.id || canManage) && (
+                        {canSignNow && (
                           <>
                             <button className="btn btn-sm btn-primary" onClick={() => handleApproveOffer(ol)}>核准</button>
                             <button className="btn btn-sm btn-secondary" style={{ color: 'var(--accent-red)' }}
@@ -1427,7 +1457,8 @@ export default function Recruitment() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -1823,15 +1854,35 @@ export default function Recruitment() {
             <input className="form-input" style={{ width: '100%' }} type="number" value={offerForm.probation_days}
               onChange={e => setOfferForm(f => ({ ...f, probation_days: e.target.value }))} />
           </Field>
-          <Field label="指定簽核人" required>
+          <Field label="簽核關卡（依序）" required>
             <SearchableSelect
-              value={offerForm.approver_id}
-              onChange={v => setOfferForm(f => ({ ...f, approver_id: v }))}
-              options={empOptions(employees)}
-              placeholder="搜尋要簽核這張錄取的人…"
+              value=""
+              onChange={v => {
+                const id = Number(v)
+                if (id && !offerForm.approver_ids.includes(id))
+                  setOfferForm(f => ({ ...f, approver_ids: [...f.approver_ids, id] }))
+              }}
+              options={empOptions(employees.filter(e => !offerForm.approver_ids.includes(e.id)))}
+              placeholder="搜尋員工，加入簽核關卡…"
             />
+            {offerForm.approver_ids.length > 0 && (
+              <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {offerForm.approver_ids.map((aid, i) => {
+                  const emp = employees.find(e => e.id === aid)
+                  return (
+                    <div key={aid} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', background: 'var(--bg-secondary)', borderRadius: 6, border: '1px solid var(--border-subtle)' }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent-cyan)', minWidth: 44 }}>第 {i + 1} 關</span>
+                      <span style={{ flex: 1, fontSize: 13 }}>{emp?.name || `#${aid}`}</span>
+                      <button type="button"
+                        onClick={() => setOfferForm(f => ({ ...f, approver_ids: f.approver_ids.filter((_, j) => j !== i) }))}
+                        style={{ background: 'none', border: 'none', color: 'var(--accent-red)', cursor: 'pointer', fontSize: 13 }}>✕</button>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-              只有這位（或招募管理者）能在「錄取簽呈」核准 / 駁回
+              依加入順序逐關簽核；每關的人（或招募管理者）才能核准 / 駁回
             </div>
           </Field>
         </Modal>

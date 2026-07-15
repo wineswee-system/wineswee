@@ -70,7 +70,7 @@ export const deleteOfferLetterTemplate = (id) =>
 // ─── Offer Letters ───
 export const getOfferLetters = (orgId, candidateId) => {
   let q = supabase.from('offer_letters')
-    .select('*, candidates(name), offer_letter_templates(name), approver:employees!approver_id(name)')
+    .select('*, candidates(name), offer_letter_templates(name), steps:offer_approval_steps(step_order,status,approver_id,decided_at,reason,approver:employees!approver_id(name))')
     .order('created_at', { ascending: false })
   if (orgId) q = q.eq('organization_id', orgId)
   if (candidateId) q = q.eq('candidate_id', candidateId)

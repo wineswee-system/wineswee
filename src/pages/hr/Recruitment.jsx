@@ -225,6 +225,23 @@ function CandidatePanel({ c, interviews, allInterviews, jobs = [], evalTemplates
           )}
         </div>
 
+        {/* 移動到任何階段（含從淘汰救回） */}
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>移動到階段</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {STAGES.filter(s => s !== c.stage).map(s => (
+              <button key={s} onClick={() => onStageChange(c.id, s)}
+                style={{
+                  fontSize: 11, padding: '4px 10px', borderRadius: 12, cursor: 'pointer',
+                  background: 'transparent', color: STAGE_COLOR[s],
+                  border: `1px solid ${STAGE_COLOR[s]}`, fontWeight: 600,
+                }}>
+                → {s}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div style={{ display: 'grid', gap: 6, marginBottom: 20, fontSize: 13 }}>
           {c.email     && <div><span style={{ color: 'var(--text-muted)' }}>Email：</span>{c.email}</div>}
           {c.phone     && <div><span style={{ color: 'var(--text-muted)' }}>電話：</span>{c.phone}</div>}

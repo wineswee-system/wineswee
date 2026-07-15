@@ -2851,19 +2851,19 @@ div.data-table > table {
 /* ── Dashboard v2 Layout ── */
 .dash-v2-metrics {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
   margin-bottom: 20px;
 }
 .dash-v2-charts {
   display: grid;
-  grid-template-columns: 1.4fr 1fr;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
   gap: 16px;
   margin-bottom: 20px;
 }
 .dash-v2-triple {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
   margin-bottom: 20px;
 }
@@ -2940,12 +2940,12 @@ div.data-table > table {
 
 /* ── Dashboard v2 responsive ── */
 @media (max-width: 1200px) {
-  .dash-v2-metrics { grid-template-columns: repeat(2, 1fr); }
-  .dash-v2-charts { grid-template-columns: 1fr; }
-  .dash-v2-triple { grid-template-columns: 1fr 1fr; }
+  .dash-v2-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dash-v2-charts { grid-template-columns: minmax(0, 1fr); }
+  .dash-v2-triple { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 768px) {
-  .dash-v2-metrics { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .dash-v2-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   .dash-v2-triple { grid-template-columns: 1fr; }
   .metric-card { padding: 16px; }
   .metric-card-value { font-size: 22px; }

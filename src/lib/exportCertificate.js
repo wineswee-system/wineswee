@@ -60,16 +60,18 @@ export function exportEmployeeCertificate({ type, employee = {}, org = {} }) {
   body { font-family: "Microsoft JhengHei","PingFang TC","Noto Sans TC","Heiti TC",sans-serif; color: #111; margin: 0; padding: 32px; }
   .toolbar { text-align: center; margin-bottom: 16px; }
   .toolbar button { padding: 10px 20px; background: #0e7490; color: #fff; border: none; border-radius: 8px; font-size: 14px; cursor: pointer; font-weight: 600; font-family: inherit; }
-  .page { max-width: 760px; margin: 0 auto; padding: 56px 64px; border: 1px solid #ddd; }
+  .page { max-width: 760px; margin: 0 auto; padding: 56px 64px; border: 1px solid #ddd; min-height: 250mm; display: flex; flex-direction: column; }
   .org-head { text-align: center; font-size: 22px; font-weight: 700; letter-spacing: 2px; }
   .org-tax { text-align: center; font-size: 12px; color: #555; margin-top: 4px; }
   .logo { display: block; max-height: 64px; margin: 0 auto 8px; }
   h1.title { text-align: center; font-size: 26px; letter-spacing: 8px; margin: 36px 0 40px; font-weight: 700; }
   .body { font-size: 17px; line-height: 2.4; text-align: justify; text-indent: 0; }
   .body b { font-weight: 700; }
-  .sign { margin-top: 64px; font-size: 15px; line-height: 2.1; width: fit-content; max-width: 100%; margin-left: auto; white-space: nowrap; }
+  /* 公司資訊:左對齊、撐到中偏下 */
+  .sign { margin-top: auto; font-size: 15px; line-height: 2.1; width: fit-content; max-width: 100%; text-align: left; white-space: nowrap; }
   .sign .seal { color: #b91c1c; }
-  .date { margin-top: 40px; text-align: right; font-size: 16px; }
+  /* 日期:置中、推到頁面最底 */
+  .date { margin-top: auto; padding-top: 32px; text-align: center; font-size: 16px; }
   @media print { .toolbar { display: none; } .page { border: none; padding: 40px 56px; } body { padding: 0; } }
 </style></head>
 <body>

@@ -47,7 +47,7 @@ export function exportEmployeeCertificate({ type, employee = {}, org = {} }) {
   const idLine = idNo ? `身分證字號：${esc(idNo)}<br>` : ''
   const birthLine = birthD ? `出生日期：${esc(birthD)}<br>` : ''
   const salary = Number(employee.salary || 0)   // 本薪 + 所有津貼(呼叫端算好傳入)
-  const salaryLine = salary > 0 ? `月薪　<b>NT$ ${salary.toLocaleString('en-US')}</b><br>` : ''
+  const salaryLine = salary > 0 ? `月薪　<b>NT ${salary.toLocaleString('en-US')}</b><br>` : ''
   const body = isSep
     ? `茲證明　<b>${esc(empName)}</b>　君<br>${idLine}${birthLine}自　<b>${esc(joinD)}</b>　起至　<b>${esc(resignD)}</b>　止<br>任職於本公司，擔任　<b>${esc(role)}</b><br>${salaryLine}現已離職，特此證明。`
     : `茲證明　<b>${esc(empName)}</b>　君<br>${idLine}${birthLine}自　<b>${esc(joinD)}</b>　起<br>任職於本公司，現擔任　<b>${esc(role)}</b><br>${salaryLine}目前仍在職，特此證明。`

@@ -61,7 +61,7 @@ export function exportEmployeeCertificate({ type, employee = {}, org = {} }) {
   .toolbar button { padding: 10px 20px; background: #0e7490; color: #fff; border: none; border-radius: 8px; font-size: 14px; cursor: pointer; font-weight: 600; font-family: inherit; }
   .page { position: relative; width: 210mm; min-height: 296mm; margin: 0 auto; padding: 20mm 22mm; border: 1px solid #ddd; display: flex; flex-direction: column; }
   /* 浮水印:logo 做成大淡印章疊在最下方 */
-  .watermark { position: absolute; left: 50%; bottom: 60px; transform: translateX(-50%); width: 440px; height: auto; opacity: 0.10; pointer-events: none; z-index: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .watermark { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 880px; height: auto; opacity: 0.10; pointer-events: none; z-index: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .sign, .date { position: relative; z-index: 1; }
   .org-head { text-align: center; font-size: 36px; font-weight: 700; letter-spacing: 2px; }
   .logo { max-height: 120px; margin: 0 auto 12px; align-self: center; }

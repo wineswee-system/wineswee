@@ -278,6 +278,18 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
                           配分 {grp.allot}{gd > 0 ? ` · 已扣 ${gd}` : ''}
                         </span>
                       </div>
+                      {/* 群組說明（一組一個，對齊紙本合併儲存格）*/}
+                      {isDraft ? (
+                        <input
+                          className="form-input"
+                          value={grp.items[0]?.group_note || ''}
+                          onChange={e => updateItem(grp.items[0].id, { group_note: e.target.value })}
+                          placeholder="此區說明（可留白）"
+                          style={{ width: '100%', fontSize: 12, marginBottom: 6 }}
+                        />
+                      ) : (grp.items[0]?.group_note && (
+                        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6, padding: '3px 8px', background: 'var(--bg-secondary)', borderRadius: 4 }}>說明：{grp.items[0].group_note}</div>
+                      ))}
                       {grp.items.map(item => (
                         <ItemRow
                           key={item.id}
@@ -458,8 +470,8 @@ function ItemRow({ item, employees, editable, maxDeduct, onChange }) {
   const handleFiles = async (e) => {
     const files = Array.from(e.target.files || [])
     if (!files.length) return
-    const remaining = 15 - attachments.length
-    if (remaining <= 0) { toast.warning('最多 15 張附件'); e.target.value = ''; return }
+    const remaining = 20 - attachments.length
+    if (remaining <= 0) { toast.warning('最多 20 張附件'); e.target.value = ''; return }
     setUploading(true)
     try {
       const urls = await Promise.all(files.slice(0, remaining).map(async (file) => {
@@ -514,17 +526,19 @@ function ItemRow({ item, employees, editable, maxDeduct, onChange }) {
         )}
       </div>
 
-      {/* 說明（每一項都能填）*/}
-      {editable ? (
-        <input
-          className="form-input"
-          value={item.remark || ''}
-          onChange={e => onChange({ remark: e.target.value })}
-          placeholder={item.input_type === 'text' ? '請填寫抽查 / 內容' : '說明（可留白）'}
-          style={{ width: '100%', fontSize: 12, marginTop: 4, background: 'var(--bg-secondary)' }}
-        />
-      ) : (
-        item.remark && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 3, padding: '3px 8px', background: 'var(--bg-secondary)', borderRadius: 4 }}>說明：{item.remark}</div>
+      {/* 打字題（結尾冒號）才顯示各自的內容輸入；一般項共用群組說明 */}
+      {item.input_type === 'text' && (
+        editable ? (
+          <input
+            className="form-input"
+            value={item.remark || ''}
+            onChange={e => onChange({ remark: e.target.value })}
+            placeholder="請填寫抽查 / 內容"
+            style={{ width: '100%', fontSize: 12, marginTop: 4, background: 'var(--bg-secondary)' }}
+          />
+        ) : (
+          item.remark && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 3, padding: '3px 8px', background: 'var(--bg-secondary)', borderRadius: 4 }}>{item.remark}</div>
+        )
       )}
 
       {/* 有扣分：責任人 + 附件 */}
@@ -541,8 +555,8 @@ function ItemRow({ item, employees, editable, maxDeduct, onChange }) {
           />
           <div>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span><Paperclip size={11} style={{ verticalAlign: 'middle', marginRight: 3 }} />附件照片（{attachments.length}/15）</span>
-              {attachments.length < 15 && (
+              <span><Paperclip size={11} style={{ verticalAlign: 'middle', marginRight: 3 }} />附件照片（{attachments.length}/20）</span>
+              {attachments.length < 20 && (
                 <label style={{ cursor: uploading ? 'default' : 'pointer', fontSize: 11, color: uploading ? 'var(--text-muted)' : 'var(--accent-cyan)' }}>
                   {uploading ? '上傳中...' : '＋ 新增'}
                   <input type="file" multiple accept="image/*" style={{ display: 'none' }} onChange={handleFiles} disabled={uploading} />

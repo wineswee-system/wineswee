@@ -51,4 +51,4 @@ INSERT INTO public.accounts (code, name, type, pick_scope, organization_id) VALU
   ('037', '員工薪資', '費用', 'restricted', 1),
   ('040', '保險費', '費用', 'restricted', 1);
 
-NOTIFY pgrst, ''reload schema'';
+NOTIFY pgrst, 'reload schema';

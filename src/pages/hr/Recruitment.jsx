@@ -107,7 +107,7 @@ function CandidateCard({ c, onSelect, onStageChange }) {
 }
 
 // ─── Candidate detail side panel ───
-function CandidatePanel({ c, interviews, allInterviews, jobs = [], evalTemplates = [], onClose, onDelete, orgId, employees, onRefreshInterviews, offerTemplates, onCreateOffer, onStageChange }) {
+function CandidatePanel({ c, interviews, allInterviews, jobs = [], evalTemplates = [], onClose, onDelete, onEdit, orgId, employees, onRefreshInterviews, offerTemplates, onCreateOffer, onStageChange }) {
   const [showIntForm, setShowIntForm] = useState(false)
   const [intForm, setIntForm] = useState({ round: '初試', scheduled_at: '', interviewer_id: '', result: '待定', note: '', location: '', score: 0, scores: {} })
   const iset = (k, v) => setIntForm(f => ({ ...f, [k]: v }))
@@ -232,6 +232,11 @@ function CandidatePanel({ c, interviews, allInterviews, jobs = [], evalTemplates
           {c.notes     && <div><span style={{ color: 'var(--text-muted)' }}>備註：</span>{c.notes}</div>}
           {c.resume_url && <a href={c.resume_url} target="_blank" rel="noreferrer" style={{ color: 'var(--accent-cyan)', fontSize: 13 }}>查看履歷</a>}
         </div>
+
+        <button className="btn btn-secondary" style={{ width: '100%', marginBottom: 16, fontSize: 13 }}
+          onClick={() => onEdit(c)}>
+          <Edit3 size={13} style={{ marginRight: 6 }} /> 編輯資料
+        </button>
 
         {/* Interviews */}
         <div style={{ marginBottom: 16 }}>
@@ -466,6 +471,7 @@ export default function Recruitment() {
   const [jobForm,     setJobForm]     = useState({ title: '', dept: '', location: '', type: '全職', headcount: 1, description: '', evaluation_template_id: '' })
   const [editingJob,  setEditingJob]  = useState(null)
   const [candForm,    setCandForm]    = useState({ name: '', email: '', phone: '', source: '主動投遞', job_id: '', notes: '', resume_url: '', tags: [] })
+  const [editingCand, setEditingCand] = useState(null)  // null=新增, obj=編輯
   const [tagInput,    setTagInput]    = useState('')
   const [resumeUploading, setResumeUploading] = useState(false)
 
@@ -482,6 +488,7 @@ export default function Recruitment() {
     const p = (candForm.phone || '').trim().replace(/[^\d]/g, '')
     if (!e && !p) return null
     const matches = candidates.filter(c => {
+      if (editingCand && c.id === editingCand.id) return false  // 編輯時不比對自己
       const ce = (c.email || '').trim().toLowerCase()
       const cp = (c.phone || '').trim().replace(/[^\d]/g, '')
       return (e && ce && ce === e) || (p && cp && cp === p)
@@ -489,8 +496,8 @@ export default function Recruitment() {
     if (matches.length === 0) return null
     const blacklisted = matches.some(c => c.stage === '淘汰')
     return { matches, blacklisted }
-  }, [candForm.email, candForm.phone, candidates])
-  const [offerForm,   setOfferForm]   = useState({ template_id: '', position: '', dept: '', salary: '', start_date: '', probation_days: 90 })
+  }, [candForm.email, candForm.phone, candidates, editingCand])
+  const [offerForm,   setOfferForm]   = useState({ template_id: '', position: '', dept: '', salary: '', start_date: '', probation_days: 90, approver_id: '' })
   const [searchQuery, setSearchQuery] = useState('')
 
   const [editingTpl, setEditingTpl] = useState(null)  // null=list, 'new'=new, obj=editing
@@ -607,6 +614,44 @@ export default function Recruitment() {
     }
   }
 
+  const openEditCandidate = (c) => {
+    setEditingCand(c)
+    setCandForm({
+      name: c.name || '', email: c.email || '', phone: c.phone || '',
+      source: c.source || '主動投遞', job_id: c.job_id ? String(c.job_id) : '',
+      notes: c.notes || '', resume_url: c.resume_url || '', tags: c.tags || [],
+    })
+    setTagInput('')
+    setShowCandModal(true)
+  }
+
+  const handleUpdateCandidate = async () => {
+    if (!candForm.name.trim()) { toast('請填寫姓名'); return }
+    const { data, error } = await updateCandidate(editingCand.id, {
+      name:       candForm.name,
+      email:      candForm.email || null,
+      phone:      candForm.phone || null,
+      source:     candForm.source,
+      notes:      candForm.notes || null,
+      resume_url: candForm.resume_url || null,
+      tags:       candForm.tags?.length ? candForm.tags : null,
+      job_id:     candForm.job_id ? Number(candForm.job_id) : null,
+    })
+    if (error) { toast.error('儲存失敗：' + error.message); return }
+    if (data) {
+      // updateCandidate 不含 recruitment_jobs 內嵌 → 自己補職缺標題,面板才不會掉
+      const jobObj = candForm.job_id ? jobs.find(j => j.id === Number(candForm.job_id)) : null
+      const merged = { ...data, recruitment_jobs: jobObj ? { title: jobObj.title } : null }
+      setCandidates(prev => prev.map(c => c.id === editingCand.id ? { ...c, ...merged } : c))
+      if (selectedCand?.id === editingCand.id) setSelectedCand(s => ({ ...s, ...merged }))
+      setShowCandModal(false)
+      setEditingCand(null)
+      setCandForm({ name: '', email: '', phone: '', source: '主動投遞', job_id: '', notes: '', resume_url: '', tags: [] })
+      setTagInput('')
+      toast.success('候選人已更新')
+    }
+  }
+
   const handleStageChange = async (id, stage) => {
     const cand = candidates.find(c => c.id === id)
     const stage_history = [...(cand?.stage_history || []), { stage, changed_at: new Date().toISOString() }]
@@ -636,6 +681,7 @@ export default function Recruitment() {
       salary:         '',
       start_date:     '',
       probation_days: 90,
+      approver_id:    '',
     })
     setShowOfferModal(true)
   }
@@ -643,6 +689,7 @@ export default function Recruitment() {
   const handleCreateOffer = async () => {
     if (!offerTarget) return
     if (!offerForm.position) { toast('請填寫職位'); return }
+    if (!offerForm.approver_id) { toast('請指定簽核人'); return }
     const tpl = offerTemplates.find(t => t.id === Number(offerForm.template_id))
     const filled = tpl ? fillTemplate(tpl.body_html, {
       candidate_name: offerTarget.name,
@@ -655,7 +702,7 @@ export default function Recruitment() {
       signed_date:    new Date().toISOString().slice(0, 10),
     }) : ''
 
-    const { data: ol } = await createOfferLetter({
+    const { data: ol, error: olErr } = await createOfferLetter({
       candidate_id:    offerTarget.id,
       template_id:     offerForm.template_id ? Number(offerForm.template_id) : null,
       filled_html:     filled,
@@ -664,10 +711,12 @@ export default function Recruitment() {
       salary:          offerForm.salary ? Number(offerForm.salary) : null,
       start_date:      offerForm.start_date || null,
       probation_days:  Number(offerForm.probation_days),
+      approver_id:     Number(offerForm.approver_id),
       status:          '待審',
       organization_id: orgId,
       created_by:      profile?.id || null,
     })
+    if (olErr) { toast.error('建立失敗：' + olErr.message); return }
     if (ol) {
       const offerCand = candidates.find(c => c.id === offerTarget.id)
       const stage_history = [...(offerCand?.stage_history || []), { stage: '錄取決定', changed_at: new Date().toISOString() }]
@@ -679,7 +728,38 @@ export default function Recruitment() {
         setSelectedCand(s => ({ ...s, hire_status: '待審', stage: '錄取決定', stage_history }))
       setOfferLetters(prev => [...prev, ol])
       setShowOfferModal(false)
-      toast('錄取簽呈已建立，請至簽核中心審核')
+      toast('錄取簽呈已建立，待指定簽核人審核')
+    }
+  }
+
+  // 指定簽核人核准 / 駁回錄取簽呈
+  const handleApproveOffer = async (ol) => {
+    const { data, error } = await updateOfferLetter(ol.id, {
+      status: '已核准', approved_at: new Date().toISOString(),
+    })
+    if (error) { toast.error('核准失敗：' + error.message); return }
+    if (data) {
+      setOfferLetters(prev => prev.map(x => x.id === ol.id ? { ...x, ...data } : x))
+      const cand = candidates.find(c => c.id === ol.candidate_id)
+      const hist = [...(cand?.stage_history || []), { stage: '已錄取', changed_at: new Date().toISOString() }]
+      await updateCandidate(ol.candidate_id, { stage: '已錄取', hire_status: '已核准', stage_history: hist })
+      setCandidates(prev => prev.map(c => c.id === ol.candidate_id ? { ...c, stage: '已錄取', hire_status: '已核准', stage_history: hist } : c))
+      if (selectedCand?.id === ol.candidate_id) setSelectedCand(s => ({ ...s, stage: '已錄取', hire_status: '已核准', stage_history: hist }))
+      toast.success('已核准錄取')
+    }
+  }
+
+  const handleRejectOffer = async (ol) => {
+    const reason = window.prompt('請輸入駁回原因：')
+    if (reason === null) return
+    const { data, error } = await updateOfferLetter(ol.id, { status: '已駁回', reject_reason: reason || null })
+    if (error) { toast.error('駁回失敗：' + error.message); return }
+    if (data) {
+      setOfferLetters(prev => prev.map(x => x.id === ol.id ? { ...x, ...data } : x))
+      await updateCandidate(ol.candidate_id, { hire_status: '已駁回' })
+      setCandidates(prev => prev.map(c => c.id === ol.candidate_id ? { ...c, hire_status: '已駁回' } : c))
+      if (selectedCand?.id === ol.candidate_id) setSelectedCand(s => ({ ...s, hire_status: '已駁回' }))
+      toast('已駁回錄取簽呈')
     }
   }
 
@@ -860,7 +940,12 @@ export default function Recruitment() {
             </div>
           )}
           {tab === 'candidates' && canManage && (
-            <button className="btn btn-primary" onClick={() => setShowCandModal(true)}>
+            <button className="btn btn-primary" onClick={() => {
+              setEditingCand(null)
+              setCandForm({ name: '', email: '', phone: '', source: '主動投遞', job_id: '', notes: '', resume_url: '', tags: [] })
+              setTagInput('')
+              setShowCandModal(true)
+            }}>
               <Plus size={14} /> 新增候選人
             </button>
           )}
@@ -1102,6 +1187,7 @@ export default function Recruitment() {
               evalTemplates={evalTemplates}
               onClose={() => setSelectedCand(null)}
               onDelete={handleDeleteCandidate}
+              onEdit={openEditCandidate}
               orgId={orgId}
               employees={employees}
               onRefreshInterviews={refreshInterviews}
@@ -1283,11 +1369,11 @@ export default function Recruitment() {
           <div className="data-table-wrapper">
             <table className="data-table">
               <thead>
-                <tr><th>候選人</th><th>職位</th><th>部門</th><th>月薪</th><th>到職日</th><th>狀態</th><th>操作</th></tr>
+                <tr><th>候選人</th><th>職位</th><th>部門</th><th>月薪</th><th>到職日</th><th>簽核人</th><th>狀態</th><th>操作</th></tr>
               </thead>
               <tbody>
                 {offerLetters.length === 0 && (
-                  <tr><td colSpan={7} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>尚無錄取通知</td></tr>
+                  <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>尚無錄取通知</td></tr>
                 )}
                 {offerLetters.map(ol => (
                   <tr key={ol.id}>
@@ -1296,16 +1382,24 @@ export default function Recruitment() {
                     <td>{ol.dept || '—'}</td>
                     <td>{ol.salary ? `NT$ ${Number(ol.salary).toLocaleString()}` : '—'}</td>
                     <td>{fmtDate(ol.start_date)}</td>
+                    <td>{ol.approver?.name || '—'}</td>
                     <td>
                       <span className={`badge ${
                         ol.status === '已核准' ? 'badge-success' :
                         ol.status === '待審'   ? 'badge-warning' :
                         ol.status === '已發送' ? 'badge-info'    :
-                        ol.status === '已婉拒' ? 'badge-error'   : 'badge-neutral'
+                        ol.status === '已婉拒' || ol.status === '已駁回' ? 'badge-error' : 'badge-neutral'
                       }`}>{ol.status}</span>
                     </td>
                     <td>
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        {ol.status === '待審' && (ol.approver_id === profile?.id || canManage) && (
+                          <>
+                            <button className="btn btn-sm btn-primary" onClick={() => handleApproveOffer(ol)}>核准</button>
+                            <button className="btn btn-sm btn-secondary" style={{ color: 'var(--accent-red)' }}
+                              onClick={() => handleRejectOffer(ol)}>駁回</button>
+                          </>
+                        )}
                         <button className="btn btn-sm btn-secondary" onClick={() => handlePrintApproval(ol)}>簽呈</button>
                         {ol.status === '已核准' && (
                           <>
@@ -1532,7 +1626,10 @@ export default function Recruitment() {
 
       {/* ─── Add Candidate modal ─── */}
       {showCandModal && (
-        <Modal title="新增候選人" onClose={() => setShowCandModal(false)} onSubmit={handleAddCandidate} submitLabel="新增">
+        <Modal title={editingCand ? '編輯候選人' : '新增候選人'}
+          onClose={() => { setShowCandModal(false); setEditingCand(null) }}
+          onSubmit={editingCand ? handleUpdateCandidate : handleAddCandidate}
+          submitLabel={editingCand ? '儲存' : '新增'}>
           <Field label="姓名" required>
             <input className="form-input" style={{ width: '100%' }} value={candForm.name}
               onChange={e => setCandForm(f => ({ ...f, name: e.target.value }))} placeholder="候選人姓名" />
@@ -1712,6 +1809,17 @@ export default function Recruitment() {
           <Field label="試用期（天）">
             <input className="form-input" style={{ width: '100%' }} type="number" value={offerForm.probation_days}
               onChange={e => setOfferForm(f => ({ ...f, probation_days: e.target.value }))} />
+          </Field>
+          <Field label="指定簽核人" required>
+            <SearchableSelect
+              value={offerForm.approver_id}
+              onChange={v => setOfferForm(f => ({ ...f, approver_id: v }))}
+              options={empOptions(employees)}
+              placeholder="搜尋要簽核這張錄取的人…"
+            />
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+              只有這位（或招募管理者）能在「錄取簽呈」核准 / 駁回
+            </div>
           </Field>
         </Modal>
       )}

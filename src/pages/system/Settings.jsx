@@ -21,7 +21,9 @@ export default function SystemSettings() {
   const logoFileRef = useRef(null)
   const [attendanceForm, setAttendanceForm] = useState({
     startTime: '09:00', endTime: '18:00', lateThreshold: '5', breakTime: '12:00 - 13:00',
+    dayBoundaryHour: '6',   // 換天時間:凌晨幾點前的打卡算前一天(存 organizations.settings)
   })
+  const [attendanceMsg, setAttendanceMsg] = useState(null)
   const [notifications, setNotifications] = useState({
     lateNotify: true, leaveReminder: true, taskOverdue: true, salaryNotify: false,
   })
@@ -30,7 +32,7 @@ export default function SystemSettings() {
     const orgId = profile?.organization_id
     Promise.all([
       supabase.from('module_access').select('*').order('sort_order'),
-      orgId ? supabase.from('organizations').select('name, tax_id, phone, address, contact_person, logo_url').eq('id', orgId).maybeSingle() : Promise.resolve({ data: null }),
+      orgId ? supabase.from('organizations').select('name, tax_id, phone, address, contact_person, logo_url, settings').eq('id', orgId).maybeSingle() : Promise.resolve({ data: null }),
     ]).then(([modRes, orgRes]) => {
       setModules(modRes.data || [])
       if (orgRes?.data) {
@@ -42,6 +44,7 @@ export default function SystemSettings() {
           contact_person: orgRes.data.contact_person || '',
           logo_url: orgRes.data.logo_url || '',
         })
+        setAttendanceForm(p => ({ ...p, dayBoundaryHour: String(orgRes.data.settings?.day_boundary_hour ?? 6) }))
       }
       setLoading(false)
     })
@@ -104,6 +107,19 @@ export default function SystemSettings() {
     } else {
       setCompanyMsg({ type: 'ok', text: '已儲存，簽呈 PDF 立即生效' })
     }
+  }
+
+  // 儲存出勤設定(目前只有「換天時間」真的寫 DB → organizations.settings.day_boundary_hour)
+  const saveAttendance = async () => {
+    const orgId = profile?.organization_id
+    if (!orgId) { setAttendanceMsg({ type: 'error', text: '無法取得 organization_id' }); return }
+    setSaving(true); setAttendanceMsg(null)
+    const h = Math.min(12, Math.max(0, parseInt(attendanceForm.dayBoundaryHour, 10) || 6))
+    const { data: cur } = await supabase.from('organizations').select('settings').eq('id', orgId).maybeSingle()
+    const next = { ...(cur?.settings || {}), day_boundary_hour: h }
+    const { error } = await supabase.from('organizations').update({ settings: next }).eq('id', orgId)
+    setSaving(false)
+    setAttendanceMsg(error ? { type: 'error', text: '儲存失敗：' + error.message } : { type: 'ok', text: `已儲存：凌晨 ${h} 點前算前一天` })
   }
 
   const updateModule = async (id, field, value) => {
@@ -321,6 +337,20 @@ export default function SystemSettings() {
             <div className="card-title"><span className="card-title-icon">⏰</span> 出勤設定</div>
           </div>
           <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {/* 換天時間 — 真正生效(補打卡跨午夜歸屬用) */}
+            <div style={{ padding: 12, borderRadius: 8, background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)' }}>
+              <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', display: 'block', marginBottom: 4 }}>換天時間</label>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
+                凌晨幾點<b>前</b>的打卡算「前一天」的班。例：設 6，則下班 00:02（7/15）自動歸 7/14 的班。跨午夜晚班用。
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>凌晨</span>
+                <input className="form-input" type="number" min="0" max="12" style={{ width: 90 }}
+                  value={attendanceForm.dayBoundaryHour}
+                  onChange={e => setAttendanceForm(p => ({ ...p, dayBoundaryHour: e.target.value }))} />
+                <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>點前算前一天</span>
+              </div>
+            </div>
             {[
               { label: '標準上班時間', key: 'startTime' },
               { label: '標準下班時間', key: 'endTime' },
@@ -328,11 +358,14 @@ export default function SystemSettings() {
               { label: '休息時間', key: 'breakTime' },
             ].map(f => (
               <div key={f.key}>
-                <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>{f.label}</label>
+                <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>{f.label}<span style={{ marginLeft: 6, color: 'var(--text-muted)' }}>（顯示用，尚未接後端）</span></label>
                 <input className="form-input" value={attendanceForm[f.key]} onChange={e => setAttendanceForm(p => ({ ...p, [f.key]: e.target.value }))} style={{ width: '100%' }} />
               </div>
             ))}
-            <button className="btn btn-primary" style={{ alignSelf: 'flex-end' }}><Save size={14} /> 儲存</button>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 10 }}>
+              {attendanceMsg && <span style={{ fontSize: 12, fontWeight: 600, color: attendanceMsg.type === 'error' ? 'var(--accent-red)' : 'var(--accent-green)' }}>{attendanceMsg.text}</span>}
+              <button className="btn btn-primary" disabled={saving} onClick={saveAttendance}><Save size={14} /> {saving ? '儲存中...' : '儲存'}</button>
+            </div>
           </div>
         </div>
       )}

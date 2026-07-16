@@ -268,12 +268,20 @@ serve(async (req: Request) => {
       //   轉成前一班的下班，不開新上班。避免舊快取跨午夜誤顯示「上班」→
       //   把昨天的班丟成孤兒(0h) + 今天又生一筆空上班。
       //
-      //   ★★ 關鍵守衛：只在「凌晨換日線(6點)之前」才這樣做（對齊前端 workDay 6 點制）。
-      //   6 點後打卡 = 新的一天上班，絕不能誤轉成昨天下班 —— 否則「昨天忘打下班、
+      //   ★★ 關鍵守衛：只在「凌晨換日線之前」才這樣做（對齊補打卡的換天時間設定）。
+      //   換天點後打卡 = 新的一天上班，絕不能誤轉成昨天下班 —— 否則「昨天忘打下班、
       //   今天早上正常上班」的人會被吃掉今天的上班、工時還算成 0/24h。
+      //   換天時間(浮動)：讀 organizations.settings.day_boundary_hour(預設 6，0~12)。
+      let dayBoundary = 6
+      {
+        const { data: orgRow } = await supabase.from('organizations')
+          .select('settings').eq('id', (emp as any).organization_id).maybeSingle()
+        const b = parseInt((orgRow?.settings as any)?.day_boundary_hour, 10)
+        if (!isNaN(b) && b >= 0 && b <= 12) dayBoundary = b
+      }
       const yesterdayStr0 = new Date(taiwanNow.getTime() - 24 * 60 * 60 * 1000)
         .toISOString().slice(0, 10)
-      const { data: yOpen } = hours24 < 6
+      const { data: yOpen } = hours24 < dayBoundary
         ? await supabase
             .from('attendance_records').select('*')
             .eq('employee_id', emp.id).eq('date', yesterdayStr0)

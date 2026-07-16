@@ -59,7 +59,7 @@ export function exportEmployeeCertificate({ type, employee = {}, org = {} }) {
   body { font-family: "Microsoft JhengHei","PingFang TC","Noto Sans TC","Heiti TC",sans-serif; color: #111; margin: 0; padding: 32px; }
   .toolbar { text-align: center; margin-bottom: 16px; }
   .toolbar button { padding: 10px 20px; background: #0e7490; color: #fff; border: none; border-radius: 8px; font-size: 14px; cursor: pointer; font-weight: 600; font-family: inherit; }
-  .page { position: relative; width: 210mm; min-height: 296mm; margin: 0 auto; padding: 20mm 22mm; border: 1px solid #ddd; display: flex; flex-direction: column; }
+  .page { position: relative; width: 210mm; min-height: 270mm; margin: 0 auto; padding: 20mm 22mm; border: 1px solid #ddd; display: flex; flex-direction: column; }
   /* 浮水印:logo 做成大淡印章疊在最下方 */
   .watermark { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 880px; height: auto; opacity: 0.10; pointer-events: none; z-index: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .sign, .date { position: relative; z-index: 1; }
@@ -75,7 +75,7 @@ export function exportEmployeeCertificate({ type, employee = {}, org = {} }) {
   /* 日期:緊貼公司資訊下方、與其一起沉到頁面最底 */
   .date { margin-top: 20px; text-align: center; font-size: 16px; }
   @page { size: A4; margin: 0; }
-  @media print { .toolbar { display: none; } .page { border: none; width: 210mm; min-height: 296mm; padding: 20mm 22mm; } body { padding: 0; } }
+  @media print { .toolbar { display: none; } .page { border: none; width: 210mm; min-height: 270mm; padding: 20mm 22mm; } body { padding: 0; } }
 </style></head>
 <body>
   <div class="toolbar"><button onclick="window.print()">🖨️ 列印 / 另存為 PDF</button></div>

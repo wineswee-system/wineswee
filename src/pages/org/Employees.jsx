@@ -182,16 +182,17 @@ export default function Employees() {
       const ROLE_ID_MAP = { super_admin: 1, admin: 2, manager: 3, office_staff: 4, store_staff: 5 }
       // employment_category / piece_rate 屬於 salary_structures，不寫進 employees 表
       // (labor_insurance/health_insurance/pension 是 employees 欄位，留著一起寫)
-      const { employment_category: _cat, piece_rate: _pr, ins_grade: _ig, ...formForEmployee } = form
+      const { employment_category: _cat, piece_rate: _pr, ...formForEmployee } = form
       const payload = {
         ...formForEmployee,
         salary_type: _cat === 'parttime' ? 'hourly' : 'monthly',
         base_salary: Number(form.base_salary) || 0,
         hourly_rate: Number(form.hourly_rate) || null,
         weekly_hours: Number(form.weekly_hours) || 40,
-        // 投保級距(留空→null,計薪依月薪自動);勞保+健保共用此值,高薪要拆到人事tab調
-        labor_ins_grade: form.ins_grade ? Number(form.ins_grade) : null,
-        health_ins_grade: form.ins_grade ? Number(form.ins_grade) : null,
+        // 各投保級距分開(勞保/健保/勞退常不同);留空→null,計薪依月薪自動查
+        labor_ins_grade: form.labor_ins_grade ? Number(form.labor_ins_grade) : null,
+        health_ins_grade: form.health_ins_grade ? Number(form.health_ins_grade) : null,
+        labor_pension_grade: form.labor_pension_grade ? Number(form.labor_pension_grade) : null,
         department_id: form.department_id ? Number(form.department_id) : null,
         store_id: form.store_id ? Number(form.store_id) : null,
         supervisor_id: form.supervisor_id ? Number(form.supervisor_id) : null,

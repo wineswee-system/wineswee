@@ -298,12 +298,28 @@ export default function EmployeeFormModal({
             </label>
           ))}
         </div>
-        {/* 投保級距(勞健保共用);留空 → 計薪依月薪自動查級距。寫進 labor_ins_grade + health_ins_grade */}
-        {((form.labor_insurance ?? true) || (form.health_insurance ?? true)) && (
-          <Field label="投保級距（勞健保，留空依月薪自動）">
-            <input className="form-input" type="number" style={{ width: '100%' }} placeholder="例 28800，留空自動"
-              value={form.ins_grade || ''} onChange={e => set('ins_grade', e.target.value)} />
-          </Field>
+        {/* 各投保級距分開填(勞保/健保/勞退常不同);勾哪個投保才顯示。留空→計薪依月薪自動查級距 */}
+        {((form.labor_insurance ?? true) || (form.health_insurance ?? true) || (form.pension ?? true)) && (
+          <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 }}>
+            {(form.labor_insurance ?? true) && (
+              <Field label="勞保級距">
+                <input className="form-input" type="number" style={{ width: '100%' }} placeholder="留空自動(封頂45800)"
+                  value={form.labor_ins_grade || ''} onChange={e => set('labor_ins_grade', e.target.value)} />
+              </Field>
+            )}
+            {(form.health_insurance ?? true) && (
+              <Field label="健保級距">
+                <input className="form-input" type="number" style={{ width: '100%' }} placeholder="留空自動"
+                  value={form.health_ins_grade || ''} onChange={e => set('health_ins_grade', e.target.value)} />
+              </Field>
+            )}
+            {(form.pension ?? true) && (
+              <Field label="勞退提繳工資級距">
+                <input className="form-input" type="number" style={{ width: '100%' }} placeholder="留空同投保"
+                  value={form.labor_pension_grade || ''} onChange={e => set('labor_pension_grade', e.target.value)} />
+              </Field>
+            )}
+          </div>
         )}
       </div>
     </Modal>

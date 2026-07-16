@@ -13,6 +13,7 @@ import ProjectDetailPanel from './components/ProjectDetailPanel'
 import ProjectListView from './components/ProjectListView'
 import SelfFillQueue from '../../components/tasks/SelfFillQueue'
 import { createTaskBindings } from '../../lib/createTaskBindings'
+import { uploadInitiatorAttachments } from '../../lib/taskAttachmentUpload'
 
 const emptyForm = { name: '', description: '', status: '規劃中', priority: '中', owner: '', department: '', store: '', start_date: '', end_date: '', budget: '', template_id: '' }
 
@@ -621,6 +622,7 @@ export default function Projects() {
       })
       if (q) setSelfFillQueue(q)
     }
+    await uploadInitiatorAttachments(data.id, fd.attachments, profile?.name)
     setTasks(prev => [...prev, data])
     if (!formData) {
       // inline path: 清空 state
@@ -681,6 +683,7 @@ export default function Projects() {
       })
       if (q) setSelfFillQueue(q)
     }
+    await uploadInitiatorAttachments(data.id, fd.attachments, profile?.name)
     setTasks(prev => [...prev, data])
     return true
   }

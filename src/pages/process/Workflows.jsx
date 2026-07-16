@@ -21,6 +21,7 @@ import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import TaskDetailPanel from '../../components/TaskDetailPanel'
 import SelfFillQueue from '../../components/tasks/SelfFillQueue'
 import { createTaskBindings } from '../../lib/createTaskBindings'
+import { uploadInitiatorAttachments } from '../../lib/taskAttachmentUpload'
 import { commitBindingDraft } from '../../lib/commitBindingDraft'
 import { notifyTaskAssignee, notifyTaskConfirmationResult, notifyApproval } from '../../lib/lineNotify'
 import { useAuth } from '../../contexts/AuthContext'
@@ -75,7 +76,7 @@ export default function Workflows() {
 
   // Modals
   const [showAddTaskModal, setShowAddTaskModal] = useState(false)
-  const [taskForm, setTaskForm] = useState({ title: '', assignee: '', store_id: '', planned_start: '', due_date: '', due_time: '17:00', required_forms: [] })
+  const [taskForm, setTaskForm] = useState({ title: '', assignee: '', store_id: '', planned_start: '', due_date: '', due_time: '17:00', required_forms: [], attachments: [] })
   const [showNotesModal, setShowNotesModal] = useState(false)
   const [notesStep, setNotesStep] = useState(null)
   const [notesText, setNotesText] = useState('')
@@ -669,8 +670,11 @@ export default function Workflows() {
         if (q) setSelfFillQueue(q)
       }
 
+      // 發起附件（新增任務時預選的檔案）→ 任務建立後上傳
+      await uploadInitiatorAttachments(data.id, taskForm.attachments, profile?.name)
+
       setShowAddTaskModal(false)
-      setTaskForm({ title: '', assignee: '', store_id: '', planned_start: '', due_date: '', due_time: '17:00', required_forms: [] })
+      setTaskForm({ title: '', assignee: '', store_id: '', planned_start: '', due_date: '', due_time: '17:00', required_forms: [], attachments: [] })
 
       if (subFailures.length > 0) {
         toast.error(`任務已建立，但有設定失敗：\n${subFailures.join('\n')}`)

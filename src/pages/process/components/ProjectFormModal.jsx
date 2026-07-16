@@ -226,6 +226,7 @@ export default function ProjectFormModal({
               employees={employees}
               stores={stores}
               approvalChains={approvalChains}
+              allowAttachments={false}
               onClose={() => setAddTaskWfIdx(null)}
               onSubmit={(fd) => { setPendingWfCreate(p => p.map((w, j) => j === addTaskWfIdx ? { ...w, tasks: [...(w.tasks || []), fd] } : w)); return true }}
             />
@@ -256,6 +257,7 @@ export default function ProjectFormModal({
               employees={employees}
               stores={stores}
               approvalChains={approvalChains}
+              allowAttachments={false}
               onClose={() => setInlineTaskMode(false)}
               onSubmit={(fd) => { setPendingTasks(p => [...p, fd]); return true }}
             />

@@ -11,6 +11,7 @@ import SearchableSelect, { empOptions } from '../../../components/SearchableSele
 import TaskDetailPanel from '../../../components/TaskDetailPanel'
 import TaskDiscussionModal from '../../../components/TaskDiscussionModal'
 import BoundFormsField from '../../../components/tasks/BoundFormsField'
+import InitiatorAttachmentField from '../../../components/tasks/InitiatorAttachmentField'
 import WorkflowDagView from '../../../components/tasks/WorkflowDagView'
 
 const STATUS_LIST = ['未開始', '待簽核', '進行中', '待確認', '已完成', '已退回', '已擱置']
@@ -923,6 +924,14 @@ export default function InstanceDetailView({
             employees={employees}
             defaultAssigneeId={employees.find(e => e.name === taskForm.assignee)?.id || null}
           />
+
+          {/* 發起附件 */}
+          <div style={{ marginTop: 12 }}>
+            <InitiatorAttachmentField
+              files={taskForm.attachments || []}
+              setFiles={fs => setTaskForm(f => ({ ...f, attachments: fs }))}
+            />
+          </div>
         </Modal>
       )}
       {showEditModal && (

@@ -3,6 +3,7 @@ import { ShieldCheck, X as XIcon } from 'lucide-react'
 import Modal, { Field } from '../Modal'
 import SearchableSelect, { empOptions } from '../SearchableSelect'
 import BoundFormsField from './BoundFormsField'
+import InitiatorAttachmentField from './InitiatorAttachmentField'
 
 /**
  * 通用快速建任務 Modal — 給 Projects / 其他需要快速建任務的地方共用
@@ -19,6 +20,7 @@ import BoundFormsField from './BoundFormsField'
 export default function TaskQuickCreateModal({
   open, title = '新增任務', employees = [], stores = [],
   defaultStore = '', approvalChains = [], departments = [], onClose, onSubmit,
+  allowAttachments = true,   // 草稿型(專案未建立)不支援即時上傳 → 關閉
 }) {
   const [form, setForm] = useState(initialForm(defaultStore))
   const [saving, setSaving] = useState(false)
@@ -188,6 +190,16 @@ export default function TaskQuickCreateModal({
         defaultAssigneeId={employees.find(e => e.name === form.assignee)?.id || null}
       />
 
+      {/* 發起附件 */}
+      {allowAttachments && (
+        <div style={{ marginTop: 12 }}>
+          <InitiatorAttachmentField
+            files={form.attachments || []}
+            setFiles={fs => set('attachments', fs)}
+          />
+        </div>
+      )}
+
     </Modal>
   )
 }
@@ -196,7 +208,7 @@ function initialForm(defaultStore) {
   return {
     title: '', description: '', assignee: '', store: defaultStore || '',
     priority: '中', planned_start: '', due_date: '', role: '',
-    required_forms: [],
+    required_forms: [], attachments: [],
     target_department_id: '',   // 指派其他部門 → 建跨部門工單
     // 簽核設定（對齊獨立任務頁）
     approval_mode: 'none', confirmation_approvers: [], confirmation_mode: 'parallel', approval_chain_id: '',

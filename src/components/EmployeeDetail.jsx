@@ -121,6 +121,9 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
 
   // Inline add skill
   const [newSkill, setNewSkill] = useState('')
+  // 眷屬表單 state（必須在 early return 之前宣告，避免 hook 順序錯亂）
+  const [showDepForm, setShowDepForm] = useState(false)
+  const [depForm, setDepForm] = useState({ name: '', relationship: '配偶', id_number: '', birth_date: '', health_ins: false })
   const [newSkillLevel, setNewSkillLevel] = useState('基礎')
 
   useEffect(() => {
@@ -386,9 +389,7 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
     } catch (e) { toast.error('刪除失敗') }
   }
 
-  // Dependents
-  const [showDepForm, setShowDepForm] = useState(false)
-  const [depForm, setDepForm] = useState({ name: '', relationship: '配偶', id_number: '', birth_date: '', health_ins: false })
+  // Dependents（state 已上移至 early return 之前）
   const addDependent = async () => {
     if (!depForm.name) return
     try {

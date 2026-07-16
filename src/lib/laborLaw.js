@@ -321,11 +321,15 @@ export function validateSchedule(schedules, weekDates, shiftDefs = []) {
     // 這段邏輯放在 src/lib/scheduleValidator.js 跟排班演算法處理，這裡不做硬擋
 
     // H3: 連續工作不超過6天 (§36 七休一)
+    // ★ 以「當天有沒有實際班次」定義上班日 —— 用 resolveShift 讀那格的上下班時間，
+    //   解析得出時數才算工作。例假/休息/特休/國定假/病假… 這類請假標記解析不出班表 →
+    //   自動打斷連續，不必維護「哪些字串算休息」的假別黑名單（舊寫法只排除 '休'，
+    //   漏掉 例假/休息 → 把整週休假誤算成連上 7 天）。
     let consecutiveWork = 0
     let maxConsecutive = 0
     for (const date of weekDates) {
       const s = empSchedules.find(s => s.date === date)
-      if (s?.shift && s.shift !== '休') {
+      if (s && resolveShift(s)) {
         consecutiveWork++
         maxConsecutive = Math.max(maxConsecutive, consecutiveWork)
       } else {

@@ -390,6 +390,7 @@ export default function Employees() {
       case 'position': return e.position || ''
       case 'store':    return storeName(e.store_id) || ''
       case 'join':     return e.join_date || ''
+      case 'resign':   return e.resign_date || ''
       case 'status':   return e.status || ''
       default:         return ''
     }
@@ -607,12 +608,13 @@ export default function Employees() {
                 <th>Email</th>
                 <th>手機</th>
                 <Th label="到職日" sk="join" />
+                {statusFilter === '離職' && <Th label="離職日" sk="resign" />}
                 <Th label="狀態" sk="status" />
                 <th>操作</th>
               </tr>
             </thead>
             <tbody>
-              {sorted.length === 0 && <tr><td colSpan={11} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>無符合條件的員工</td></tr>}
+              {sorted.length === 0 && <tr><td colSpan={statusFilter === '離職' ? 12 : 11} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>無符合條件的員工</td></tr>}
               {sorted.map(e => {
                 const empType = EMPLOYMENT_TYPES.find(t => t.value === (e.employment_type || '正職'))
                 return (
@@ -644,10 +646,13 @@ export default function Employees() {
                   <td style={{ fontSize: 12 }}><MaskedText value={e.phone} type="phone" canReveal={true} /></td>
                   <td style={{ fontSize: 12 }}>
                     {e.join_date}
-                    {e.resign_date && (
+                    {e.resign_date && statusFilter !== '離職' && (
                       <div style={{ fontSize: 10, color: 'var(--accent-red)', marginTop: 2 }}>離職：{e.resign_date}</div>
                     )}
                   </td>
+                  {statusFilter === '離職' && (
+                    <td style={{ fontSize: 12, color: 'var(--accent-red)', fontWeight: 600 }}>{e.resign_date || '—'}</td>
+                  )}
                   <td>
                     {e.status === '在職' && e.join_date && e.join_date > new Date().toISOString().slice(0, 10) ? (
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700, background: 'var(--accent-purple-dim)', color: 'var(--accent-purple)' }}>

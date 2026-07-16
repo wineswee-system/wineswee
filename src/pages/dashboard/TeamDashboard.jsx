@@ -424,6 +424,7 @@ export default function TeamDashboard() {
       .select('id, employee_id, employee, type, start_date, end_date, status')
       .eq('status', '已核准')
       .in('employee_id', teamIds)
+      .is('deleted_at', null)
       .lte('start_date', today).gte('end_date', today)
     setTodayLeaves(leavesOnToday || [])
 
@@ -431,6 +432,7 @@ export default function TeamDashboard() {
     const { data: otToday } = await supabase.from('overtime_requests')
       .select('id, employee_id, employee, date, hours, status')
       .eq('status', '已核准').eq('date', today).in('employee_id', teamIds)
+      .is('deleted_at', null)
     setTodayOvertimes(otToday || [])
 
     // 今日出差
@@ -438,15 +440,16 @@ export default function TeamDashboard() {
       .select('id, employee_id, employee, start_date, end_date, status')
       .eq('status', '已核准')
       .in('employee_id', teamIds)
+      .is('deleted_at', null)
       .lte('start_date', today).gte('end_date', today)
     setTodayTrips(tripToday || [])
 
     // 待簽核 — 不嚴格做「指派給我」(那要解 chain step)，先列「我 scope 內的待審核」
     const [pl, po, pt, pc] = await Promise.all([
-      supabase.from('leave_requests').select('id, employee, type, start_date, end_date, days, reason, created_at').eq('status', '待審核').in('employee_id', teamIds).order('created_at', { ascending: false }).limit(20),
-      supabase.from('overtime_requests').select('id, employee, date, hours, reason, created_at').eq('status', '待審核').in('employee_id', teamIds).order('created_at', { ascending: false }).limit(20),
-      supabase.from('business_trips').select('id, employee, start_date, end_date, destination, purpose, created_at').eq('status', '待審核').in('employee_id', teamIds).order('created_at', { ascending: false }).limit(20),
-      supabase.from('clock_corrections').select('id, employee, date, reason, created_at').eq('status', '待審核').in('employee_id', teamIds).order('created_at', { ascending: false }).limit(20),
+      supabase.from('leave_requests').select('id, employee, type, start_date, end_date, days, reason, created_at').eq('status', '待審核').in('employee_id', teamIds).is('deleted_at', null).order('created_at', { ascending: false }).limit(20),
+      supabase.from('overtime_requests').select('id, employee, date, hours, reason, created_at').eq('status', '待審核').in('employee_id', teamIds).is('deleted_at', null).order('created_at', { ascending: false }).limit(20),
+      supabase.from('business_trips').select('id, employee, start_date, end_date, destination, purpose, created_at').eq('status', '待審核').in('employee_id', teamIds).is('deleted_at', null).order('created_at', { ascending: false }).limit(20),
+      supabase.from('clock_corrections').select('id, employee, date, reason, created_at').eq('status', '待審核').in('employee_id', teamIds).is('deleted_at', null).order('created_at', { ascending: false }).limit(20),
     ])
     setPendingLeaves(pl.data || [])
     setPendingOvertimes(po.data || [])
@@ -519,6 +522,7 @@ export default function TeamDashboard() {
     // 本月加班接近上限（>= 36h；46h 法定上限）+ 本月累計
     const { data: monthOT } = await supabase.from('overtime_requests')
       .select('employee, hours').eq('status', '已核准').in('employee_id', teamIds)
+      .is('deleted_at', null)
       .gte('date', month + '-01').lte('date', today)
     const otSum = {}
     for (const r of monthOT || []) otSum[r.employee] = (otSum[r.employee] || 0) + Number(r.hours || 0)
@@ -528,9 +532,11 @@ export default function TeamDashboard() {
     const [{ data: monthLeave }, { data: monthTrip }] = await Promise.all([
       supabase.from('leave_requests').select('days')
         .eq('status', '已核准').in('employee_id', teamIds)
+        .is('deleted_at', null)
         .gte('start_date', month + '-01'),
       supabase.from('business_trips').select('id')
         .eq('status', '已核准').in('employee_id', teamIds)
+        .is('deleted_at', null)
         .gte('start_date', month + '-01'),
     ])
     setMonthLeaveDays((monthLeave || []).reduce((s, r) => s + Number(r.days || 0), 0))
@@ -566,6 +572,7 @@ export default function TeamDashboard() {
     // 加每日請假人數（從 leave_requests 算今日生效）
     const { data: weekLeaves } = await supabase.from('leave_requests')
       .select('start_date, end_date').eq('status', '已核准').in('employee_id', teamIds)
+      .is('deleted_at', null)
       .lte('start_date', today).gte('end_date', last7Start.toISOString().slice(0, 10))
     for (const day of days7) {
       day.leave = (weekLeaves || []).filter(l => l.start_date <= day.date && l.end_date >= day.date).length

@@ -456,6 +456,9 @@ function EmployeeRow({
                   }
                 }
                 const isTimeRange = /^\d{1,2}:\d{2}~\d{1,2}:\d{2}$/.test(label)
+                // 假別代碼(生/病/事…) → 顯示 icon+全名,避免「生」被誤讀成生日
+                const absCfg = getAbsenceConfig(shift)
+                const payLabel = absCfg ? (absCfg.payRate === 1 ? '全薪' : absCfg.payRate === 0 ? '無薪' : '半薪') : ''
                 return isTimeRange ? (
                   <span style={{
                     display: 'inline-block', padding: '1px 2px', borderRadius: 3,
@@ -466,12 +469,14 @@ function EmployeeRow({
                     <div>{label.split('~')[1]}</div>
                   </span>
                 ) : (
-                  <span style={{
-                    display: 'inline-block', padding: '1px 3px', borderRadius: 3,
-                    fontSize: 9, fontWeight: 600, ...getShiftStyle(shift),
-                    whiteSpace: 'nowrap',
-                  }}>
-                    {label}
+                  <span
+                    title={absCfg ? `${absCfg.label}（${payLabel}）` : undefined}
+                    style={{
+                      display: 'inline-block', padding: '1px 3px', borderRadius: 3,
+                      fontSize: 9, fontWeight: 600, ...getShiftStyle(shift),
+                      whiteSpace: 'nowrap',
+                    }}>
+                    {absCfg ? `${absCfg.icon}${absCfg.label}` : label}
                   </span>
                 )
               })()

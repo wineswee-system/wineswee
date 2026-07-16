@@ -321,20 +321,24 @@ export function validateSchedule(schedules, weekDates, shiftDefs = []) {
     // 這段邏輯放在 src/lib/scheduleValidator.js 跟排班演算法處理，這裡不做硬擋
 
     // H3: 連續工作不超過6天 (§36 七休一)
-    // ★ 以「當天有沒有實際班次」定義上班日 —— 用 resolveShift 讀那格的上下班時間，
-    //   解析得出時數才算工作。例假/休息/特休/國定假/病假… 這類請假標記解析不出班表 →
-    //   自動打斷連續，不必維護「哪些字串算休息」的假別黑名單（舊寫法只排除 '休'，
-    //   漏掉 例假/休息 → 把整週休假誤算成連上 7 天）。
+    // ★ 掃「整份排班」按日曆天相鄰數連續上班，不再只吃單週 weekDates 窗 ——
+    //   否則跨週的連上(如週六→下週)會被 7 天窗切成兩段而漏報，且永遠封頂在 7。
+    //   上班日 = resolveShift 解析得出班次(讀那格實際上下班時間)；
+    //   例假/休息/特休/國定假/病假 / 當天沒排班 → 解析不出 → 打斷連續，
+    //   不必維護「哪些字串算休息」的假別黑名單。
+    const _dayNum = (d) => Math.round(new Date(`${d}T00:00:00Z`).getTime() / 86400000)
+    const sortedWorkDays = empSchedules
+      .filter(s => resolveShift(s))
+      .map(s => _dayNum(s.date))
+      .sort((a, b) => a - b)
     let consecutiveWork = 0
     let maxConsecutive = 0
-    for (const date of weekDates) {
-      const s = empSchedules.find(s => s.date === date)
-      if (s && resolveShift(s)) {
-        consecutiveWork++
-        maxConsecutive = Math.max(maxConsecutive, consecutiveWork)
-      } else {
-        consecutiveWork = 0
-      }
+    let prevDayNum = null
+    for (const dn of sortedWorkDays) {
+      if (dn === prevDayNum) continue          // 同日多筆班次不重複計數
+      consecutiveWork = (prevDayNum !== null && dn === prevDayNum + 1) ? consecutiveWork + 1 : 1
+      maxConsecutive = Math.max(maxConsecutive, consecutiveWork)
+      prevDayNum = dn
     }
     if (maxConsecutive > 6) {
       errors.push({

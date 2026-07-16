@@ -127,6 +127,42 @@ describe('validateSchedule', () => {
     expect(result.errors.some(e => e.message.includes('連續工作'))).toBe(true)
   })
 
+  it('連續工作跨週界仍偵測(8 連上,weekDates 只給單週窗)', () => {
+    // 迴歸:林則宇情境。H3 須掃整份排班按日曆天相鄰,不能只看 7 天 weekDates 窗,
+    // 否則跨週的連上會被切成兩段(各 ≤6)而漏報。
+    const schedules = [
+      { employee: 'PT林', date: '2026-04-06', shift: '例假' },        // 打斷
+      { employee: 'PT林', date: '2026-04-07', shift: '9-18' },        // 連上第 1 天
+      { employee: 'PT林', date: '2026-04-08', shift: '9-18' },
+      { employee: 'PT林', date: '2026-04-09', shift: '9-18' },
+      { employee: 'PT林', date: '2026-04-10', shift: '9-18' },
+      { employee: 'PT林', date: '2026-04-11', shift: '9-18' },
+      { employee: 'PT林', date: '2026-04-12', shift: '9-18' },        // weekDates 窗到此為止
+      { employee: 'PT林', date: '2026-04-13', shift: '9-18' },        // 跨到下週
+      { employee: 'PT林', date: '2026-04-14', shift: '9-18' },        // 連上第 8 天
+    ]
+    // weekDates 刻意只給單週(04-06~04-12);舊碼會在 04-12 截斷只數到 6 而漏報
+    const result = validateSchedule(schedules, weekDates)
+    const hit = result.errors.find(e => e.message.includes('連續工作'))
+    expect(hit).toBeTruthy()
+    expect(hit.message).toContain('8')
+  })
+
+  it('例假/休息 打斷連續,不誤報(莊浩隆情境)', () => {
+    // 迴歸:排班休假存 例假/休息(非舊字串 休),不可被當成上班日累加。
+    const schedules = [
+      { employee: 'PT莊', date: '2026-04-06', shift: '9-18' },
+      { employee: 'PT莊', date: '2026-04-07', shift: '例假' },
+      { employee: 'PT莊', date: '2026-04-08', shift: '9-18' },
+      { employee: 'PT莊', date: '2026-04-09', shift: '9-18' },
+      { employee: 'PT莊', date: '2026-04-10', shift: '休息' },
+      { employee: 'PT莊', date: '2026-04-11', shift: '9-18' },
+      { employee: 'PT莊', date: '2026-04-12', shift: '9-18' },
+    ]
+    const result = validateSchedule(schedules, weekDates)
+    expect(result.errors.some(e => e.message.includes('連續工作'))).toBe(false)
+  })
+
   it('short shift interval triggers warning (§34)', () => {
     const schedules = [
       { employee: '王小明', date: '2026-04-06', shift: '14-22' },

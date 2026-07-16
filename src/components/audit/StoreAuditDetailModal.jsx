@@ -33,16 +33,19 @@ function buildCats(items) {
   })
   return Object.values(cats).sort((a, b) => (CAT_ORDER[a.code] || 99) - (CAT_ORDER[b.code] || 99))
 }
-const groupDeduct = (grp) => grp.items.reduce((s, i) => s + (i.deduct_score || 0), 0)
+// 加分列(input_type='bonus')的 deduct_score 存正的加分點數,計分時當「負扣」往回加
+const itemDeduct = (i) => i.input_type === 'bonus' ? -(i.deduct_score || 0) : (i.deduct_score || 0)
+const groupDeduct = (grp) => grp.items.reduce((s, i) => s + itemDeduct(i), 0)
 const catMax = (cat) => cat.order.reduce((s, g) => s + (cat.groups[g].allot || 0), 0)
 const catDeduct = (cat) => cat.order.reduce((s, g) => s + groupDeduct(cat.groups[g]), 0)
-const catScore = (cat) => Math.max(0, catMax(cat) - catDeduct(cat))
+// 加分可回血但頂標=滿分,不超過
+const catScore = (cat) => Math.min(catMax(cat), Math.max(0, catMax(cat) - catDeduct(cat)))
 
 function computeScores(items) {
   const cats = buildCats(items)
   const scored = cats.filter(c => catMax(c) > 0)
   const avg = scored.length ? Math.round(scored.reduce((s, c) => s + catScore(c), 0) / scored.length * 100) / 100 : 0
-  const totalDed = items.reduce((s, i) => s + (i.deduct_score || 0), 0)
+  const totalDed = items.reduce((s, i) => s + (i.input_type === 'bonus' ? 0 : (i.deduct_score || 0)), 0)
   return { avg, totalDed }
 }
 
@@ -99,9 +102,9 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
   const scored = cats.filter(c => catMax(c) > 0)
   const avgScore = scored.length ? Math.round(scored.reduce((s, c) => s + catScore(c), 0) / scored.length * 100) / 100 : 0
 
-  // 統計（評分制：只看有沒有扣分）
-  const deductedCount = items.filter(i => (i.deduct_score || 0) > 0).length
-  const totalDeducted = items.reduce((s, i) => s + (i.deduct_score || 0), 0)
+  // 統計（評分制：只看有沒有扣分；加分列不計入扣分統計）
+  const deductedCount = items.filter(i => i.input_type !== 'bonus' && (i.deduct_score || 0) > 0).length
+  const totalDeducted = items.reduce((s, i) => s + (i.input_type === 'bonus' ? 0 : (i.deduct_score || 0)), 0)
 
   // ─── 草稿：編輯項目（並即時把總平均/總扣分寫回單頭）───
   const updateItem = async (itemId, patch) => {
@@ -137,6 +140,8 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
 
   // ─── 送出 ───
   const handleSubmit = async () => {
+    const bonusMissing = items.find(i => i.input_type === 'bonus' && (i.deduct_score || 0) > 0 && !i.remark?.trim())
+    if (bonusMissing) { toast.warning('有加分的項目需填「加分原因」'); return }
     if (onDuty.length === 0) { toast.warning('請至少選 1 名當班人員'); return }
     const unsigned = onDuty.filter(d => !d.signature_data_url)
     if (unsigned.length > 0) {
@@ -269,17 +274,23 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
                 </h4>
                 {cat.order.map(gName => {
                   const grp = cat.groups[gName]
+                  const isBonusGroup = grp.items.some(i => i.input_type === 'bonus')
                   const gd = groupDeduct(grp)
+                  const bonusPts = isBonusGroup ? grp.items.reduce((s, i) => s + (i.deduct_score || 0), 0) : 0
                   return (
                     <div key={gName} style={{ marginBottom: 12 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', padding: '4px 6px', background: 'var(--bg-secondary)', borderRadius: 4, marginBottom: 4 }}>
-                        <span>{grp.name}</span>
-                        <span style={{ color: gd > 0 ? 'var(--accent-red)' : 'var(--text-muted)' }}>
-                          配分 {grp.allot}{gd > 0 ? ` · 已扣 ${gd}` : ''}
-                        </span>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, fontWeight: 700, color: isBonusGroup ? 'var(--accent-green)' : 'var(--text-secondary)', padding: '4px 6px', background: isBonusGroup ? 'var(--accent-green-dim)' : 'var(--bg-secondary)', borderRadius: 4, marginBottom: 4 }}>
+                        <span>{isBonusGroup ? '➕ 加分（回補分數，上限 100）' : grp.name}</span>
+                        {isBonusGroup
+                          ? (bonusPts > 0 && <span style={{ color: 'var(--accent-green)' }}>已加 {bonusPts}</span>)
+                          : (
+                            <span style={{ color: gd > 0 ? 'var(--accent-red)' : 'var(--text-muted)' }}>
+                              配分 {grp.allot}{gd > 0 ? ` · 已扣 ${gd}` : ''}
+                            </span>
+                          )}
                       </div>
-                      {/* 群組說明（一組一個，對齊紙本合併儲存格）*/}
-                      {isDraft ? (
+                      {/* 群組說明（一組一個；加分群組不需要，它有自己的說明欄）*/}
+                      {!isBonusGroup && (isDraft ? (
                         <input
                           className="form-input"
                           value={grp.items[0]?.group_note || ''}
@@ -289,13 +300,13 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
                         />
                       ) : (grp.items[0]?.group_note && (
                         <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6, padding: '3px 8px', background: 'var(--bg-secondary)', borderRadius: 4 }}>說明：{grp.items[0].group_note}</div>
-                      ))}
+                      )))}
                       {grp.items.map(item => (
                         <ItemRow
                           key={item.id}
                           item={item}
                           editable={isDraft}
-                          maxDeduct={(grp.allot || 0) - (gd - (item.deduct_score || 0))}
+                          maxDeduct={item.input_type === 'bonus' ? 100 : (grp.allot || 0) - (gd - (item.deduct_score || 0))}
                           onChange={p => updateItem(item.id, p)}
                         />
                       ))}
@@ -459,24 +470,27 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
   )
 }
 
-// ─── 評核項目單列（評分制：只填扣分；責任人看當班簽名、照片看整張統計）───
+// ─── 評核項目單列（評分制：扣分；加分列往回補分）───
 function ItemRow({ item, editable, maxDeduct, onChange }) {
-  const deducted = item.deduct_score || 0
-  const hasDeduct = deducted > 0
+  const isBonus = item.input_type === 'bonus'
+  const val = item.deduct_score || 0
+  const active = val > 0
+  const accent = isBonus ? 'var(--accent-green)' : 'var(--accent-red)'
+  const accentDim = isBonus ? 'var(--accent-green-dim)' : 'var(--accent-red-dim)'
+  const needRemark = isBonus && val > 0 && !item.remark
 
-  const setDeduct = (raw) => {
+  const setVal = (raw) => {
     let v = Math.max(0, Math.floor(Number(raw) || 0))
-    if (v > maxDeduct) { v = Math.max(0, maxDeduct); toast.warning(`此群組最多再扣 ${Math.max(0, maxDeduct)} 分`) }
-    // 有扣分 → passed=false（供 submit 計 total_deducted）；0 → 合格
-    onChange({ deduct_score: v, passed: v > 0 ? false : true })
+    if (v > maxDeduct) { v = Math.max(0, maxDeduct); toast.warning(isBonus ? `加分上限 ${Math.max(0, maxDeduct)} 分` : `此群組最多再扣 ${Math.max(0, maxDeduct)} 分`) }
+    onChange(isBonus ? { deduct_score: v, passed: true } : { deduct_score: v, passed: v > 0 ? false : true })
   }
 
   return (
     <div style={{
       padding: '6px 4px', borderBottom: '1px solid var(--border)', fontSize: 13,
-      background: hasDeduct ? 'var(--accent-red-dim)' : 'transparent',
+      background: active ? accentDim : 'transparent',
     }}>
-      {/* 內容 + 扣分 */}
+      {/* 內容 + 扣分/加分 */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8, alignItems: 'center' }}>
         <div style={{ minWidth: 0 }}>
           {item.is_star && <Star size={12} style={{ color: 'var(--accent-orange)', verticalAlign: 'middle', marginRight: 4 }} fill="var(--accent-orange)" />}
@@ -485,39 +499,39 @@ function ItemRow({ item, editable, maxDeduct, onChange }) {
         </div>
         {editable ? (
           <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>扣</span>
+            <span style={{ fontSize: 11, color: isBonus ? 'var(--accent-green)' : 'var(--text-muted)' }}>{isBonus ? '加' : '扣'}</span>
             <input
               type="number" min={0} max={Math.max(0, maxDeduct)}
-              value={deducted || ''}
+              value={val || ''}
               placeholder="0"
-              onChange={e => setDeduct(e.target.value)}
+              onChange={e => setVal(e.target.value)}
               className="form-input"
-              style={{ width: 56, fontSize: 13, textAlign: 'center', padding: '4px 6px', color: hasDeduct ? 'var(--accent-red)' : 'var(--text-primary)', fontWeight: hasDeduct ? 700 : 400 }}
+              style={{ width: 56, fontSize: 13, textAlign: 'center', padding: '4px 6px', color: active ? accent : 'var(--text-primary)', fontWeight: active ? 700 : 400 }}
             />
           </div>
         ) : (
           <span style={{
             padding: '3px 8px', borderRadius: 4, fontSize: 11, fontWeight: 700,
-            background: hasDeduct ? 'var(--accent-red-dim)' : 'var(--accent-green-dim)',
-            color: hasDeduct ? 'var(--accent-red)' : 'var(--accent-green)',
+            background: active ? accentDim : 'var(--accent-green-dim)',
+            color: active ? accent : 'var(--accent-green)',
           }}>
-            {hasDeduct ? `扣 ${deducted}` : '✓'}
+            {isBonus ? (active ? `加 ${val}` : '—') : (active ? `扣 ${val}` : '✓')}
           </span>
         )}
       </div>
 
-      {/* 打字題（結尾冒號）才顯示各自的內容輸入；一般項共用群組說明 */}
-      {item.input_type === 'text' && (
+      {/* 打字題 / 加分列 顯示說明輸入（加分有分數則必填）*/}
+      {(item.input_type === 'text' || isBonus) && (
         editable ? (
           <input
             className="form-input"
             value={item.remark || ''}
             onChange={e => onChange({ remark: e.target.value })}
-            placeholder="請填寫抽查 / 內容"
-            style={{ width: '100%', fontSize: 12, marginTop: 4, background: 'var(--bg-secondary)' }}
+            placeholder={isBonus ? '加分原因（有加分則必填）' : '請填寫抽查 / 內容'}
+            style={{ width: '100%', fontSize: 12, marginTop: 4, background: 'var(--bg-secondary)', border: needRemark ? '1px solid var(--accent-red)' : undefined }}
           />
         ) : (
-          item.remark && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 3, padding: '3px 8px', background: 'var(--bg-secondary)', borderRadius: 4 }}>{item.remark}</div>
+          item.remark && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 3, padding: '3px 8px', background: 'var(--bg-secondary)', borderRadius: 4 }}>{isBonus ? '加分原因：' : ''}{item.remark}</div>
         )
       )}
     </div>

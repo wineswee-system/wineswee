@@ -298,6 +298,13 @@ export default function EmployeeFormModal({
             </label>
           ))}
         </div>
+        {/* 投保級距(勞健保共用);留空 → 計薪依月薪自動查級距。寫進 labor_ins_grade + health_ins_grade */}
+        {((form.labor_insurance ?? true) || (form.health_insurance ?? true)) && (
+          <Field label="投保級距（勞健保，留空依月薪自動）">
+            <input className="form-input" type="number" style={{ width: '100%' }} placeholder="例 28800，留空自動"
+              value={form.ins_grade || ''} onChange={e => set('ins_grade', e.target.value)} />
+          </Field>
+        )}
       </div>
     </Modal>
   )

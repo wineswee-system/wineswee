@@ -108,6 +108,12 @@ export default function ScheduleBuilder() {
   })()
   const isLocked = currentCycleStatus === 'published'
 
+  // 兩頭班/自訂休息：查該班別是否手動休息 → 回分鐘數(否則 null 走公式)
+  const restMinFor = useCallback((shiftName) => {
+    const d = shiftDefs.find(x => x.name === shiftName)
+    return d?.manual_break ? Math.max(0, d.break_minutes || 0) : null
+  }, [shiftDefs])
+
   // 即時儲存（每筆獨立、不共用 debounce timer — 修之前「快速連點只存最後一筆」bug）
   const autoSave = useCallback(async (empName, date, shift, actualStart, actualEnd, sourceStore) => {
     pendingSavesRef.current++
@@ -116,6 +122,7 @@ export default function ScheduleBuilder() {
       employee: empName, date, shift,
       actual_start: actualStart, actual_end: actualEnd,
       source_store: sourceStore,
+      rest_minutes: restMinFor(shift),
       organization_id: authProfile?.organization_id,
     }, { onConflict: 'employee,date' })
     pendingSavesRef.current--
@@ -126,7 +133,7 @@ export default function ScheduleBuilder() {
       setSaveStatus('saved')
       setLastSavedAt(Date.now())
     }
-  }, [authProfile])
+  }, [authProfile, restMinFor])
 
   const handleSetShift = useCallback((empName, date, shift, actualStart, actualEnd, sourceStore) => {
     setAssignments(prev => ({
@@ -170,6 +177,7 @@ pendingSavesRef.current++
           employee: empName, date, shift: val.shift,
           actual_start: val.actual_start, actual_end: val.actual_end,
           source_store: val.source_store,
+          rest_minutes: restMinFor(val.shift),
           organization_id: authProfile?.organization_id,
         })
       }
@@ -313,6 +321,7 @@ pendingSavesRef.current++
                     employee: empName, date, shift: val.shift,
                     actual_start: val.actual_start, actual_end: val.actual_end,
                     source_store: val.source_store,
+                    rest_minutes: restMinFor(val.shift),
                     organization_id: authProfile?.organization_id,
                   })
                 }

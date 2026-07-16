@@ -663,11 +663,15 @@ export default function Schedule() {
     const emp = employees.find(e => e.name === empName)
     const effectiveSource = sourceStore || emp?.store || null
 
+    // 兩頭班/自訂休息：把該班別的手動休息烤進 schedule.rest_minutes，
+    // 讓 DB 計薪封頂吃到（否則後端一律走階梯公式）。非手動 → null（維持公式）。
+    const def = shiftDefs.find(d => d.name === shift)
     const record = {
       shift,
       actual_start: actualStart || null,
       actual_end: actualEnd || null,
       source_store: effectiveSource,
+      rest_minutes: def?.manual_break ? Math.max(0, def.break_minutes || 0) : null,
     }
 
     const existing = schedules.find(s => s.employee === empName && s.date === date)

@@ -41,10 +41,19 @@ export function getRestMinutes(grossHours) {
   return 60
 }
 
-/** 班次淨工時（毛時數扣自動算出的休息），取代 `getShiftHours(def) - (def.break_minutes||60)/60` */
+/**
+ * 班次休息分鐘：班別有勾「自訂休息」(manual_break) → 用 break_minutes；否則走公式。
+ * 兩頭班(如 11-22 中間休 3hr)才需要手動；一般班別維持階梯公式。
+ */
+export function getShiftRestMinutes(def, grossHours) {
+  if (def?.manual_break) return Math.max(0, Number(def.break_minutes) || 0)
+  return getRestMinutes(grossHours)
+}
+
+/** 班次淨工時（毛時數扣休息；自訂休息優先，否則公式） */
 export function getNetWorkHours(def) {
   const gross = getShiftHours(def)
-  return gross - getRestMinutes(gross) / 60
+  return gross - getShiftRestMinutes(def, gross) / 60
 }
 
 /** Get the effective end hour (adds 24 for midnight-crossing shifts) */

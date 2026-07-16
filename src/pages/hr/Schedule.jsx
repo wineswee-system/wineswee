@@ -669,6 +669,7 @@ export default function Schedule() {
     const def = shiftDefs.find(d => d.name === shift)
     const record = {
       shift,
+      employee_id: emp?.id || null,   // 一併寫 id → LIFF 我的班表用 id 對齊(不再只靠姓名)
       actual_start: actualStart || null,
       actual_end: actualEnd || null,
       source_store: effectiveSource,

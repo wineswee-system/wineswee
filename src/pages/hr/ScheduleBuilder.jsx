@@ -113,13 +113,15 @@ export default function ScheduleBuilder() {
     const d = shiftDefs.find(x => x.name === shiftName)
     return d?.manual_break ? Math.max(0, d.break_minutes || 0) : null
   }, [shiftDefs])
+  // 姓名 → employee_id(給 LIFF 我的班表用 id 對齊)
+  const empIdFor = useCallback((name) => employees.find(e => e.name === name)?.id || null, [employees])
 
   // 即時儲存（每筆獨立、不共用 debounce timer — 修之前「快速連點只存最後一筆」bug）
   const autoSave = useCallback(async (empName, date, shift, actualStart, actualEnd, sourceStore) => {
     pendingSavesRef.current++
     setSaveStatus('saving')
     const { error } = await supabase.from('schedules').upsert({
-      employee: empName, date, shift,
+      employee: empName, employee_id: empIdFor(empName), date, shift,
       actual_start: actualStart, actual_end: actualEnd,
       source_store: sourceStore,
       rest_minutes: restMinFor(shift),
@@ -133,7 +135,7 @@ export default function ScheduleBuilder() {
       setSaveStatus('saved')
       setLastSavedAt(Date.now())
     }
-  }, [authProfile, restMinFor])
+  }, [authProfile, restMinFor, empIdFor])
 
   const handleSetShift = useCallback((empName, date, shift, actualStart, actualEnd, sourceStore) => {
     setAssignments(prev => ({
@@ -174,7 +176,7 @@ pendingSavesRef.current++
       const date = key.slice(pi + 1)
       if (date >= rangeStart && date <= rangeEnd && val.shift) {
         rows.push({
-          employee: empName, date, shift: val.shift,
+          employee: empName, employee_id: empIdFor(empName), date, shift: val.shift,
           actual_start: val.actual_start, actual_end: val.actual_end,
           source_store: val.source_store,
           rest_minutes: restMinFor(val.shift),
@@ -318,7 +320,7 @@ pendingSavesRef.current++
                 const date = key.slice(pi + 1)
                 if (date >= rangeStart && date <= rangeEnd && val.shift) {
                   rows.push({
-                    employee: empName, date, shift: val.shift,
+                    employee: empName, employee_id: empIdFor(empName), date, shift: val.shift,
                     actual_start: val.actual_start, actual_end: val.actual_end,
                     source_store: val.source_store,
                     rest_minutes: restMinFor(val.shift),

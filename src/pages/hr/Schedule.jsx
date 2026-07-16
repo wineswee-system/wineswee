@@ -81,7 +81,8 @@ export default function Schedule() {
   const [offRequests, setOffRequests] = useState([])
   const [pendingLeaves, setPendingLeaves] = useState([]) // 待審核/審核中請假（橘點提示用）
   const [holidays, setHolidays] = useState([]) // ['2026-04-04', ...]
-  const [storeEvents, setStoreEvents] = useState([]) // [{ id, store_id, date, title, color }]
+  const [storeEvents, setStoreEvents] = useState([]) // [{ id, store_id, date, title, color, category, pay_class }]
+  const [disasters, setDisasters] = useState([]) // 天災宣告(該門市、本月區間) → 顯示在行事曆
   const [shiftDefs, setShiftDefs] = useState([])
   const [SHIFT_TYPES, setShiftTypes] = useState([REST_SHIFT])
   const [autoScheduling, setAutoScheduling] = useState(false)
@@ -1177,6 +1178,15 @@ export default function Schedule() {
           .gte('date', monthStart).lte('date', monthEnd)
           .then(({ data }) => setStoreEvents(data || []))
           .catch(() => setStoreEvents([]))  // table might not exist yet
+        // Load 天災宣告(本組織、該門市或全公司、開始日<=月底) → 再篩結束>=月初(含跨月宣告)
+        supabase.from('disaster_days').select('*')
+          .eq('organization_id', authProfile?.organization_id)
+          .lte('date', monthEnd)
+          .or(`store_ids.is.null,store_ids.cs.{${store.id}}`)
+          .then(({ data }) => setDisasters(
+            (data || []).filter(d => (d.end_at ? d.end_at.slice(0, 10) : d.date) >= monthStart)
+          ))
+          .catch(() => setDisasters([]))
       }
     }
   }, [storeFilter, locations, selectedMonth])
@@ -1687,6 +1697,7 @@ export default function Schedule() {
           holidays={holidays}
           storeEvents={storeEvents}
           setStoreEvents={setStoreEvents}
+          disasters={disasters}
           storeFilter={storeFilter}
           locations={locations}
         />

@@ -1,12 +1,30 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../../lib/supabase'
 import { toast } from '../../../lib/toast'
 
 // ══════════════════════════════════════════════════════════════
-//  Schedule Calendar Events (holidays + custom store events)
+//  Schedule Calendar Events (holidays + custom store events + 天災)
 // ══════════════════════════════════════════════════════════════
-export default function ScheduleCalendarEvents({ selectedMonth, monthDates, holidays, storeEvents, setStoreEvents, storeFilter, locations }) {
-  const [newEvent, setNewEvent] = useState({ date: '', title: '', color: '#f59e0b' })
+
+// 活動類別 → icon + 主題色系(用 accent token，不寫死 hex)
+const EVENT_CATEGORIES = {
+  '公司公休': { icon: '🚫', accent: 'red' },
+  '節慶活動': { icon: '🎉', accent: 'orange' },
+  '包場':     { icon: '🎪', accent: 'purple' },
+  '教育訓練': { icon: '📚', accent: 'blue' },
+  '促銷檔期': { icon: '🏷️', accent: 'green' },
+  '其他':     { icon: '📌', accent: 'cyan' },
+}
+// 計薪比照(目前只支援比照國定假日)
+const PAY_CLASS_OPTS = {
+  '': '無（不影響計薪）',
+  national_holiday: '比照國定假日（加給/加班費）',
+}
+
+export default function ScheduleCalendarEvents({ selectedMonth, monthDates, holidays, storeEvents, setStoreEvents, disasters = [], storeFilter, locations }) {
+  const navigate = useNavigate()
+  const [newEvent, setNewEvent] = useState({ date: '', title: '', category: '節慶活動', pay_class: '' })
   const [showForm, setShowForm] = useState(false)
 
   const store = locations.find(s => s.name === storeFilter)
@@ -15,11 +33,17 @@ export default function ScheduleCalendarEvents({ selectedMonth, monthDates, holi
   const handleAdd = async () => {
     if (!newEvent.date || !newEvent.title || !store) return
     const { data, error } = await supabase.from('store_events')
-      .insert({ store_id: store.id, date: newEvent.date, title: newEvent.title, color: newEvent.color })
+      .insert({
+        store_id: store.id,
+        date: newEvent.date,
+        title: newEvent.title,
+        category: newEvent.category || null,
+        pay_class: newEvent.pay_class || null,
+      })
       .select().single()
     if (data) setStoreEvents(prev => [...prev, data])
     if (error) toast.error('新增失敗：' + error.message)
-    setNewEvent({ date: '', title: '', color: '#f59e0b' })
+    setNewEvent({ date: '', title: '', category: '節慶活動', pay_class: '' })
     setShowForm(false)
   }
 
@@ -30,6 +54,14 @@ export default function ScheduleCalendarEvents({ selectedMonth, monthDates, holi
 
   const holidayDates = monthDates.filter(d => holidays.includes(d))
 
+  // 天災宣告 → 顯示區間標籤(同月內)
+  const fmtDisaster = (d) => {
+    const start = (d.start_at ? d.start_at.slice(0, 10) : d.date)
+    const end = (d.end_at ? d.end_at.slice(0, 10) : start)
+    const sDay = parseInt(start.slice(8)), eDay = parseInt(end.slice(8))
+    return start === end ? `${sDay}日` : `${sDay}~${eDay}日`
+  }
+
   return (
     <div className="card" style={{ marginBottom: 12, padding: '12px 16px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -37,7 +69,7 @@ export default function ScheduleCalendarEvents({ selectedMonth, monthDates, holi
         {storeFilter && (
           <button onClick={() => setShowForm(!showForm)} style={{
             padding: '4px 12px', borderRadius: 6, border: '1px solid var(--border-medium)',
-            background: showForm ? 'rgba(34,211,238,0.1)' : 'var(--bg-card)',
+            background: showForm ? 'var(--accent-cyan-dim)' : 'var(--bg-card)',
             color: showForm ? 'var(--accent-cyan)' : 'var(--text-muted)',
             fontSize: 11, fontWeight: 600, cursor: 'pointer',
           }}>
@@ -48,7 +80,7 @@ export default function ScheduleCalendarEvents({ selectedMonth, monthDates, holi
 
       {/* Add event form */}
       {showForm && (
-        <div style={{ display: 'flex', gap: 8, alignItems: 'end', marginBottom: 10, padding: '8px 12px', borderRadius: 8, background: 'var(--glass-light)' }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'end', flexWrap: 'wrap', marginBottom: 10, padding: '8px 12px', borderRadius: 8, background: 'var(--glass-light)' }}>
           <div>
             <label style={{ fontSize: 10, color: 'var(--text-muted)', display: 'block', marginBottom: 2 }}>日期</label>
             <select className="form-input" style={{ width: 100, padding: '5px 6px', fontSize: 12 }}
@@ -61,19 +93,33 @@ export default function ScheduleCalendarEvents({ selectedMonth, monthDates, holi
               })}
             </select>
           </div>
-          <div style={{ flex: 1 }}>
+          <div>
+            <label style={{ fontSize: 10, color: 'var(--text-muted)', display: 'block', marginBottom: 2 }}>類別</label>
+            <select className="form-input" style={{ width: 110, padding: '5px 6px', fontSize: 12 }}
+              value={newEvent.category} onChange={e => setNewEvent(prev => ({ ...prev, category: e.target.value }))}>
+              {Object.entries(EVENT_CATEGORIES).map(([k, v]) => <option key={k} value={k}>{v.icon} {k}</option>)}
+            </select>
+          </div>
+          <div style={{ flex: 1, minWidth: 140 }}>
             <label style={{ fontSize: 10, color: 'var(--text-muted)', display: 'block', marginBottom: 2 }}>活動名稱</label>
             <input className="form-input" type="text" placeholder="例：包場、週年慶" style={{ width: '100%', padding: '5px 8px', fontSize: 12 }}
               value={newEvent.title} onChange={e => setNewEvent(prev => ({ ...prev, title: e.target.value }))} />
           </div>
           <div>
-            <label style={{ fontSize: 10, color: 'var(--text-muted)', display: 'block', marginBottom: 2 }}>顏色</label>
-            <input type="color" value={newEvent.color} onChange={e => setNewEvent(prev => ({ ...prev, color: e.target.value }))}
-              style={{ width: 32, height: 28, border: 'none', borderRadius: 4, cursor: 'pointer' }} />
+            <label style={{ fontSize: 10, color: 'var(--text-muted)', display: 'block', marginBottom: 2 }}>計薪比照</label>
+            <select className="form-input" style={{ width: 170, padding: '5px 6px', fontSize: 12 }}
+              value={newEvent.pay_class} onChange={e => setNewEvent(prev => ({ ...prev, pay_class: e.target.value }))}>
+              {Object.entries(PAY_CLASS_OPTS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </select>
           </div>
           <button onClick={handleAdd} disabled={!newEvent.date || !newEvent.title} className="btn btn-primary btn-sm" style={{ padding: '5px 12px', fontSize: 12 }}>
             新增
           </button>
+        </div>
+      )}
+      {showForm && newEvent.pay_class === 'national_holiday' && (
+        <div style={{ fontSize: 11, color: 'var(--accent-orange)', marginBottom: 8, marginLeft: 2 }}>
+          💰 該門市這天「有上班的人」會比照國定假日計薪（出勤加給／加班費倍率）；沒上班的人不受影響。
         </div>
       )}
 
@@ -86,24 +132,46 @@ export default function ScheduleCalendarEvents({ selectedMonth, monthDates, holi
           return (
             <span key={`h_${d}`} style={{
               padding: '3px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600,
-              background: 'rgba(239,68,68,0.1)', color: 'var(--accent-red)',
+              background: 'var(--accent-red-dim)', color: 'var(--accent-red)',
             }}>
               🏷️ {day}({dow}) 國定假日
             </span>
           )
         })}
 
+        {/* 天災宣告(唯讀，點擊導到天災管理) */}
+        {disasters.map(d => (
+          <span key={`d_${d.id}`}
+            onClick={() => navigate('/hr/disaster')}
+            title="點擊前往天災管理"
+            style={{
+              padding: '3px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+              background: 'var(--accent-red-dim)', color: 'var(--accent-red)',
+              cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4,
+              border: '1px dashed var(--accent-red)',
+            }}>
+            🌧️ {fmtDisaster(d)} {d.disaster_type}停班 ↗
+          </span>
+        ))}
+
         {/* Custom store events */}
         {storeEvents.map(ev => {
           const day = parseInt(ev.date.slice(8))
           const dow = dows[new Date(ev.date).getDay()]
+          const cat = EVENT_CATEGORIES[ev.category]
+          // 有類別 → 用主題色 token；舊資料(無類別) → fallback 到自訂 hex 色
+          const chipStyle = cat
+            ? { background: `var(--accent-${cat.accent}-dim)`, color: `var(--accent-${cat.accent})` }
+            : { background: (ev.color || '#f59e0b') + '20', color: ev.color || '#f59e0b' }
           return (
             <span key={ev.id} style={{
               padding: '3px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600,
-              background: (ev.color || '#f59e0b') + '20', color: ev.color || '#f59e0b',
-              display: 'inline-flex', alignItems: 'center', gap: 4,
+              display: 'inline-flex', alignItems: 'center', gap: 4, ...chipStyle,
             }}>
-              📌 {day}({dow}) {ev.title}
+              {cat?.icon || '📌'} {day}({dow}) {ev.title}
+              {ev.pay_class === 'national_holiday' && (
+                <span style={{ fontSize: 10, opacity: 0.85 }}>· 💰比照國定</span>
+              )}
               <button onClick={() => handleDelete(ev.id)} style={{
                 background: 'none', border: 'none', cursor: 'pointer', padding: 0,
                 color: 'inherit', fontSize: 10, opacity: 0.6, lineHeight: 1,
@@ -112,7 +180,7 @@ export default function ScheduleCalendarEvents({ selectedMonth, monthDates, holi
           )
         })}
 
-        {holidayDates.length === 0 && storeEvents.length === 0 && (
+        {holidayDates.length === 0 && storeEvents.length === 0 && disasters.length === 0 && (
           <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>本月無節慶或活動</span>
         )}
       </div>

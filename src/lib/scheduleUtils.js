@@ -473,8 +473,8 @@ export const MIN_SHIFT_INTERVAL = 11
 
 /** Max consecutive work days — 兼職 (勞基法 §36 七休一) */
 export const MAX_CONSECUTIVE_WORK_DAYS = 6
-/** Max consecutive work days — 正職 (統一七休一，原 12 天但書改 6 天) */
-export const MAX_CONSECUTIVE_WORK_DAYS_FT = 6
+/** Max consecutive work days — 正職 (變形工時但書:兩例假分置兩週頭尾 → 最多連上 12 天) */
+export const MAX_CONSECUTIVE_WORK_DAYS_FT = 12
 
 /** Min rest days per week (勞基法 §36 一例一休) */
 export const MIN_WEEKLY_REST_DAYS = 2

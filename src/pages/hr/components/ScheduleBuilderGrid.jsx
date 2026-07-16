@@ -61,7 +61,7 @@ export default function ScheduleBuilderGrid({
       }
     }
     if (schedules.length === 0) return { errors: [], warnings: [], isValid: true }
-    const base = validateSchedule(schedules, dates, shiftDefs)
+    const base = validateSchedule(schedules, dates, shiftDefs, employees)
     const quota = validateLeisureQuota({
       schedules,
       workHourSystem: storeSettings?.work_hour_system,

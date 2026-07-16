@@ -163,6 +163,26 @@ describe('validateSchedule', () => {
     expect(result.errors.some(e => e.message.includes('連續工作'))).toBe(false)
   })
 
+  // 連續工作上限依員工類型:正職 12(變形工時但書)、兼職 6(七休一)
+  const _consecDates = (n) => Array.from({ length: n }, (_, i) => `2026-04-${String(6 + i).padStart(2, '0')}`)
+  it('正職連上10天不報(變形工時但書上限12)', () => {
+    const schedules = _consecDates(10).map(d => ({ employee: '正職甲', date: d, shift: '9-18' }))
+    const result = validateSchedule(schedules, weekDates, [], [{ name: '正職甲', employment_type: '正職' }])
+    expect(result.errors.some(e => e.message.includes('連續工作'))).toBe(false)
+  })
+  it('正職連上13天要報(超過上限12)', () => {
+    const schedules = _consecDates(13).map(d => ({ employee: '正職甲', date: d, shift: '9-18' }))
+    const result = validateSchedule(schedules, weekDates, [], [{ name: '正職甲', employment_type: '正職' }])
+    const hit = result.errors.find(e => e.message.includes('連續工作'))
+    expect(hit).toBeTruthy()
+    expect(hit.message).toContain('12')
+  })
+  it('兼職連上10天要報(上限6)', () => {
+    const schedules = _consecDates(10).map(d => ({ employee: '兼職乙', date: d, shift: '9-18' }))
+    const result = validateSchedule(schedules, weekDates, [], [{ name: '兼職乙', employment_type: '兼職' }])
+    expect(result.errors.some(e => e.message.includes('連續工作'))).toBe(true)
+  })
+
   it('short shift interval triggers error (§34)', () => {
     const schedules = [
       { employee: '王小明', date: '2026-04-06', shift: '14-22' },

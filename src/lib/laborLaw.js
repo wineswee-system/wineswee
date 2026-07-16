@@ -15,7 +15,7 @@
  * - 病假新制：10天內不得不利處分、全勤按比例扣
  */
 
-import { parseShiftRange } from './scheduleUtils'
+import { parseShiftRange, MAX_CONSECUTIVE_WORK_DAYS, MAX_CONSECUTIVE_WORK_DAYS_FT } from './scheduleUtils'
 
 // ══════════════════════════════════════
 //  勞基法 — 工時與排班規定
@@ -240,9 +240,21 @@ export const OCCUPATIONAL_SAFETY = {
 //  排班合規驗證
 // ══════════════════════════════════════
 
-export function validateSchedule(schedules, weekDates, shiftDefs = []) {
+export function validateSchedule(schedules, weekDates, shiftDefs = [], employees = []) {
   const warnings = []
   const errors = []
+
+  // 連續工作上限依員工類型:兼職 6 天(七休一)、正職 12 天(變形工時但書)。
+  //   有給 employees 時才分辨正職(→12);沒給則一律 6(保守,向下相容)。
+  const ptNames = new Set(
+    (employees || [])
+      .filter(e => e.employment_type === '兼職' || e.employment_type === 'PT' || e.employment_category === 'parttime')
+      .map(e => e.name)
+  )
+  const hasEmployees = (employees || []).length > 0
+  const consecutiveLimitFor = (empName) =>
+    ptNames.has(empName) ? MAX_CONSECUTIVE_WORK_DAYS
+      : (hasEmployees ? MAX_CONSECUTIVE_WORK_DAYS_FT : MAX_CONSECUTIVE_WORK_DAYS)
 
   // 單日排班上限（gross span，actual_start→actual_end）：最多 12h = 11 工作 + 1 休息（四週變形）
   const DAILY_MAX_SPAN_HOURS = 12
@@ -340,12 +352,13 @@ export function validateSchedule(schedules, weekDates, shiftDefs = []) {
       maxConsecutive = Math.max(maxConsecutive, consecutiveWork)
       prevDayNum = dn
     }
-    if (maxConsecutive > 6) {
+    const consecutiveLimit = consecutiveLimitFor(emp)
+    if (maxConsecutive > consecutiveLimit) {
       errors.push({
         employee: emp,
         constraint: 'H3',
         law: '勞基法 §36',
-        message: `${emp} 連續工作 ${maxConsecutive} 天，建議安排休息`,
+        message: `${emp} 連續工作 ${maxConsecutive} 天，超過上限 ${consecutiveLimit} 天`,
         severity: 'error',
       })
     }

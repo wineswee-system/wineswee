@@ -364,7 +364,7 @@ export default function Schedule() {
   useEffect(() => {
     if (schedules.length === 0) return
     const timer = setTimeout(() => {
-      const baseResult = validateSchedule(schedules, weekDates, shiftDefs)
+      const baseResult = validateSchedule(schedules, weekDates, shiftDefs, employees)
       // 加 cycle-aware 例休 quota 檢查（依當前店設定的工時制）
       const quotaResult = validateLeisureQuota({
         schedules,

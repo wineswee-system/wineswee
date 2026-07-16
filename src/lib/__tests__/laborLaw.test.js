@@ -163,7 +163,7 @@ describe('validateSchedule', () => {
     expect(result.errors.some(e => e.message.includes('連續工作'))).toBe(false)
   })
 
-  it('short shift interval triggers warning (§34)', () => {
+  it('short shift interval triggers error (§34)', () => {
     const schedules = [
       { employee: '王小明', date: '2026-04-06', shift: '14-22' },
       { employee: '王小明', date: '2026-04-07', shift: '6-14' },
@@ -174,8 +174,8 @@ describe('validateSchedule', () => {
       { employee: '王小明', date: '2026-04-12', shift: '休' },
     ]
     const result = validateSchedule(schedules, weekDates)
-    // Gap: 22→6 next day = 8h, which is < 11h
-    expect(result.warnings.some(w => w.law === '勞基法 §34')).toBe(true)
+    // Gap: 22→6 next day = 8h, which is < 11h。§34 班距不足是硬性 error(老闆定,拿掉舊 8h 工會例外)
+    expect(result.errors.some(e => e.law === '勞基法 §34')).toBe(true)
   })
 
   it('handles multiple employees independently', () => {

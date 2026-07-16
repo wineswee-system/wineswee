@@ -16,10 +16,18 @@ const EVENT_CATEGORIES = {
   '促銷檔期': { icon: '🏷️', accent: 'green' },
   '其他':     { icon: '📌', accent: 'cyan' },
 }
-// 計薪比照(目前只支援比照國定假日)
+// 計薪比照 → 對應加班費日別(§36/§37)。個人請假別(特休/病假…)不在此,走請假流程。
 const PAY_CLASS_OPTS = {
   '': '無（不影響計薪）',
+  weekly_off: '比照例假（§36 出勤最高倍率）',
+  restday: '比照休息日（§36 休息日加給）',
   national_holiday: '比照國定假日（加給/加班費）',
+}
+// 簡短標籤(chip 用)
+const PAY_CLASS_SHORT = {
+  weekly_off: '💰比照例假',
+  restday: '💰比照休息日',
+  national_holiday: '💰比照國定',
 }
 
 export default function ScheduleCalendarEvents({ selectedMonth, monthDates, holidays, storeEvents, setStoreEvents, disasters = [], storeFilter, locations }) {
@@ -117,9 +125,9 @@ export default function ScheduleCalendarEvents({ selectedMonth, monthDates, holi
           </button>
         </div>
       )}
-      {showForm && newEvent.pay_class === 'national_holiday' && (
+      {showForm && newEvent.pay_class && (
         <div style={{ fontSize: 11, color: 'var(--accent-orange)', marginBottom: 8, marginLeft: 2 }}>
-          💰 該門市這天「有上班的人」會比照國定假日計薪（出勤加給／加班費倍率）；沒上班的人不受影響。
+          💰 該門市這天「有上班的人」會依「{PAY_CLASS_OPTS[newEvent.pay_class]}」計薪（加給／加班費倍率）；沒上班的人不受影響。
         </div>
       )}
 
@@ -169,8 +177,8 @@ export default function ScheduleCalendarEvents({ selectedMonth, monthDates, holi
               display: 'inline-flex', alignItems: 'center', gap: 4, ...chipStyle,
             }}>
               {cat?.icon || '📌'} {day}({dow}) {ev.title}
-              {ev.pay_class === 'national_holiday' && (
-                <span style={{ fontSize: 10, opacity: 0.85 }}>· 💰比照國定</span>
+              {PAY_CLASS_SHORT[ev.pay_class] && (
+                <span style={{ fontSize: 10, opacity: 0.85 }}>· {PAY_CLASS_SHORT[ev.pay_class]}</span>
               )}
               <button onClick={() => handleDelete(ev.id)} style={{
                 background: 'none', border: 'none', cursor: 'pointer', padding: 0,

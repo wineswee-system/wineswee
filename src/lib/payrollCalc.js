@@ -54,11 +54,13 @@ export async function computeBatchPayroll({ month, orgId, employees, storeFilter
       .select('employee_id, ot_hours, ot_type, ot_category, request_date, is_exception')
       .eq('status', '已核准')
       .eq('organization_id', orgId)
+      .is('deleted_at', null)
       .gte('request_date', monthStart).lte('request_date', monthEnd),
     supabase.from('leave_requests')
       .select('employee_id, days, hours, type')
       .eq('status', '已核准')
       .eq('organization_id', orgId)
+      .is('deleted_at', null)
       .gte('start_date', monthStart).lte('start_date', monthEnd),
     supabase.from('salary_structures')
       .select('*')

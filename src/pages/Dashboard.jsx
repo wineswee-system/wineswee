@@ -105,8 +105,8 @@ function AdminDashboard({ profile }) {
       supabase.from('stock_levels').select('*'),
       supabase.from('workflow_instances').select('id, status').eq('status', '進行中'),
       supabase.from('tasks').select('id, status, assignee, due_date').not('workflow_instance_id', 'is', null).in('status', ['進行中', '待簽核', '待確認', '待處理']),
-      supabase.from('clock_corrections').select('id').eq('status', '待審核'),
-      supabase.from('overtime_requests').select('id').eq('status', '待審核'),
+      supabase.from('clock_corrections').select('id').eq('status', '待審核').is('deleted_at', null),
+      supabase.from('overtime_requests').select('id').eq('status', '待審核').is('deleted_at', null),
     ])
       .then(([e, t, w, a, l, ar, ap, opp, stk, wfi, wfs, pc, ot]) => {
         setEmployees(e.data || []); setTasks(t.data || []); setWorkflows(w.data || [])

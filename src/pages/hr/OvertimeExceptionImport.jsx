@@ -129,11 +129,13 @@ export default function OvertimeExceptionImport() {
         supabase.from('overtime_requests')
           .select('employee_id, ot_hours, hours, is_exception, status, request_date, date')
           .eq('organization_id', orgId)
+          .is('deleted_at', null)
           .gte('request_date', monthStart).lte('request_date', monthEnd),
         supabase.from('overtime_requests')
           .select('id, employee, employee_id, request_date, ot_hours, ot_type, reason, exception_note, exception_imported_at, exception_imported_by, status')
           .eq('organization_id', orgId)
           .eq('is_exception', true)
+          .is('deleted_at', null)
           .order('exception_imported_at', { ascending: false, nullsFirst: false })
           .limit(50),
       ])

@@ -272,6 +272,7 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
       .select('employee, date, store')
       .eq('organization_id', authProfile.organization_id)
       .eq('status', '已核准')
+      .is('deleted_at', null)
       .in('store', storeNames)
       .gte('date', earliestStart)
       .lte('date', latestEnd)

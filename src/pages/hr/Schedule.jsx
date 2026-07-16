@@ -263,9 +263,10 @@ export default function Schedule() {
     setScheduleLoading(true)
     Promise.all([
       supabase.from('schedules').select('*').gte('date', activeStart).lte('date', activeEnd).abortSignal(signal),
-      supabase.from('off_requests').select('*').gte('date', activeStart).lte('date', activeEnd).abortSignal(signal),
+      supabase.from('off_requests').select('*').gte('date', activeStart).lte('date', activeEnd).is('deleted_at', null).abortSignal(signal),
       supabase.from('leave_requests').select('employee, start_date, end_date')
         .in('status', ['待審核', '審核中'])
+        .is('deleted_at', null)
         .lte('start_date', activeEnd)
         .gte('end_date', activeStart)
         .eq('unit', 'day')
@@ -1199,7 +1200,7 @@ export default function Schedule() {
         .then(({ data }) => setPreferences(data || []))
     }
     if (mainTab === 'swaps') {
-      supabase.from('shift_swaps').select('*').order('created_at', { ascending: false })
+      supabase.from('shift_swaps').select('*').is('deleted_at', null).order('created_at', { ascending: false })
         .then(({ data }) => setSwaps(data || []))
     }
   }, [mainTab, storeFilter])

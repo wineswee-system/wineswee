@@ -58,6 +58,7 @@ export async function calculateAnnualLeaveSettlement() {
       .eq('employee_id', emp.id)
       .eq('type', '特休')
       .eq('status', '已核准')
+      .is('deleted_at', null)
       .gte('start_date', yearStart.toISOString().slice(0, 10))
 
     const used = (leaves || []).reduce((s, l) => s + (l.days || 0), 0)

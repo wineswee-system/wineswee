@@ -137,9 +137,11 @@ export default function LeaveBalances() {
           .eq('year', yearFilter).eq('organization_id', orgId).eq('employee_id', selectedEmpId),
         supabase.from('leave_requests').select('employee_id,type,days,hours,start_date,status')
           .eq('organization_id', orgId).eq('employee_id', selectedEmpId)
+          .is('deleted_at', null)
           .in('status', ['已核准']).gte('start_date', yearStart).lt('start_date', yearEnd),
         supabase.from('leave_requests').select('employee_id,type,days,hours,start_date,status')
           .eq('organization_id', orgId).eq('employee_id', selectedEmpId)
+          .is('deleted_at', null)
           .eq('status', '申請中').gte('start_date', yearStart).lt('start_date', yearEnd),
         // 補休：改讀 comp_time_ledger（與補休管理 tab / 104 同源，不用 leave_balances 那套髒的）
         supabase.from('comp_time_ledger').select('hours,hours_used,status')

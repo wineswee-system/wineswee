@@ -34,7 +34,7 @@ export default function LeaveCalendar() {
 
     Promise.all([
       supabase.from('employees').select('id, name, dept, department_id, position, departments!department_id(name)').eq('status', '在職').order('department_id').order('name'),
-      supabase.from('leave_requests').select('*').eq('status', '已核准').lte('start_date', endDate).gte('end_date', startDate),
+      supabase.from('leave_requests').select('*').eq('status', '已核准').is('deleted_at', null).lte('start_date', endDate).gte('end_date', startDate),
       supabase.from('holidays').select('*').gte('date', startDate).lte('date', endDate),
       supabase.from('departments').select('*').order('name'),
     ]).then(([e, l, h, d]) => {

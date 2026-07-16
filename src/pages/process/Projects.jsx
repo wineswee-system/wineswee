@@ -194,6 +194,7 @@ export default function Projects() {
       supabase.from('approval_chains').select('id, name, steps:approval_chain_steps(id)').order('name'),
       supabase.from('expense_requests')
         .select('id, title, employee, estimated_amount, actual_amount, status, project_id, account_name, store, created_at')
+        .is('deleted_at', null)
         .order('created_at', { ascending: false }),
       getDepartments(orgId),
       supabase.from('checklists').select('id, name, items').order('name'),

@@ -22,7 +22,7 @@ export default function StaffDashboard({ profile }) {
     Promise.all([
       supabase.from('schedules').select('date, shift').eq('employee', empName).gte('date', monthStart).order('date'),
       supabase.from('attendance_records').select('date, clock_in, clock_out, status, hours').eq('employee', empName).gte('date', monthStart).order('date', { ascending: false }),
-      supabase.from('leave_requests').select('id, type, start_date, end_date, status').eq('employee', empName).order('created_at', { ascending: false }).limit(5),
+      supabase.from('leave_requests').select('id, type, start_date, end_date, status').eq('employee', empName).is('deleted_at', null).order('created_at', { ascending: false }).limit(5),
       supabase.from('workflow_instances').select('id, template_name, status, created_at').eq('started_by', empName).order('created_at', { ascending: false }).limit(5),
     ]).then(([s, a, l, f]) => {
       setSchedules(s.data || [])

@@ -96,6 +96,7 @@ export default function Attendance() {
       supabase.from('overtime_requests')
         .select('id, employee, date, start_time, end_time, ot_hours, hours, ot_category, store, status, organization_id')
         .eq('organization_id', orgId).eq('status', '已核准')
+        .is('deleted_at', null)
         .gte('date', startDate).lte('date', endDate),
     ]).then(([r, e, d, s, ot]) => {
       let recs = (r.data || []).map(r => ({

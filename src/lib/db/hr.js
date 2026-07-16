@@ -235,6 +235,7 @@ export const deleteDevelopmentPlan = (id) =>
 export const getHeadcountRequests = (orgId) => {
   let q = supabase.from('headcount_requests')
     .select('*, creator:employees!created_by(name), reviewer:employees!reviewed_by(name)')
+    .is('deleted_at', null)
     .order('created_at', { ascending: false })
   if (orgId) q = q.eq('organization_id', orgId)
   return q

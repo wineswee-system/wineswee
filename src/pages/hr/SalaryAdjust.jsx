@@ -144,12 +144,14 @@ export default function SalaryAdjust() {
         .eq('employee_id', employeeId)
         .lte('start_date', monthEnd).gte('end_date', monthStart)
         .eq('status', '已核准')
+        .is('deleted_at', null)
         .order('start_date'),
       supabase.from('overtime_requests')
         .select('id, request_date, ot_hours, ot_type, reason, status')
         .eq('employee_id', employeeId)
         .gte('request_date', monthStart).lte('request_date', monthEnd)
         .eq('status', '已核准')
+        .is('deleted_at', null)
         .order('request_date'),
     ])
     setSourceData(prev => ({

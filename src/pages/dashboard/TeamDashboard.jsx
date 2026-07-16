@@ -472,7 +472,7 @@ export default function TeamDashboard() {
         .order('created_at', { ascending: false }).limit(15),
       supabase.from('expense_requests')
         .select('id, employee_id, employee, title, estimated_amount, status, current_step, approval_chain_id, created_at')
-        .eq('status', '申請中').in('employee_id', teamIds)
+        .eq('status', '申請中').in('employee_id', teamIds).is('deleted_at', null)
         .order('created_at', { ascending: false }).limit(15),
     ])
     setPendingResignations(pr.data || [])

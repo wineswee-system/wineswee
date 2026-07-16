@@ -267,6 +267,7 @@ export default function ChainConfigModal({ open, onClose, formType, formLabel, o
         .select('id', { count: 'exact', head: true })
         .eq('approval_chain_id', cid)
         .in('status', ['申請中', '待審'])
+        .is('deleted_at', null)
       if ((count || 0) > 0) {
         toast.error(`無法刪除「${name}」\n\n目前有 ${count} 筆「申請中/待審」的費用申請正在使用此鏈。\n請等這些申請走完流程後再刪除，或先把它們處理掉。`)
         return
@@ -427,6 +428,7 @@ export default function ChainConfigModal({ open, onClose, formType, formLabel, o
         .select('id', { count: 'exact', head: true })
         .eq('approval_chain_id', chainId)
         .in('status', ['申請中', '待審'])
+        .is('deleted_at', null)
       if ((count || 0) > 0) {
         const { count: oldStepCount } = await supabase
           .from('approval_chain_steps')

@@ -52,7 +52,7 @@ export default function SelfService() {
 
     Promise.all([
       supabase.from('attendance_records').select('*').eq('employee_id', emp?.id).gte('date', last30.toISOString().slice(0, 10)).order('date', { ascending: false }),
-      supabase.from('leave_requests').select('*').eq('employee_id', emp?.id).order('created_at', { ascending: false }).limit(20),
+      supabase.from('leave_requests').select('*').eq('employee_id', emp?.id).is('deleted_at', null).order('created_at', { ascending: false }).limit(20),
       supabase.from('salary_records').select('*').eq('employee_id', emp?.id).order('month', { ascending: false }).limit(12),
       supabase.from('leave_entitlements').select('*').eq('employee', emp?.name).eq('year', thisYear),
     ]).then(([a, l, s, le]) => {

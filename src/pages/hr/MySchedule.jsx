@@ -56,6 +56,7 @@ export default function MySchedule() {
       const nextDates = getMonthDates(nextM.getFullYear(), nextM.getMonth() + 1)
       const { data: nextReqs } = await supabase.from('off_requests').select('date')
         .eq('employee_id', empId)
+        .is('deleted_at', null)
         .gte('date', nextDates[0]).lte('date', nextDates[nextDates.length - 1])
       setNextMonthRequests(nextReqs?.length || 0)
 
@@ -315,6 +316,7 @@ function OffRequestForm({ empName, empId, employmentType }) {
   useEffect(() => {
     supabase.from('off_requests').select('*')
       .eq('employee_id', empId)
+      .is('deleted_at', null)
       .gte('date', targetDates[0])
       .lte('date', targetDates[targetDates.length - 1])
       .then(({ data }) => setMyRequests(data || []))
@@ -417,6 +419,7 @@ function SwapRequestForm({ empName, monthDates, schedules, shiftDefs }) {
   useEffect(() => {
     supabase.from('shift_swaps').select('*')
       .or(`requester.eq.${empName},target.eq.${empName}`)
+      .is('deleted_at', null)
       .gte('date', monthDates[0])
       .lte('date', monthDates[monthDates.length - 1])
       .order('created_at', { ascending: false })

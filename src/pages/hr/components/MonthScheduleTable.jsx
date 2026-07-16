@@ -101,6 +101,20 @@ export default function MonthScheduleTable({
             {a.icon}{a.label}
           </span>
         ))}
+        {/* 格子標記說明 */}
+        <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 4 }}>|</span>
+        <span style={{ fontSize: 10, color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: 3 }}
+          title="格子右上角橘點：該員工那天有一張還在跑簽核（待審核/審核中）的整天請假單">
+          <span style={{ color: 'var(--accent-orange)' }}>●</span>待審核請假
+        </span>
+        <span style={{ fontSize: 10, color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: 3 }}
+          title="格子左上角紫字：該員工當天跨店支援，顯示去支援的門市首字">
+          <span style={{ padding: '0 3px', borderRadius: 3, fontWeight: 700, background: 'var(--accent-purple-dim)', color: 'var(--accent-purple)' }}>店</span>跨店支援
+        </span>
+        <span style={{ fontSize: 10, color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: 3 }}
+          title="灰底斜體：該日不在此員工的在職區間（尚未入職或已離職），不列入排班/合規檢查">
+          <span style={{ color: 'var(--text-muted)', fontStyle: 'italic', opacity: 0.55 }}>未入職/已離職</span>
+        </span>
       </div>
 
       {/* Monthly Grid Table */}
@@ -494,7 +508,7 @@ function EmployeeRow({
                 emp={emp} date={date} shift={shift}
                 storeSettings={storeSettings}
                 schedules={schedules}
-                shiftDefs={getStoreShifts ? getStoreShifts(emp.store, 'all') : shiftDefs}
+                shiftDefs={getStoreShifts ? getStoreShifts(emp.store, 'all') : []}
                 currentSchedule={schedules.find(s => s.employee === emp.name && s.date === date)}
                 handleSetShift={handleSetShift} handleDeleteShift={handleDeleteShift}
                 onClose={() => setEditCell(null)}

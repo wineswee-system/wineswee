@@ -561,7 +561,7 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
                 {employee.name_en && <span style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 500 }}>{employee.name_en}</span>}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 10, fontFamily: 'monospace', padding: '2px 8px', borderRadius: 4, background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)', fontWeight: 700 }}>EMP-{String(employee.id).padStart(3, '0')}</span>
+                <span style={{ fontSize: 10, fontFamily: 'monospace', padding: '2px 8px', borderRadius: 4, background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)', fontWeight: 700 }}>{employee.employee_number || `EMP-${String(employee.id).padStart(3, '0')}`}</span>
                 <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, background: empTypeDimColor, color: empTypeColor, fontWeight: 700 }}>{form.employment_type || '正職'}</span>
                 <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, background: statusDimColor, color: statusColor, fontWeight: 700 }}>{form.status || '在職'}</span>
               </div>

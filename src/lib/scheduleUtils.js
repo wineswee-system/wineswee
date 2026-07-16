@@ -669,6 +669,19 @@ export function validateLeisureQuota({ schedules, workHourSystem, anchorDate, st
       .map(e => e.name)
   )
 
+  // 在職區間（入職/離職）→ 只在「完整涵蓋整個檢查窗」時才要求配額。
+  //   離職者在離職後(或入職者入職前)無法回頭補排例假/休息，半個 cycle 也湊不滿全 cycle 配額
+  //   → 沒完整在職的窗直接跳過配額檢查，避免對離職/新進員工誤報。
+  const empSpan = {}
+  ;(employees || []).forEach(e => { empSpan[e.name] = { join: e.join_date || null, resign: e.resign_date || null } })
+  const fullyEmployed = (empName, rStart, rEnd) => {
+    const span = empSpan[empName]
+    if (!span) return true                       // 查無在職資料 → 當在職(不誤跳)
+    if (span.join && span.join > rStart) return false     // 窗中途才入職
+    if (span.resign && span.resign < rEnd) return false   // 窗中途就離職
+    return true
+  }
+
   const isWeeklyOff = s => s === '例假'
   const isRestDay = s => s === '休息' || s === '休' // legacy 休 算休息
   const isAbsenceShift = s => !s || isWeeklyOff(s) || isRestDay(s) || ['補休', '特休', '病', '會議', '產', '事'].includes(s)
@@ -702,6 +715,7 @@ export function validateLeisureQuota({ schedules, workHourSystem, anchorDate, st
   for (const [empName, scheds] of Object.entries(byEmp)) {
     if (ptNames.has(empName)) continue   // 兼職不排例假/休息 → 跳過整段配額檢查
     const checkRange = (rangeStart, rangeEnd, label, minWeeklyOff, minRestDays) => {
+      if (!fullyEmployed(empName, rangeStart, rangeEnd)) return  // 離職/新進 未完整涵蓋此窗 → 跳過配額
       const inRange = scheds.filter(s => s.date >= rangeStart && s.date <= rangeEnd)
       const woCount = inRange.filter(s => isWeeklyOff(s.shift)).length
       const rdCount = inRange.filter(s => isRestDay(s.shift)).length
@@ -748,6 +762,7 @@ export function validateLeisureQuota({ schedules, workHourSystem, anchorDate, st
         for (let w = 0; w < 4; w += 2) {
           const subStart = _addDays(cs, w * 7)
           const subEnd = _addDays(subStart, 13)
+          if (!fullyEmployed(empName, _isoDate(subStart), _isoDate(subEnd))) continue  // 未完整涵蓋 → 跳過
           const inSub = scheds.filter(s => s.date >= _isoDate(subStart) && s.date <= _isoDate(subEnd))
           const woInSub = inSub.filter(s => isWeeklyOff(s.shift)).length
           if (woInSub < 1) {

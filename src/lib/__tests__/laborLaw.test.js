@@ -178,6 +178,53 @@ describe('validateSchedule', () => {
     expect(result.errors.some(e => e.law === '勞基法 §34')).toBe(true)
   })
 
+  it('離職員工:離職後未完整在職的窗不報例假/休息不足', () => {
+    // 王小明 2026-04-08 離職;標準工時每7天需1例1休。該週他只在職到 04-08,
+    // 湊不滿例假/休息 → 但不該報(離職者無法回頭補排)。對照下一個 test。
+    const schedules = [
+      { employee: '王小明', date: '2026-04-06', shift: '9-18' },
+      { employee: '王小明', date: '2026-04-07', shift: '9-18' },
+      { employee: '王小明', date: '2026-04-08', shift: '9-18' },
+    ]
+    const result = validateLeisureQuota({
+      schedules,
+      workHourSystem: '標準工時',
+      startDate: '2026-04-06',
+      endDate: '2026-04-12',
+      employees: [{ name: '王小明', resign_date: '2026-04-08' }],
+    })
+    expect(result.errors.some(e => e.constraint === 'H5')).toBe(false)
+  })
+
+  it('未入職員工:入職前的窗不報例假/休息不足', () => {
+    // 王小明 2026-04-10 才入職;該週(04-06~04-12)前段未入職 → 不該報。
+    const schedules = [
+      { employee: '王小明', date: '2026-04-10', shift: '9-18' },
+      { employee: '王小明', date: '2026-04-11', shift: '9-18' },
+      { employee: '王小明', date: '2026-04-12', shift: '9-18' },
+    ]
+    const result = validateLeisureQuota({
+      schedules,
+      workHourSystem: '標準工時',
+      startDate: '2026-04-06',
+      endDate: '2026-04-12',
+      employees: [{ name: '王小明', join_date: '2026-04-10' }],
+    })
+    expect(result.errors.some(e => e.constraint === 'H5')).toBe(false)
+  })
+
+  it('在職員工:整週在職湊不滿仍正常報例假/休息不足(對照組)', () => {
+    const schedules = weekDates.map(d => ({ employee: '王小明', date: d, shift: '9-18' }))
+    const result = validateLeisureQuota({
+      schedules,
+      workHourSystem: '標準工時',
+      startDate: '2026-04-06',
+      endDate: '2026-04-12',
+      employees: [{ name: '王小明' }],   // 無 resign_date = 在職
+    })
+    expect(result.errors.some(e => e.constraint === 'H5')).toBe(true)
+  })
+
   it('handles multiple employees independently', () => {
     const schedules = [
       // Employee A: valid

@@ -4,6 +4,7 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClient } from './lib/queryClient'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { TenantProvider } from './contexts/TenantContext'
+import { LanguageProvider } from './contexts/LanguageContext'
 import Sidebar from './components/Sidebar'
 import OnboardingWizard from './components/OnboardingWizard'
 import LoadingSpinner from './components/LoadingSpinner'
@@ -220,6 +221,7 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
     <ErrorBoundary>
+    <LanguageProvider>
     <AuthProvider>
       <TenantProvider>
         <ThemedToaster />
@@ -246,6 +248,7 @@ export default function App() {
         </Suspense>
       </TenantProvider>
     </AuthProvider>
+    </LanguageProvider>
     </ErrorBoundary>
     </QueryClientProvider>
   )

@@ -551,13 +551,20 @@ export async function notifyProjectMember(assigneeName, project, taskTitles) {
  */
 export async function notifyProjectMembers(project, { force = false } = {}) {
   if (!project?.id) return { notified: 0, reason: 'no_project' }
+  // 撈專案發起人（owner）一次，附到彙總卡上顯示
+  let owner = project.owner
+  if (!owner) {
+    const { data: p } = await supabase.from('projects').select('owner').eq('id', project.id).maybeSingle()
+    owner = p?.owner || null
+  }
+  const projectWithOwner = { ...project, owner }
   const { data, error } = await supabase.rpc('notify_project_members', {
     p_project_id: project.id, p_force: force,
   })
   if (error || !Array.isArray(data)) return { notified: 0, error }
   // 站內通知已由 RPC 寫入；逐人發 LINE 彙總卡（列出所有任務名稱）
   for (const row of data) {
-    await notifyProjectMember(row.employee_name, project, row.task_titles).catch(() => {})
+    await notifyProjectMember(row.employee_name, projectWithOwner, row.task_titles).catch(() => {})
   }
   return { notified: data.length }
 }

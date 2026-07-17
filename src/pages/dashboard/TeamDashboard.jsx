@@ -12,6 +12,7 @@ import {
   CategoryScale, LinearScale, BarElement, PointElement, LineElement, Filler,
 } from 'chart.js'
 import { Line, Bar, Doughnut } from 'react-chartjs-2'
+import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../contexts/AuthContext'
 import { supabase } from '../../lib/supabase'
 import { usePendingApprovals } from '../../lib/usePendingApprovals'
@@ -309,6 +310,7 @@ function WorkflowProgressCard({ w, tasks, days, onJump, index }) {
 // 主元件
 // ──────────────────────────────────────────────
 export default function TeamDashboard() {
+  const { t } = useTranslation()
   const { profile, isManager, isAdmin, hasPermission } = useAuth()
   const navigate = useNavigate()
   // 儀表板分頁可見性（admin 可在權限頁逐人調；super_admin 永遠 true；
@@ -922,7 +924,7 @@ export default function TeamDashboard() {
       }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>
-            {greetingNow()}，{profile?.name || '主管'}
+            {t(greetingNow() + '，{{name}}', { name: profile?.name || t('主管') })}
           </h2>
           <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>
             {new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}
@@ -939,13 +941,13 @@ export default function TeamDashboard() {
               onChange={e => setStoreFilter(e.target.value ? Number(e.target.value) : null)}
               style={{ fontSize: 13, padding: '6px 10px', minWidth: 140 }}
             >
-              <option value="">全公司</option>
+              <option value="">{t('全公司')}</option>
               {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           )}
           <button
             onClick={() => setRefreshTick(x => x + 1)}
-            title="重新整理"
+            title={t('重新整理')}
             style={{
               background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 8,
               padding: 8, cursor: 'pointer', color: C.muted,
@@ -970,7 +972,7 @@ export default function TeamDashboard() {
             display: 'flex', alignItems: 'center', gap: 6,
           }}
         >
-          <Users size={14} /> 人 · HR
+          <Users size={14} /> {t('人 · HR')}
         </button>
         )}
         {canSeeProcess && (
@@ -985,7 +987,7 @@ export default function TeamDashboard() {
             display: 'flex', alignItems: 'center', gap: 6,
           }}
         >
-          <WorkflowIcon size={14} /> 事 · 流程
+          <WorkflowIcon size={14} /> {t('事 · 流程')}
         </button>
         )}
       </div>
@@ -993,7 +995,7 @@ export default function TeamDashboard() {
 
       {!canSeeHr && !canSeeProcess && (
         <div style={{ padding: '60px 24px', textAlign: 'center', color: C.muted }}>
-          <p style={{ fontSize: 14 }}>你的角色尚未開放任何戰情儀表板分頁。如需檢視，請聯繫管理員於「系統設定 → 權限」開通。</p>
+          <p style={{ fontSize: 14 }}>{t('你的角色尚未開放任何戰情儀表板分頁。如需檢視，請聯繫管理員於「系統設定 → 權限」開通。')}</p>
         </div>
       )}
 
@@ -1004,40 +1006,40 @@ export default function TeamDashboard() {
         gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
         gap: 12,
       }}>
-        <KpiCard icon={Users} label="團隊在班" value={kpi.presentCount} suffix={`/ ${kpi.total}`}
-                 sub={`出勤率 ${kpi.attendRate}%`}
+        <KpiCard icon={Users} label={t('團隊在班')} value={kpi.presentCount} suffix={`/ ${kpi.total}`}
+                 sub={t('出勤率 {{rate}}%', { rate: kpi.attendRate })}
                  color={C.green} colorDim={C.greenDim} />
-        <KpiCard icon={Calendar} label="今日請假" value={kpi.leaveCount}
-                 sub={monthLeaveDays > 0 ? `本月累計 ${monthLeaveDays} 天` : '本月零請假'}
+        <KpiCard icon={Calendar} label={t('今日請假')} value={kpi.leaveCount}
+                 sub={monthLeaveDays > 0 ? t('本月累計 {{n}} 天', { n: monthLeaveDays }) : t('本月零請假')}
                  color={C.cyan} colorDim={C.cyanDim}
                  onClick={() => navigate('/hr/leave')} />
-        <KpiCard icon={Clock} label="今日加班" value={kpi.otCount}
-                 sub={monthOtHours > 0 ? `本月累計 ${monthOtHours.toFixed(1)}h` : '本月零加班'}
+        <KpiCard icon={Clock} label={t('今日加班')} value={kpi.otCount}
+                 sub={monthOtHours > 0 ? t('本月累計 {{n}}h', { n: monthOtHours.toFixed(1) }) : t('本月零加班')}
                  color={C.orange} colorDim={C.orangeDim}
                  onClick={() => navigate('/hr/overtime')} />
-        <KpiCard icon={Plane} label="今日出差" value={kpi.tripCount}
-                 sub={monthTripCount > 0 ? `本月 ${monthTripCount} 人次` : '本月零出差'}
+        <KpiCard icon={Plane} label={t('今日出差')} value={kpi.tripCount}
+                 sub={monthTripCount > 0 ? t('本月 {{n}} 人次', { n: monthTripCount }) : t('本月零出差')}
                  color={C.blue} colorDim={C.blueDim}
                  onClick={() => navigate('/hr/travel')} />
-        <KpiCard icon={FileCheck} label="待我簽核" value={kpi.pendingCount}
-                 sub={kpi.avgPendingDays > 0 ? `平均待簽 ${kpi.avgPendingDays} 天` : null}
+        <KpiCard icon={FileCheck} label={t('待我簽核')} value={kpi.pendingCount}
+                 sub={kpi.avgPendingDays > 0 ? t('平均待簽 {{n}} 天', { n: kpi.avgPendingDays }) : null}
                  subColor={kpi.avgPendingDays >= 3 ? C.red : C.muted}
                  color={C.purple} colorDim={C.purpleDim}
-                 badge={pendingUnified.some(p => p.daysOpen >= 3) ? '逾期' : null}
+                 badge={pendingUnified.some(p => p.daysOpen >= 3) ? t('逾期') : null}
                  onClick={() => navigate('/process/approvals')} />
-        <KpiCard icon={AlertTriangle} label="未打卡" value={kpi.lateCount}
+        <KpiCard icon={AlertTriangle} label={t('未打卡')} value={kpi.lateCount}
                  sub={(() => {
                    const diff = kpi.lateCount - yesterdayLateCount
-                   if (diff === 0) return `與昨日相同`
-                   return diff > 0 ? `比昨日 +${diff}` : `比昨日 ${diff}`
+                   if (diff === 0) return t('與昨日相同')
+                   return diff > 0 ? t('比昨日 +{{n}}', { n: diff }) : t('比昨日 {{n}}', { n: diff })
                  })()}
                  subColor={kpi.lateCount > yesterdayLateCount ? C.red : C.green}
                  color={C.red} colorDim={C.redDim}
                  onClick={() => navigate('/hr/attendance')} />
-        <KpiCard icon={TrendingUp} label="滾動離職率"
+        <KpiCard icon={TrendingUp} label={t('滾動離職率')}
                  value={hrStats?.attrition?.rate_pct != null ? hrStats.attrition.rate_pct : '—'}
                  suffix={hrStats?.attrition?.rate_pct != null ? '%' : ''}
-                 sub={hrStats?.attrition?.ytd_terms != null ? `今年離職 ${hrStats.attrition.ytd_terms} 人` : '近 12 個月'}
+                 sub={hrStats?.attrition?.ytd_terms != null ? t('今年離職 {{n}} 人', { n: hrStats.attrition.ytd_terms }) : t('近 12 個月')}
                  color={(hrStats?.attrition?.rate_pct ?? 0) > 10 ? C.red : (hrStats?.attrition?.rate_pct ?? 0) > 5 ? C.orange : C.green}
                  colorDim={(hrStats?.attrition?.rate_pct ?? 0) > 10 ? C.redDim : (hrStats?.attrition?.rate_pct ?? 0) > 5 ? C.orangeDim : C.greenDim}
                  onClick={() => navigate('/analytics/HRAnalytics')} />
@@ -1066,7 +1068,7 @@ export default function TeamDashboard() {
         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
             <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <FileCheck size={16} style={{ color: C.purple }} /> 待簽核
+              <FileCheck size={16} style={{ color: C.purple }} /> {t('待簽核')}
               {pendingUnified.length > 0 && (
                 <span style={{ fontSize: 12, fontWeight: 600, color: C.muted }}>({pendingUnified.length})</span>
               )}
@@ -1074,14 +1076,14 @@ export default function TeamDashboard() {
             <button
               onClick={() => navigate('/process/approvals')}
               style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 12, color: C.cyan, display: 'flex', alignItems: 'center', gap: 4 }}>
-              全部 <ChevronRight size={12} />
+              {t('全部')} <ChevronRight size={12} />
             </button>
           </div>
 
           {pendingUnified.length === 0 ? (
             <div style={{ padding: '32px 16px', textAlign: 'center', color: C.muted, fontSize: 13 }}>
               <CheckCircle2 size={28} style={{ color: C.green, marginBottom: 8 }} /><br />
-              🎉 今日無待簽案件
+              🎉 {t('今日無待簽案件')}
             </div>
           ) : (
             <>
@@ -1094,7 +1096,7 @@ export default function TeamDashboard() {
                 <button
                   onClick={() => setShowAllPending(s => !s)}
                   style={{ marginTop: 10, width: '100%', background: 'transparent', border: `1px dashed ${C.border}`, borderRadius: 8, padding: 8, cursor: 'pointer', fontSize: 12, color: C.muted }}>
-                  {showAllPending ? '收起' : `展開全部 ${pendingUnified.length} 筆`}
+                  {showAllPending ? t('收起') : t('展開全部 {{n}} 筆', { n: pendingUnified.length })}
                 </button>
               )}
             </>
@@ -1104,14 +1106,14 @@ export default function TeamDashboard() {
         {/* 警示 */}
         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16 }}>
           <h3 style={{ margin: 0, marginBottom: 12, fontSize: 15, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <AlertTriangle size={16} style={{ color: C.orange }} /> 警示
+            <AlertTriangle size={16} style={{ color: C.orange }} /> {t('警示')}
             {alerts.length > 0 && (
               <span style={{ fontSize: 12, fontWeight: 600, color: C.muted }}>({alerts.length})</span>
             )}
           </h3>
           {alerts.length === 0 ? (
             <div style={{ padding: '20px 8px', textAlign: 'center', color: C.muted, fontSize: 13 }}>
-              ✅ 一切正常
+              ✅ {t('一切正常')}
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -1388,7 +1390,7 @@ export default function TeamDashboard() {
             </h3>
             <button onClick={() => navigate('/process/tasks')}
               style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 12, color: C.cyan, display: 'flex', alignItems: 'center', gap: 4 }}>
-              全部 <ChevronRight size={12} />
+              {t('全部')} <ChevronRight size={12} />
             </button>
           </div>
 
@@ -1617,7 +1619,7 @@ export default function TeamDashboard() {
             </h3>
             <button onClick={() => navigate('/process/projects')}
               style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 12, color: C.cyan, display: 'flex', alignItems: 'center', gap: 4 }}>
-              全部 <ChevronRight size={12} />
+              {t('全部')} <ChevronRight size={12} />
             </button>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10 }}>

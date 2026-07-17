@@ -83,6 +83,7 @@ export default function Schedule() {
   const [holidays, setHolidays] = useState([]) // ['2026-04-04', ...]
   const [storeEvents, setStoreEvents] = useState([]) // [{ id, store_id, date, title, color, category, pay_class }]
   const [disasters, setDisasters] = useState([]) // 天災宣告(該門市、本月區間) → 顯示在行事曆
+  const [dayBoundaryHour, setDayBoundaryHour] = useState(6) // 換日線(換天時間):凌晨幾點前算前一天的班
   const [shiftDefs, setShiftDefs] = useState([])
   const [SHIFT_TYPES, setShiftTypes] = useState([REST_SHIFT])
   const [autoScheduling, setAutoScheduling] = useState(false)
@@ -202,6 +203,14 @@ export default function Schedule() {
   const weekSepDates = useCycleView
     ? new Set((activeDates || []).filter((_, i) => i > 0 && i % 7 === 0))
     : new Set()
+
+  // 載入換日線(換天時間) — 供跨午夜夜班請假判斷「收尾日」用
+  useEffect(() => {
+    if (!authProfile?.organization_id) return
+    supabase.from('organizations').select('settings').eq('id', authProfile.organization_id).maybeSingle()
+      .then(({ data }) => setDayBoundaryHour(parseInt(data?.settings?.day_boundary_hour, 10) || 6))
+      .catch(() => {})
+  }, [authProfile?.organization_id])
 
   useEffect(() => {
     Promise.all([
@@ -712,10 +721,14 @@ export default function Schedule() {
     const map = {}
     const _iso = (d) => d.toISOString().slice(0, 10)
     const _addDays = (dateStr, n) => { const d = new Date(dateStr + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return _iso(d) }
-    // 該員某天是否排「跨午夜的班」(actual_end <= actual_start，'HH:MM:SS' 字串可直接比；00:00:00<=18:00:00)
+    // 該員某天是否排「跨午夜、且收在換日線前」的班 → 那段算前一天的班
+    //   ('HH:MM:SS' 字串可直接比；如 18:00~00:00：00:00:00<=18:00:00 且 00:00:00<=07:00:00)
+    const _boundaryTime = String(dayBoundaryHour).padStart(2, '0') + ':00:00'
     const crossMidnightShiftOn = (empName, dateStr) => {
       const s = schedules.find(x => x.employee === empName && x.date === dateStr)
-      return !!(s && s.actual_start && s.actual_end && s.actual_end <= s.actual_start)
+      return !!(s && s.actual_start && s.actual_end
+        && s.actual_end <= s.actual_start      // 跨午夜
+        && s.actual_end <= _boundaryTime)      // 收在換日線前 → 屬前一天
     }
     // 該員某天是否有實際上班班次(有 shift 且非請假/例假/休息)
     const hasWorkShiftOn = (empName, dateStr) => {

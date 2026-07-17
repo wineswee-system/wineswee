@@ -307,7 +307,7 @@ export default function StoreSettingsTab({
                     <td>{d.start_time?.slice(0, 5)}</td>
                     <td>{d.end_time?.slice(0, 5)}</td>
                     <td>{brk}分鐘{d.manual_break ? ' ✍手動' : ''}</td>
-                    <td style={{ color: 'var(--accent-cyan)', fontWeight: 700 }}>{wh.toFixed(1)}h</td>
+                    <td style={{ color: 'var(--text-primary)', fontWeight: 700 }}>{wh.toFixed(1)}h</td>
                     <td style={{ fontSize: 10 }}>
                       {d.employee_type === 'pt' ? '兼職' : d.employee_type === 'full_time' ? '正職' : '全部'}
                       {d.day_type && d.day_type !== 'all' ? ` · ${d.day_type === 'weekday' ? '平日' : '假日'}` : ''}
@@ -388,7 +388,7 @@ export default function StoreSettingsTab({
                     </td>
                     <td style={{ textAlign: 'center' }}>
                       <input type="number" className="form-input" min={1} max={20} value={s.required_count}
-                        style={{ width: 45, padding: '4px', fontSize: 13, textAlign: 'center', fontWeight: 700, color: 'var(--accent-cyan)' }}
+                        style={{ width: 45, padding: '4px', fontSize: 13, textAlign: 'center', fontWeight: 700, color: 'var(--text-primary)' }}
                         onChange={async e => {
                           const v = Math.max(1, parseInt(e.target.value) || 1)
                           const { data } = await supabase.from('store_time_slots').update({ required_count: v }).eq('id', s.id).select().single()
@@ -398,7 +398,7 @@ export default function StoreSettingsTab({
                     <td style={{ textAlign: 'center' }}>
                       <input type="number" className="form-input" min={1} max={20} value={s.max_count || ''}
                         placeholder="不限"
-                        style={{ width: 45, padding: '4px', fontSize: 13, textAlign: 'center', fontWeight: 700, color: 'var(--accent-cyan)' }}
+                        style={{ width: 45, padding: '4px', fontSize: 13, textAlign: 'center', fontWeight: 700, color: 'var(--text-primary)' }}
                         onChange={async e => {
                           const v = e.target.value ? Math.max(s.required_count, parseInt(e.target.value) || 1) : null
                           const { data } = await supabase.from('store_time_slots').update({ max_count: v }).eq('id', s.id).select().single()

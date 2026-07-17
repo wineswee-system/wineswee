@@ -4876,8 +4876,8 @@ div.data-table > table {
 
 /* ── Header logo ── */
 .topnav-brand-logo {
-  height: 34px;
-  width: 160px;
+  height: 46px;
+  width: 230px;
   background: var(--wsw-header-logo) left center / contain no-repeat;
   flex-shrink: 0;
 }
@@ -4922,25 +4922,27 @@ div.data-table > table {
 .sidebar-logout-btn { color: var(--wsw-shell-on); }
 .sidebar-logout-btn:hover { background: var(--wsw-shell-hover); color: var(--wsw-shell-on-strong); }
 
-/* ── Main content：底色 + 致中 logo 浮水印 ── */
-.main-content { background: var(--wsw-main-bg); }
-.main-content::before {
-  content: '';
-  position: fixed;
-  top: calc(var(--topnav-height) + (100vh - var(--topnav-height)) / 2);
-  left: calc(var(--sidebar-width) + (100vw - var(--sidebar-width)) / 2);
-  transform: translate(-50%, -50%);
-  width: min(44vh, 44vw);
-  aspect-ratio: 1 / 1;
-  background: url('/brand/logo-mark.png') center / contain no-repeat;
-  opacity: 0.05;
-  pointer-events: none;
-  z-index: 0;
+/* ── Main content：底色 + 致中 logo 浮水印 ──
+   浮水印用 main-content 背景圖(background-attachment: scroll 預設 = 固定在
+   內容可視框正中、不隨內容捲動、也不受 #root zoom 影響)。用半透明 PNG 疊。 */
+.main-content {
+  background-color: var(--wsw-main-bg);
+  background-image: url('/brand/logo-mark.png');
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-size: 400px 400px;
+  background-blend-mode: soft-light;
 }
 
-/* ── Scrollbars → 紅色（全站） ── */
-::-webkit-scrollbar-thumb { background: var(--wsw-scroll-thumb) !important; }
-::-webkit-scrollbar-thumb:hover { background: var(--brand-red) !important; filter: brightness(1.15); }
-::-webkit-scrollbar-track { background: var(--wsw-scroll-track) !important; }
-html { scrollbar-color: var(--wsw-scroll-thumb) var(--wsw-scroll-track); }
+/* ── Scrollbars → 紅色（全站，webkit + Firefox） ── */
+::-webkit-scrollbar-thumb,
+.main-content::-webkit-scrollbar-thumb,
+.sidebar-nav::-webkit-scrollbar-thumb,
+.data-table-wrapper::-webkit-scrollbar-thumb { background: var(--wsw-scroll-thumb) !important; border-radius: 6px; }
+::-webkit-scrollbar-thumb:hover { background: #a03a37 !important; }
+::-webkit-scrollbar-track,
+.main-content::-webkit-scrollbar-track { background: var(--wsw-scroll-track) !important; }
+html, body, *, .main-content, .sidebar-nav, .data-table-wrapper {
+  scrollbar-color: var(--wsw-scroll-thumb) var(--wsw-scroll-track) !important;
+}
 

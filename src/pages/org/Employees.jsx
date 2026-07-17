@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Search, UserMinus, UserPlus, Pencil, Mail, Upload, Building2, Trash2, Users, FileText, UserCheck, Power } from 'lucide-react'
+import { Plus, Search, UserMinus, UserPlus, Pencil, Mail, Upload, Download, Building2, Trash2, Users, FileText, UserCheck, Power } from 'lucide-react'
 import { exportEmployeeCertificate } from '../../lib/exportCertificate'
 import { getEmployeesList, createEmployee, updateEmployee, inviteEmployee } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
@@ -18,6 +18,7 @@ import { loadPositions, DEFAULT_POSITIONS } from '../../lib/positions'
 import ResignRehireModal from './components/ResignRehireModal'
 import OffboardingModal from '../../components/OffboardingModal'
 import ProxyManagementModal from '../../components/ProxyManagementModal'
+import EmployeeExportModal from './components/EmployeeExportModal'
 import { ArrowRightLeft } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 
@@ -45,6 +46,7 @@ export default function Employees() {
   const [offboardingFor, setOffboardingFor] = useState(null)  // { employee, date, reason }
   const [showProxyMgmt, setShowProxyMgmt] = useState(false)
   const [showPosMgr, setShowPosMgr] = useState(false)
+  const [showExport, setShowExport] = useState(false)
   const [positions, setPositions] = useState(DEFAULT_POSITIONS)   // 職位清單(DB,含 level→role)
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
@@ -431,6 +433,7 @@ export default function Employees() {
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="btn btn-secondary" onClick={() => setShowProxyMgmt(true)}><ArrowRightLeft size={14} /> 代理管理</button>
             {canEditEmp && <button className="btn btn-secondary" onClick={() => setShowPosMgr(true)}><Plus size={14} /> 職位管理</button>}
+            <button className="btn btn-secondary" onClick={() => setShowExport(true)}><Download size={14} /> 匯出 Excel</button>
             {canEditEmp && <button className="btn btn-secondary" onClick={() => setShowCsvImport(true)}><Upload size={14} /> 匯入指派 CSV</button>}
             {canEditEmp && <button className="btn btn-primary" onClick={() => setShowModal(true)}><Plus size={14} /> 新增員工（到職）</button>}
           </div>
@@ -822,6 +825,15 @@ export default function Employees() {
         resignReason={resignReason}
         setResignReason={setResignReason}
         onSubmit={handleResign}
+      />
+
+      {/* 匯出 Excel Modal（選欄位＋選同仁）*/}
+      <EmployeeExportModal
+        open={showExport}
+        onClose={() => setShowExport(false)}
+        employees={filtered}
+        orgId={profile?.organization_id}
+        allowSensitive={canEditEmp}
       />
 
       {/* 代理管理 Modal */}

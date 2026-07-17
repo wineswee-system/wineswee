@@ -37,3 +37,4 @@ venv/
 screenshots/
 test-results/
 playwright-report/
+_*

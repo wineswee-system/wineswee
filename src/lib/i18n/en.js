@@ -309,4 +309,10 @@ export default {
   '進行中簽核': 'In-progress Approvals', '待簽核步驟': 'Pending Steps', '已完成簽核': 'Completed Approvals', '任務完成率': 'Task Completion Rate',
   '簽核流程': 'Approval Flow', '任務統計': 'Task Stats', '審核人': 'Reviewer', '進度': 'Progress', '流程模板': 'Workflow Templates',
   '步驟數': 'Steps', '查核清單進度': 'Checklist Progress', '退回流程': 'Return Workflow', '退回原因 *': 'Return Reason *',
+  // 流程/專案 詳情頁
+  '開單人': 'Opener', '未關聯專案': 'Unlinked Project', '看板': 'Board', '依賴圖': 'Dependency Graph',
+  '步驟任務': 'Step Tasks', '確認任務': 'Confirm Task', '討論': 'Discuss', '快速新增任務': 'Quick Add Task',
+  '返回專案列表': 'Back to Project List', '無說明': 'No description', '總任務': 'Total Tasks', '整體進度': 'Overall Progress',
+  '燃盡圖': 'Burndown', '變更日誌': 'Change Log', '通知成員': 'Notify Members', '連結 / 建立流程': 'Link / Create Workflow',
+  '預計完成': 'Expected Completion', '開始': 'Start', '指派': 'Assigned', '未指定負責人': 'No owner assigned',
 }

@@ -705,15 +705,34 @@ export default function Schedule() {
   const getOffRequest = (empName, date) => offRequests.find(o => o.employee === empName && o.date === date)
 
   // empName → Set<dateStr>，供 MonthScheduleTable 標橘點
+  // ★ 跨午夜班的「收尾日」不標：夜班(如 18:00~00:00)收在午夜，屬前一天的班；
+  //   若請假範圍含收尾日、而那天本身沒排班、前一天卻是跨午夜班 → 不畫(避免看起來跨天)。
+  //   純顯示邏輯、不動任何資料；班表一排上跨午夜班就自動生效，舊單無需調整。
   const pendingLeaveMap = (() => {
     const map = {}
+    const _iso = (d) => d.toISOString().slice(0, 10)
+    const _addDays = (dateStr, n) => { const d = new Date(dateStr + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return _iso(d) }
+    // 該員某天是否排「跨午夜的班」(actual_end <= actual_start，'HH:MM:SS' 字串可直接比；00:00:00<=18:00:00)
+    const crossMidnightShiftOn = (empName, dateStr) => {
+      const s = schedules.find(x => x.employee === empName && x.date === dateStr)
+      return !!(s && s.actual_start && s.actual_end && s.actual_end <= s.actual_start)
+    }
+    // 該員某天是否有實際上班班次(有 shift 且非請假/例假/休息)
+    const hasWorkShiftOn = (empName, dateStr) => {
+      const s = schedules.find(x => x.employee === empName && x.date === dateStr)
+      return !!(s && s.shift && !isAbsence(s.shift))
+    }
     for (const lr of pendingLeaves) {
       if (!lr.employee || !lr.start_date || !lr.end_date) continue
       if (!map[lr.employee]) map[lr.employee] = new Set()
       let d = new Date(lr.start_date + 'T00:00:00Z')
       const end = new Date(lr.end_date + 'T00:00:00Z')
       while (d <= end) {
-        map[lr.employee].add(d.toISOString().slice(0, 10))
+        const cur = _iso(d)
+        const isSpilloverTail = cur > lr.start_date
+          && !hasWorkShiftOn(lr.employee, cur)
+          && crossMidnightShiftOn(lr.employee, _addDays(cur, -1))
+        if (!isSpilloverTail) map[lr.employee].add(cur)
         d.setUTCDate(d.getUTCDate() + 1)
       }
     }

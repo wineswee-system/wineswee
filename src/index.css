@@ -4859,13 +4859,13 @@ div.data-table > table {
   --wsw-scroll-thumb: #852e2c;
   --wsw-scroll-track: rgba(133, 46, 44, 0.14);
   /* 側欄固定樣式（不分深淺）：米色底 + 紅字 */
-  --wsw-side-bg: #fcf2d7;
+  --wsw-side-bg: #fef7e5;
   --wsw-side-on: #852e2c;
   --wsw-side-on-strong: #6d2422;
   --wsw-side-hover: rgba(133, 46, 44, 0.09);
   --wsw-side-border: rgba(133, 46, 44, 0.16);
   --wsw-side-sel-bg: #852e2c;            /* 選中框：紅 */
-  --wsw-side-sel-on: #fcf2d7;            /* 選中字：米 */
+  --wsw-side-sel-on: #fef7e5;            /* 選中字：米 */
 }
 [data-theme="light"] {
   /* 淺色 = 紅色品牌 shell */

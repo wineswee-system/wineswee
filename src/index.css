@@ -4878,7 +4878,7 @@ div.data-table > table {
   --wsw-sel-bg: #f0e4bc;                 /* 選中框：米 */
   --wsw-sel-on: #852e2c;                 /* 選中字：紅 */
   --wsw-header-logo: url('/brand/logo-header-light.png');
-  --wsw-main-bg: #f0e4bc;                /* 淺色主區底 = 米（與紅色側欄對比） */
+  --wsw-main-bg: #fffbf8;                /* 淺色主區底 */
   --wsw-wm-blend: multiply;              /* 米底上用 multiply 讓浮水印顯色 */
   --wsw-scroll-thumb: #852e2c;
   --wsw-scroll-track: rgba(133, 46, 44, 0.12);

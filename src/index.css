@@ -4855,6 +4855,7 @@ div.data-table > table {
   --wsw-sel-on: #f4ead0;                 /* 選中字：米 */
   --wsw-header-logo: url('/brand/logo-header-dark.png');
   --wsw-main-bg: #852e2c;                /* 深色主區底 = 紅（與米色側欄對比） */
+  --wsw-wm-blend: screen;                /* 紅底上用 screen 讓浮水印透出 */
   --wsw-scroll-thumb: #852e2c;
   --wsw-scroll-track: rgba(133, 46, 44, 0.14);
 }
@@ -4870,14 +4871,15 @@ div.data-table > table {
   --wsw-sel-on: #852e2c;                 /* 選中字：紅 */
   --wsw-header-logo: url('/brand/logo-header-light.png');
   --wsw-main-bg: #f0e4bc;                /* 淺色主區底 = 米（與紅色側欄對比） */
+  --wsw-wm-blend: multiply;              /* 米底上用 multiply 讓浮水印顯色 */
   --wsw-scroll-thumb: #852e2c;
   --wsw-scroll-track: rgba(133, 46, 44, 0.12);
 }
 
 /* ── Header logo ── */
 .topnav-brand-logo {
-  height: 46px;
-  width: 230px;
+  height: 48px;
+  width: 210px;
   background: var(--wsw-header-logo) left center / contain no-repeat;
   flex-shrink: 0;
 }
@@ -4931,7 +4933,7 @@ div.data-table > table {
   background-repeat: no-repeat;
   background-position: center center;
   background-size: 400px 400px;
-  background-blend-mode: soft-light;
+  background-blend-mode: var(--wsw-wm-blend, soft-light);
 }
 
 /* ── Scrollbars → 紅色（全站，webkit + Firefox） ── */

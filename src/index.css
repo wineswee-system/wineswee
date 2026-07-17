@@ -4927,13 +4927,32 @@ div.data-table > table {
 /* ── Main content：底色 + 致中 logo 浮水印 ──
    浮水印用 main-content 背景圖(background-attachment: scroll 預設 = 固定在
    內容可視框正中、不隨內容捲動、也不受 #root zoom 影響)。用半透明 PNG 疊。 */
+/* 浮水印：
+   · 深色(紅底)內容外層是透明玻璃 → 用 main-content 背景圖 + screen blend 透出。
+   · 淺色(米底)內容外層是白色不透明 → 背景被蓋,改用 fixed 覆蓋層疊在內容上。
+   置中用 inset(top=topnav,left=sidebar)+margin:auto,不用 vw/vh,避開 #root zoom 讓 fixed 歪的雷。 */
 .main-content {
   background-color: var(--wsw-main-bg);
   background-image: url('/brand/logo-mark.png');
   background-repeat: no-repeat;
   background-position: center center;
   background-size: 400px 400px;
-  background-blend-mode: var(--wsw-wm-blend, soft-light);
+  background-blend-mode: var(--wsw-wm-blend, screen);
+}
+[data-theme="light"] .main-content::before {
+  content: '';
+  position: fixed;
+  top: var(--topnav-height);
+  left: var(--sidebar-width);
+  right: 0;
+  bottom: 0;
+  margin: auto;
+  width: 400px;
+  height: 400px;
+  background: url('/brand/logo-mark.png') center / contain no-repeat;
+  opacity: 0.08;
+  pointer-events: none;
+  z-index: 0;
 }
 
 /* ── Scrollbars → 紅色（全站，webkit + Firefox） ── */

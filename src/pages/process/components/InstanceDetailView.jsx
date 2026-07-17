@@ -242,6 +242,16 @@ export default function InstanceDetailView({
             <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--text-secondary)' }}>
               <User size={13} /> {inst.assignee || '未指定負責人'}
             </div>
+            {inst.started_by && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--text-muted)' }}
+                title={`由 ${inst.started_by} 於 ${inst.started_at ? new Date(inst.started_at).toLocaleString('zh-TW', { hour12: false }) : '-'} 開單`}>
+                <span style={{ opacity: 0.8 }}>開單人</span>
+                <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{inst.started_by}</span>
+                {inst.started_at && (
+                  <span style={{ opacity: 0.75 }}>· {new Date(inst.started_at).toLocaleString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })}</span>
+                )}
+              </div>
+            )}
             <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, padding: '3px 10px', borderRadius: 6, background: currentProject ? 'var(--accent-purple-dim)' : 'var(--glass-light)', color: currentProject ? 'var(--accent-purple)' : 'var(--text-muted)', border: currentProject ? '1px solid rgba(168,85,247,0.2)' : '1px solid var(--border-subtle)' }}>
               <FolderOpen size={12} /> {currentProject ? currentProject.name : '未關聯專案'}
             </div>

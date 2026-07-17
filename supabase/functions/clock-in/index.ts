@@ -99,6 +99,7 @@ serve(async (req: Request) => {
       lat, lng, accuracy,
       ip: clientIP,
       clock_mode: rawMode = 'normal',
+      force_weak_gps = false,   // 前端「GPS 不穩確定畫面」按確定 → true：照打、標 gps_weak
       organization_id: bodyOrgId,
     } = body
 
@@ -184,54 +185,63 @@ serve(async (req: Request) => {
     let method: string = skipLocation ? 'bypass' : 'none'
 
     if (!skipLocation) {
-      // 全局：GPS 精確度太差 → 不用試各家了
+      // GPS 精確度太差：
+      //   未確認 → 回 403(帶 gps_weak:true)，前端跳「確定畫面」告知 GPS 不穩
+      //   已確認(force_weak_gps) → 照打，method='gps_weak'(位置僅參考)、不驗證範圍。時間照樣記錄。
       if (lat != null && lng != null && accuracy != null && accuracy > GPS_ACCURACY_THRESHOLD) {
-        return jsonResp({
-          error: '打卡失敗：GPS 精確度不足',
-          reasons: [`GPS 精確度 ${Math.round(accuracy)}m（限 ${GPS_ACCURACY_THRESHOLD}m）`],
-          ip: resolvedIP,
-        }, 403)
-      }
-
-      const matchAttempts: string[] = []
-      for (const cand of candidateStores) {
-        const hasGPS = cand.lat != null && cand.lng != null
-        const hasWifi = cand.allowed_wifi && cand.allowed_wifi.length > 0
-        if (!hasGPS && !hasWifi) { matchAttempts.push(`${cand.name}：未設定 GPS/WiFi`); continue }
-
-        let gpsMatch = false
-        let wifiMatch = false
-
-        if (hasGPS && lat != null && lng != null) {
-          const dist = haversineMetres(lat, lng, Number(cand.lat), Number(cand.lng))
-          const radius = cand.clock_radius || 200
-          gpsMatch = dist <= radius
-          if (!gpsMatch) matchAttempts.push(`${cand.name}：GPS 距離 ${Math.round(dist)}m / 限 ${radius}m`)
+        if (!force_weak_gps) {
+          return jsonResp({
+            error: '打卡失敗：GPS 精確度不足',
+            reasons: [`GPS 精確度 ${Math.round(accuracy)}m（限 ${GPS_ACCURACY_THRESHOLD}m）`],
+            gps_weak: true,
+            ip: resolvedIP,
+          }, 403)
         }
-        if (hasWifi && resolvedIP && !gpsMatch) {
-          wifiMatch = cand.allowed_wifi.some((cidr: string) => ipMatchesCIDR(resolvedIP, cidr))
-          if (!wifiMatch) matchAttempts.push(`${cand.name}：IP ${resolvedIP} 不在 WiFi 白名單`)
-        }
-
-        // 此店要求 GPS-only 但沒過 → 跳過試下一家
-        if (cand.clock_in_method === 'gps_required' && !gpsMatch) continue
-
-        if (gpsMatch || wifiMatch) {
-          location = cand
-          method = gpsMatch ? 'gps' : 'wifi'
-          break
-        }
+        location = candidateStores[0] || null
+        method = 'gps_weak'
       }
 
       if (!location) {
-        return jsonResp({
-          error: candidateStores.length === 0
-            ? '打卡失敗：員工未指派任何門市'
-            : '打卡失敗：你不在任何授權門市的範圍內',
-          reasons: matchAttempts.length > 0 ? matchAttempts : ['請確認 GPS 已開啟、或已在授權門市內'],
-          authorized_stores: candidateStores.map(s => s.name),
-          ip: resolvedIP,
-        }, 403)
+        const matchAttempts: string[] = []
+        for (const cand of candidateStores) {
+          const hasGPS = cand.lat != null && cand.lng != null
+          const hasWifi = cand.allowed_wifi && cand.allowed_wifi.length > 0
+          if (!hasGPS && !hasWifi) { matchAttempts.push(`${cand.name}：未設定 GPS/WiFi`); continue }
+
+          let gpsMatch = false
+          let wifiMatch = false
+
+          if (hasGPS && lat != null && lng != null) {
+            const dist = haversineMetres(lat, lng, Number(cand.lat), Number(cand.lng))
+            const radius = cand.clock_radius || 200
+            gpsMatch = dist <= radius
+            if (!gpsMatch) matchAttempts.push(`${cand.name}：GPS 距離 ${Math.round(dist)}m / 限 ${radius}m`)
+          }
+          if (hasWifi && resolvedIP && !gpsMatch) {
+            wifiMatch = cand.allowed_wifi.some((cidr: string) => ipMatchesCIDR(resolvedIP, cidr))
+            if (!wifiMatch) matchAttempts.push(`${cand.name}：IP ${resolvedIP} 不在 WiFi 白名單`)
+          }
+
+          // 此店要求 GPS-only 但沒過 → 跳過試下一家
+          if (cand.clock_in_method === 'gps_required' && !gpsMatch) continue
+
+          if (gpsMatch || wifiMatch) {
+            location = cand
+            method = gpsMatch ? 'gps' : 'wifi'
+            break
+          }
+        }
+
+        if (!location) {
+          return jsonResp({
+            error: candidateStores.length === 0
+              ? '打卡失敗：員工未指派任何門市'
+              : '打卡失敗：你不在任何授權門市的範圍內',
+            reasons: matchAttempts.length > 0 ? matchAttempts : ['請確認 GPS 已開啟、或已在授權門市內'],
+            authorized_stores: candidateStores.map(s => s.name),
+            ip: resolvedIP,
+          }, 403)
+        }
       }
     } else {
       // outing 模式 bypass 驗證；store_id 預設用主要店記錄

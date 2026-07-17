@@ -10,7 +10,7 @@
 
 // ★ 每次 build chunk 換 hash 時 bump 這個版本號，會自動清掉舊快取
 //    避免「舊 index.html 引用的舊 chunk 找不到」造成 App crash
-const CACHE_VERSION = 'sme-ops-v4'
+const CACHE_VERSION = 'sme-ops-v5'
 const STATIC_CACHE = `${CACHE_VERSION}-static`
 const API_CACHE = `${CACHE_VERSION}-api`
 const OFFLINE_QUEUE = 'sme-ops-offline-queue'
@@ -54,6 +54,13 @@ self.addEventListener('fetch', (event) => {
     if (url.pathname.includes('supabase')) {
       event.respondWith(resilientMutation(event.request))
     }
+    return
+  }
+
+  // /brand/ 等「固定檔名」的 public 資產(非 hash-named):同一 URL 下內容會被換掉(如換 logo),
+  //   cache-first 會一直回舊的(F5 拿舊 logo、Ctrl+Shift+R 略過 SW 才拿到新的)→ 改 network-first。
+  if (url.pathname.startsWith('/brand/')) {
+    event.respondWith(networkFirst(event.request, STATIC_CACHE))
     return
   }
 

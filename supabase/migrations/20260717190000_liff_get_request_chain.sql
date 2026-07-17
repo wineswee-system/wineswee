@@ -13,6 +13,8 @@ AS $$
 DECLARE
   v_snap_type text;
   v_applicant int;
+  v_status    text;
+  v_approved  boolean;
   v_result json;
 BEGIN
   -- snapshot 的 request_type(長名)
@@ -22,15 +24,18 @@ BEGIN
     ELSE p_type
   END;
 
-  -- 申請人 employee_id(給 resolve 解動態主管用)
-  v_applicant := CASE p_type
-    WHEN 'leave'           THEN (SELECT employee_id FROM public.leave_requests     WHERE id = p_id)
-    WHEN 'overtime'        THEN (SELECT employee_id FROM public.overtime_requests  WHERE id = p_id)
-    WHEN 'correction'      THEN (SELECT employee_id FROM public.clock_corrections  WHERE id = p_id)
-    WHEN 'trip'            THEN (SELECT employee_id FROM public.business_trips      WHERE id = p_id)
-    WHEN 'expense_request' THEN (SELECT employee_id FROM public.expense_requests   WHERE id = p_id)
-    ELSE NULL
-  END;
+  -- 申請人 employee_id + 單子最終狀態(依 request_type 對應表)
+  CASE p_type
+    WHEN 'leave'           THEN SELECT employee_id, status INTO v_applicant, v_status FROM public.leave_requests     WHERE id = p_id;
+    WHEN 'overtime'        THEN SELECT employee_id, status INTO v_applicant, v_status FROM public.overtime_requests  WHERE id = p_id;
+    WHEN 'correction'      THEN SELECT employee_id, status INTO v_applicant, v_status FROM public.clock_corrections  WHERE id = p_id;
+    WHEN 'trip'            THEN SELECT employee_id, status INTO v_applicant, v_status FROM public.business_trips      WHERE id = p_id;
+    WHEN 'expense_request' THEN SELECT employee_id, status INTO v_applicant, v_status FROM public.expense_requests   WHERE id = p_id;
+    ELSE v_applicant := NULL;
+  END CASE;
+
+  -- 已核准/通過 → 所有關卡視為 completed(current_step 舊單不可靠,只信最終狀態)
+  v_approved := v_status IN ('已核准', '已通過', '已核銷', '已結案');
 
   SELECT json_agg(row_to_json(x) ORDER BY x.step_order) INTO v_result FROM (
     SELECT
@@ -42,6 +47,7 @@ BEGIN
            FROM public.resolve_snapshot_step_approvers(v_snap_type, p_id, s.step_order, v_applicant) r)  -- 未到關:現任
       ) AS name,
       CASE
+        WHEN v_approved THEN 'completed'
         WHEN h.action IN ('rejected','returned','退回','駁回') THEN 'rejected'
         WHEN h.exited_at IS NOT NULL THEN 'completed'
         WHEN h.entered_at IS NOT NULL THEN 'current'

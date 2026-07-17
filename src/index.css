@@ -123,9 +123,9 @@
   --glass-medium: rgba(99, 135, 210, 0.07);
   --glass-strong: rgba(99, 135, 210, 0.10);
 
-  --accent-cyan: #0ea5c9;
-  --accent-cyan-dim: rgba(14, 165, 201, 0.10);
-  --accent-cyan-glow: rgba(14, 165, 201, 0.18);
+  --accent-cyan: #0e7490;
+  --accent-cyan-dim: rgba(14, 116, 144, 0.12);
+  --accent-cyan-glow: rgba(14, 116, 144, 0.18);
   --accent-blue: #3b82f6;
   --accent-blue-dim: rgba(59, 130, 246, 0.10);
   --accent-purple: #8b5cf6;

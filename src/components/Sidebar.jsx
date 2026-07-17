@@ -395,15 +395,7 @@ export default function Sidebar() {
     {/* ═══════ Top Navigation Bar ═══════ */}
     <header className="topnav">
       <div className="topnav-brand" onClick={() => { navigate('/'); setOpenDropdown(null) }} role="button" tabIndex={0}>
-        <div className="topnav-brand-icon">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="3" width="7" height="7" rx="1.5"/>
-            <rect x="14" y="3" width="7" height="7" rx="1.5"/>
-            <rect x="3" y="14" width="7" height="7" rx="1.5"/>
-            <rect x="14" y="14" width="7" height="7" rx="1.5"/>
-          </svg>
-        </div>
-        <span className="topnav-brand-label">SME Ops</span>
+        <div className="topnav-brand-logo" role="img" aria-label="WINESWEE 威士威" />
       </div>
 
       <nav className="topnav-groups">

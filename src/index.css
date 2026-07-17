@@ -4836,3 +4836,111 @@ div.data-table > table {
   .page-header h2 { font-size: 16px; }
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   WINESWEE 威士威 — 品牌換裝（shell）2026-07-17
+   淺色模式 = 紅品牌（紅底 shell / 白主區）；深色模式 = 米品牌（米底 shell / 深主區）
+   只動外殼：topnav / sidebar / 主區底 + 浮水印 / 滾輪。內容卡片沿用原 token。
+   ═══════════════════════════════════════════════════════════════ */
+:root {
+  --brand-red: #852e2c;
+  --brand-cream: #f0e4bc;
+  /* 深色（預設）= 米色品牌 shell */
+  --wsw-topnav-bg: #efe1ba;              /* 對齊 header 圖底色，無縫 */
+  --wsw-shell-bg: #f0e4bc;
+  --wsw-shell-on: #7c2c2a;               /* 米底上的深紅字 */
+  --wsw-shell-on-strong: #5f2220;
+  --wsw-shell-hover: rgba(133, 46, 44, 0.10);
+  --wsw-shell-border: rgba(133, 46, 44, 0.16);
+  --wsw-sel-bg: #852e2c;                 /* 選中框：紅 */
+  --wsw-sel-on: #f4ead0;                 /* 選中字：米 */
+  --wsw-header-logo: url('/brand/logo-header-dark.png');
+  --wsw-main-bg: #852e2c;                /* 深色主區底 = 紅（與米色側欄對比） */
+  --wsw-scroll-thumb: #852e2c;
+  --wsw-scroll-track: rgba(133, 46, 44, 0.14);
+}
+[data-theme="light"] {
+  /* 淺色 = 紅色品牌 shell */
+  --wsw-topnav-bg: #802c2c;
+  --wsw-shell-bg: #852e2c;
+  --wsw-shell-on: #f0e4bc;               /* 紅底上的米字 */
+  --wsw-shell-on-strong: #ffffff;
+  --wsw-shell-hover: rgba(240, 228, 188, 0.14);
+  --wsw-shell-border: rgba(240, 228, 188, 0.18);
+  --wsw-sel-bg: #f0e4bc;                 /* 選中框：米 */
+  --wsw-sel-on: #852e2c;                 /* 選中字：紅 */
+  --wsw-header-logo: url('/brand/logo-header-light.png');
+  --wsw-main-bg: #f0e4bc;                /* 淺色主區底 = 米（與紅色側欄對比） */
+  --wsw-scroll-thumb: #852e2c;
+  --wsw-scroll-track: rgba(133, 46, 44, 0.12);
+}
+
+/* ── Header logo ── */
+.topnav-brand-logo {
+  height: 34px;
+  width: 160px;
+  background: var(--wsw-header-logo) left center / contain no-repeat;
+  flex-shrink: 0;
+}
+.topnav {
+  background: var(--wsw-topnav-bg) !important;
+  backdrop-filter: none;
+  border-bottom: 1px solid var(--wsw-shell-border);
+}
+.topnav-brand { padding: 4px 8px; }
+.topnav-brand:hover { background: transparent; }
+.topnav-group-btn { color: var(--wsw-shell-on); opacity: 0.8; }
+.topnav-group-btn:hover { color: var(--wsw-shell-on-strong); background: var(--wsw-shell-hover); opacity: 1; }
+.topnav-group-btn.active { color: var(--wsw-shell-on-strong); background: var(--wsw-shell-hover); opacity: 1; }
+.topnav-group-btn.active::after { background: var(--wsw-shell-on-strong); box-shadow: none; }
+.topnav-chevron { color: var(--wsw-shell-on); }
+.topnav-theme-btn { color: var(--wsw-shell-on); }
+.topnav-theme-btn:hover { background: var(--wsw-shell-hover); color: var(--wsw-shell-on-strong); }
+
+/* ── Sidebar ── */
+.sidebar {
+  background: var(--wsw-shell-bg) !important;
+  backdrop-filter: none;
+  border-right: 1px solid var(--wsw-shell-border);
+}
+.nav-section-label, .nav-divider-label { color: color-mix(in srgb, var(--wsw-shell-on) 55%, transparent); }
+.nav-divider-label { border-top-color: var(--wsw-shell-border); }
+.nav-section-header { color: var(--wsw-shell-on); }
+.nav-section-header:hover { background: var(--wsw-shell-hover); color: var(--wsw-shell-on-strong); }
+.nav-sub-item { color: color-mix(in srgb, var(--wsw-shell-on) 78%, transparent); }
+.nav-sub-item:hover { color: var(--wsw-shell-on-strong); background: var(--wsw-shell-hover); }
+.nav-sub-item.active { color: var(--wsw-sel-on) !important; background: var(--wsw-sel-bg) !important; font-weight: 600; }
+.nav-sub-item.active::before { background: var(--wsw-sel-on); }
+.nav-sub-item.active .nav-sub-item-icon { opacity: 1; }
+.sidebar-search-input { color: var(--wsw-shell-on); border-color: var(--wsw-shell-border); }
+.sidebar-search-input::placeholder { color: color-mix(in srgb, var(--wsw-shell-on) 50%, transparent); }
+.sidebar-system-btn { color: color-mix(in srgb, var(--wsw-shell-on) 80%, transparent); }
+.sidebar-system-btn:hover { background: var(--wsw-shell-hover); color: var(--wsw-shell-on-strong); }
+.sidebar-footer { border-top: 1px solid var(--wsw-shell-border); }
+.sidebar-user { background: var(--wsw-shell-hover); }
+.sidebar-user-name { color: var(--wsw-shell-on-strong); }
+.sidebar-user-role { color: color-mix(in srgb, var(--wsw-shell-on) 60%, transparent); }
+.sidebar-logout-btn { color: var(--wsw-shell-on); }
+.sidebar-logout-btn:hover { background: var(--wsw-shell-hover); color: var(--wsw-shell-on-strong); }
+
+/* ── Main content：底色 + 致中 logo 浮水印 ── */
+.main-content { background: var(--wsw-main-bg); }
+.main-content::before {
+  content: '';
+  position: fixed;
+  top: calc(var(--topnav-height) + (100vh - var(--topnav-height)) / 2);
+  left: calc(var(--sidebar-width) + (100vw - var(--sidebar-width)) / 2);
+  transform: translate(-50%, -50%);
+  width: min(44vh, 44vw);
+  aspect-ratio: 1 / 1;
+  background: url('/brand/logo-mark.png') center / contain no-repeat;
+  opacity: 0.05;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── Scrollbars → 紅色（全站） ── */
+::-webkit-scrollbar-thumb { background: var(--wsw-scroll-thumb) !important; }
+::-webkit-scrollbar-thumb:hover { background: var(--brand-red) !important; filter: brightness(1.15); }
+::-webkit-scrollbar-track { background: var(--wsw-scroll-track) !important; }
+html { scrollbar-color: var(--wsw-scroll-thumb) var(--wsw-scroll-track); }
+

@@ -1593,23 +1593,30 @@ serve(async (req) => {
       let enriched = { ...details, liff_id: acct?.liffId || null };
       if (details?.task_id && !details?.due_date) {
         const { data: task } = await db.from("tasks")
-          .select("id, title, due_date, due_time, description, notes, store, assignee, workflow_instance_id, created_by, step_order")
+          .select("id, title, due_date, due_time, description, notes, store, assignee, workflow_instance_id, project_id, created_by, step_order")
           .eq("id", details.task_id).maybeSingle();
         if (task) {
-          // 抓 workflow_instance template_name + created_by（發起人）
+          // 抓 workflow_instance template_name + started_by（發起人）
+          // ⚠ workflow_instances 沒有 created_by 欄,發起人存在 started_by
           let workflowName: string | undefined = details.workflow_name;
           let initiatedBy: string | undefined = details.initiated_by || task.created_by || undefined;
           let totalSteps: number | undefined = undefined;
           if (task.workflow_instance_id) {
             const { data: inst } = await db.from("workflow_instances")
-              .select("template_name, created_by").eq("id", task.workflow_instance_id).maybeSingle();
+              .select("template_name, started_by").eq("id", task.workflow_instance_id).maybeSingle();
             if (!workflowName) workflowName = inst?.template_name || undefined;
-            if (!initiatedBy) initiatedBy = inst?.created_by || undefined;
+            if (!initiatedBy) initiatedBy = inst?.started_by || undefined;
             // 算此流程的總任務步數
             const { count } = await db.from("tasks")
               .select("id", { count: "exact", head: true })
               .eq("workflow_instance_id", task.workflow_instance_id);
             totalSteps = count ?? undefined;
+          }
+          // 專案任務(非流程):發起人 fallback 用專案負責人
+          if (!initiatedBy && task.project_id) {
+            const { data: proj } = await db.from("projects")
+              .select("owner").eq("id", task.project_id).maybeSingle();
+            if (proj?.owner) initiatedBy = proj.owner;
           }
           // 抓 employee dept
           const { data: emp } = await db.from("employees")

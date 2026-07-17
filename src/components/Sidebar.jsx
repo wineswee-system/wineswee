@@ -549,7 +549,7 @@ export default function Sidebar() {
     <div className={`sidebar-overlay ${mobileOpen ? 'active' : ''}`} onClick={() => setMobileOpen(false)} />
 
     {/* ═══════ Left Sidebar (contextual) ═══════ */}
-    <aside className={`sidebar ${mobileOpen ? 'open' : ''} ${activeGroup === 'dashboard' && !isSystemGroup && !isSuperAdminGroup ? 'sidebar-hidden' : ''} ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
+    <aside className={`sidebar ${mobileOpen ? 'open' : ''} ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
       {/* Collapse toggle button */}
       <button
         className="sidebar-toggle-btn"
@@ -575,6 +575,52 @@ export default function Sidebar() {
 
       {/* Contextual nav for the active group */}
       <nav className="sidebar-nav">
+        {/* 儀表板：左側放「所有模組」手風琴，各群組可點開直接進頁 */}
+        {activeGroup === 'dashboard' && !isSystemGroup && !isSuperAdminGroup && (
+          <>
+            <div className="nav-section-label">所有模組</div>
+            {majorGroups.filter(g => g.key !== 'dashboard').map((group) => {
+              const GroupIcon = group.icon
+              const kids = filterSections(groupNav[group.key] || []).flatMap(s => s.children || [])
+              if (!kids.length) return null
+              const isOpen = openMenus['__grp_' + group.key] === true
+              return (
+                <div key={group.key} className="nav-section">
+                  <div
+                    className="nav-section-header"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => toggleMenu('__grp_' + group.key)}
+                  >
+                    {GroupIcon && <GroupIcon size={14} className="nav-section-icon" />}
+                    <span>{group.label}</span>
+                    <ChevronRight className={`nav-section-chevron ${isOpen ? 'open' : ''}`} />
+                  </div>
+                  <div className={`nav-section-children ${isOpen ? 'open' : ''}`}>
+                    {kids.map((child, ci) => {
+                      const ChildIcon = child.icon
+                      const childVisible = matchChild(child)
+                      return (
+                        <NavLink
+                          to={child.path}
+                          key={ci}
+                          className={({ isActive: active }) => `nav-sub-item ${active ? 'active' : ''} ${childVisible ? '' : 'hidden'}`}
+                          onClick={handleNavClick}
+                          onMouseEnter={e => showTooltip(e, child.title || child.label)}
+                          onMouseLeave={hideTooltip}
+                        >
+                          {ChildIcon && <ChildIcon className="nav-sub-item-icon" />}
+                          <span>{child.label}</span>
+                        </NavLink>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })}
+          </>
+        )}
+
         {activeGroup !== 'dashboard' && !isSystemGroup && !isSuperAdminGroup && currentSections.map((section, si) => {
           const SectionIcon = section.icon
           const isOpen = openMenus[section.label] === true

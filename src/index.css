@@ -760,7 +760,7 @@ input, select, textarea {
   transition: max-height var(--transition-slow);
 }
 .nav-section-children.open {
-  max-height: 600px;
+  max-height: 2000px;
 }
 
 /* Sub-items */

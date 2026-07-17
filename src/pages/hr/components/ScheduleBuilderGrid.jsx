@@ -24,7 +24,7 @@ function getShiftStyle(shiftLabel, shiftDefs) {
   }
   const def = shiftDefs.find(d => d.name === shiftLabel)
   if (def?.color) return { background: hexToDim(def.color), color: def.color, borderColor: def.color + '55' }
-  return { background: 'rgba(34,211,238,0.12)', color: 'var(--accent-cyan)', borderColor: 'rgba(34,211,238,0.3)' }
+  return { background: 'rgba(34,211,238,0.12)', color: 'var(--text-primary)', borderColor: 'rgba(34,211,238,0.3)' }
 }
 
 export default function ScheduleBuilderGrid({

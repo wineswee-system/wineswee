@@ -1277,8 +1277,8 @@ export default function Schedule() {
       if (!type) return {}
       return { background: type.dim, color: type.color, border: `1px solid ${type.color}30` }
     }
-    // All work shifts use a single unified color for cleaner visuals
-    return { background: 'rgba(34,211,238,0.10)', color: 'var(--accent-cyan)', border: '1px solid rgba(34,211,238,0.18)' }
+    // All work shifts use a single unified color for cleaner visuals（時間文字改黑字提升可讀）
+    return { background: 'rgba(34,211,238,0.10)', color: 'var(--text-primary)', border: '1px solid rgba(34,211,238,0.18)' }
   }
 
   const selectedStore = locations.find(s => s.name === storeFilter)

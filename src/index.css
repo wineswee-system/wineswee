@@ -4896,7 +4896,7 @@ div.data-table > table {
   backdrop-filter: none;
   border-bottom: 1px solid var(--wsw-shell-border);
 }
-.topnav-brand { padding: 4px 8px; }
+.topnav-brand { padding: 4px 8px; user-select: none; -webkit-user-select: none; caret-color: transparent; outline: none; }
 .topnav-brand:hover { background: transparent; }
 .topnav-group-btn { color: var(--wsw-shell-on); opacity: 0.8; }
 .topnav-group-btn:hover { color: var(--wsw-shell-on-strong); background: var(--wsw-shell-hover); opacity: 1; }

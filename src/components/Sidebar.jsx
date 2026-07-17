@@ -12,7 +12,9 @@ import {
   Award, BarChart3, FileText, Truck,
   Package, Monitor, GitBranch, Smartphone,
 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useAuth } from '../contexts/AuthContext'
+import { useLanguage } from '../contexts/LanguageContext'
 import FontSizeControl from './FontSizeControl'
 import { prefetchGroup } from '../modules/prefetch'
 import { majorGroups, groupNav } from './sidebar/sidebarConfig'
@@ -122,6 +124,8 @@ export default function Sidebar() {
   const [activeGroup, setActiveGroup] = useState(() => routeToGroup(location.pathname))
   const [openMenus, setOpenMenus] = useState({})
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light')
+  const { lang, setLang } = useLanguage()
+  const { t } = useTranslation()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem('sidebar-collapsed') === 'true')
   const [searchQuery, setSearchQuery] = useState('')
@@ -394,7 +398,7 @@ export default function Sidebar() {
     <SidebarTooltipLayer tip={tooltip} />
     {/* ═══════ Top Navigation Bar ═══════ */}
     <header className="topnav">
-      <div className="topnav-brand" onClick={() => { navigate('/'); setOpenDropdown(null) }} role="button" tabIndex={0}>
+      <div className="topnav-brand" onClick={(e) => { e.currentTarget.blur(); navigate('/'); setOpenDropdown(null) }} role="button" tabIndex={0}>
         <div className="topnav-brand-logo" role="img" aria-label="WINESWEE 威士威" />
       </div>
 
@@ -414,7 +418,7 @@ export default function Sidebar() {
               style={{ '--group-color': group.color }}
             >
               <Icon size={16} />
-              <span>{group.label}</span>
+              <span>{t(group.label)}</span>
               {hasMega && <ChevronDown size={11} className={`topnav-chevron ${isOpen ? 'rotated' : ''}`} />}
             </button>
           )
@@ -463,6 +467,14 @@ export default function Sidebar() {
           <Sparkles size={12} />
           Demo
         </button>
+        <button
+          onClick={() => setLang(lang === 'en' ? 'zh' : 'en')}
+          className="topnav-theme-btn"
+          title={lang === 'en' ? '切換為中文' : 'Switch to English'}
+          style={{ fontSize: 12, fontWeight: 800, minWidth: 32, letterSpacing: '0.02em' }}
+        >
+          {lang === 'en' ? '中' : 'EN'}
+        </button>
         <button onClick={toggleTheme} className="topnav-theme-btn" title={theme === 'light' ? '深色模式' : '淺色模式'}>
           {theme === 'light' ? <Moon size={15} /> : <Sun size={15} />}
         </button>
@@ -509,7 +521,7 @@ export default function Sidebar() {
                   <div key={si} className="mega-col">
                     <div className="mega-col-header">
                       {SIcon && <SIcon size={14} className="mega-col-icon" style={{ color: groupColor }} />}
-                      <span>{section.label}</span>
+                      <span>{t(section.label)}</span>
                     </div>
                     <div className="mega-col-items">
                       {section.children?.map((child, ci) => {
@@ -523,7 +535,7 @@ export default function Sidebar() {
                             onMouseLeave={hideTooltip}
                           >
                             <CIcon size={13} className="mega-item-icon" />
-                            <span>{child.label}</span>
+                            <span>{t(child.label)}</span>
                           </button>
                         )
                       })}
@@ -566,7 +578,7 @@ export default function Sidebar() {
           <input
             className="sidebar-search-input"
             type="text"
-            placeholder="搜尋功能..."
+            placeholder={t('搜尋功能...')}
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
           />
@@ -578,7 +590,7 @@ export default function Sidebar() {
         {/* 儀表板：左側放「所有模組」手風琴，各群組可點開直接進頁 */}
         {activeGroup === 'dashboard' && !isSystemGroup && !isSuperAdminGroup && (
           <>
-            <div className="nav-section-label">所有模組</div>
+            <div className="nav-section-label">{t('所有模組')}</div>
             {majorGroups.filter(g => g.key !== 'dashboard').map((group) => {
               const GroupIcon = group.icon
               const kids = filterSections(groupNav[group.key] || []).flatMap(s => s.children || [])
@@ -593,7 +605,7 @@ export default function Sidebar() {
                     onClick={() => toggleMenu('__grp_' + group.key)}
                   >
                     {GroupIcon && <GroupIcon size={14} className="nav-section-icon" />}
-                    <span>{group.label}</span>
+                    <span>{t(group.label)}</span>
                     <ChevronRight className={`nav-section-chevron ${isOpen ? 'open' : ''}`} />
                   </div>
                   <div className={`nav-section-children ${isOpen ? 'open' : ''}`}>
@@ -610,7 +622,7 @@ export default function Sidebar() {
                           onMouseLeave={hideTooltip}
                         >
                           {ChildIcon && <ChildIcon className="nav-sub-item-icon" />}
-                          <span>{child.label}</span>
+                          <span>{t(child.label)}</span>
                         </NavLink>
                       )
                     })}
@@ -629,7 +641,7 @@ export default function Sidebar() {
           return (
             <div key={si} className={`nav-section ${visible ? '' : 'hidden'}`}>
               {section.divider ? (
-                <div className="nav-divider-label">{section.label}</div>
+                <div className="nav-divider-label">{t(section.label)}</div>
               ) : (
                 <div
                   className="nav-section-header"
@@ -638,7 +650,7 @@ export default function Sidebar() {
                   onClick={() => toggleMenu(section.label)}
                 >
                   {SectionIcon && <SectionIcon size={14} className="nav-section-icon" />}
-                  <span>{section.label}</span>
+                  <span>{t(section.label)}</span>
                   <ChevronRight className={`nav-section-chevron ${isOpen ? 'open' : ''}`} />
                 </div>
               )}
@@ -656,7 +668,7 @@ export default function Sidebar() {
                       onMouseLeave={hideTooltip}
                     >
                       <ChildIcon className="nav-sub-item-icon" />
-                      <span>{child.label}</span>
+                      <span>{t(child.label)}</span>
                     </NavLink>
                   )
                 })}
@@ -668,7 +680,7 @@ export default function Sidebar() {
         {/* System items shown when system group active */}
         {isSystemGroup && (
           <div className="nav-section">
-            <div className="nav-section-label">系統與整合</div>
+            <div className="nav-section-label">{t('系統與整合')}</div>
             {systemItems.filter(item => !item.perm || hasPermission(item.perm)).map((item) => {
               const Icon = item.icon
               return (
@@ -720,7 +732,7 @@ export default function Sidebar() {
             onClick={() => { setActiveGroup('system'); handleNavClick() }}
           >
             <Settings size={14} />
-            <span>系統設定</span>
+            <span>{t('系統設定')}</span>
           </button>
         )}
 

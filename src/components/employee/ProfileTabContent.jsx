@@ -92,8 +92,8 @@ export default function ProfileTabContent({
 
           <SectionTitle icon="🚨" text="緊急聯絡人" />
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
-            <div><div style={L}>姓名</div><input className="form-input" style={{ width: '100%' }} value={form.emergency_name || ''} onChange={e => set('emergency_name', e.target.value)} /></div>
-            <div><div style={L}>電話</div><input className="form-input" style={{ width: '100%' }} value={form.emergency_phone || ''} onChange={e => set('emergency_phone', e.target.value)} /></div>
+            <div><div style={L}>姓名</div><input className="form-input" style={{ width: '100%' }} value={form.emergency_contact_name || ''} onChange={e => set('emergency_contact_name', e.target.value)} /></div>
+            <div><div style={L}>電話</div><input className="form-input" style={{ width: '100%' }} value={form.emergency_contact_phone || ''} onChange={e => set('emergency_contact_phone', e.target.value)} /></div>
             <div>
               <div style={L}>關係</div>
               <select className="form-input" style={{ width: '100%' }}

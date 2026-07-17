@@ -998,7 +998,6 @@ export default function Workflows() {
         priority: deployForm.priority || '中',
         notes: deployForm.notes || null,
         completion_chain_id: deployForm.completion_chain_id ? Number(deployForm.completion_chain_id) : null,
-        applicant_emp_id: profile?.id || null,
       }).select().single()
       if (instance) {
         const empByName = new Map((employees || []).map(e => [e.name, e.id]))

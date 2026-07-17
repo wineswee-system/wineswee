@@ -4858,6 +4858,14 @@ div.data-table > table {
   --wsw-wm-blend: screen;                /* 紅底上用 screen 讓浮水印透出 */
   --wsw-scroll-thumb: #852e2c;
   --wsw-scroll-track: rgba(133, 46, 44, 0.14);
+  /* 側欄固定樣式（不分深淺）：米色底 + 紅字 */
+  --wsw-side-bg: #fcf2d7;
+  --wsw-side-on: #852e2c;
+  --wsw-side-on-strong: #6d2422;
+  --wsw-side-hover: rgba(133, 46, 44, 0.09);
+  --wsw-side-border: rgba(133, 46, 44, 0.16);
+  --wsw-side-sel-bg: #852e2c;            /* 選中框：紅 */
+  --wsw-side-sel-on: #fcf2d7;            /* 選中字：米 */
 }
 [data-theme="light"] {
   /* 淺色 = 紅色品牌 shell */
@@ -4898,31 +4906,34 @@ div.data-table > table {
 .topnav-theme-btn { color: var(--wsw-shell-on); }
 .topnav-theme-btn:hover { background: var(--wsw-shell-hover); color: var(--wsw-shell-on-strong); }
 
-/* ── Sidebar ── */
+/* ── Sidebar（固定米底紅字，不分深淺） ── */
 .sidebar {
-  background: var(--wsw-shell-bg) !important;
+  background: var(--wsw-side-bg) !important;
   backdrop-filter: none;
-  border-right: 1px solid var(--wsw-shell-border);
+  border-right: 1px solid var(--wsw-side-border);
 }
-.nav-section-label, .nav-divider-label { color: color-mix(in srgb, var(--wsw-shell-on) 55%, transparent); }
-.nav-divider-label { border-top-color: var(--wsw-shell-border); }
-.nav-section-header { color: var(--wsw-shell-on); }
-.nav-section-header:hover { background: var(--wsw-shell-hover); color: var(--wsw-shell-on-strong); }
-.nav-sub-item { color: color-mix(in srgb, var(--wsw-shell-on) 78%, transparent); }
-.nav-sub-item:hover { color: var(--wsw-shell-on-strong); background: var(--wsw-shell-hover); }
-.nav-sub-item.active { color: var(--wsw-sel-on) !important; background: var(--wsw-sel-bg) !important; font-weight: 600; }
-.nav-sub-item.active::before { background: var(--wsw-sel-on); }
+.nav-section-label, .nav-divider-label { color: color-mix(in srgb, var(--wsw-side-on) 55%, transparent); }
+.nav-divider-label { border-top-color: var(--wsw-side-border); }
+.nav-section-header { color: var(--wsw-side-on); }
+.nav-section-header:hover { background: var(--wsw-side-hover); color: var(--wsw-side-on-strong); }
+.nav-sub-item { color: color-mix(in srgb, var(--wsw-side-on) 82%, transparent); }
+.nav-sub-item:hover { color: var(--wsw-side-on-strong); background: var(--wsw-side-hover); }
+.nav-sub-item.active { color: var(--wsw-side-sel-on) !important; background: var(--wsw-side-sel-bg) !important; font-weight: 600; }
+.nav-sub-item.active::before { background: var(--wsw-side-sel-on); }
 .nav-sub-item.active .nav-sub-item-icon { opacity: 1; }
-.sidebar-search-input { color: var(--wsw-shell-on); border-color: var(--wsw-shell-border); }
-.sidebar-search-input::placeholder { color: color-mix(in srgb, var(--wsw-shell-on) 50%, transparent); }
-.sidebar-system-btn { color: color-mix(in srgb, var(--wsw-shell-on) 80%, transparent); }
-.sidebar-system-btn:hover { background: var(--wsw-shell-hover); color: var(--wsw-shell-on-strong); }
-.sidebar-footer { border-top: 1px solid var(--wsw-shell-border); }
-.sidebar-user { background: var(--wsw-shell-hover); }
-.sidebar-user-name { color: var(--wsw-shell-on-strong); }
-.sidebar-user-role { color: color-mix(in srgb, var(--wsw-shell-on) 60%, transparent); }
-.sidebar-logout-btn { color: var(--wsw-shell-on); }
-.sidebar-logout-btn:hover { background: var(--wsw-shell-hover); color: var(--wsw-shell-on-strong); }
+.sidebar-search-input { color: var(--wsw-side-on); border-color: var(--wsw-side-border); background: rgba(133,46,44,0.05); }
+.sidebar-search-input::placeholder { color: color-mix(in srgb, var(--wsw-side-on) 50%, transparent); }
+.sidebar-search-icon { color: color-mix(in srgb, var(--wsw-side-on) 60%, transparent); }
+.sidebar-system-btn { color: color-mix(in srgb, var(--wsw-side-on) 82%, transparent); }
+.sidebar-system-btn:hover { background: var(--wsw-side-hover); color: var(--wsw-side-on-strong); }
+.sidebar-footer { border-top: 1px solid var(--wsw-side-border); }
+.sidebar-user { background: var(--wsw-side-hover); }
+.sidebar-user-name { color: var(--wsw-side-on-strong); }
+.sidebar-user-role { color: color-mix(in srgb, var(--wsw-side-on) 60%, transparent); }
+.sidebar-logout-btn { color: var(--wsw-side-on); }
+.sidebar-logout-btn:hover { background: var(--wsw-side-hover); color: var(--wsw-side-on-strong); }
+.sidebar-toggle-btn { color: var(--wsw-side-on); }
+.nav-section-icon, .nav-sub-item-icon { color: currentColor; }
 
 /* ── Main content：底色 + 致中 logo 浮水印 ──
    浮水印用 main-content 背景圖(background-attachment: scroll 預設 = 固定在
@@ -4950,7 +4961,7 @@ div.data-table > table {
   width: 400px;
   height: 400px;
   background: url('/brand/logo-mark.png') center / contain no-repeat;
-  opacity: 0.08;
+  opacity: 0.045;
   pointer-events: none;
   z-index: 0;
 }

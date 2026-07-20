@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Search, Download, MapPin, Clock, CalendarCheck } from 'lucide-react'
 import { getAttendance, serverClockIn, getActiveEmployees, getDepartments, getStores } from '../../lib/db'
@@ -78,10 +78,12 @@ export default function Attendance() {
   const [tab, setTab] = useState('records') // records | hours
   const [page, setPage] = useState(1)       // 打卡紀錄分頁（每頁 100 筆）
   const PAGE_SIZE = 100
-  const listTopRef = useRef(null)           // 換頁後捲回列表頂端
   const goToPage = (p) => {
     setPage(p)
-    listTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    // 只捲 main-content 這個真正的捲動容器回頂端。
+    // 不要用 el.scrollIntoView() — 它會連 document 一起捲，在 #root zoom≠1 時
+    // (document 被撐得比視窗高、可捲) 會把整頁往上頂 → 頂部躲 topnav、底部露縫。
+    document.querySelector('.main-content')?.scrollTo({ top: 0, behavior: 'smooth' })
   }
   const [editModal, setEditModal] = useState(null) // record being edited
   const [editClockIn, setEditClockIn] = useState('')
@@ -421,7 +423,7 @@ export default function Attendance() {
         </div>
       </div>
 
-      <div className="card" ref={listTopRef} style={{ scrollMarginTop: 16 }}>
+      <div className="card">
         <div className="card-header">
           <div className="card-title"><span className="card-title-icon">📋</span> 出勤紀錄</div>
           <div className="search-bar">

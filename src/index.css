@@ -341,11 +341,6 @@ body::before {
   position: relative;
   z-index: 1;
   min-height: 100vh;
-  /* 補不透明底色：#root 蓋滿可視區且在 body::before(裝飾漸層,z-index:0) 之上。
-     缺這層時,zoom≠1 造成 margin-top(fixed topnav 1x) 與 main-content 高度(除回 zoom)
-     對不齊,底部露出縫 → body::before 右下角的紫漸層從縫透出。補 --bg-primary(與主內容
-     同色)後漸層透不出、縫也與頁面同色融掉。dark 主題 --bg-primary 即最底色,視覺無感。 */
-  background: var(--bg-primary);
   /* 全站字體縮放放在 #root 而非 body，讓 createPortal 到 body 的 overlay
      不繼承 zoom，避免 position:fixed; inset:0 的彈窗超出視窗 */
   zoom: var(--app-font-scale, 1);

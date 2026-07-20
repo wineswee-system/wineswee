@@ -405,7 +405,7 @@ export default function Schedule() {
     const vEnd = activeDates?.[activeDates.length - 1]
     const filteredEmps = employees.filter(em =>
       em.employment_category !== 'admin' && em.employment_category !== 'piece' &&
-      (isAdmin || scopedStoreIds.has(em.store_id)) &&
+      (isAdmin || canScheduleAllStores || scopedStoreIds.has(em.store_id)) &&
       (deptFilter === '' || em.dept === deptFilter) &&
       (storeFilter === '' || em.store === storeFilter) &&
       (!em.join_date   || !vEnd   || em.join_date   <= vEnd) &&
@@ -451,7 +451,7 @@ export default function Schedule() {
     const vEnd = activeDates?.[activeDates.length - 1]
     return employees.filter(em =>
       em.employment_category !== 'admin' && em.employment_category !== 'piece' &&
-      (isAdmin || scopedStoreIds.has(em.store_id)) &&
+      (isAdmin || canScheduleAllStores || scopedStoreIds.has(em.store_id)) &&
       (deptFilter === '' || em.dept === deptFilter) &&
       (storeFilter === '' || em.store === storeFilter) &&
       (!em.join_date   || !vEnd   || em.join_date   <= vEnd) &&
@@ -536,7 +536,7 @@ export default function Schedule() {
       const vEnd = activeDates?.[activeDates.length - 1]
       const filteredEmps = employees.filter(em =>
         em.employment_category !== 'admin' && em.employment_category !== 'piece' &&
-        (isAdmin || scopedStoreIds.has(em.store_id)) &&
+        (isAdmin || canScheduleAllStores || scopedStoreIds.has(em.store_id)) &&
         (deptFilter === '' || em.dept === deptFilter) &&
         (storeFilter === '' || em.store === storeFilter) &&
         (!em.join_date   || !vEnd   || em.join_date   <= vEnd) &&
@@ -2054,7 +2054,7 @@ export default function Schedule() {
         const vStart = activeDates?.[0]
         const vEnd = activeDates?.[activeDates.length - 1]
         const fEmps = employees.filter(em =>
-          (isAdmin || scopedStoreIds.has(em.store_id)) &&
+          (isAdmin || canScheduleAllStores || scopedStoreIds.has(em.store_id)) &&
           (deptFilter === '' || em.dept === deptFilter) &&
           (storeFilter === '' || em.store === storeFilter) &&
           (!em.join_date   || !vEnd   || em.join_date   <= vEnd) &&

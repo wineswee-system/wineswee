@@ -591,7 +591,9 @@ export default function Sidebar() {
         {activeGroup === 'dashboard' && !isSystemGroup && !isSuperAdminGroup && (
           <>
             <div className="nav-section-label">{t('所有模組')}</div>
-            {majorGroups.filter(g => g.key !== 'dashboard').map((group) => {
+            {/* ★ 用 roleFiltered(已過群組權限閘)而非 majorGroups — 否則低權限使用者
+                會在此「所有模組」面板看到 top nav 已藏的群組(如物流調度/通訊協作) */}
+            {roleFiltered.filter(g => g.key !== 'dashboard').map((group) => {
               const GroupIcon = group.icon
               const kids = filterSections(groupNav[group.key] || []).flatMap(s => s.children || [])
               if (!kids.length) return null

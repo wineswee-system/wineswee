@@ -795,6 +795,8 @@ export default function Overtime() {
             fields={[
               { label: '加班類型', value: detailRow.is_pre_approval ? '預先申請' : '事後補登' },
               { label: '加班日期', value: detailRow.date },
+              { label: '加班時間', value: (detailRow.start_time || detailRow.end_time)
+                  ? `${String(detailRow.start_time || '').slice(0, 5)}–${String(detailRow.end_time || '').slice(0, 5)}` : '—' },
               { label: '時數', value: `${detailRow.hours || 0} 小時` },
               { label: '事由', value: detailRow.reason, multiline: true },
               ...(detailRow.reject_reason

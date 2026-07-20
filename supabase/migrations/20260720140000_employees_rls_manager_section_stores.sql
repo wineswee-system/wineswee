@@ -53,8 +53,9 @@ DROP POLICY IF EXISTS employees_select_manager_scope ON public.employees;
 CREATE POLICY employees_select_manager_scope ON public.employees
 FOR SELECT TO authenticated
 USING (
-  -- 包 (SELECT ...) 讓 helper 每次查詢只算一次(對齊 employees_select_v4 的寫法,避免 per-row 呼叫)
-  store_id = ANY ((SELECT public.current_user_manager_store_ids()))
+  -- IN (SELECT unnest(...)) — helper 回 int[],unnest 成集合;子查詢每次查詢只算一次(對齊 v4 避免 per-row)。
+  --   ★ 不可寫 = ANY((SELECT func())):那會被當子查詢回整個 array 當單值 → integer = integer[] 型別錯。
+  store_id IN (SELECT unnest(public.current_user_manager_store_ids()))
 );
 
 COMMENT ON POLICY employees_select_manager_scope ON public.employees IS

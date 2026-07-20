@@ -14,7 +14,7 @@ import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
 import { printTripSignOff } from '../../lib/signOffAdapters'
 import ApprovalDetailModal from '../../components/ApprovalDetailModal'
-import { buildFormChainSteps } from '../../lib/buildChainSteps'
+import { buildFormChainSteps, mergeStepSignTimes } from '../../lib/buildChainSteps'
 import { validateRequired, clearError } from '../../lib/formValidation'
 import { usePendingApprovals } from '../../lib/usePendingApprovals'
 import { useChainGuard } from '../../lib/useChainGuard'
@@ -155,7 +155,7 @@ export default function BusinessTravel() {
     if (!win) { toast.error('請允許彈出視窗才能列印簽呈'); return }
     try {
       const empRow = employees.find(e => e.name === row.employee)
-      const chainSteps = await buildFormChainSteps({
+      let chainSteps = await buildFormChainSteps({
         formType: 'trip',
         organizationId: profile?.organization_id,
         applicantName: row.employee,
@@ -166,7 +166,10 @@ export default function BusinessTravel() {
         approvedAt: row.approved_at,
         rejectReason: row.reject_reason,
         fallbackTail: ['人資/財務'],
+        // ★ 標對駁回關 + 補每關簽核時間
+        requestType: 'trip', requestId: row.id, currentStep: row.current_step,
       })
+      chainSteps = await mergeStepSignTimes('trip', row.id, chainSteps)
       const approverMap = {}
       chainSteps.forEach(s => { if (s.target_emp_id && s.name) approverMap[s.target_emp_id] = s.name })
       printTripSignOff(row, {

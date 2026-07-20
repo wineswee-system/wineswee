@@ -17,7 +17,7 @@ import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
 import { printOvertimeSignOff } from '../../lib/signOffAdapters'
 import ApprovalDetailModal from '../../components/ApprovalDetailModal'
-import { buildFormChainSteps } from '../../lib/buildChainSteps'
+import { buildFormChainSteps, mergeStepSignTimes } from '../../lib/buildChainSteps'
 import { validateRequired, clearError } from '../../lib/formValidation'
 import { uploadFormAttachments, cloneFormAttachments, loadCarriedFormAttachments } from '../../lib/formAttachments'
 import CarriedAttachments from '../../components/CarriedAttachments'
@@ -375,7 +375,7 @@ export default function Overtime() {
     if (!win) { toast.error('請允許彈出視窗才能列印簽呈'); return }
     try {
       const empRow = employees.find(e => e.name === row.employee)
-      const chainSteps = await buildFormChainSteps({
+      let chainSteps = await buildFormChainSteps({
         formType: 'overtime',
         organizationId: profile?.organization_id,
         applicantName: row.employee,
@@ -385,7 +385,10 @@ export default function Overtime() {
         approverName: row.approver,
         approvedAt: row.approved_at,
         rejectReason: row.reject_reason,
+        // ★ 標對駁回關 + 補每關簽核時間
+        requestType: 'overtime_request', requestId: row.id, currentStep: row.current_step,
       })
+      chainSteps = await mergeStepSignTimes('overtime', row.id, chainSteps)
       const approverMap = {}
       chainSteps.forEach(s => { if (s.target_emp_id && s.name) approverMap[s.target_emp_id] = s.name })
       printOvertimeSignOff(row, {

@@ -15,7 +15,7 @@ import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
 import { printClockCorrectionSignOff } from '../../lib/signOffAdapters'
 import ApprovalDetailModal from '../../components/ApprovalDetailModal'
-import { buildFormChainSteps } from '../../lib/buildChainSteps'
+import { buildFormChainSteps, mergeStepSignTimes } from '../../lib/buildChainSteps'
 import { createApprovalWorkflow } from '../../lib/workflowIntegration'
 import { validateRequired, clearError } from '../../lib/formValidation'
 import { uploadFormAttachments, cloneFormAttachments, loadCarriedFormAttachments } from '../../lib/formAttachments'
@@ -122,7 +122,7 @@ export default function PunchCorrection() {
     if (!win) { toast.error('請允許彈出視窗才能列印簽呈'); return }
     try {
       const empRow = employees.find(e => e.name === row.employee)
-      const chainSteps = await buildFormChainSteps({
+      let chainSteps = await buildFormChainSteps({
         formType: 'punch',
         organizationId: profile?.organization_id,
         applicantName: row.employee,
@@ -132,7 +132,10 @@ export default function PunchCorrection() {
         approverName: row.approver,
         approvedAt: row.approved_at,
         rejectReason: row.reject_reason,
+        // ★ 標對駁回關 + 補每關簽核時間
+        requestType: 'correction', requestId: row.id, currentStep: row.current_step,
       })
+      chainSteps = await mergeStepSignTimes('correction', row.id, chainSteps)
       const approverMap = {}
       chainSteps.forEach(s => { if (s.target_emp_id && s.name) approverMap[s.target_emp_id] = s.name })
       printClockCorrectionSignOff(row, {

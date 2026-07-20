@@ -22,7 +22,7 @@ import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { getEventBus } from '../../lib/events/index.js'
 import { printLeaveSignOff } from '../../lib/signOffAdapters'
 import ApprovalDetailModal from '../../components/ApprovalDetailModal'
-import { buildWorkflowChainSteps, buildFormChainSteps } from '../../lib/buildChainSteps'
+import { buildWorkflowChainSteps, buildFormChainSteps, mergeStepSignTimes } from '../../lib/buildChainSteps'
 import { validateRequired, clearError } from '../../lib/formValidation'
 import { usePendingApprovals } from '../../lib/usePendingApprovals'
 import { useChainGuard } from '../../lib/useChainGuard'
@@ -461,7 +461,7 @@ export default function Leave() {
       const empRow = employees.find(e => e.name === row.employee)
       // ★ 用 buildFormChainSteps：讀 form_chain_configs 的設定（admin 在 Leave 頁面設好的 chain）
       // 沒設定則 fallback 到舊的「申請人 + 直屬主管 + 人資核章」3 關
-      const chainSteps = await buildFormChainSteps({
+      let chainSteps = await buildFormChainSteps({
         formType: 'leave',
         organizationId: profile?.organization_id,
         applicantName: row.employee,
@@ -475,6 +475,7 @@ export default function Leave() {
         requestId: row.id,
         currentStep: row.current_step,
       })
+      chainSteps = await mergeStepSignTimes('leave', row.id, chainSteps)  // ★ 補每關簽核時間
       const approverMap = {}
       chainSteps.forEach(s => { if (s.target_emp_id && s.name) approverMap[s.target_emp_id] = s.name })
       printLeaveSignOff(row, {

@@ -14,7 +14,7 @@ import {
 } from '../../lib/hrChain'
 import ApprovalDetailModal from '../../components/ApprovalDetailModal'
 import { printLoaSignOff } from '../../lib/signOffAdapters'
-import { buildFormChainSteps } from '../../lib/buildChainSteps'
+import { buildFormChainSteps, mergeStepSignTimes } from '../../lib/buildChainSteps'
 import { validateRequired, clearError } from '../../lib/formValidation'
 import { usePendingApprovals } from '../../lib/usePendingApprovals'
 import { confirm } from '../../lib/confirm'
@@ -80,7 +80,8 @@ export default function LeaveOfAbsence() {
     const win = window.open('', '_blank', 'width=900,height=1100')
     if (!win) { toast.error('請允許彈出視窗才能列印簽呈'); return }
     try {
-      const builtSteps = await buildAndResolveChain(row)
+      let builtSteps = await buildAndResolveChain(row)
+      builtSteps = await mergeStepSignTimes('loa', row.id, builtSteps)  // ★ 補每關簽核時間
       const approverMap = {}
       builtSteps.forEach(s => { if (s.target_emp_id && s.name) approverMap[s.target_emp_id] = s.name })
       printLoaSignOff(row, {

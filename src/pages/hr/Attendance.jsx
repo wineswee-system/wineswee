@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Search, Download, MapPin, Clock, CalendarCheck } from 'lucide-react'
 import { getAttendance, serverClockIn, getActiveEmployees, getDepartments, getStores } from '../../lib/db'
@@ -78,6 +78,11 @@ export default function Attendance() {
   const [tab, setTab] = useState('records') // records | hours
   const [page, setPage] = useState(1)       // 打卡紀錄分頁（每頁 100 筆）
   const PAGE_SIZE = 100
+  const listTopRef = useRef(null)           // 換頁後捲回列表頂端
+  const goToPage = (p) => {
+    setPage(p)
+    listTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
   const [editModal, setEditModal] = useState(null) // record being edited
   const [editClockIn, setEditClockIn] = useState('')
   const [editClockOut, setEditClockOut] = useState('')
@@ -416,7 +421,7 @@ export default function Attendance() {
         </div>
       </div>
 
-      <div className="card">
+      <div className="card" ref={listTopRef} style={{ scrollMarginTop: 16 }}>
         <div className="card-header">
           <div className="card-title"><span className="card-title-icon">📋</span> 出勤紀錄</div>
           <div className="search-bar">
@@ -507,9 +512,9 @@ export default function Attendance() {
                 顯示 {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, allRows.length)} / 共 {allRows.length} 筆
               </span>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <button className="btn btn-secondary" style={{ fontSize: 12, padding: '4px 12px' }} disabled={safePage <= 1} onClick={() => setPage(safePage - 1)}>← 上一頁</button>
+                <button className="btn btn-secondary" style={{ fontSize: 12, padding: '4px 12px' }} disabled={safePage <= 1} onClick={() => goToPage(safePage - 1)}>← 上一頁</button>
                 <span style={{ fontSize: 13, color: 'var(--text-secondary)', minWidth: 70, textAlign: 'center' }}>{safePage} / {totalPages}</span>
-                <button className="btn btn-secondary" style={{ fontSize: 12, padding: '4px 12px' }} disabled={safePage >= totalPages} onClick={() => setPage(safePage + 1)}>下一頁 →</button>
+                <button className="btn btn-secondary" style={{ fontSize: 12, padding: '4px 12px' }} disabled={safePage >= totalPages} onClick={() => goToPage(safePage + 1)}>下一頁 →</button>
               </div>
             </div>
           )}

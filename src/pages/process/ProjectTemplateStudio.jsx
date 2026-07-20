@@ -79,6 +79,13 @@ function MiniStepList({ steps, onStepsChange }) {
     onStepsChange(next)
   }
 
+  // 在第 i 步「下方」插入一個空白步驟
+  const insertStep = (i) => {
+    const next = [...steps]
+    next.splice(i + 1, 0, emptyStep())
+    onStepsChange(next)
+  }
+
   return (
     <div>
       {/* Column headers */}
@@ -135,6 +142,15 @@ function MiniStepList({ steps, onStepsChange }) {
               }}
               title="下移"
             >▼</button>
+            <button
+              type="button"
+              onClick={() => insertStep(i)}
+              style={{
+                background: 'none', border: 'none', padding: '1px',
+                color: 'var(--accent-cyan)', cursor: 'pointer', fontSize: 12, lineHeight: 1,
+              }}
+              title="在此步下方插入新步驟"
+            >＋</button>
           </div>
 
           {/* Name + description stacked */}

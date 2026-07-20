@@ -215,6 +215,14 @@ export default function TemplateStudio() {
     setSelectedStep(i + 1)
   }
 
+  // 在第 i 步「下方」插入一個空白步驟（範本編輯純陣列，不涉依賴鏈）
+  const insertStep = (i) => {
+    const steps = [...tpl.steps]
+    steps.splice(i + 1, 0, emptyStep())
+    updateTpl(t => ({ ...t, steps }))
+    setSelectedStep(i + 1)
+  }
+
   const moveStep = (i, dir) => {
     const j = i + dir
     if (j < 0 || j >= tpl.steps.length) return
@@ -755,6 +763,21 @@ export default function TemplateStudio() {
                     }}
                   >
                     <Copy size={11} />
+                  </button>
+                  {/* Insert-below button: 在此步下方插入空白步驟 */}
+                  <button
+                    type="button"
+                    title="在此步下方插入新步驟"
+                    onClick={e => { e.stopPropagation(); insertStep(i) }}
+                    style={{
+                      position: 'absolute', top: 5, right: 48,
+                      background: 'none', border: 'none', padding: '2px 3px',
+                      cursor: 'pointer', color: 'var(--accent-cyan)', borderRadius: 4,
+                      display: 'flex', alignItems: 'center', lineHeight: 1,
+                      zIndex: 1,
+                    }}
+                  >
+                    <Plus size={11} />
                   </button>
                 </div>
               ))}

@@ -1,7 +1,10 @@
 -- 回填舊加班單為「淨工時」(自動扣休息) — 2026-07-20
 -- 對齊新規則 computeOvertimeHours:毛時數 <5h 扣0、5~9h 扣30、≥9h 扣60分,扣後湊各店 step。
--- 範圍:所有未刪、有起訖時間的 overtime_requests(含已核准、含匯入例外單 is_exception)。
---   ⚠️ 使用者明確選 C=全回填,包含匯入例外單(其時數原以廠商 PDF 為準,此處一律改用起訖重算)。
+-- 範圍:只回填「手動輸入」的舊單(source=manual/null 且非 is_exception)。
+--   ★ 匯入單(source='import'/'104匯入')一律不動 —— 其起訖時間是匯入器塞的佔位垃圾
+--     (如 01:00~22:00),重算會壞:①撞 chk_ot_positive_hours(hours≤12) ②蓋掉廠商 PDF 正確時數。
+--     匯入單的 hours 以廠商 PDF 為準,保留原值。
+--   保險:v_net>12 或 ≤0 直接跳過,永不撞 constraint。
 -- 手法:DO block 內 DISABLE TRIGGER USER(繞 block_edit_after_signed 守衛 + 各種 guard),
 --   直接寫 hours + ot_hours(不靠 sync trigger),做完 ENABLE。block 原子性→失敗全 rollback。
 -- idempotent:重算=淨值,第二次跑 net==hours 直接略過,重跑安全。
@@ -23,6 +26,8 @@ BEGIN
     WHERE deleted_at IS NULL
       AND start_time IS NOT NULL
       AND end_time IS NOT NULL
+      AND COALESCE(source, 'manual') NOT IN ('import', '104匯入')  -- 匯入單保留廠商值
+      AND NOT COALESCE(is_exception, false)
   LOOP
     -- 毛時數(分);跨日 end<=start 自動 +24h
     v_gross_min := (EXTRACT(HOUR FROM r.end_time)::int * 60 + EXTRACT(MINUTE FROM r.end_time)::int)
@@ -41,7 +46,11 @@ BEGIN
 
     -- 扣休息後湊 step(四捨五入,對齊 JS Math.round)
     v_net := ROUND( ((v_gross_min - v_rest)::numeric / 60.0) / v_step ) * v_step;
-    IF v_net < 0 THEN v_net := 0; END IF;
+
+    -- 保險:法定單日上限 12h(chk_ot_positive_hours);異常值(垃圾起訖)一律跳過不動
+    IF v_net <= 0 OR v_net > 12 THEN
+      CONTINUE;
+    END IF;
 
     IF v_net IS DISTINCT FROM r.hours THEN
       UPDATE public.overtime_requests

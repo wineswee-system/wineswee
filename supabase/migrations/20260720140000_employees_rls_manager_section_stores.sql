@@ -53,7 +53,8 @@ DROP POLICY IF EXISTS employees_select_manager_scope ON public.employees;
 CREATE POLICY employees_select_manager_scope ON public.employees
 FOR SELECT TO authenticated
 USING (
-  store_id = ANY (public.current_user_manager_store_ids())
+  -- 包 (SELECT ...) 讓 helper 每次查詢只算一次(對齊 employees_select_v4 的寫法,避免 per-row 呼叫)
+  store_id = ANY ((SELECT public.current_user_manager_store_ids()))
 );
 
 COMMENT ON POLICY employees_select_manager_scope ON public.employees IS

@@ -14,7 +14,7 @@ import { empLabel } from '../../lib/empLabel'
 import CarriedAttachments from '../../components/CarriedAttachments'
 import { printExpenseSimpleSignOff } from '../../lib/signOffAdapters'
 import ApprovalDetailModal from '../../components/ApprovalDetailModal'
-import { buildFormChainSteps } from '../../lib/buildChainSteps'
+import { buildFormChainSteps, mergeStepSignTimes } from '../../lib/buildChainSteps'
 import { validateRequired, clearError } from '../../lib/formValidation'
 import { usePendingApprovals } from '../../lib/usePendingApprovals'
 import { postBindingFillDone } from '../../lib/embeddedBinding'
@@ -318,7 +318,7 @@ export default function Expenses() {
     if (!win) { toast.error('請允許彈出視窗才能列印簽呈'); return }
     try {
       const empRow = employees.find(e => e.name === row.employee)
-      const chainSteps = await buildFormChainSteps({
+      let chainSteps = await buildFormChainSteps({
         formType: 'expense',
         organizationId: profile?.organization_id,
         applicantName: row.employee,
@@ -330,6 +330,8 @@ export default function Expenses() {
         rejectReason: row.reject_reason,
         fallbackTail: ['財務核章'],
       })
+      // 每關補上實際簽核時間(approval_step_history)— 否則簽呈中間關卡印不出時間
+      chainSteps = await mergeStepSignTimes('expense', row.id, chainSteps)
       const approverMap = {}
       chainSteps.forEach(s => { if (s.target_emp_id && s.name) approverMap[s.target_emp_id] = s.name })
       printExpenseSimpleSignOff(row, {

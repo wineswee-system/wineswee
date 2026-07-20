@@ -10,6 +10,40 @@
 import { supabase } from './supabase'
 import { getWorkflowForRecord } from './workflowIntegration'
 
+/**
+ * 把 approval_step_history 每關實際簽核時間(exited_at)merge 進 chainSteps 的 completedAt
+ *
+ * 給簽呈 PDF 用 — buildFormChainSteps/buildChainBasedSteps 只給申請人+最後一關 completedAt,
+ * 中間關卡沒時間。modal 靠 get_approval_timeline 補;PDF 走另一條路沒補 → 每關印不出簽核時間。
+ * 此 helper 讓 PDF 路徑也能顯示「幾點簽的」。
+ *
+ * @param {string} timelineType  get_approval_timeline 用的 request_type(短名:'expense'/'leave'/'overtime'/'trip'/'correction')
+ * @param {number} requestId
+ * @param {Array}  chainSteps    [applicantStep, ...chainSteps]（可能含 extra/settle_divider）
+ * @returns {Promise<Array>}
+ */
+export async function mergeStepSignTimes(timelineType, requestId, chainSteps) {
+  if (!timelineType || !requestId || !Array.isArray(chainSteps)) return chainSteps
+  try {
+    const { data: tl } = await supabase.rpc('get_approval_timeline', {
+      p_request_type: timelineType, p_request_id: Number(requestId),
+    })
+    if (!Array.isArray(tl) || tl.length === 0) return chainSteps
+    // timeline.step_order 0-based,只對應「實際 chain step」(不含申請人/加簽/分隔)
+    let idx = 0
+    return chainSteps.map(s => {
+      if (s.isApplicant || s.kind === 'extra' || s.kind === 'settle_divider') return s
+      const t = tl.find(x => x.step_order === idx)
+      idx += 1
+      if (t?.exited_at && !s.completedAt) return { ...s, completedAt: t.exited_at }
+      return s
+    })
+  } catch (e) {
+    console.warn('[mergeStepSignTimes] failed:', e)
+    return chainSteps
+  }
+}
+
 // 把兩個時間差格式化成「X 天 Y 小時 Z 分」（給 timeline 「停留」用，對齊 get_approval_timeline 的 duration_text）
 function fmtDuration(startIso, endIso) {
   if (!startIso || !endIso) return null

@@ -1,9 +1,11 @@
-﻿import { useState, useEffect } from 'react'
+﻿import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../contexts/AuthContext'
 import { usePendingApprovals } from '../../../lib/usePendingApprovals'
 import LoadingSpinner from '../../../components/LoadingSpinner'
+import ApprovalDetailModal from '../../../components/ApprovalDetailModal'
+import { buildFormChainSteps } from '../../../lib/buildChainSteps'
 import { toast } from '../../../lib/toast'
 import { confirm } from '../../../lib/confirm'
 import {
@@ -44,6 +46,61 @@ const SIGNED_TYPE_LABEL = {
  * 對齊 LIFF Approve.jsx 結構，但 row 互動改成「導頁」而非 inline 操作
  * （因 Web HR 頁已有更完整的 ApprovalDetailModal + ApprovalActionBar）。
  */
+
+// ── 就地開明細 + 當場簽核（不跳 HR 頁）支援的類型 ──
+//   formType→form_chain_configs(live fallback用) / snap→snapshot request_type / source→加簽用表
+const INPLACE = {
+  leave:      { formType: 'leave',    snap: 'leave_request',    source: 'leave_requests',    title: '請假申請' },
+  overtime:   { formType: 'overtime', snap: 'overtime_request', source: 'overtime_requests', title: '加班申請' },
+  trip:       { formType: 'trip',     snap: 'trip',             source: 'business_trips',    title: '出差申請' },
+  correction: { formType: 'punch',    snap: 'correction',       source: 'clock_corrections', title: '補打卡申請' },
+}
+const hhmm = (t) => (t ? String(t).slice(0, 5) : '')
+
+// 各類型 → ApprovalDetailModal 左側欄位（含申請的開始/結束時間）
+function buildDetailFields(type, row) {
+  const rej = row.reject_reason ? [{ label: '駁回原因', value: row.reject_reason, multiline: true }] : []
+  const timeRange = (row.start_time || row.end_time) ? `${hhmm(row.start_time)}–${hhmm(row.end_time)}` : null
+  switch (type) {
+    case 'overtime':
+      return [
+        { label: '加班類型', value: row.is_pre_approval ? '預先申請' : '事後補登' },
+        { label: '加班日期', value: row.date },
+        { label: '加班時間', value: timeRange || '—' },
+        { label: '時數', value: `${row.hours || 0} 小時` },
+        { label: '事由', value: row.reason, multiline: true },
+        ...rej,
+      ]
+    case 'leave':
+      return [
+        { label: '假別', value: row.type || '請假' },
+        { label: '請假期間', value: `${row.start_date || ''} ~ ${row.end_date || row.start_date || ''}` },
+        { label: '時間', value: timeRange || '整天' },
+        { label: '時數 / 天數', value: (row.unit === '小時' || (row.hours && !row.days)) ? `${row.hours || 0} 小時` : `${row.days || 0} 天` },
+        { label: '事由', value: row.reason, multiline: true },
+        ...rej,
+      ]
+    case 'correction':
+      return [
+        { label: '類型', value: row.type || '補打卡' },
+        { label: '日期', value: row.date },
+        { label: '補登時間', value: hhmm(row.correction_time) || '—' },
+        { label: '原打卡時間', value: row.original_time ? hhmm(row.original_time) : '無紀錄' },
+        { label: '事由', value: row.reason, multiline: true },
+        ...rej,
+      ]
+    case 'trip':
+      return [
+        { label: '目的地', value: row.destination },
+        { label: '出差期間', value: `${row.start_date || ''} ~ ${row.end_date || ''}` },
+        { label: '目的', value: row.purpose, multiline: true },
+        ...(row.budget ? [{ label: '預算', value: `NT$ ${Number(row.budget).toLocaleString()}` }] : []),
+        ...rej,
+      ]
+    default:
+      return []
+  }
+}
 
 const GROUPS = [
   {
@@ -246,10 +303,53 @@ function PendingApprovalsView() {
   const activeTabDef = activeGroupDef?.tabs.find(t => t.key === activeTab)
   const rows = data[activeTab] || []
 
-  const handleRowClick = (row, tabDef) => {
-    // 跳到對應 HR 頁面，帶 ?focus={id} 自動開 detail modal；審核完後 returnTo=/ 回儀表板
-    navigate(`${tabDef.route}?focus=${row.id}&returnTo=/`)
+  // ── 就地開明細 modal（leave/overtime/trip/correction）；其餘仍跳 HR 頁 ──
+  const [detail, setDetail] = useState(null)        // { type, row, emp }
+  const [detailChain, setDetailChain] = useState([])
+  const [loadingChain, setLoadingChain] = useState(false)
+  const detailIdRef = useRef(null)
+
+  const openDetail = async (row, tabDef) => {
+    const type = tabDef.key
+    if (!INPLACE[type]) {
+      // 複雜類型（費用/調撥/人事異動…）仍跳 HR 頁，帶 focus + returnTo
+      navigate(`${tabDef.route}?focus=${row.id}&returnTo=/`)
+      return
+    }
+    const cfg = INPLACE[type]
+    detailIdRef.current = row.id
+    setDetail({ type, row, emp: null })
+    setDetailChain([])
+    setLoadingChain(true)
+
+    // 申請人卡片資料（頭像/職位/在職狀態/員編）
+    const { data: emp } = await supabase.from('employees')
+      .select('id, name, name_en, position, status, employee_no, avatar_url')
+      .eq('id', row.employee_id).maybeSingle()
+    if (detailIdRef.current === row.id) {
+      setDetail(d => (d && d.row.id === row.id ? { ...d, emp } : d))
+    }
+
+    // 簽核鏈（snapshot 優先，對齊 HR 頁顯示）
+    const steps = await buildFormChainSteps({
+      formType: cfg.formType,
+      organizationId: profile?.organization_id,
+      applicantName: row.employee,
+      applicantId: row.employee_id,
+      applicantCreatedAt: row.created_at,
+      recordStatus: row.status,
+      approverName: row.approver,
+      approvedAt: row.approved_at,
+      rejectReason: row.reject_reason,
+      requestType: cfg.snap,
+      requestId: row.id,
+      currentStep: row.current_step,
+    })
+    if (detailIdRef.current !== row.id) return
+    setDetailChain(steps)
+    setLoadingChain(false)
   }
+  const closeDetail = () => { detailIdRef.current = null; setDetail(null); setDetailChain([]) }
 
   // ── inline 逐張核准/退回（對齊 LIFF）+ 批次通過 ──
   // 各 tab.key → 對應通過/退回 RPC。有支援的才顯示 inline 按鈕與勾選批次。
@@ -476,7 +576,7 @@ function PendingApprovalsView() {
                 key={`${activeTab}-${row.id}`}
                 row={row} tabDef={activeTabDef}
                 groupColor={activeGroupDef.color}
-                onClick={() => handleRowClick(row, activeTabDef)}
+                onClick={() => openDetail(row, activeTabDef)}
                 inline={tabSupportsInline(activeTab)}
                 checked={selected.has(row.id)}
                 onToggle={() => toggleSel(row.id)}
@@ -489,6 +589,49 @@ function PendingApprovalsView() {
         )}
       </div>
     </div>
+
+    {/* ─── 就地明細 + 當場簽核 modal ─── */}
+    {detail && INPLACE[detail.type] && (
+      <ApprovalDetailModal
+        open={!!detail}
+        onClose={closeDetail}
+        docTitle={detail.type === 'overtime' && detail.row.is_pre_approval ? '預先加班申請' : INPLACE[detail.type].title}
+        docNo={detail.row.id}
+        status={detail.row.status}
+        applicant={{
+          name: detail.row.employee,
+          name_en: detail.emp?.name_en,
+          position: detail.emp?.position,
+          status: detail.emp?.status,
+          employee_no: detail.emp?.employee_no || (detail.row.employee_id ? `ID ${detail.row.employee_id}` : undefined),
+          avatar_url: detail.emp?.avatar_url,
+        }}
+        fields={buildDetailFields(detail.type, detail.row)}
+        attachments={(detail.row.attachments || []).map(url => ({
+          url,
+          name: decodeURIComponent(String(url).split('?')[0].split('/').pop() || '附件'),
+        }))}
+        createdAt={detail.row.created_at}
+        chainSteps={loadingChain ? [{ label: '載入中…', name: '', status: 'pending' }] : detailChain}
+        requestType={detail.type}
+        requestId={detail.row.id}
+        actions={{
+          sourceTable: INPLACE[detail.type].source,
+          row: detail.row,
+          onApprove: async () => {
+            const res = await approveAction(detail.type, detail.row.id, 'approve', null)
+            if (!isOk(res)) { toast.error('通過失敗：' + (res.error?.message || res.data?.error || '未知')); throw new Error('approve failed') }
+            toast.success('已通過')
+          },
+          onReject: async (_r, reason) => {
+            const res = await approveAction(detail.type, detail.row.id, 'reject', reason)
+            if (!isOk(res)) { toast.error('退回失敗：' + (res.error?.message || res.data?.error || '未知')); throw new Error('reject failed') }
+            toast.success('已退回')
+          },
+          onChanged: () => { closeDetail(); reload(); loadExtras() },
+        }}
+      />
+    )}
     </>
   )
 }

@@ -42,6 +42,9 @@ const REQTYPE_TO_TABLE = {
 // "10:57:00" → "10:57"（給加班當天班表/打卡顯示用）
 const hhmm = (t) => (t ? String(t).slice(0, 5) : '')
 
+// 這些單型審核時自動帶「當天班表 + 打卡」對照（走 get_request_day_context）
+const DAY_CTX_TYPES = new Set(['overtime', 'leave', 'correction', 'trip'])
+
 /**
  * @param {Object} props
  * @param {boolean} props.open
@@ -95,12 +98,13 @@ export default function ApprovalDetailModal({
     return () => { cancelled = true }
   }, [open, requestType, requestId])
 
-  // 加班單：自動帶入加班當天的班表 + 打卡（審核時對照,判斷加班合不合理）
+  // 加班/請假/補打卡/出差：自動帶入當天的班表 + 打卡（審核時對照,判斷單子合不合理）
+  //   請假/出差取 start_date 當天。走通用 get_request_day_context RPC(繞前端 RLS)。
   const [otDay, setOtDay] = useState(null)
   useEffect(() => {
-    if (!open || requestType !== 'overtime' || !requestId) { setOtDay(null); return }
+    if (!open || !DAY_CTX_TYPES.has(requestType) || !requestId) { setOtDay(null); return }
     let cancelled = false
-    supabase.rpc('get_overtime_day_context', { p_overtime_id: Number(requestId) })
+    supabase.rpc('get_request_day_context', { p_type: requestType, p_id: Number(requestId) })
       .then(({ data }) => { if (!cancelled) setOtDay(data || null) })
     return () => { cancelled = true }
   }, [open, requestType, requestId])
@@ -285,11 +289,11 @@ export default function ApprovalDetailModal({
               </div>
             ))}
 
-            {/* 加班當天出勤（審核參考）— 自動帶入班表 + 打卡 */}
-            {requestType === 'overtime' && otDay && (
+            {/* 當天出勤（審核參考）— 自動帶入班表 + 打卡（加班/請假/補打卡/出差通用）*/}
+            {DAY_CTX_TYPES.has(requestType) && otDay && (
               <div style={{ marginBottom: 18, padding: 12, borderRadius: 10, background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)' }}>
                 <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
-                  📋 加班當天出勤（審核參考）
+                  📋 當天班表 · 打卡（審核參考{otDay.date ? `：${otDay.date}` : ''}）
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <div>

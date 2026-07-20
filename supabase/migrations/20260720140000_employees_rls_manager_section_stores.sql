@@ -3,8 +3,9 @@
 --   但督導(如黃蘊珊 role=manager)靠 department_sections 督導整課(營運二課7店),排班 scope 選得到
 --   那些店,員工 RLS 卻只放行自己門市 → 選到課內其他店(中山國小 store29)員工全被 RLS 擋 → 空。
 -- 修:新增一支 SECURITY DEFINER helper 回「我能管的門市 id」= 自己店 + 我當店長的店(stores.manager_id)
---   + 我督導的課的店(department_sections.supervisor_id)。再加一條「加分」permissive SELECT policy
---   讓這些店的員工也讀得到。純新增,不動既有 employees_select_v3(避免動關鍵 policy)。
+--   + 我督導的課的店(department_sections.supervisor_id) + 我當經理的部門的所有店(departments.manager_id
+--   → 該部門所有課 → 所有店;如張庭瑋=營運部經理看得到全營運部12店)。再加一條「加分」permissive
+--   SELECT policy 讓這些店的員工也讀得到。純新增,不動既有 employees_select_v3(避免動關鍵 policy)。
 -- ★ SECURITY DEFINER 繞 RLS 查 employees/stores/department_sections,避免 policy 自查 employees 遞迴。
 
 -- ── helper:我(manager/督導)能看到員工的門市 id 集合 ──
@@ -35,6 +36,13 @@ AS $$
     FROM public.stores s
     JOIN public.department_sections ds ON ds.id = s.section_id
     JOIN me ON ds.supervisor_id = me.id
+    UNION
+    -- 我當經理的部門(departments.manager_id=我)底下所有課的所有店(部門經理看整部門)
+    SELECT s.id
+    FROM public.stores s
+    JOIN public.department_sections ds ON ds.id = s.section_id
+    JOIN public.departments d ON d.id = ds.department_id
+    JOIN me ON d.manager_id = me.id
   ) x;
 $$;
 

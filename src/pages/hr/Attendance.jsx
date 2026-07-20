@@ -76,6 +76,8 @@ export default function Attendance() {
   const [clockingIn, setClockingIn] = useState(false)
   const [clockMsg, setClockMsg] = useState(null)
   const [tab, setTab] = useState('records') // records | hours
+  const [page, setPage] = useState(1)       // 打卡紀錄分頁（每頁 100 筆）
+  const PAGE_SIZE = 100
   const [editModal, setEditModal] = useState(null) // record being edited
   const [editClockIn, setEditClockIn] = useState('')
   const [editClockOut, setEditClockOut] = useState('')
@@ -207,7 +209,14 @@ export default function Attendance() {
     return [...merged, ...notClockedRows]
   }, [filtered, otRows, records, employees, storeFilter, deptFilter, search, today, showNotClockedToday])
 
-  // 出勤紀錄最多數百筆，不需要 virtual scroll，直接 map 避免渲染問題
+  // 前端分頁：預設每頁 100 筆。篩選/區間/tab 改變時回第 1 頁。
+  useEffect(() => { setPage(1) }, [search, deptFilter, storeFilter, startDate, endDate, tab])
+  const totalPages = Math.max(1, Math.ceil(allRows.length / PAGE_SIZE))
+  const safePage = Math.min(page, totalPages)
+  const pagedRows = useMemo(
+    () => allRows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
+    [allRows, safePage]
+  )
 
   if (loading) return <LoadingSpinner />
   if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
@@ -429,7 +438,7 @@ export default function Attendance() {
           {/* List body */}
           <div style={{ overflowX: 'hidden' }}>
             <div>
-              {allRows.map((r) => {
+              {pagedRows.map((r) => {
                 const isToday = r.date === today
                 const isNotClocked = r._rowType === 'notClocked'
                 const isOvertime = r._rowType === 'overtime'
@@ -491,6 +500,19 @@ export default function Attendance() {
               })}
             </div>
           </div>
+          {/* 分頁 */}
+          {allRows.length > PAGE_SIZE && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '12px 16px', borderTop: '1px solid var(--border-subtle)', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                顯示 {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, allRows.length)} / 共 {allRows.length} 筆
+              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <button className="btn btn-secondary" style={{ fontSize: 12, padding: '4px 12px' }} disabled={safePage <= 1} onClick={() => setPage(safePage - 1)}>← 上一頁</button>
+                <span style={{ fontSize: 13, color: 'var(--text-secondary)', minWidth: 70, textAlign: 'center' }}>{safePage} / {totalPages}</span>
+                <button className="btn btn-secondary" style={{ fontSize: 12, padding: '4px 12px' }} disabled={safePage >= totalPages} onClick={() => setPage(safePage + 1)}>下一頁 →</button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
       </>}

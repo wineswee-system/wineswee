@@ -329,6 +329,8 @@ export default function Expenses() {
         approvedAt: row.approved_at,
         rejectReason: row.reject_reason,
         fallbackTail: ['財務核章'],
+        // ★ 傳 current_step 讓 builder 標對「哪一關駁回/進行中」— 缺它會 default 成第0關駁回
+        requestType: 'expense', requestId: row.id, currentStep: row.current_step,
       })
       // 每關補上實際簽核時間(approval_step_history)— 否則簽呈中間關卡印不出時間
       chainSteps = await mergeStepSignTimes('expense', row.id, chainSteps)
@@ -365,6 +367,8 @@ export default function Expenses() {
       approvedAt: row.approved_at,
       rejectReason: row.reject_reason,
       fallbackTail: ['財務核章'],
+      // ★ 傳 current_step 讓 builder 標對「哪一關駁回/進行中」— 缺它會 default 成第0關駁回
+      requestType: 'expense', requestId: row.id, currentStep: row.current_step,
     })
     if (detailRowIdRef.current !== row.id) return
     setDetailChainSteps(steps)

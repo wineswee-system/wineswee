@@ -456,6 +456,7 @@ export default function Sidebar() {
             <NotificationPanel
               onClose={() => setShowNotifPanel(false)}
               markSeen={markSeen}
+              totalPending={totalPending}
             />
           )}
         </div>

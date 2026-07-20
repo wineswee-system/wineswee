@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 
-export default function NotificationPanel({ onClose, markSeen }) {
+export default function NotificationPanel({ onClose, markSeen, totalPending = 0 }) {
   const [mentions, setMentions] = useState([])
   const [loading, setLoading] = useState(true)
   const panelRef = useRef(null)
@@ -48,7 +48,7 @@ export default function NotificationPanel({ onClose, markSeen }) {
         padding: '12px 16px', borderBottom: '1px solid var(--border-subtle)',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
-        <span style={{ fontWeight: 700, fontSize: 13 }}>💬 我的 @mention</span>
+        <span style={{ fontWeight: 700, fontSize: 13 }}>🔔 通知</span>
         <button onClick={onClose} style={{
           background: 'none', border: 'none', cursor: 'pointer',
           color: 'var(--text-muted)', fontSize: 16, lineHeight: 1,
@@ -56,10 +56,36 @@ export default function NotificationPanel({ onClose, markSeen }) {
       </div>
 
       <div style={{ maxHeight: 380, overflowY: 'auto' }}>
+        {/* 待簽核（鈴鐺紅點來源）— 點了才知道那個數字是什麼 */}
+        {totalPending > 0 && (
+          <div
+            onClick={() => { onClose(); navigate('/process/approvals') }}
+            style={{
+              padding: '12px 16px', cursor: 'pointer',
+              borderBottom: '1px solid var(--border-subtle)',
+              background: 'var(--accent-red-dim)',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            }}
+            onMouseEnter={e => e.currentTarget.style.filter = 'brightness(0.96)'}
+            onMouseLeave={e => e.currentTarget.style.filter = 'none'}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--accent-red)', flexShrink: 0 }} />
+              <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent-red)' }}>你有 {totalPending} 件待簽核</span>
+            </div>
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent-red)' }}>前往簽核 →</span>
+          </div>
+        )}
+
+        {/* @mention 區塊小標 */}
+        <div style={{ padding: '8px 16px 4px', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)' }}>💬 @mention</div>
+
         {loading ? (
           <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>載入中…</div>
         ) : mentions.length === 0 ? (
-          <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>目前沒有被標記的紀錄</div>
+          <div style={{ padding: '4px 16px 20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>
+            {totalPending > 0 ? '沒有新的 @mention' : '目前沒有通知'}
+          </div>
         ) : mentions.map(m => (
           <div
             key={m.mention_id}

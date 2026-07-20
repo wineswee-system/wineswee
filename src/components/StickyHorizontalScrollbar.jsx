@@ -29,6 +29,7 @@ export default function StickyHorizontalScrollbar() {
   const targetRef = useRef(null)
   const stickyRef = useRef(null)
   const syncingRef = useRef(false)
+  const trackWidthRef = useRef(0)   // pickTarget 內讀「目前寬度」用（避開 [] deps 的 stale closure）
 
   // ── 找 target + 監聽 layout 變動 ──────────────────────────────
   useEffect(() => {
@@ -109,19 +110,22 @@ export default function StickyHorizontalScrollbar() {
       const prevTarget = targetRef.current
       targetRef.current = best
 
-      if (best && stickyRef.current) {
-        const newWidth = computeInnerWidth(best, stickyRef.current)
-        if (newWidth !== trackWidth) {
-          setTrackWidth(newWidth)
-        }
-        // 同步 sticky bar 的 scrollLeft 跟新 target 對齊
-        if (best !== prevTarget) {
-          syncingRef.current = true
-          stickyRef.current.scrollLeft = best.scrollLeft
-          requestAnimationFrame(() => { syncingRef.current = false })
-        }
-      } else if (!best && trackWidth !== 0) {
-        setTrackWidth(0)
+      // 沒 target → 寬度 0（bar 收回）；有 target → 算 inner width。
+      // 用 trackWidthRef 比較，不能讀 state trackWidth：本 effect deps=[]，
+      // closure 內的 trackWidth 永遠是初始 0（stale），會害「收回」分支永不觸發，
+      // 導致離開寬表頁後底部空白滾軸條卡住不消失。
+      const newWidth = best && stickyRef.current
+        ? computeInnerWidth(best, stickyRef.current)
+        : 0
+      if (newWidth !== trackWidthRef.current) {
+        trackWidthRef.current = newWidth
+        setTrackWidth(newWidth)
+      }
+      // 切換到新 target → 同步 sticky bar scrollLeft 對齊
+      if (best && stickyRef.current && best !== prevTarget) {
+        syncingRef.current = true
+        stickyRef.current.scrollLeft = best.scrollLeft
+        requestAnimationFrame(() => { syncingRef.current = false })
       }
     }
 

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Plus, X, FileText, Briefcase, UserCheck, Calendar, Edit3, Star, Search, ClipboardList, CheckCircle, XCircle, FileEdit, Trash2, Eye } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { findHeadcountChain } from '../../lib/hrChain'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import {
   getRecruitmentJobs, createRecruitmentJob, updateRecruitmentJob,
@@ -904,19 +905,25 @@ export default function Recruitment() {
   // ── Headcount handlers ──
   const handleAddHcRequest = async () => {
     if (!hcForm.dept || !hcForm.position_title) { toast('請填寫部門與職位'); return }
+    // 走 HR B 簽核鏈:解鏈 + 申請中(多關/快照/LINE/LIFF/加簽全靠既有 HR B);通過→已核准→trigger 自動開缺
+    const chain = await findHeadcountChain(orgId)
+    if (!chain?.id) { toast.error('尚未設定人力需求簽核鏈，請先到「簽核鏈設定」建立'); return }
     const { data, error } = await createHeadcountRequest({
       ...hcForm,
       headcount: Number(hcForm.headcount) || 1,
       expected_start_date: hcForm.expected_start_date || null,
       organization_id: orgId,
       created_by: profile?.id || null,
-      status: 'pending',
+      employee_id: profile?.id || null,   // HR B 靠 employee_id 解動態關(直屬主管/部門主管)
+      status: '申請中',
+      approval_chain_id: chain.id,
+      current_step: 0,
     })
     if (error) { toast.error('建立失敗：' + error.message); return }
     setHeadcountReqs(prev => [data, ...prev])
     setShowHcModal(false)
     setHcForm({ dept: '', position_title: '', headcount: 1, expected_start_date: '', reason: '' })
-    toast.success('人力需求單已送出')
+    toast.success('人力需求單已送出，進第 1 關簽核（部門主管會收到通知）')
   }
 
   const handleApproveHcRequest = async (req) => {
@@ -1576,10 +1583,12 @@ export default function Recruitment() {
                     <td>{req.creator?.name || '—'}</td>
                     <td>
                       <span className={`badge ${
-                        req.status === 'approved' ? 'badge-success' :
-                        req.status === 'rejected' ? 'badge-error' : 'badge-warning'
+                        (req.status === 'approved' || req.status === '已核准') ? 'badge-success' :
+                        (req.status === 'rejected' || req.status === '已退回' || req.status === '已駁回') ? 'badge-error' : 'badge-warning'
                       }`}>
-                        {req.status === 'approved' ? '已核准' : req.status === 'rejected' ? '已駁回' : '待審'}
+                        {(req.status === 'approved' || req.status === '已核准') ? '已核准'
+                          : (req.status === 'rejected' || req.status === '已退回' || req.status === '已駁回') ? '已駁回'
+                          : req.status === '申請中' ? '簽核中' : '待審'}
                       </span>
                       {req.status === 'approved' && req.job_id && (
                         <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--accent-cyan)' }}>
@@ -1588,19 +1597,10 @@ export default function Recruitment() {
                       )}
                     </td>
                     <td>
-                      {req.status === 'pending' && (
-                        <div style={{ display: 'flex', gap: 4 }}>
-                          <button className="btn btn-sm btn-primary"
-                            onClick={() => handleApproveHcRequest(req)}
-                            style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                            <CheckCircle size={11} /> 核准
-                          </button>
-                          <button className="btn btn-sm btn-secondary"
-                            onClick={() => handleRejectHcRequest(req)}
-                            style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--accent-red)' }}>
-                            <XCircle size={11} /> 駁回
-                          </button>
-                        </div>
+                      {req.status === '申請中' && (
+                        <span style={{ fontSize: 11, color: 'var(--accent-orange)' }}>
+                          簽核中（第 {(req.current_step ?? 0) + 1} 關）· 於簽核中心/LINE 簽核
+                        </span>
                       )}
                     </td>
                   </tr>

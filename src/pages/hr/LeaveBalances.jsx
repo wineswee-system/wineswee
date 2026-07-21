@@ -83,22 +83,8 @@ export default function LeaveBalances() {
   const ANNUAL_ALIASES = new Set(['annual', '特休假', '特休', '特別休假'])
   const normalizeType = (t) => (ANNUAL_ALIASES.has(t) ? 'annual' : (TYPE_CODE[t] || t))
 
-  // ★ refDate = 算年資的基準日。特休以「選的年度那個週年當下」的年資計(非今天),
-  //   否則看未來/過去年度會用錯年資(如 2024 到職者看 2027 年度應為 3 年 14 天,非今天的 1 年 7 天)。
-  const calcStatutoryLeave = (emp, refDate) => {
-    if (!emp?.join_date) return null
-    // PT(時薪)不在此排除;改由呼叫端按「實際排班比例」乘算(對齊 leave_annual_entitlement RPC)。此處只回純 §38 天數。
-    const ref = refDate || new Date(), join = new Date(emp.join_date)
-    const months = (ref.getFullYear() - join.getFullYear()) * 12 + (ref.getMonth() - join.getMonth())
-    const years = Math.floor(months / 12)
-    if (months < 6)  return 0
-    if (months < 12) return 3
-    if (years < 2)   return 7
-    if (years < 3)   return 10
-    if (years < 5)   return 14
-    if (years < 10)  return 15
-    return Math.min(15 + (years - 10), 30)
-  }
+  // 特休 §38 額度已收斂到後端 leave_annual_entitlement RPC(唯一真相,含第一年滿6月=3天修正)。
+  // 前端不再自算階梯 → 原 calcStatutoryLeave 已移除,改由 load() 呼叫 RPC 帶入 annualEnt。
 
   const calcMaternityDays = (emp) => {
     if (!emp?.join_date) return 56
@@ -157,20 +143,22 @@ export default function LeaveBalances() {
       setLeaveRequests(lrs)
       setPendingRequests(pending)
       const emp = employees.find(e => e.id === selectedEmpId)
-      // PT(時薪)特休按「近6個月實際排班週均」算比例 — 與 leave_annual_entitlement RPC 同源
-      let ptAvgWeekly = null
-      if (emp?.salary_type === 'hourly') {
-        const { data: avg } = await supabase.rpc('leave_pt_avg_weekly_hours', { p_emp_id: selectedEmpId })
-        ptAvgWeekly = avg
+      // ★特休額度單一真相 = leave_annual_entitlement RPC(基準年=yearFilter 到職週年期)
+      //   一次拿 FT 天數 + PT 實排比例時數,退掉前端各自複刻的 §38 階梯(calcStatutoryLeave)
+      let annualEnt = null
+      if (emp?.join_date) {
+        const { data: ent } = await supabase.rpc('leave_annual_entitlement',
+          { p_emp_id: selectedEmpId, p_ref_year: yearFilter })
+        annualEnt = ent
       }
-      setTableRows(buildRows(emp, bals, lrs, pending, comp, ptAvgWeekly))
+      setTableRows(buildRows(emp, bals, lrs, pending, comp, annualEnt))
       setDataLoading(false)
     }
     load()
   }, [selectedEmpId, yearFilter, employees])
 
   // ── build table rows ──────────────────────────────────────────────────────
-  const buildRows = (emp, bals, lrs, pending, comp = [], ptAvgWeekly = null) => {
+  const buildRows = (emp, bals, lrs, pending, comp = [], annualEnt = null) => {
     if (!emp) return []
     // 補休：以 comp_time_ledger 為準（可休=sum(hours)、已休=sum(hours_used)）
     const compTotal = comp.reduce((s, c) => s + Number(c.hours || 0), 0)
@@ -213,13 +201,10 @@ export default function LeaveBalances() {
       let computedDays = 0
 
       if (type === 'annual') {
-        // 用「選的年度那個週年當下」的年資算特休(基準日=該年到職週年),而非今天
-        const _j = emp.join_date ? new Date(emp.join_date) : null
-        const _ref = _j ? new Date(yearFilter, _j.getMonth(), _j.getDate()) : null
-        let _ft = calcStatutoryLeave(emp, _ref) ?? 0
-        // PT(時薪)特休 = 全職天數 × 實際排班比例(min(1, 週均/40)),與 leave_annual_entitlement RPC 同源
-        if (emp.salary_type === 'hourly') _ft = _ft * Math.min(1, (Number(ptAvgWeekly) || 0) / 40)
-        computedDays = _ft
+        // ★特休額度單一真相走 leave_annual_entitlement RPC(基準年=yearFilter 週年期,含修好的第一年3天)
+        //   FT 回天數;PT 回實排比例時數(已含 min(1,近6月週均/40))→ /8 換回天數走既有 daysToHours
+        if (annualEnt?.is_pt) computedDays = (Number(annualEnt.pt_hours) || 0) / 8
+        else computedDays = Number(annualEnt?.ft_days) || 0
       }
       else if (type === 'maternity') computedDays = calcMaternityDays(emp)
       else if (type === 'menstrual') computedDays = 12  // annual total (12 × 1 day)

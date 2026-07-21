@@ -127,6 +127,8 @@ export default function Severance() {
     setSaving(false)
     if (cascadeErr || !cascadeResult?.ok) {
       toast.error(`資遣紀錄已存但員工狀態未同步：${cascadeErr?.message || cascadeResult?.error || '未知錯誤'}`)
+    } else if (cascadeResult?.scheduled) {
+      toast.success(`資遣紀錄已建立，員工維持在職至 ${calcResult.termination_date}，屆時自動轉離職`)
     } else {
       toast.success('資遣紀錄已建立，員工狀態已同步為離職')
     }

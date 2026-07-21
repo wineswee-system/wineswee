@@ -9,7 +9,8 @@
 -- ════════════════════════════════════════════════════════════════════════════
 CREATE OR REPLACE FUNCTION public.deploy_workflow_template(
   p_template_id integer,
-  p_params      jsonb DEFAULT '{}'::jsonb
+  p_params      jsonb DEFAULT '{}'::jsonb,
+  p_actor_id    integer DEFAULT NULL   -- 僅在 auth.uid() 解不到員工時才採用(service/trigger/測試);前端無法冒名
 ) RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -40,8 +41,11 @@ DECLARE
   v_form        jsonb;
   i             int;
 BEGIN
-  -- ── 呼叫者(權限 + 建立人) ──
+  -- ── 呼叫者(權限 + 建立人) ── auth.uid() 優先;解不到才用 p_actor_id(前端無法冒名)
   SELECT * INTO v_caller FROM employees WHERE auth_user_id = auth.uid() LIMIT 1;
+  IF v_caller.id IS NULL AND p_actor_id IS NOT NULL THEN
+    SELECT * INTO v_caller FROM employees WHERE id = p_actor_id;
+  END IF;
   IF v_caller.id IS NULL THEN
     RETURN jsonb_build_object('ok', false, 'error', 'CALLER_NOT_FOUND');
   END IF;
@@ -146,6 +150,6 @@ BEGIN
   );
 END $function$;
 
-GRANT EXECUTE ON FUNCTION public.deploy_workflow_template(integer, jsonb) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.deploy_workflow_template(integer, jsonb, integer) TO authenticated, service_role;
 
 NOTIFY pgrst, 'reload schema';

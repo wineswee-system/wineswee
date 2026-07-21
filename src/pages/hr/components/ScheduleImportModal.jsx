@@ -170,39 +170,25 @@ export default function ScheduleImportModal({ open, onClose, employees, stores, 
     setImporting(true)
     let success = 0
     let fail = 0
-    const errors = []
+    let errors = []
 
-    for (const r of validRows) {
-      const record = {
-        employee: r.name,
-        date: r.date,
-        shift: r.shift,
-        actual_start: r.actual_start,
-        actual_end: r.actual_end,
-        source_store: r.source_store,
-        organization_id: orgId || null,
-      }
-
-      // 先找有沒有舊 row
-      const { data: existing } = await supabase
-        .from('schedules')
-        .select('id')
-        .eq('employee', r.name)
-        .eq('date', r.date)
-        .maybeSingle()
-
-      let res
-      if (existing?.id) {
-        res = await supabase.from('schedules').update(record).eq('id', existing.id)
-      } else {
-        res = await supabase.from('schedules').insert(record)
-      }
-      if (res.error) {
-        fail++
-        errors.push(`列 ${r.rowNum} (${r.name} ${r.date}): ${res.error.message}`)
-      } else {
-        success++
-      }
+    // 批次匯入走 import_schedules RPC：一次呼叫，RPC 內逐列 upsert(employee+date)+savepoint，
+    // 取代原本 N 列 2N 次網路來回；一列壞不影響其他，回 success/fail/errors。
+    const rows = validRows.map(r => ({
+      rowNum: r.rowNum, name: r.name, date: r.date, shift: r.shift,
+      actual_start: r.actual_start, actual_end: r.actual_end, source_store: r.source_store,
+    }))
+    const { data: res, error: impErr } = await supabase.rpc('import_schedules', {
+      p_rows: rows,
+      p_org: orgId || null,
+    })
+    if (impErr || !res?.ok) {
+      fail = validRows.length
+      errors = [impErr?.message || res?.error || '未知錯誤']
+    } else {
+      success = res.success
+      fail = res.fail
+      errors = (res.errors || []).map(e => `列 ${e.row} (${e.name} ${e.date}): ${e.error}`)
     }
 
     setImporting(false)

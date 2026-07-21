@@ -73,12 +73,13 @@ export default function HrTabContent({
     if (!insBrackets) { toast.error('投保級距表尚未載入，請稍候再試'); return }
     const n = v => Number(v) || 0
     const isPT = form.salary_type === 'hourly' || form.employment_category === 'parttime'
-    // 投保基數 = 本薪(月薪)或估算月收入(時薪) + 經常性津貼(伙食/交通/住房 + 自訂)
+    // 投保基數 = 本薪(月薪)或估算月收入(時薪) + 所有津貼(伙食/交通/住房/夜間/跨店 + 自訂)
     const base = isPT
       ? n(form.hourly_rate) * (n(form.weekly_hours) || 40) * 4.33
       : n(form.base_salary)
     const insuredBase = base
       + n(form.meal_allowance) + n(form.transport_allowance) + n(form.housing_allowance)
+      + n(form.night_shift_allowance) + n(form.cross_store_allowance)
       + (form.custom_allowances || []).reduce((s, c) => s + n(c.amount), 0)
     if (insuredBase <= 0) { toast.error('請先填「本薪 / 時薪」與津貼'); return }
 
@@ -454,7 +455,7 @@ export default function HrTabContent({
               🔄 依薪資自動帶入級距
             </button>
             <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-              以「本薪 + 經常性津貼（伙食/交通/住房 + 自訂）」查投保級距表，帶入勞保/職災/健保/勞退。帶入後仍可手動調整。
+              以「本薪 + 所有津貼（伙食/交通/住房/夜間/跨店 + 自訂）」為投保基數查級距表，帶入勞保/職災/健保/勞退。帶入後仍可手動調整。
             </span>
           </div>
 

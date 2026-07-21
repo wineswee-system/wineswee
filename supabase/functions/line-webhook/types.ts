@@ -24,7 +24,9 @@ export type ApprovalRequestType =
   | "loa"
   | "headcount"
   // 門市稽核（走 liff_store_audit_approve 獨立 RPC）
-  | "store_audit";
+  | "store_audit"
+  // 錄取簽呈（走 liff_advance_offer_approval 獨立 RPC）
+  | "offer";
 
 // ── Pending Action types ────────────────────────────────────────────────────
 

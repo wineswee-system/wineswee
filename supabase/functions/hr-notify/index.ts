@@ -1332,10 +1332,22 @@ function buildOfferApprovalNotification(subtype: string, details: {
   const liffUrl = (subtype === "pending" && details.liff_id && details.offer_id)
     ? `https://liff.line.me/${details.liff_id}?to=${encodeURIComponent("/recruitment/offer/" + details.offer_id)}`
     : null;
-  const footer = liffUrl ? [{
-    type: "button", style: "primary", color: c.color, height: "sm",
-    action: { type: "uri", label: "✍️ 前往簽核", uri: liffUrl },
-  }] : [];
+  // 待簽核卡:卡上直接核准/退回(退回走 pending→聊天輸入原因);另附「查看完整」開 LIFF
+  const footer: any[] = [];
+  if (subtype === "pending" && details.offer_id) {
+    footer.push({
+      type: "box", layout: "horizontal", spacing: "sm", contents: [
+        { type: "button", style: "primary", color: "#22C55E", height: "sm",
+          action: { type: "postback", label: "✓ 核准", data: `action=approve&type=request&rt=offer&id=${details.offer_id}`, displayText: "核准錄取簽呈" } },
+        { type: "button", style: "primary", color: "#EF4444", height: "sm",
+          action: { type: "postback", label: "✕ 退回", data: `action=reject&type=request&rt=offer&id=${details.offer_id}`, displayText: "退回錄取簽呈" } },
+      ],
+    });
+    if (liffUrl) footer.push({
+      type: "button", style: "link", height: "sm",
+      action: { type: "uri", label: "查看完整內容", uri: liffUrl },
+    });
+  }
 
   return {
     type: "flex",

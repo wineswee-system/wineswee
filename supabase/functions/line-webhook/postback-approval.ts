@@ -44,6 +44,8 @@ function parseRequestType(s: string | undefined): ApprovalRequestType | null {
     "resignation", "transfer", "loa", "headcount",
     // 門市稽核（走 liff_store_audit_approve 獨立 RPC）
     "store_audit",
+    // 錄取簽呈（走 liff_advance_offer_approval 獨立 RPC）
+    "offer",
   ];
   return (valid as string[]).includes(s ?? "") ? (s as ApprovalRequestType) : null;
 }
@@ -77,6 +79,10 @@ const handleApprove: PostbackHandler = async (params, ctx) => {
   } else if (rt === "store_audit") {
     ({ data, error } = await ctx.db.rpc("liff_store_audit_approve", {
       p_line_user_id: ctx.userId, p_id: id, p_action: "approve", p_reason: null,
+    }));
+  } else if (rt === "offer") {
+    ({ data, error } = await ctx.db.rpc("liff_advance_offer_approval", {
+      p_line_user_id: ctx.userId, p_offer_id: id, p_action: "approve", p_reason: null,
     }));
   } else if (isHrChainType(rt)) {
     if (!ctx.lineUser?.employee_id) {
@@ -125,6 +131,9 @@ const handleApprove: PostbackHandler = async (params, ctx) => {
   const nextHint = (result.event === "advanced" && (result.next_approvers?.length ?? 0) > 0)
     ? `（已推給下關 ${result.next_approvers!.length} 位簽核者）` : "";
 
+  if (rt === "offer") {
+    return [txt((result as { final?: boolean }).final ? `✅ 錄取簽呈已全部通過（#${id}）` : `✅ 已核准，已送下一關（#${id}）`)];
+  }
   if (rt === "off_request") {
     return [txt(`✅ ${result.date ?? ""} 的希望休已核准（#${id}）`)];
   }
@@ -183,7 +192,18 @@ const handleReject: PostbackHandler = async (params, ctx) => {
 
   // 先確認該單仍在待審狀態（避免使用者按到舊卡），並取申請人名
   let applicantName = "員工";
-  if (isHrChainType(rt)) {
+  if (rt === "offer") {
+    const { data: rec } = await ctx.db.from("offer_letters").select("status, candidate_id").eq("id", id).maybeSingle();
+    if (!rec) return [txt(`❌ 找不到 #${id}（可能已刪除）`)];
+    if ((rec as { status?: string }).status !== "待審") {
+      return [txt(`⚠️ 此錄取簽呈已是「${(rec as { status?: string }).status}」狀態，不能再退回`)];
+    }
+    const candId = (rec as { candidate_id?: number }).candidate_id;
+    if (candId) {
+      const { data: cand } = await ctx.db.from("candidates").select("name").eq("id", candId).maybeSingle();
+      applicantName = (cand as { name?: string } | null)?.name ?? "應徵者";
+    }
+  } else if (isHrChainType(rt)) {
     // HR B 類：表用 employee_id（無 text 名字欄），待審狀態為「申請中」
     const { data: rec } = await ctx.db.from(HR_CHAIN_REAL_TABLE[rt])
       .select("status, employee_id").eq("id", id).maybeSingle();

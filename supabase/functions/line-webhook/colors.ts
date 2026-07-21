@@ -77,4 +77,5 @@ export const REQUEST_TYPE_COLORS: Record<string, { header: string; subtitle: str
   transfer:        { header: COLOR_NEUTRAL,     subtitle: TEXT_DIM_APPROVAL,    emoji: "🔄", label: "異動申請"   },
   loa:             { header: COLOR_WARNING,     subtitle: TEXT_DIM_WARNING,     emoji: "⏸", label: "留職停薪"   },
   headcount:       { header: COLOR_NEUTRAL,     subtitle: TEXT_DIM_APPROVAL,    emoji: "🧑‍💼", label: "人力需求"   },
+  offer:           { header: COLOR_WARNING,     subtitle: TEXT_DIM_WARNING,     emoji: "📝", label: "錄取簽呈"   },
 };

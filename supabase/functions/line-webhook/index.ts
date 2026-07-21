@@ -378,6 +378,10 @@ serve(async (req) => {
             ({ data, error } = await db.rpc("liff_store_audit_approve", {
               p_line_user_id: lineUserId, p_id: pending.request_id, p_action: "reject", p_reason: reason,
             }));
+          } else if (pending.request_type === "offer") {
+            ({ data, error } = await db.rpc("liff_advance_offer_approval", {
+              p_line_user_id: lineUserId, p_offer_id: pending.request_id, p_action: "reject", p_reason: reason,
+            }));
           } else if (HR_CHAIN_RT.includes(pending.request_type)) {
             if (!lineUser.employee_id) {
               data = { ok: false, error: "EMPLOYEE_NOT_FOUND" };

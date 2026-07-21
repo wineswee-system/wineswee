@@ -1299,6 +1299,59 @@ function buildWorkOrderNotification(
   };
 }
 
+// ── 錄取簽呈簽核卡(升級版) — pending(送簽/推進) / approved(全通過) / rejected(駁回) ──
+function buildOfferApprovalNotification(subtype: string, details: {
+  offer_id?: number; candidate_name?: string; position?: string; dept?: string;
+  salary?: number | string; current_step?: number; total_steps?: number;
+  reject_reason?: string; liff_id?: string | null;
+}) {
+  const cfg: Record<string, { color: string; icon: string; title: string }> = {
+    pending:  { color: "#E67E22", icon: "📝", title: "新錄取簽呈待簽核" },
+    approved: { color: "#22C55E", icon: "🎉", title: "錄取簽呈已全部通過" },
+    rejected: { color: "#EF4444", icon: "⛔", title: "錄取簽呈被駁回" },
+  };
+  const c = cfg[subtype] || cfg.pending;
+  const row = (label: string, value: string, valColor?: string) => ({
+    type: "box", layout: "baseline", spacing: "sm", contents: [
+      { type: "text", text: label, size: "sm", color: "#8A94A6", flex: 2 },
+      { type: "text", text: value || "—", size: "sm", color: valColor || "#2D3748", flex: 5, wrap: true, weight: "bold" },
+    ],
+  });
+  const body: any[] = [
+    row("應徵者", details.candidate_name || "—"),
+    row("職位", [details.dept, details.position].filter(Boolean).join(" · ") || "—"),
+  ];
+  if (details.salary) body.push(row("待遇", "NT$ " + Number(details.salary).toLocaleString()));
+  if (subtype === "pending" && details.total_steps) {
+    body.push(row("關卡", `第 ${details.current_step || 1} / ${details.total_steps} 關`, c.color));
+  }
+  if (subtype === "rejected" && details.reject_reason) {
+    body.push(row("駁回原因", details.reject_reason, "#EF4444"));
+  }
+
+  const liffUrl = (subtype === "pending" && details.liff_id && details.offer_id)
+    ? `https://liff.line.me/${details.liff_id}?to=${encodeURIComponent("/recruitment/offer/" + details.offer_id)}`
+    : null;
+  const footer = liffUrl ? [{
+    type: "button", style: "primary", color: c.color, height: "sm",
+    action: { type: "uri", label: "✍️ 前往簽核", uri: liffUrl },
+  }] : [];
+
+  return {
+    type: "flex",
+    altText: `${c.icon} ${c.title}｜${details.candidate_name || ""}`,
+    contents: {
+      type: "bubble",
+      header: {
+        type: "box", layout: "vertical", paddingAll: "14px", backgroundColor: c.color,
+        contents: [{ type: "text", text: `${c.icon} ${c.title}`, weight: "bold", color: "#FFFFFF", size: "md" }],
+      },
+      body: { type: "box", layout: "vertical", spacing: "sm", paddingAll: "14px", contents: body },
+      ...(footer.length ? { footer: { type: "box", layout: "vertical", paddingAll: "12px", contents: footer } } : {}),
+    },
+  };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -1528,7 +1581,8 @@ serve(async (req) => {
       || type === "goods_transfer_extra_approved_back"
       || type === "goods_transfer_rejected"
       || type === "goods_transfer_approved"
-      || type.startsWith("work_order_");
+      || type.startsWith("work_order_")
+      || type.startsWith("offer_approval_");
     const acct = needsLiff ? await resolveLineAccount(db, employee_id) : null;
     const lineUserId = acct ? acct.lineUserId : await resolveLineId(db, employee_id);
     if (!lineUserId) {
@@ -1662,6 +1716,8 @@ serve(async (req) => {
       message = buildTaskMentioned({ ...details, liff_id: acct?.liffId || null });
     } else if (type.startsWith("work_order_")) {
       message = buildWorkOrderNotification(type.replace("work_order_", ""), { ...details, liff_id: acct?.liffId || null });
+    } else if (type.startsWith("offer_approval_")) {
+      message = buildOfferApprovalNotification(type.replace("offer_approval_", ""), { ...details, liff_id: acct?.liffId || null });
     } else {
       return new Response(JSON.stringify({ error: `Unknown type: ${type}` }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },

@@ -83,11 +83,13 @@ export default function LeaveBalances() {
   const ANNUAL_ALIASES = new Set(['annual', '特休假', '特休', '特別休假'])
   const normalizeType = (t) => (ANNUAL_ALIASES.has(t) ? 'annual' : (TYPE_CODE[t] || t))
 
-  const calcStatutoryLeave = (emp) => {
+  // ★ refDate = 算年資的基準日。特休以「選的年度那個週年當下」的年資計(非今天),
+  //   否則看未來/過去年度會用錯年資(如 2024 到職者看 2027 年度應為 3 年 14 天,非今天的 1 年 7 天)。
+  const calcStatutoryLeave = (emp, refDate) => {
     if (!emp?.join_date) return null
     if (emp.employment_type === '兼職' && Number(emp.weekly_hours || 40) < 20) return null
-    const now = new Date(), join = new Date(emp.join_date)
-    const months = (now.getFullYear() - join.getFullYear()) * 12 + (now.getMonth() - join.getMonth())
+    const ref = refDate || new Date(), join = new Date(emp.join_date)
+    const months = (ref.getFullYear() - join.getFullYear()) * 12 + (ref.getMonth() - join.getMonth())
     const years = Math.floor(months / 12)
     if (months < 6)  return 0
     if (months < 12) return 3
@@ -204,7 +206,12 @@ export default function LeaveBalances() {
       const dbTotal = Number(dbBal?.total_days || 0)
       let computedDays = 0
 
-      if (type === 'annual') computedDays = calcStatutoryLeave(emp) ?? 0
+      if (type === 'annual') {
+        // 用「選的年度那個週年當下」的年資算特休(基準日=該年到職週年),而非今天
+        const _j = emp.join_date ? new Date(emp.join_date) : null
+        const _ref = _j ? new Date(yearFilter, _j.getMonth(), _j.getDate()) : null
+        computedDays = calcStatutoryLeave(emp, _ref) ?? 0
+      }
       else if (type === 'maternity') computedDays = calcMaternityDays(emp)
       else if (type === 'menstrual') computedDays = 12  // annual total (12 × 1 day)
       else computedDays = LEGAL_LIMITS[type] ?? 0

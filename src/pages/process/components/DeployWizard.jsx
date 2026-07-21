@@ -6,8 +6,6 @@ import {
   Calendar, Settings, AlertTriangle, User, CheckCircle2, Bell,
 } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
-import { createTask } from '../../../lib/db'
-import { useAuth } from '../../../contexts/AuthContext'
 import { toast } from '../../../lib/toast'
 import { Field } from '../../../components/Modal'
 
@@ -523,9 +521,7 @@ const STEP_LABELS = ['目標', '人員分配', '時間設定', '提醒通知', '
  *   onSuccess   — (result: { location, taskCount }) => void  (optional)
  */
 export default function DeployWizard({ template, stores, employees, departments, onClose, onSuccess }) {
-  const { profile } = useAuth()
   const navigate = useNavigate()
-  const currentUser = profile?.name || '管理員'
   const tplSteps = template?.steps || []
   const targetType = detectTargetType(template?.name)
 
@@ -561,133 +557,46 @@ export default function DeployWizard({ template, stores, employees, departments,
 
   const handleDeploy = async () => {
     setDeploying(true)
-    let instance = null
     try {
+      // 前端 pre-check（後端 RPC 也會擋，這裡先給即時回饋）
       if (form.planned_start_date && form.planned_end_date &&
           form.planned_end_date < form.planned_start_date) {
         throw new Error('結束日期不能早於開始日期')
       }
       const loc = form.location
-      const batchDef = form.batch_defaults || { due_time: '17:00', reminder_preset: '1hr', priority: '中' }
 
-      // Spread tasks evenly across the selected date range
-      const totalDays = form.planned_end_date && form.planned_start_date
-        ? Math.max(1, Math.round((new Date(form.planned_end_date) - new Date(form.planned_start_date)) / 86400000))
-        : (tplSteps.length || 7)
-      const stepOffset = Math.max(1, Math.floor(totalDays / Math.max(1, tplSteps.length)))
-
-      // 1. Workflow instance
-      const { data: inst, error: instErr } = await supabase
-        .from('workflow_instances')
-        .insert({
-          template_name: template.name,
-          store: loc,
-          status: '進行中',
-          started_by: currentUser,
-          started_by_id: profile?.id || null,
+      // ── deploy_workflow_template RPC：單一原子交易建 instance + tasks + 表單綁定 + 依賴鏈 ──
+      // 取代原本前端多表序列寫入 + 3 段手刻 rollback + RLS-SELECT hack（部分失敗自動回滾，不留孤兒）。
+      const { data: res, error } = await supabase.rpc('deploy_workflow_template', {
+        p_template_id: template.id,
+        p_params: {
+          location: loc || null,
           priority: form.priority || '中',
           planned_start_date: form.planned_start_date || null,
           planned_end_date: form.planned_end_date || null,
           notes: form.notes || null,
           target_employee_id: form.target_employee_id ? Number(form.target_employee_id) : null,
-          organization_id: profile?.organization_id || null,
-        })
-        .select().single()
-      if (instErr) throw instErr
-      if (!inst) {
-        // INSERT succeeded but SELECT was blocked (RLS SELECT policy gap).
-        // Best-effort cleanup — timestamp guard limits blast radius to rows created
-        // in the last 10 s, avoiding deletion of legitimate concurrent deployments.
-        let cleanupQ = supabase.from('workflow_instances').delete()
-          .eq('template_name', template.name)
-          .eq('store', loc)
-          .eq('status', '進行中')
-          .gte('created_at', new Date(Date.now() - 10000).toISOString())
-        // Match null/non-null started_by_id exactly — INSERT stores null when falsy,
-        // so .eq(field,'') would miss it; use .is() for the null branch.
-        if (profile?.id) cleanupQ = cleanupQ.eq('started_by_id', profile.id)
-        else cleanupQ = cleanupQ.is('started_by_id', null)
-        cleanupQ.catch(() => null) // fire-and-forget — result intentionally discarded
-        throw new Error('workflow_instances insert returned no data — check RLS SELECT policy')
-      }
-      instance = inst
-
-      // 2. Tasks — rollback instance on any failure
-      const insertedTasks = []
-      let formBindingWarnings = 0
-      for (let i = 0; i < tplSteps.length; i++) {
-        const step = tplSteps[i]
-        const offsetDays = (i + 1) * stepOffset
-        let dueDate = form.planned_start_date
-          ? new Date(new Date(form.planned_start_date).getTime() + offsetDays * 86400000).toISOString().slice(0, 10)
-          : new Date(Date.now() + offsetDays * 86400000).toISOString().slice(0, 10)
-        if (form.planned_end_date && dueDate > form.planned_end_date) dueDate = form.planned_end_date
-
-        const { data: task, error: taskErr } = await createTask({
-          title: step.title,
-          description: step.description || null,
-          workflow: template.name,
-          workflow_instance_id: instance.id,
-          step_order: i + 1,
-          step_type: 'workflow_step',
-          task_type: 'process_step',
-          role: step.role || null,
-          assignee: form.assignees?.[i] || '',
-          priority: batchDef.priority || '中',
-          status: i === 0 ? '進行中' : '待處理',
-          due_date: dueDate,
-          due_time: batchDef.due_time || '17:00',
-          reminder_preset: batchDef.reminder_preset || '1hr',
+          assignees: form.assignees || [],
+          batch_defaults: form.batch_defaults || { due_time: '17:00', reminder_preset: '1hr', priority: '中' },
           notify_line: form.notify_line ?? true,
           notify_timing: form.notify_timing || '1day',
-          store: loc,
-          bucket: '工作流程',
-          category: '工作流程',
-          organization_id: profile?.organization_id || null,
-          created_by_emp_id: profile?.id || null,   // tasks_sel RLS
-          checklist_id: step.checklist_id || null,
-          approval_chain_id: step.approval_chain_id || null,
-          trigger_template_id_on_complete: step.trigger_template_id || null,
-        })
-        if (taskErr) {
-          // FK is ON DELETE SET NULL — delete tasks explicitly before removing the instance
-          if (insertedTasks.length > 0) {
-            await supabase.from('tasks').delete()
-              .in('id', insertedTasks.map(t => t.id))
-              .catch(() => null)
-          }
-          await supabase.from('workflow_instances').delete().eq('id', instance.id).catch(() => null)
-          instance = null
-          throw taskErr
-        }
-        if (task) {
-          insertedTasks.push(task)
-          for (const f of (step.required_forms || [])) {
-            const { error: fbErr } = await supabase.rpc('create_task_form_binding', {
-              p_task_id: task.id,
-              p_form_type: f.form_type,
-              p_form_template_id: f.form_template_id || null,
-              p_fill_mode: f.fill_mode || 'self',
-              p_assignee_id: f.fill_mode === 'other' ? (f.assignee_id || null) : null,
-            })
-            if (fbErr) formBindingWarnings++
-          }
-        }
+        },
+      })
+      if (error) throw error
+      if (!res?.ok) {
+        throw new Error({
+          CALLER_NOT_FOUND: '找不到帳號對應員工',
+          TEMPLATE_NOT_FOUND: '找不到範本',
+          TEMPLATE_HAS_NO_STEPS: '範本沒有步驟',
+          END_BEFORE_START: '結束日期不能早於開始日期',
+        }[res?.error] || (res?.error || '未知錯誤'))
       }
 
-      // 3. Sequential dependencies
-      for (let i = 1; i < insertedTasks.length; i++) {
-        await supabase.from('task_dependencies').insert({
-          task_id: insertedTasks[i].id,
-          depends_on_task_id: insertedTasks[i - 1].id,
-        }).catch(() => null)
+      if ((res.form_binding_warnings || 0) > 0) {
+        toast.error(`部署完成，但 ${res.form_binding_warnings} 個表單綁定設定失敗，請手動確認`)
       }
 
-      if (formBindingWarnings > 0) {
-        toast.error(`部署完成，但 ${formBindingWarnings} 個表單綁定設定失敗，請手動確認`)
-      }
-
-      const result = { location: loc, taskCount: insertedTasks.length, instanceId: instance.id }
+      const result = { location: loc, taskCount: (res.task_ids || []).length, instanceId: res.instance_id }
       setDeployed(result)
       onSuccess?.(result)
     } catch (err) {

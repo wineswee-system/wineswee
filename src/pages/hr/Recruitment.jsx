@@ -20,14 +20,36 @@ import { notifyInterviewScheduled } from '../../lib/lineNotify'
 import { printHireApprovalSignOff } from '../../lib/signOffAdapters'
 import { printOfferLetter } from '../../lib/offerLetterPrinter'
 
-const STAGES = ['投遞', '篩選', '面試', '錄取決定', '已錄取', '淘汰']
+// 招募 11 態單一狀態機(對齊 DB recruit_transitions)。STAGES=管線(看板欄),TERMINAL=終態(不進看板)
+const STAGES = ['投遞', '篩選中', '面試中', '待錄取決定', '錄取簽核中', '已錄取', '待報到', '已報到']
+const TERMINAL_STAGES = ['淘汰', '婉拒', '人才庫']
+const ALL_STAGES = [...STAGES, ...TERMINAL_STAGES]
+// 合法「手動」轉換的前端鏡像(給移動選單只列合法項);system 轉換(建簽呈/建檔/連接)由專用流程觸發不列
+const ALLOWED_NEXT = {
+  '投遞':       ['篩選中', '淘汰'],
+  '篩選中':     ['面試中', '淘汰', '人才庫'],
+  '面試中':     ['待錄取決定', '淘汰', '人才庫'],
+  '待錄取決定': ['淘汰', '人才庫'],
+  '錄取簽核中': ['淘汰'],
+  '已錄取':     ['婉拒'],
+  '待報到':     ['婉拒'],
+  '已報到':     [],
+  '淘汰':       ['人才庫', '篩選中'],
+  '婉拒':       ['人才庫'],
+  '人才庫':     ['篩選中', '面試中'],
+}
 const STAGE_COLOR = {
-  '投遞':    'var(--accent-blue)',
-  '篩選':    'var(--accent-cyan)',
-  '面試':    'var(--accent-purple)',
-  '錄取決定': 'var(--accent-orange)',
-  '已錄取':  'var(--accent-green)',
-  '淘汰':    'var(--accent-red)',
+  '投遞':       'var(--accent-blue)',
+  '篩選中':     'var(--accent-cyan)',
+  '面試中':     'var(--accent-purple)',
+  '待錄取決定': 'var(--accent-orange)',
+  '錄取簽核中': 'var(--accent-orange)',
+  '已錄取':     'var(--accent-green)',
+  '待報到':     'var(--accent-green)',
+  '已報到':     'var(--accent-green)',
+  '淘汰':       'var(--accent-red)',
+  '婉拒':       'var(--accent-red)',
+  '人才庫':     'var(--text-muted)',
 }
 const SOURCES = ['主動投遞', '獵頭', '員工推薦', '校園', '平台']
 const ROUNDS  = ['初試', '複試', '主管面', '最終面']
@@ -95,7 +117,7 @@ function CandidateCard({ c, onSelect, onStageChange }) {
         </div>
       )}
       <div style={{ marginTop: 8, display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-        {STAGES.filter(s => s !== c.stage).slice(0, 2).map(s => (
+        {(ALLOWED_NEXT[c.stage] || []).slice(0, 2).map(s => (
           <button key={s} className="btn btn-ghost" style={{ fontSize: 10, padding: '2px 6px' }}
             onClick={e => { e.stopPropagation(); onStageChange(c.id, s) }}>
             → {s}
@@ -220,16 +242,13 @@ function CandidatePanel({ c, interviews, allInterviews, jobs = [], evalTemplates
             padding: '4px 12px', borderRadius: 12, fontSize: 12, fontWeight: 600,
             background: STAGE_COLOR[c.stage] + '22', color: STAGE_COLOR[c.stage],
           }}>{c.stage}</span>
-          {c.hire_status && (
-            <span style={{ marginLeft: 8, fontSize: 12, color: 'var(--text-muted)' }}>審核：{c.hire_status}</span>
-          )}
         </div>
 
         {/* 移動到任何階段（含從淘汰救回） */}
         <div style={{ marginBottom: 16 }}>
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>移動到階段</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {STAGES.filter(s => s !== c.stage).map(s => (
+            {(ALLOWED_NEXT[c.stage] || []).map(s => (
               <button key={s} onClick={() => onStageChange(c.id, s)}
                 style={{
                   fontSize: 11, padding: '4px 10px', borderRadius: 12, cursor: 'pointer',
@@ -401,8 +420,8 @@ function CandidatePanel({ c, interviews, allInterviews, jobs = [], evalTemplates
                     onClick={async () => {
                       await updateInterview(iv.id, { result: r })
                       onRefreshInterviews()
-                      if (r === '通過' && c.stage === '面試') {
-                        onStageChange(c.id, '錄取決定')
+                      if (r === '通過' && c.stage === '面試中') {
+                        onStageChange(c.id, '待錄取決定')
                       }
                     }}>
                     → {r}
@@ -413,7 +432,7 @@ function CandidatePanel({ c, interviews, allInterviews, jobs = [], evalTemplates
           ))}
         </div>
 
-        {(c.stage === '錄取決定' || c.stage === '已錄取') && !c.hire_status && (
+        {c.stage === '待錄取決定' && (
           <button className="btn btn-primary" style={{ width: '100%', marginTop: 8 }} onClick={() => onCreateOffer(c)}>
             <FileText size={14} style={{ marginRight: 6 }} /> 建立錄取簽呈 &amp; 通知書
           </button>
@@ -671,12 +690,20 @@ export default function Recruitment() {
 
   const handleStageChange = async (id, stage) => {
     const cand = candidates.find(c => c.id === id)
-    const stage_history = [...(cand?.stage_history || []), { stage, changed_at: new Date().toISOString() }]
-    const { data } = await updateCandidate(id, { stage, stage_history })
-    if (data) {
-      setCandidates(prev => prev.map(c => c.id === id ? { ...c, stage, stage_history } : c))
-      if (selectedCand?.id === id) setSelectedCand(s => ({ ...s, stage, stage_history }))
+    // 走狀態機引擎(DB 把關合法轉換+權限);寫操作不 fallback，失敗直接提示
+    const { data, error } = await supabase.rpc('recruit_transition', {
+      p_candidate_id: id, p_to_status: stage, p_reason: null,
+    })
+    if (error || data?.ok === false) {
+      const code = data?.error || error?.message || ''
+      toast.error(code === 'ILLEGAL_TRANSITION' ? '此階段不可直接轉換'
+        : code === 'NO_PERMISSION' ? '沒有招募管理權限'
+        : '轉換失敗：' + code)
+      return
     }
+    const stage_history = [...(cand?.stage_history || []), { stage, changed_at: new Date().toISOString() }]
+    setCandidates(prev => prev.map(c => c.id === id ? { ...c, stage, stage_history } : c))
+    if (selectedCand?.id === id) setSelectedCand(s => ({ ...s, stage, stage_history }))
   }
 
   const handleDeleteCandidate = async (id) => {
@@ -742,13 +769,14 @@ export default function Recruitment() {
         toast.error('建立簽核鏈失敗：' + (chainErr?.message || chainRes?.error || '未知')); return
       }
       const offerCand = candidates.find(c => c.id === offerTarget.id)
-      const stage_history = [...(offerCand?.stage_history || []), { stage: '錄取決定', changed_at: new Date().toISOString() }]
-      await updateCandidate(offerTarget.id, { hire_status: '待審', stage: '錄取決定', stage_history })
+      // 建簽呈 = 待錄取決定→錄取簽核中(system 轉換);階段1b 先直接寫,階段2 併進 recruit_create_offer RPC
+      const stage_history = [...(offerCand?.stage_history || []), { stage: '錄取簽核中', changed_at: new Date().toISOString() }]
+      await updateCandidate(offerTarget.id, { stage: '錄取簽核中', stage_history })
       setCandidates(prev => prev.map(c =>
-        c.id === offerTarget.id ? { ...c, hire_status: '待審', stage: '錄取決定', stage_history } : c
+        c.id === offerTarget.id ? { ...c, stage: '錄取簽核中', stage_history } : c
       ))
       if (selectedCand?.id === offerTarget.id)
-        setSelectedCand(s => ({ ...s, hire_status: '待審', stage: '錄取決定', stage_history }))
+        setSelectedCand(s => ({ ...s, stage: '錄取簽核中', stage_history }))
       // 重抓錄取(帶簽核步驟)
       const { data: fresh } = await getOfferLetters(orgId)
       setOfferLetters(fresh || [])
@@ -803,15 +831,15 @@ export default function Recruitment() {
   }
 
   const handleDeclineOffer = async (ol) => {
-    const ok = await confirm('確定標記此 Offer 為已婉拒？候選人將移至「淘汰」')
+    const ok = await confirm('確定標記此 Offer 為已婉拒？候選人將移至「婉拒」')
     if (!ok) return
     const { data } = await updateOfferLetter(ol.id, { status: '已婉拒' })
     if (data) {
       setOfferLetters(prev => prev.map(x => x.id === ol.id ? data : x))
       const declineCand = candidates.find(c => c.id === ol.candidate_id)
-      const declineHist = [...(declineCand?.stage_history || []), { stage: '淘汰', changed_at: new Date().toISOString() }]
-      await updateCandidate(ol.candidate_id, { stage: '淘汰', hire_status: null, stage_history: declineHist })
-      setCandidates(prev => prev.map(c => c.id === ol.candidate_id ? { ...c, stage: '淘汰', hire_status: null, stage_history: declineHist } : c))
+      const declineHist = [...(declineCand?.stage_history || []), { stage: '婉拒', changed_at: new Date().toISOString() }]
+      await updateCandidate(ol.candidate_id, { stage: '婉拒', stage_history: declineHist })
+      setCandidates(prev => prev.map(c => c.id === ol.candidate_id ? { ...c, stage: '婉拒', stage_history: declineHist } : c))
     }
   }
 
@@ -1021,7 +1049,7 @@ export default function Recruitment() {
 
           {candidates.length > 0 && (() => {
             const total = candidates.length
-            const counts = STAGES.map(s => ({ stage: s, n: candidates.filter(c => c.stage === s).length }))
+            const counts = ALL_STAGES.map(s => ({ stage: s, n: candidates.filter(c => c.stage === s).length }))
             const maxN = Math.max(...counts.map(x => x.n), 1)
             return (
               <div className="card" style={{ marginBottom: 16, padding: '16px 20px' }}>
@@ -1167,7 +1195,7 @@ export default function Recruitment() {
             </select>
             <select className="form-input" style={{ fontSize: 13, minWidth: 120 }} value={stageFilter} onChange={e => setStageFilter(e.target.value)}>
               <option value="">全部階段</option>
-              {STAGES.map(s => <option key={s}>{s}</option>)}
+              {ALL_STAGES.map(s => <option key={s}>{s}</option>)}
             </select>
             <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>共 {filteredCands.length} 位</span>
           </div>
@@ -1316,7 +1344,7 @@ export default function Recruitment() {
                   onChange={e => setQuickIntForm(f => ({ ...f, candidate_id: e.target.value }))}>
                   <option value="">請選擇候選人</option>
                   {candidates
-                    .filter(c => !['已錄取', '淘汰'].includes(c.stage))
+                    .filter(c => !['已錄取', '待報到', '已報到', '淘汰', '婉拒', '人才庫'].includes(c.stage))
                     .map(c => (
                       <option key={c.id} value={c.id}>
                         {c.name}{c.recruitment_jobs?.title ? ` — ${c.recruitment_jobs.title}` : ''}（{c.stage}）

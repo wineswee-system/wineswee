@@ -226,10 +226,18 @@ export default function LeaveBalances() {
       else computedDays = LEGAL_LIMITS[type] ?? 0
 
       // 有 DB 餘額(104 匯入為準) → 直接用；否則用法定計算值
-      // 可休期間起日 > 今天(未生效，如新人特休尚未滿6月)→ 可休算 0，只看當下能休的
-      const notStarted     = dbBal?.period_start && dbBal.period_start > _todayStr
-      const effectiveDays  = notStarted ? 0 : (dbTotal > 0 ? dbTotal : computedDays)
-      const carryOverDays  = notStarted ? 0 : Number(dbBal?.carry_over_days || 0)
+      // ── 未生效(該期起日 > 今天,如特休下一週年尚未到)→ 仍顯示額度,但標「未生效」+可申請0 ──
+      //   (不再把可休歸 0,避免主管看到 0 誤以為「沒特休」;真正能不能請由「可申請」把關)
+      const _pad2s = (n) => String(n).padStart(2, '0')
+      let _periodStartStr
+      if (dbBal?.period_start) _periodStartStr = dbBal.period_start
+      else if (type === 'annual' && emp.join_date) {
+        const _jj = new Date(emp.join_date)
+        _periodStartStr = `${yearFilter}-${_pad2s(_jj.getMonth() + 1)}-${_pad2s(_jj.getDate())}`
+      } else _periodStartStr = `${yearFilter}-01-01`
+      const notStarted     = _periodStartStr > _todayStr
+      const effectiveDays  = dbTotal > 0 ? dbTotal : computedDays       // 未生效不歸 0,照顯示額度
+      const carryOverDays  = Number(dbBal?.carry_over_days || 0)
       // 補休：可休直接用 comp_time_ledger 加總（小時，不經 days 換算）
       const totalHours     = type === '補休' ? compTotal : daysToHours(effectiveDays + carryOverDays)
 
@@ -293,7 +301,7 @@ export default function LeaveBalances() {
           : ((type === 'annual' && annualStartStr) ? sumH(lrs.filter(inAnnual)) : (usedByType[type] || 0)))
       const pendH    = (type === 'annual' && annualStartStr) ? sumH(pending.filter(inAnnual)) : (pendByType[type] || 0)
       const remH     = totalHours - usedH
-      const canApply = Math.max(0, remH - pendH)
+      const canApply = notStarted ? 0 : Math.max(0, remH - pendH)   // 未生效→現在不可申請
 
       // 事件制假別（無固定天數）：沒有 DB 記錄且沒有用過就不顯示
       if (EVENT_BASED.has(type) && !dbBal && usedH === 0) continue
@@ -306,6 +314,7 @@ export default function LeaveBalances() {
         totalHours, usedHours: usedH, remainingHours: remH,
         pendingHours: pendH, canApplyHours: canApply,
         dbId: dbBal?.id, isManual: dbTotal > 0,
+        notStarted, effectiveFrom: notStarted ? _periodStartStr : null,   // 未生效 + 生效日(給 UI 標註)
       })
     }
 
@@ -600,7 +609,14 @@ export default function LeaveBalances() {
                           const remColor = r.remainingHours > 0 ? 'var(--accent-green)' : r.remainingHours < 0 ? 'var(--accent-red)' : 'var(--text-muted)'
                           return (
                             <tr key={r._key} style={{ background: idx % 2 === 0 ? 'transparent' : 'var(--bg-secondary)' }}>
-                              <td style={{ ...cellStyle, fontWeight: 600, color: 'var(--text-primary)' }}>{r.label}</td>
+                              <td style={{ ...cellStyle, fontWeight: 600, color: 'var(--text-primary)' }}>
+                                {r.label}
+                                {r.notStarted && (
+                                  <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 500, color: 'var(--accent-orange)', background: 'var(--accent-orange-dim)', padding: '1px 6px', borderRadius: 4, whiteSpace: 'nowrap' }}>
+                                    未生效 · {String(r.effectiveFrom || '').replace(/-/g, '/')} 生效
+                                  </span>
+                                )}
+                              </td>
                               <td style={{ ...cellStyle, textAlign: 'center' }}>{r.period}</td>
                               <td style={{ ...cellStyle, textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>{r.range}</td>
                               {numCell(r.totalHours)}

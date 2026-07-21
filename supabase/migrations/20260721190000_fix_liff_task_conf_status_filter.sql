@@ -38,7 +38,8 @@ BEGIN
     WHERE tc.approver = emp.name
       AND tc.status = 'pending'
       AND (tc.organization_id IS NULL OR tc.organization_id = emp.organization_id)
-      AND t.deleted_at IS NULL           -- 只擋已刪任務;任務狀態(進行中/待處理…)不擋,pending 確認就該顯示
+      -- 不再用任務狀態(進行中/待處理…)過濾:tc.status='pending' 才是真訊號。
+      -- 與 web(web_list_my_pending_approval_ids)一致:不擋任務狀態、不擋刪除(tasks 無 deleted_at,archived_at 亦不擋以對齊 web)。
   ), '[]'::json);
 END $function$;
 

@@ -468,7 +468,7 @@ export default function LeaveBalances() {
   )
 
   return (
-    <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', height: 'calc((100vh - var(--topnav-height)) / var(--app-font-scale, 1))', overflow: 'hidden' }}>
       {/* Header */}
       <div className="page-header" style={{ marginBottom: 12 }}>
         <div className="page-header-row">

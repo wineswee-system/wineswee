@@ -3,6 +3,8 @@ import Modal, { Field } from '../../../components/Modal'
 import SearchableSelect, { empOptions } from '../../../components/SearchableSelect'
 import { useAuth } from '../../../contexts/AuthContext'
 import { loadPositions, groupPositions, DEFAULT_POSITIONS } from '../../../lib/positions'
+import { loadInsuranceBrackets, findLaborBracket, findHealthBracket, findPTInsuredSalary } from '../../../lib/insuranceBrackets'
+import { toast } from '../../../lib/toast'
 
 const EMPLOYMENT_TYPES = [
   { value: '正職', label: '正職' },
@@ -46,9 +48,31 @@ export default function EmployeeFormModal({
   const { isSuperAdmin } = useAuth()  // 只有 super_admin 能指派 super_admin（升權防護）
   const [positions, setPositions] = useState(DEFAULT_POSITIONS)
   useEffect(() => { loadPositions().then(setPositions) }, [])
+  const [insBrackets, setInsBrackets] = useState(null)
+  useEffect(() => { loadInsuranceBrackets(new Date().getFullYear()).then(setInsBrackets).catch(() => {}) }, [])
   if (!open) return null
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+
+  // 依「本薪 + 所有津貼」查投保級距表，帶入勞保/職災/健保/勞退（帶入後仍可手調）
+  const autoFillInsuranceGrades = () => {
+    if (!insBrackets) { toast.error('投保級距表尚未載入，請稍候再試'); return }
+    const n = v => Number(v) || 0
+    const isPT = form.employment_category === 'parttime' || form.salary_type === 'hourly'
+    const base = isPT
+      ? n(form.hourly_rate) * (n(form.weekly_hours) || 40) * 4.33
+      : n(form.base_salary)
+    const insuredBase = base
+      + n(form.meal_allowance) + n(form.transport_allowance) + n(form.housing_allowance)
+    if (insuredBase <= 0) { toast.error('請先填「本薪 / 時薪」與津貼'); return }
+    const labor = findLaborBracket(insBrackets.labor, insuredBase, { isPartTime: isPT })?.insured_salary
+    const health = isPT
+      ? findPTInsuredSalary(insBrackets.health, insuredBase)
+      : findHealthBracket(insBrackets.health, insuredBase)?.insured_salary
+    if (labor) { set('labor_ins_grade', labor); set('labor_occ_injury_grade', labor); set('labor_pension_grade', labor) }
+    if (health) set('health_ins_grade', health)
+    toast.success(`已依投保基數 ${Math.round(insuredBase).toLocaleString()} 帶入級距，可再手動調整`)
+  }
 
   return (
     <Modal title="新增員工（到職）" onClose={onClose} onSubmit={onSubmit}>
@@ -285,6 +309,19 @@ export default function EmployeeFormModal({
         <Field label="每週工時上限">
           <input className="form-input" type="number" style={{ width: '100%' }} placeholder="40" value={form.weekly_hours} onChange={e => set('weekly_hours', e.target.value)} />
         </Field>
+        {/* 津貼（算入投保基數）— 這裡僅收 employees 表的固定津貼;夜間/跨店/自訂在「薪資結構」詳細編輯 */}
+        <div style={{ marginTop: 12, fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>🎁 津貼（算入投保基數）</div>
+        <div style={{ marginTop: 6, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10 }}>
+          {[
+            ['meal_allowance', '伙食津貼'],
+            ['transport_allowance', '交通津貼'],
+            ['housing_allowance', '住房津貼'],
+          ].map(([key, label]) => (
+            <Field key={key} label={label}>
+              <input className="form-input" type="number" style={{ width: '100%' }} placeholder="0" value={form[key] || ''} onChange={e => set(key, e.target.value)} />
+            </Field>
+          ))}
+        </div>
         {/* 投保設定（寫入 employees，計薪依此判斷扣不扣勞健保/勞退） */}
         <div style={{ marginTop: 12, display: 'flex', gap: 18, flexWrap: 'wrap' }}>
           {[
@@ -298,6 +335,16 @@ export default function EmployeeFormModal({
             </label>
           ))}
         </div>
+        {/* 依薪資自動帶入級距 */}
+        {((form.labor_insurance ?? true) || (form.health_insurance ?? true) || (form.pension ?? true)) && (
+          <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <button type="button" onClick={autoFillInsuranceGrades}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 700, color: '#fff', background: 'var(--accent-cyan)', border: 'none', borderRadius: 8, padding: '7px 12px', cursor: 'pointer' }}>
+              🔄 依薪資自動帶入級距
+            </button>
+            <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>以「本薪 + 津貼（伙食/交通/住房）」查表帶入勞保/健保/勞退，可再手調</span>
+          </div>
+        )}
         {/* 各投保級距分開填(勞保/健保/勞退常不同);勾哪個投保才顯示。留空→計薪依月薪自動查級距 */}
         {((form.labor_insurance ?? true) || (form.health_insurance ?? true) || (form.pension ?? true)) && (
           <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 }}>

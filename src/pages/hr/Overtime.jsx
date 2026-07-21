@@ -250,13 +250,17 @@ export default function Overtime() {
         return
       }
 
-      // ── 新增路徑 ──
+      // ── 新增路徑（走 create_overtime_request RPC：淨工時後端算、單一寫入路徑）──
       const empRow = employees.find(em => em.name === form.employee)
-      const { data, error } = await createOvertimeRequest({
-        ...form,
-        status: '待審核',
-        organization_id: profile?.organization_id,
-        employee_id: empRow?.id ?? null,
+      const { data, error } = await supabase.rpc('create_overtime_request', {
+        p_employee_id: empRow?.id ?? null,
+        p_date: form.date,
+        p_start_time: form.start_time,
+        p_end_time: form.end_time,
+        p_ot_type: form.ot_type || 'pay',
+        p_reason: form.reason,
+        p_store: form.store,
+        p_is_pre_approval: form.is_pre_approval || false,
       })
       if (error) throw error
       if (data) {

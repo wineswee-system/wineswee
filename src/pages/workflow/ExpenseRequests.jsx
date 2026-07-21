@@ -725,25 +725,30 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
 
   // Submit settlement
   const handleSettle = async () => {
-    if (!validateRequired(settleForm, ['actual_amount'], setErrors)) return
+    if (!validateRequired(settleForm, ['actual_amount'], setErrors)) {
+      toast.error('請先填寫實際金額')
+      return
+    }
     setSaving(true)
     const req = showDetail
-    // 重新核銷：清掉 settle_chain_id + reject_reason，讓 trigger 依新金額重抓 chain
-    const isResubmit = req.status === '核銷已退回'
-    const { error: upErr } = await supabase.from('expense_requests')
-      .update({
-        actual_amount: Number(settleForm.actual_amount),
-        notes: settleForm.notes || null,
-        status: '待核銷',
-        ...(isResubmit && {
-          settle_chain_id: null,
-          settle_current_step: 0,
-          settle_reject_reason: null,
-          settled_by: null,
-          settled_at: null,
-        }),
-      }).eq('id', req.id)
-    if (upErr) { setError(upErr.message); setSaving(false); return }
+    // 送驗收走 SECURITY DEFINER RPC：核銷負責人(非 admin)直接 UPDATE 會被 RLS 靜默擋掉→沒反應。
+    // RPC 內把關(核銷負責人/申請人/admin)並處理重送清鏈。狀態→待核銷 觸發既有掛鏈 trigger。
+    const { data: res, error: upErr } = await supabase.rpc('submit_expense_settle', {
+      p_id: req.id,
+      p_actual_amount: Number(settleForm.actual_amount),
+      p_notes: settleForm.notes || null,
+    })
+    if (upErr) { toast.error('送驗收失敗：' + upErr.message); setSaving(false); return }
+    if (!res?.ok) {
+      const map = {
+        NOT_SETTLE_OWNER: '只有驗收/核銷負責人才能送此單',
+        NOT_SETTLEABLE: `此單狀態（${res?.status || ''}）無法送驗收`,
+        NOT_FOUND: '找不到此單', AMOUNT_REQUIRED: '請填寫實際金額', NOT_AUTHENTICATED: '尚未登入',
+      }
+      toast.error('送驗收失敗：' + (map[res?.error] || res?.error || '未知錯誤'))
+      setSaving(false)
+      return
+    }
 
     // Upload settlement attachments (receipts)
     if (settleFiles.length > 0) {

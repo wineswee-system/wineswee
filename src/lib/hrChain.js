@@ -42,6 +42,22 @@ export async function findFormChainByApplicantType(formType, organizationId, emp
     isManager = (count || 0) > 0
   }
 
+  // 三路分類（對齊 DB trigger _auto_apply_hr_form_chain，單一來源）：
+  //   部門主管(departments.manager_id) → manager
+  //   真門市(store_type='retail')      → store_staff
+  //   其他(null / hq / warehouse)      → staff
+  let specificType = 'staff'
+  if (isManager) {
+    specificType = 'manager'
+  } else if (employeeId) {
+    const { data: emp } = await supabase
+      .from('employees')
+      .select('store_id, stores:stores!store_id(store_type)')
+      .eq('id', employeeId)
+      .maybeSingle()
+    if (emp?.store_id && emp?.stores?.store_type === 'retail') specificType = 'store_staff'
+  }
+
   const { data: rows } = await supabase
     .from('form_chain_configs')
     .select('chain_id, applicant_type, approval_chains(id, name)')
@@ -50,7 +66,6 @@ export async function findFormChainByApplicantType(formType, organizationId, emp
     .eq('is_active', true)
 
   const byType = (rows || []).reduce((acc, r) => { acc[r.applicant_type] = r; return acc }, {})
-  const specificType = isManager ? 'manager' : 'staff'
   const best = byType[specificType] || byType['all'] || null
   if (!best?.chain_id) return null
   return { id: best.chain_id, name: best.approval_chains?.name || null }

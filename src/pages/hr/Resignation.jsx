@@ -114,7 +114,7 @@ export default function Resignation() {
   const load = async () => {
     setLoading(true)
     let q = supabase.from('resignation_requests')
-      .select('*, employee:employees(id,name,name_en,department_id,position), approver:employees!approver_id(id,name,signature_url)')
+      .select('*, employee:employees!employee_id(id,name,name_en,department_id,position), approver:employees!approver_id(id,name,signature_url)')
       .order('id', { ascending: false })
     if (!isManagerOrAbove && profile?.id) q = q.eq('employee_id', profile.id)
     const orgId = profile?.organization_id
@@ -159,22 +159,22 @@ export default function Resignation() {
       ? ['employee_id', 'planned_resign_date', 'reason']
       : ['planned_resign_date', 'reason']
     if (!validateRequired(validateForm, validateKeys, setErrors)) return
-    const payload = {
-      employee_id: Number(empId),
-      planned_resign_date: form.planned_resign_date,
-      reason: form.reason,
-      reason_detail: form.reason_detail || null,
-      handover_notes: form.handover_notes || null,
-      organization_id: profile?.organization_id || 1,
-      status: '申請中',
-      current_step: 0,
-      approval_chain_id: activeChain?.id || null,   // 依申請人身分蓋鏈（HR B 無 auto-fill trigger）
-    }
-
     // ── 編輯路徑 ──
+    // 註:approval_chain_id 一律不由前端帶（chain 由 DB trigger _auto_apply_hr_form_chain 決定，單一來源）。
+    //    編輯/重送保留原鏈，不覆寫，交給 resume_workflow_for_request 重啟。
     if (editingId) {
+      const updatePayload = {
+        employee_id: Number(empId),
+        planned_resign_date: form.planned_resign_date,
+        reason: form.reason,
+        reason_detail: form.reason_detail || null,
+        handover_notes: form.handover_notes || null,
+        status: '申請中',
+        current_step: 0,
+        reject_reason: null,
+      }
       const { error: updErr } = await supabase.from('resignation_requests')
-        .update({ ...payload, reject_reason: null }).eq('id', editingId)
+        .update(updatePayload).eq('id', editingId)
       if (updErr) return toast.error('更新失敗：' + updErr.message)
       try {
         const { error: rpcErr } = await supabase.rpc('resume_workflow_for_request', { p_type: 'resignation', p_id: editingId })
@@ -192,8 +192,25 @@ export default function Resignation() {
       return
     }
 
-    const { error } = await supabase.from('resignation_requests').insert(payload)
+    // ── 新增路徑：走 create_resignation_request RPC（單一來源，chain 由 DB trigger 解）──
+    const { data: res, error } = await supabase.rpc('create_resignation_request', {
+      p_payload: {
+        employee_id: Number(empId),
+        planned_resign_date: form.planned_resign_date,
+        reason: form.reason,
+        reason_detail: form.reason_detail || null,
+        handover_notes: form.handover_notes || null,
+      },
+    })
     if (error) return toast.error('送出失敗：' + error.message)
+    if (!res?.ok) {
+      const msg = {
+        DATE_REQUIRED: '請填離職日', REASON_REQUIRED: '請填離職原因',
+        ALREADY_PENDING: '該員工已有申請中的離職單', NOT_ALLOWED_FOR_OTHERS: '無權限代他人送出',
+        CALLER_NOT_FOUND: '找不到帳號對應員工', APPLICANT_NOT_FOUND: '找不到申請人',
+      }[res?.error] || ('送出失敗：' + (res?.error || '未知錯誤'))
+      return toast.error(msg)
+    }
 
     setShowForm(false)
     setForm({ employee_id: profile?.id || '', planned_resign_date: '', reason: '個人因素', reason_detail: '', handover_notes: '' })

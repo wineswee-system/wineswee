@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Plus, Search, UserMinus, UserPlus, Pencil, Mail, Upload, Download, Building2, Trash2, Users, FileText, UserCheck, Power } from 'lucide-react'
 import { exportEmployeeCertificate } from '../../lib/exportCertificate'
 import { getEmployeesList, createEmployee, updateEmployee, inviteEmployee } from '../../lib/db'
@@ -87,6 +87,30 @@ export default function Employees() {
   const openDetail = (emp) => navigate(`/org/employees/${emp.id}`)
   const [showCsvImport, setShowCsvImport] = useState(false)
   const [pageTab, setPageTab] = useState('employees')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [onboardCandidateId, setOnboardCandidateId] = useState(null)  // 招募報到:建員工檔後回寫的候選人
+
+  // 招募「已錄取」→ ?onboard=<candidate_id> 跳來:撈候選人+offer 預填新增員工表單
+  useEffect(() => {
+    const cid = searchParams.get('onboard')
+    if (!cid) return
+    ;(async () => {
+      const { data: cand } = await supabase.from('candidates').select('id, name, email, phone, employee_id').eq('id', cid).maybeSingle()
+      if (!cand) return
+      if (cand.employee_id) { toast.error('此候選人已建過員工檔'); setSearchParams(sp => { const x = new URLSearchParams(sp); x.delete('onboard'); return x }, { replace: true }); return }
+      const { data: offer } = await supabase.from('offer_letters').select('position, dept, salary, start_date').eq('candidate_id', cid).order('id', { ascending: false }).limit(1).maybeSingle()
+      setForm(f => ({
+        ...f,
+        name: cand.name || '', email: cand.email || '', phone: cand.phone || '',
+        position: offer?.position || '',
+        base_salary: offer?.salary != null ? String(offer.salary) : '',
+        join_date: offer?.start_date || '',
+      }))
+      setOnboardCandidateId(cand.id)
+      setShowModal(true)
+      setSearchParams(sp => { const x = new URLSearchParams(sp); x.delete('onboard'); return x }, { replace: true })
+    })()
+  }, [searchParams])  // eslint-disable-line react-hooks/exhaustive-deps
 
   // 簽核代理 tab state
   const delegToday = () => new Date().toISOString().slice(0, 10)
@@ -233,6 +257,12 @@ export default function Employees() {
           piece_rate: Number(form.piece_rate) || 0,
         })
         if (ssErr) { console.warn('salary_structures 建立失敗:', ssErr); toast.error('員工已建立，但薪資結構未建立：' + ssErr.message) }
+        // 招募報到:建員工檔後回寫候選人 → 待報到(本人綁 LINE 後由 trigger 轉「已報到」)
+        if (onboardCandidateId) {
+          const { data: linkRes } = await supabase.rpc('recruit_onboard_link', { p_candidate_id: onboardCandidateId, p_employee_id: data.id })
+          if (linkRes?.ok) toast.success('員工檔已建立，候選人轉「待報到」，本人綁 LINE 後自動報到')
+          setOnboardCandidateId(null)
+        }
         setForm({
           name: '', name_en: '', department_id: departments[0]?.id || null, position: '', position_secondary: '', position_third: '',
           store_id: locations[0]?.id || null, email: '', phone: '', join_date: '', status: '在職', employment_type: '正職',

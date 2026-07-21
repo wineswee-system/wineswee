@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Plus, X, FileText, Briefcase, UserCheck, Calendar, Edit3, Star, Search, ClipboardList, CheckCircle, XCircle, FileEdit, Trash2, Eye } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import {
   getRecruitmentJobs, createRecruitmentJob, updateRecruitmentJob,
@@ -129,7 +130,7 @@ function CandidateCard({ c, onSelect, onStageChange }) {
 }
 
 // ─── Candidate detail side panel ───
-function CandidatePanel({ c, interviews, allInterviews, jobs = [], evalTemplates = [], onClose, onDelete, onEdit, orgId, employees, onRefreshInterviews, offerTemplates, onCreateOffer, onStageChange }) {
+function CandidatePanel({ c, interviews, allInterviews, jobs = [], evalTemplates = [], onClose, onDelete, onEdit, orgId, employees, onRefreshInterviews, offerTemplates, onCreateOffer, onStageChange, onOnboard }) {
   const [showIntForm, setShowIntForm] = useState(false)
   const [intForm, setIntForm] = useState({ round: '初試', scheduled_at: '', interviewer_id: '', result: '待定', note: '', location: '', score: 0, scores: {} })
   const iset = (k, v) => setIntForm(f => ({ ...f, [k]: v }))
@@ -438,6 +439,12 @@ function CandidatePanel({ c, interviews, allInterviews, jobs = [], evalTemplates
           </button>
         )}
 
+        {c.stage === '已錄取' && (
+          <button className="btn btn-primary" style={{ width: '100%', marginTop: 8, background: 'var(--accent-green)' }} onClick={() => onOnboard?.(c.id)}>
+            <UserCheck size={14} style={{ marginRight: 6 }} /> 建員工檔（報到）
+          </button>
+        )}
+
         {/* Stage history timeline */}
         {c.stage_history?.length > 0 && (
           <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--border-primary)' }}>
@@ -478,6 +485,7 @@ function CandidatePanel({ c, interviews, allInterviews, jobs = [], evalTemplates
 // ──────────────────────────────────────────────
 export default function Recruitment() {
   const { profile, hasPermission } = useAuth()
+  const navigate = useNavigate()
   const canManage = hasPermission('recruit.manage')
   const orgId = profile?.organization_id
   const [tab, setTab] = useState('jobs')
@@ -1243,6 +1251,7 @@ export default function Recruitment() {
               offerTemplates={offerTemplates}
               onCreateOffer={openOfferModal}
               onStageChange={handleStageChange}
+              onOnboard={(id) => navigate('/org/employees?onboard=' + id)}
             />
           )}
         </>

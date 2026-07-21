@@ -3,7 +3,7 @@ import { ModalOverlay } from '../../components/Modal'
 import { createPortal } from 'react-dom'
 import { ChevronDown, ChevronRight, Plus, Trash2, Send, Ban } from 'lucide-react'
 import { getJournalEntries, getJournalLines, createJournalEntry, createJournalLine } from '../../lib/db'
-import { validateJournalEntry, validateJournalBalance, postJournalEntry, CHART_OF_ACCOUNTS } from '../../lib/accounting'
+import { validateJournalEntry, validateJournalBalance, CHART_OF_ACCOUNTS } from '../../lib/accounting'
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
@@ -177,11 +177,22 @@ export default function JournalEntries() {
         return
       }
 
-      // 使用會計引擎過帳（驗證 + 更新狀態 + 更新科目餘額）
-      const result = await postJournalEntry(entry.id, mappedLines, supabase)
-
-      if (!result.success) {
-        toast.error(`無法過帳：${result.errors.join('；')}`)
+      // 過帳走 post_journal_entry RPC（單一原子交易：驗平衡 + 更新狀態 + 原子更新科目餘額，根治 race）
+      const { data: result, error: postErr } = await supabase.rpc('post_journal_entry', { p_entry_id: entry.id })
+      if (postErr) {
+        toast.error(`過帳失敗：${postErr.message}`)
+        setPosting(null)
+        return
+      }
+      if (!result?.ok) {
+        const msg = {
+          ENTRY_NOT_FOUND: '找不到傳票',
+          ALREADY_POSTED: '此傳票已過帳',
+          NO_LINES: '傳票無分錄',
+          NOT_BALANCED: `借貸不平衡：借方 ${result.total_debit} / 貸方 ${result.total_credit}`,
+          CALLER_NOT_FOUND: '找不到帳號對應員工',
+        }[result?.error] || `無法過帳：${result?.error || '未知錯誤'}`
+        toast.error(msg)
         setPosting(null)
         return
       }

@@ -710,122 +710,41 @@ export default function Projects() {
 
     setDeploying(true)
     try {
-      const tpl = deployTpl
-      const today = deployForm.start_date || new Date().toISOString().slice(0, 10)
-      const endDate = deployForm.end_date ||
-        (tpl.estimated_days ? new Date(Date.now() + tpl.estimated_days * 86400000).toISOString().slice(0, 10) : null)
-
-      // 1. Create project
-      const { data: project } = await supabase.from('projects').insert({
-        name: deployForm.name,
-        description: tpl.description,
-        status: '進行中',
-        priority: tpl.default_priority || '中',
-        owner: deployForm.owner || profile?.name || '',
-        store: deployForm.store || null,
-        start_date: today,
-        end_date: endDate,
-        budget: tpl.estimated_budget,
-        organization_id: orgId,
-        template_id: tpl.id,
-      }).select().single()
-
-      if (!project) throw new Error('建立專案失敗')
-
-      // 2. Create workflows + tasks — prefer per-workflow overrides from deployForm
-      //    進階欄位（綁表單/簽核鏈/查核清單/說明）一律取自「範本」tplWfs，避免 deployForm 覆寫時遺失
-      const tplWfs = Array.isArray(tpl.workflows) ? tpl.workflows : JSON.parse(tpl.workflows || '[]')
-      const deployWfs = deployForm.workflows?.length
-        ? deployForm.workflows
-        : tplWfs.map(w => ({
-            name: w.name, owner: '', store: '', due_date: '',
-            tasks: (w.tasks || []).map(t => ({ ...t, assignee: '', due_date: '' })),
-          }))
-
-      for (let i = 0; i < deployWfs.length; i++) {
-        const wf = deployWfs[i]
-        const tplWf = tplWfs[i] || { tasks: [] }
-        // Fallback chain: wf-override → project-level → profile
-        const wfOwner   = wf.owner   || deployForm.owner   || profile?.name || ''
-        const wfStore   = wf.store   || deployForm.store   || null
-        const wfDueDate = wf.due_date || endDate || null
-
-        const { data: instance } = await supabase.from('workflow_instances').insert({
-          template_name: wf.name,
-          status: '進行中',
-          started_by: wfOwner,
-          started_by_id: profile?.id || null,
-          applicant_emp_id: profile?.id || null,
-          store: wfStore,
-          due_date: wfDueDate,
-          project_id: project.id,
-          organization_id: orgId,  // ★ 補 org_id，否則 org-scoped 查詢會漏
-          sort_order: i + 1,
-          started_at: new Date().toISOString(),
-        }).select().single()
-
-        if (instance && wf.tasks?.length > 0) {
-          const taskRows = wf.tasks.map((t, j) => {
-            const rt = tplWf.tasks?.[j] || t   // 範本任務 = 進階欄位來源
-            return {
-              title: t.title,
-              description: rt.description || null,
-              approval_chain_id: rt.approval_chain_id || null,   // 任務完成後掛簽核鏈
-              workflow_instance_id: instance.id,
-              project_id: project.id,
-              organization_id: orgId,  // ★ 補 org_id
-              // step 1 直接開工 進行中、step 2+ 待處理（等 trg_task_advance_next_step 推進）
-              // trigger:'manual' 的任務維持 待處理，需人工啟動
-              status: j === 0 && t.trigger !== 'manual' ? '進行中' : '待處理',
-              started_at: j === 0 && t.trigger !== 'manual' ? new Date().toISOString() : null,
-              role: t.role || null,
-              step_order: j + 1,
-              priority: t.priority || '中',
-              // Fallback chain: task-override → wf-override → project-level
-              assignee: t.assignee || wfOwner || null,
-              due_date: t.due_date || wfDueDate,
-              store: wfStore,
-              bucket: 'Project',
-              category: wf.name || null,
-              created_by_emp_id: profile?.id || null,   // tasks_ins RLS：指派給別人時靠建立者過
-            }
-          })
-          // insert 帶 .select() 取回 id → 逐任務建綁表單 + 掛查核清單（比照流程範本部署）
-          const { data: insertedTasks } = await supabase.from('tasks').insert(taskRows).select('id')
-          if (insertedTasks) {
-            for (let j = 0; j < insertedTasks.length; j++) {
-              const rt = tplWf.tasks?.[j] || wf.tasks[j] || {}
-              const taskId = insertedTasks[j].id
-              for (const f of (rt.required_forms || [])) {
-                await supabase.rpc('create_task_form_binding', {
-                  p_task_id: taskId,
-                  p_form_type: f.form_type,
-                  p_form_template_id: f.form_template_id || null,
-                  p_fill_mode: f.fill_mode || 'self',
-                  p_assignee_id: f.fill_mode === 'other' ? (f.assignee_id || null) : null,
-                })
-              }
-              if (rt.checklist_id) {
-                await supabase.from('task_checklists').insert({ task_id: taskId, checklist_id: rt.checklist_id })
-              }
-            }
-          }
-        }
+      // ── deploy_project_template RPC：單一原子交易建 project + workflows + tasks + 綁定 + checklist ──
+      // 取代原本前端巢狀迴圈多表寫入（★原本完全沒 rollback，部分失敗會留半殘專案+孤兒工作流/任務★）。
+      const { data: res, error } = await supabase.rpc('deploy_project_template', {
+        p_template_id: deployTpl.id,
+        p_params: {
+          name: deployForm.name,
+          owner: deployForm.owner || null,
+          store: deployForm.store || null,
+          start_date: deployForm.start_date || null,
+          end_date: deployForm.end_date || null,
+          workflows: deployForm.workflows || null,   // 基本欄位 override（進階欄位 RPC 取自範本）
+        },
+      })
+      if (error) throw error
+      if (!res?.ok) {
+        throw new Error({
+          CALLER_NOT_FOUND: '找不到帳號對應員工',
+          NO_ORG: '身份資訊未載入完成，請重新登入',
+          TEMPLATE_NOT_FOUND: '找不到範本',
+          NAME_REQUIRED: '請填專案名稱',
+        }[res?.error] || (res?.error || '未知錯誤'))
       }
 
       // LINE notify project owner
       if (deployForm.owner) {
         notifyTaskAssignee(deployForm.owner, `專案「${deployForm.name}」已建立`, '專案部署', null).catch(() => {})
       }
-
-      // 通知專案成員：凡在此專案任一流程被指派任務者，各發一則彙總（聚合/去重/站內通知由 RPC 處理）
-      notifyProjectMembers({ id: project.id, name: project.name, store: project.store }).catch(() => {})
+      // 通知專案成員（聚合/去重/站內通知由 RPC 處理）
+      notifyProjectMembers({ id: res.project_id, name: deployForm.name, store: deployForm.store || null }).catch(() => {})
 
       setShowDeployModal(false)
       setDeployTpl(null)
       load()
     } catch (err) {
-      toast.error('部署失敗，請稍後再試')
+      toast.error('部署失敗：' + (err.message || '請稍後再試'))
     }
     setDeploying(false)
   }

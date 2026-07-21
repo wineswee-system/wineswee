@@ -100,24 +100,30 @@ BEGIN
     v_status   := CASE WHEN i = 0 THEN '進行中' ELSE '待處理' END;
     v_assignee := COALESCE(p_params #>> ARRAY['assignees', i::text], '');
 
+    -- 註:reminder_preset/notify_line/notify_timing 欄位已從 tasks 移除(Studio drift,無 migration),
+    --    這正是前端 handleDeploy 傳它們→PostgREST 報錯→部署自 2026-06 中壞掉的主因;此處不再寫。
+    --    checklist 改走 task_checklists 關聯表(見下)。
     INSERT INTO tasks (
       title, description, workflow, workflow_instance_id, step_order,
       step_type, task_type, role, assignee, priority, status,
-      due_date, due_time, reminder_preset, notify_line, notify_timing,
+      due_date, due_time,
       store, bucket, category, organization_id, created_by_emp_id,
-      checklist_id, approval_chain_id, trigger_template_id_on_complete
+      approval_chain_id, trigger_template_id_on_complete
     ) VALUES (
       v_step->>'title', NULLIF(v_step->>'description',''), v_tpl.name, v_inst_id, i + 1,
       'workflow_step', 'process_step', NULLIF(v_step->>'role',''), v_assignee, v_batch_pri, v_status,
-      v_due, v_due_time, v_rem,
-      COALESCE((p_params->>'notify_line')::boolean, true),
-      COALESCE(NULLIF(p_params->>'notify_timing',''), '1day'),
+      v_due, v_due_time,
       v_loc, '工作流程', '工作流程', v_caller.organization_id, v_caller.id,
-      NULLIF(v_step->>'checklist_id','')::int,
       NULLIF(v_step->>'approval_chain_id','')::int,
       NULLIF(v_step->>'trigger_template_id','')::int
     ) RETURNING id INTO v_task_id;
     v_task_ids := v_task_ids || v_task_id;
+
+    -- checklist:走 task_checklists 關聯表(非 tasks.checklist_id 欄)
+    IF NULLIF(v_step->>'checklist_id','') IS NOT NULL THEN
+      INSERT INTO task_checklists (task_id, checklist_id)
+      VALUES (v_task_id, (v_step->>'checklist_id')::int);
+    END IF;
 
     -- 表單綁定(失敗不中止,累計 warning — 比照現況)
     IF jsonb_typeof(v_step->'required_forms') = 'array' THEN

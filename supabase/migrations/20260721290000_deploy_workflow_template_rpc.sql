@@ -112,7 +112,7 @@ BEGIN
     ) VALUES (
       v_step->>'title', NULLIF(v_step->>'description',''), v_tpl.name, v_inst_id, i + 1,
       'workflow_step', 'process_step', NULLIF(v_step->>'role',''), v_assignee, v_batch_pri, v_status,
-      v_due, v_due_time,
+      v_due, v_due_time::time,
       v_loc, '工作流程', '工作流程', v_caller.organization_id, v_caller.id,
       NULLIF(v_step->>'approval_chain_id','')::int,
       NULLIF(v_step->>'trigger_template_id','')::int

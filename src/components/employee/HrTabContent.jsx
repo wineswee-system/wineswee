@@ -4,6 +4,8 @@ import { getPTAnnualLeaveHours, getAnnualLeaveEntitlement } from '../../lib/leav
 import SearchableSelect, { empOptions } from '../SearchableSelect'
 import { useAuth } from '../../contexts/AuthContext'
 import { loadPositions, groupPositions, DEFAULT_POSITIONS } from '../../lib/positions'
+import { loadInsuranceBrackets, findLaborBracket, findHealthBracket, findPTInsuredSalary } from '../../lib/insuranceBrackets'
+import { toast } from '../../lib/toast'
 
 const maskBank = (v) => v ? '****' + v.slice(-4) : ''
 
@@ -59,6 +61,37 @@ export default function HrTabContent({
   const roleOptions = (roles || []).filter(
     r => r.name !== 'super_admin' || isSuperAdmin || form.role_id === 1 || form.role === 'super_admin'
   )
+
+  // ── 勞健保級距表（依薪資自動帶入用）─────────────────────────────
+  const [insBrackets, setInsBrackets] = useState(null)
+  useEffect(() => {
+    loadInsuranceBrackets(new Date().getFullYear()).then(setInsBrackets).catch(() => {})
+  }, [])
+
+  // 依「本薪 + 經常性津貼」查投保級距表，帶入勞保/職災/健保/勞退級距（帶入後仍可手調）
+  const autoFillInsuranceGrades = () => {
+    if (!insBrackets) { toast.error('投保級距表尚未載入，請稍候再試'); return }
+    const n = v => Number(v) || 0
+    const isPT = form.salary_type === 'hourly' || form.employment_category === 'parttime'
+    // 投保基數 = 本薪(月薪)或估算月收入(時薪) + 經常性津貼(伙食/交通/住房 + 自訂)
+    const base = isPT
+      ? n(form.hourly_rate) * (n(form.weekly_hours) || 40) * 4.33
+      : n(form.base_salary)
+    const insuredBase = base
+      + n(form.meal_allowance) + n(form.transport_allowance) + n(form.housing_allowance)
+      + (form.custom_allowances || []).reduce((s, c) => s + n(c.amount), 0)
+    if (insuredBase <= 0) { toast.error('請先填「本薪 / 時薪」與津貼'); return }
+
+    const labor = findLaborBracket(insBrackets.labor, insuredBase, { isPartTime: isPT })?.insured_salary
+    const health = isPT
+      ? findPTInsuredSalary(insBrackets.health, insuredBase)
+      : findHealthBracket(insBrackets.health, insuredBase)?.insured_salary
+    // 職災/勞退預設「同投保級距」（高薪者上限不同可手動再調）
+    if (labor) { set('labor_ins_grade', labor); set('labor_occ_injury_grade', labor); set('labor_pension_grade', labor) }
+    if (health) set('health_ins_grade', health)
+    toast.success(`已依投保基數 ${Math.round(insuredBase).toLocaleString()} 帶入級距，可再手動調整`)
+  }
+
   return (
     <>
       {/* ════════════════════════════════════════
@@ -413,6 +446,17 @@ export default function HrTabContent({
       {subTab === 'insurance' && (
         <>
           <SectionTitle icon="🏥" text="勞健保 / 退休金" />
+
+          {/* 依薪資自動帶入級距 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 10, padding: '10px 14px', background: 'var(--accent-cyan-dim)', borderRadius: 10, border: '1px solid var(--border-subtle)' }}>
+            <button type="button" onClick={autoFillInsuranceGrades}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: '#fff', background: 'var(--accent-cyan)', border: 'none', borderRadius: 8, padding: '8px 14px', cursor: 'pointer', flexShrink: 0 }}>
+              🔄 依薪資自動帶入級距
+            </button>
+            <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+              以「本薪 + 經常性津貼（伙食/交通/住房 + 自訂）」查投保級距表，帶入勞保/職災/健保/勞退。帶入後仍可手動調整。
+            </span>
+          </div>
 
           <div style={{ padding: '12px 14px', background: 'var(--bg-card)', borderRadius: 10, marginBottom: 10, border: '1px solid var(--border-subtle)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: form.labor_insurance ? 12 : 0 }}>

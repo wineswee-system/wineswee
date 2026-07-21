@@ -52,7 +52,8 @@ export default function Resignation() {
     setDetailRow(row)
     setLoadingChain(true)
     setDetailChainSteps([])
-    const steps = await buildAndResolveChain(row)
+    let steps = await buildAndResolveChain(row)
+    steps = await mergeStepSignTimes('resignation', row.id, steps)  // ★ 補每關實際簽核時間（對齊 PDF 路徑）
     if (detailRowIdRef.current !== row.id) return
     setDetailChainSteps(steps)
     setLoadingChain(false)

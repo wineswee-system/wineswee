@@ -347,17 +347,29 @@ export default function Leave() {
       return
     }
 
-    // ── 新增路徑（原邏輯）──
-    const { data } = await createLeaveRequest({ ...payload, status: '待審核', approver: '-' })
+    // ── 新增路徑（走 create_leave_request RPC：算天數/時數+驗證+插入全後端,單一寫入路徑）──
+    //   上方 client 算法/驗證保留當即時預覽 + pre-check;RPC 為權威(以後端算的 days/hours/額度為準)。
+    const { data, error: createErr } = await supabase.rpc('create_leave_request', {
+      p_employee_id: empRow?.id ?? null,
+      p_type_code: form.type,
+      p_unit: form.unit,
+      p_start_date: form.start_date,
+      p_end_date: form.unit === 'hour' ? form.start_date : (form.end_date || form.start_date),
+      p_start_time: form.unit === 'hour' ? form.start_time : null,
+      p_end_time: form.unit === 'hour' ? form.end_time : null,
+      p_reason: form.reason,
+    })
+    if (createErr) { setValidationMsg(createErr.message); return }
     if (data) {
       setLeaves(prev => [data, ...prev])
 
       // ── 補休：FIFO 扣 comp_time_ledger（送出即扣，駁回後需手動退）──
+      //   用後端存的 data.hours（權威值）扣帳,與實際入庫一致
       if (form.type === 'comp_time' && empRow?.id) {
         const { data: dedRes, error: dedErr } = await supabase.rpc('deduct_comp_time', {
           p_leave_request_id: data.id,
           p_employee_id: empRow.id,
-          p_hours: hours,
+          p_hours: data.hours,
         })
         if (dedErr || !dedRes?.ok) {
           toast.error('補休扣帳失敗：' + (dedErr?.message || dedRes?.error || '未知錯誤'))

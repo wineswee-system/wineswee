@@ -42,13 +42,17 @@ export async function calculateAnnualLeaveSettlement() {
 
     if (existing) continue
 
-    // Calculate entitled annual leave based on Taiwan labor law
-    let entitled = 0
-    if (yearsWorked >= 10) entitled = 30
-    else if (yearsWorked >= 5) entitled = 15
-    else if (yearsWorked >= 3) entitled = 14
-    else if (yearsWorked >= 2) entitled = 10
-    else entitled = 7 // 1 year
+    // 結清的是「剛結束那個服務年」的特休額度 = §38 滿(yearsWorked-1)年
+    //   (原本每年都錯一格:結清剛完成的第 N 年卻套用下一年額度,且漏掉第一年 3 天檔 → 系統性多結)
+    //   滿6月3天 / 滿1年7 / 滿2年10 / 滿3~4年14 / 滿5~9年15 / 滿10年起每年+1封頂30
+    const settledYear = yearsWorked // 剛完成第 settledYear 個服務年
+    let entitled
+    if      (settledYear === 1) entitled = 3
+    else if (settledYear === 2) entitled = 7
+    else if (settledYear === 3) entitled = 10
+    else if (settledYear <= 5)  entitled = 14  // 完成第4、5年 = 滿3、4年
+    else if (settledYear <= 11) entitled = 15  // 完成第6~11年 = 滿5~10年
+    else entitled = Math.min(30, 15 + (settledYear - 11)) // 完成第12年起 = 滿11年起
 
     // Get used leave in the past year
     const yearStart = new Date(today.getFullYear() - 1, anniversaryMonth, joinDate.getDate())

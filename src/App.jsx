@@ -230,6 +230,8 @@ export default function App() {
         <Suspense fallback={<LoadingSpinner />}>
         <Routes>
           <Route path="/demo" element={<PortalGuard><DemoLanding /></PortalGuard>} />
+          {/* Public marketing landing — no auth required (shareable demo URL) */}
+          <Route path="/showcase" element={<Suspense fallback={<LoadingSpinner />}><DemoLanding /></Suspense>} />
           <Route path="/login" element={<Suspense fallback={<LoadingSpinner />}><Login /></Suspense>} />
           {/* Guest QR self-order menu — public, no auth required */}
           <Route path="/menu/:storeId/:tableId" element={<Suspense fallback={<LoadingSpinner />}><GuestMenu /></Suspense>} />

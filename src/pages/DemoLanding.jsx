@@ -168,6 +168,22 @@ export default function DemoLanding() {
   const [theme, setTheme] = useState(() => document.documentElement.getAttribute('data-theme') || 'light')
   const [inquiry, setInquiry] = useState({ company_name: '', contact_name: '', phone: '', email: '', company_size: '', interested_modules: [] })
   const [inquiryStatus, setInquiryStatus] = useState(null)
+  const [trialEmail, setTrialEmail] = useState('')
+  const [trialStatus, setTrialStatus] = useState(null)
+
+  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trialEmail)
+  const handleTrialSubmit = async () => {
+    if (!emailValid) return
+    setTrialStatus('sending')
+    try {
+      await supabase.from('inquiries').insert({
+        company_name: '免費試用申請',
+        email: trialEmail.trim(),
+        interested_modules: ['免費試用'],
+      })
+      setTrialStatus('success')
+    } catch { setTrialStatus('error') }
+  }
 
   const toggleModule = (mod) => setInquiry(prev => ({
     ...prev, interested_modules: prev.interested_modules.includes(mod) ? prev.interested_modules.filter(m => m !== mod) : [...prev.interested_modules, mod],
@@ -251,7 +267,7 @@ export default function DemoLanding() {
               預約專人導覽 <ArrowRight size={16} />
             </button>
             <button className="lp-cta-secondary" onClick={() => scrollTo('try')}>
-              免費自行體驗
+              免費開通試用
             </button>
           </div>
 
@@ -415,25 +431,49 @@ export default function DemoLanding() {
         </div>
       </Section>
 
-      {/* ═══ Try It ═══ */}
+      {/* ═══ Free Trial (email capture) ═══ */}
       <Section id="try">
         <div className="lp-container">
           <div className="lp-section-header">
-            <span className="lp-badge">🖥️ 線上體驗</span>
-            <h2>直接操作，無需註冊</h2>
-            <p>選擇模組進入體驗環境</p>
+            <span className="lp-badge">🚀 免費試用</span>
+            <h2>留下 Email，立即開通試用帳號</h2>
+            <p>無需信用卡，專人為您建立體驗環境，一個工作天內開通</p>
           </div>
-          <div className="lp-try-grid">
-            {SYSTEMS.map((sys, i) => {
-              const Icon = sys.icon
-              return (
-                <button key={i} className="lp-try-tile" onClick={() => navigate(sys.path)} style={{ '--tc': sys.color }}>
-                  <div className="lp-try-icon"><Icon size={22} strokeWidth={1.5} /></div>
-                  <span>{sys.title}</span>
-                  <ArrowUpRight size={14} className="lp-try-arrow" />
-                </button>
-              )
-            })}
+          <div className="lp-trial">
+            {trialStatus === 'success' ? (
+              <div className="lp-trial-done">
+                <div className="lp-trial-check"><Check size={28} strokeWidth={2.5} /></div>
+                <h3>已收到您的申請</h3>
+                <p>我們會將試用帳號的開通資訊寄到<br /><strong>{trialEmail}</strong></p>
+              </div>
+            ) : (
+              <>
+                <div className="lp-trial-form">
+                  <input
+                    type="email"
+                    placeholder="you@company.com"
+                    value={trialEmail}
+                    onChange={e => { setTrialEmail(e.target.value); if (trialStatus === 'error') setTrialStatus(null) }}
+                    onKeyDown={e => { if (e.key === 'Enter') handleTrialSubmit() }}
+                  />
+                  <button
+                    className="lp-trial-btn"
+                    onClick={handleTrialSubmit}
+                    disabled={!emailValid || trialStatus === 'sending'}
+                  >
+                    {trialStatus === 'sending' ? '開通中…' : '開通試用帳號'}
+                    <ArrowRight size={16} />
+                  </button>
+                </div>
+                {trialStatus === 'error' && (
+                  <p className="lp-trial-err">送出失敗，請稍後再試，或使用下方聯繫表單。</p>
+                )}
+                <p className="lp-trial-note">
+                  已經有帳號了？
+                  <button className="lp-trial-login" onClick={() => navigate('/login')}>登入</button>
+                </p>
+              </>
+            )}
           </div>
         </div>
       </Section>

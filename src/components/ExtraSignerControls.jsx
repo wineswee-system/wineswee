@@ -49,14 +49,13 @@ export default function ExtraSignerControls({
           .eq('source_id', row.id)
           .eq('status', 'pending')
           .limit(1),
-        supabase.from('employees')
-          .select('id, name, department_id')
-          .eq('status', '在職')
-          .order('name'),
+        // 加簽選人要全 org(邀任何同事協助簽核,常往上找主管)→ 走 SECURITY DEFINER RPC,
+        // 不用 from('employees')(那受 RLS 限、非 admin 簽核人只看到自己門市 → 選人幾乎空)。
+        supabase.rpc('list_org_active_employees'),
       ])
       if (cancelled) return
       setPendingExtra((extras || [])[0] || null)
-      setEmployees(emps || [])
+      setEmployees(Array.isArray(emps) ? emps : [])
       setLoading(false)
     })()
     return () => { cancelled = true }

@@ -132,13 +132,18 @@ export const getEmployeePermissions = async (employeeId) => {
   return (data?.roles?.role_permissions || []).map(p => p.permissions?.code).filter(Boolean)
 }
 
-export const getLineGroups = () =>
-  supabase.from('line_groups').select('*').order('id')
+// channelIds:本組織的 line_channel id 陣列(多租戶連動過濾;傳空陣列→回 0 列)
+export const getLineGroups = (channelIds) => {
+  let q = supabase.from('line_groups').select('*').order('id')
+  if (channelIds) q = q.in('channel_id', channelIds)
+  return q
+}
 
 export const getLineMessages = (filters = {}) => {
   let q = supabase.from('line_messages').select('*').order('created_at', { ascending: false }).limit(100)
   if (filters.line_user_id) q = q.eq('line_user_id', filters.line_user_id)
   if (filters.group_id) q = q.eq('group_id', filters.group_id)
+  if (filters.channelIds) q = q.in('channel_id', filters.channelIds)
   return q
 }
 

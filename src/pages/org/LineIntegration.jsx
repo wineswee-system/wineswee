@@ -44,13 +44,17 @@ export default function LineIntegration() {
     setLoading(true)
     setError(null)
     try {
-      const [ch, acc, emp, grp, msg, cmd] = await Promise.all([
-        supabase.from('line_channels').select('*').order('is_default', { ascending: false }).order('name'),
-        supabase.from('employee_line_accounts').select('*, employees(name, department_id, position, departments!department_id(name)), line_channels(code, name)').order('linked_at', { ascending: false }),
+      // 先撈本組織的 channel(org 過濾)→ 取 ids 給下游 4 表 channel_id 連動過濾(多租戶隔離)
+      const ch = await supabase.from('line_channels').select('*').eq('organization_id', orgId).order('is_default', { ascending: false }).order('name')
+      const channelIds = (ch.data || []).map(c => c.id)
+      const noCh = channelIds.length === 0            // 本組織尚無 channel → 下游一律空(避免 .in([]) 回全表)
+      const emptyRes = Promise.resolve({ data: [], error: null })
+      const [acc, emp, grp, msg, cmd] = await Promise.all([
+        noCh ? emptyRes : supabase.from('employee_line_accounts').select('*, employees(name, department_id, position, departments!department_id(name)), line_channels(code, name)').in('channel_id', channelIds).order('linked_at', { ascending: false }),
         supabase.from('employees').select('id, name, name_en, dept, department_id, store, store_id, position, status, departments!department_id(name), stores!store_id(name)').eq('status', '在職').eq('organization_id', orgId).order('name'),
-        getLineGroups(),
-        getLineMessages(),
-        supabase.from('line_command_logs').select('*').order('created_at', { ascending: false }).limit(100),
+        noCh ? emptyRes : getLineGroups(channelIds),
+        noCh ? emptyRes : getLineMessages({ channelIds }),
+        noCh ? emptyRes : supabase.from('line_command_logs').select('*').in('channel_id', channelIds).order('created_at', { ascending: false }).limit(100),
       ])
       const results = [
         ['line_channels', ch],
@@ -84,6 +88,7 @@ export default function LineIntegration() {
     const { data } = await supabase.from('line_channels').insert({
       ...channelForm,
       is_default: channels.length === 0,
+      organization_id: profile?.organization_id,
     }).select().single()
     if (data) {
       setChannels(prev => [...prev, data])
@@ -93,8 +98,8 @@ export default function LineIntegration() {
   }
 
   const handleSetDefault = async (id) => {
-    // Clear all defaults, then set this one
-    await supabase.from('line_channels').update({ is_default: false }).neq('id', 0)
+    // Clear defaults within this org only, then set this one
+    await supabase.from('line_channels').update({ is_default: false }).eq('organization_id', profile?.organization_id)
     const { data } = await supabase.from('line_channels').update({ is_default: true }).eq('id', id).select().single()
     if (data) setChannels(prev => prev.map(c => ({ ...c, is_default: c.id === id })))
   }

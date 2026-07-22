@@ -728,7 +728,8 @@ export default function StoreSettingsTab({
             {(() => {
               const sh = parseTime(shiftForm.start_time)
               const eh = parseTime(shiftForm.end_time)
-              const grossH = sh && eh ? (eh > sh ? eh - sh : (24 - sh + eh)) : 0
+              // 用原始字串判斷「是否已填」— 不能用 sh&&eh，00:00 parse 成 0(falsy) 會被誤判沒填→跨午夜班(13:00~00:00)毛時數變 0
+              const grossH = shiftForm.start_time && shiftForm.end_time ? (eh > sh ? eh - sh : (24 - sh + eh)) : 0
               const autoBreak = getRestMinutes(grossH)
               const brk = shiftForm.manual_break ? Math.max(0, Number(shiftForm.break_minutes) || 0) : autoBreak
               const netH = grossH - brk / 60

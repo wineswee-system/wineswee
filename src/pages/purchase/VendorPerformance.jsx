@@ -28,9 +28,9 @@ export default function VendorPerformance() {
     setLoading(true)
     try {
       const [suppRes, poRes, grRes] = await Promise.all([
-        getSuppliers().catch(() => ({ data: null })),
+        getSuppliers(profile?.organization_id).catch(() => ({ data: null })),
         getPurchaseOrders(profile?.organization_id).catch(() => ({ data: null })),
-        getGoodsReceipts().catch(() => ({ data: null })),
+        getGoodsReceipts(profile?.organization_id).catch(() => ({ data: null })),
       ])
 
       const suppliers = suppRes.data || []

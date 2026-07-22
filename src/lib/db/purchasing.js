@@ -1,7 +1,10 @@
 import { supabase } from '../supabase'
 
-export const getSuppliers = () =>
-  supabase.from('suppliers').select('*').order('id')
+export const getSuppliers = (orgId) => {
+  let q = supabase.from('suppliers').select('*').order('id')
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
 
 export const createSupplier = (data) =>
   supabase.from('suppliers').insert(data).select().single()
@@ -76,8 +79,11 @@ export const createPurchaseOrder = (data) =>
 export const updatePurchaseOrder = (id, data) =>
   supabase.from('purchase_orders').update(data).eq('id', id).select().single()
 
-export const getGoodsReceipts = () =>
-  supabase.from('goods_receipts').select('*').order('id', { ascending: false })
+export const getGoodsReceipts = (orgId) => {
+  let q = supabase.from('goods_receipts').select('*').order('id', { ascending: false })
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
 
 export const createGoodsReceipt = (data) =>
   supabase.from('goods_receipts').insert(data).select().single()

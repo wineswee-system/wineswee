@@ -3,6 +3,7 @@ import { ModalOverlay } from '../../components/Modal'
 import { createPortal } from 'react-dom'
 import { Plus, Trash2, Edit3, X, FileText, ChevronDown, ChevronRight } from 'lucide-react'
 import { getBlanketOrders, createBlanketOrder, updateBlanketOrder, deleteBlanketOrder, getBlanketOrderReleases, createBlanketOrderRelease, getSuppliers } from '../../lib/db'
+import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 
 import { confirm } from '../../lib/confirm'
@@ -16,6 +17,7 @@ const emptyForm = {
 }
 
 export default function BlanketOrders() {
+  const { profile } = useAuth()
   const [orders, setOrders] = useState([])
   const [suppliers, setSuppliers] = useState([])
   const [loading, setLoading] = useState(true)
@@ -31,14 +33,15 @@ export default function BlanketOrders() {
 
   const load = async () => {
     setLoading(true)
-    const [boRes, supRes] = await Promise.all([getBlanketOrders(), getSuppliers()])
+    const orgId = profile?.organization_id
+    const [boRes, supRes] = await Promise.all([getBlanketOrders(), getSuppliers(orgId)])
     if (boRes.error) setError(boRes.error.message)
     else setOrders(boRes.data || [])
     setSuppliers(supRes.data || [])
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [profile?.organization_id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSubmit = async () => {
     if (!form.supplier_id || !form.total_amount) return

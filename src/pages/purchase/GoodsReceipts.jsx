@@ -29,8 +29,8 @@ export default function GoodsReceipts() {
   const [autoMatchAlert, setAutoMatchAlert] = useState(null) // auto-match warning after GR save
 
   useEffect(() => {
-    getGoodsReceipts().then(({ data }) => { setReceipts(data || []) }).catch(err => { console.error('Failed to load data:', err); setError('資料載入失敗，請重新整理頁面') }).finally(() => { setLoading(false) })
-  }, [])
+    getGoodsReceipts(orgId).then(({ data }) => { setReceipts(data || []) }).catch(err => { console.error('Failed to load data:', err); setError('資料載入失敗，請重新整理頁面') }).finally(() => { setLoading(false) })
+  }, [orgId])
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 

@@ -3,9 +3,11 @@ import { Plus, Search, FileText } from 'lucide-react'
 import { getSupplierContracts, createSupplierContract, getSuppliers } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
+import { useAuth } from '../../contexts/AuthContext'
 
 import { toast } from '../../lib/toast'
 export default function Contracts() {
+  const { profile } = useAuth()
   const [contracts, setContracts] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -15,13 +17,13 @@ export default function Contracts() {
   const [form, setForm] = useState({ contract_number: '', supplier_id: '', start_date: '', end_date: '', discount_rate: '', min_order: '', status: '有效' })
 
   useEffect(() => {
-    Promise.all([getSupplierContracts(), getSuppliers()]).then(([c, s]) => {
+    Promise.all([getSupplierContracts(), getSuppliers(profile?.organization_id)]).then(([c, s]) => {
       setContracts(c.data || []); setSuppliers(s.data || [])
     }).catch(err => {
       console.error('Failed to load data:', err)
       setError('資料載入失敗，請重新整理頁面')
     }).finally(() => { setLoading(false) })
-  }, [])
+  }, [profile?.organization_id])
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 

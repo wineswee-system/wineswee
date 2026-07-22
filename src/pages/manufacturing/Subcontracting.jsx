@@ -3,6 +3,7 @@ import { ModalOverlay } from '../../components/Modal'
 import { createPortal } from 'react-dom'
 import { Plus, Trash2, Edit3, X, Truck, Package } from 'lucide-react'
 import { getSubcontracts, createSubcontract, updateSubcontract, deleteSubcontract, getSuppliers, getManufacturingOrders } from '../../lib/db'
+import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 
 import { confirm } from '../../lib/confirm'
@@ -16,6 +17,7 @@ const emptyForm = {
 }
 
 export default function Subcontracting() {
+  const { profile } = useAuth()
   const [contracts, setContracts] = useState([])
   const [suppliers, setSuppliers] = useState([])
   const [orders, setOrders] = useState([])
@@ -30,8 +32,9 @@ export default function Subcontracting() {
 
   const load = async () => {
     setLoading(true)
+    const orgId = profile?.organization_id
     const [scRes, supRes, moRes] = await Promise.all([
-      getSubcontracts(), getSuppliers(), getManufacturingOrders(),
+      getSubcontracts(), getSuppliers(orgId), getManufacturingOrders(),
     ])
     if (scRes.error) setError(scRes.error.message)
     else setContracts(scRes.data || [])
@@ -40,7 +43,7 @@ export default function Subcontracting() {
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [profile?.organization_id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSubmit = async () => {
     if (!form.supplier_id || !form.operation_name) return

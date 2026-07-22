@@ -24,7 +24,7 @@ export default function Suppliers() {
 
   useEffect(() => {
     Promise.all([
-      getSuppliers().then(({ data }) => data || []).catch(() => []),
+      getSuppliers(profile?.organization_id).then(({ data }) => data || []).catch(() => []),
       getVendorCategories().then(({ data }) => data || []).catch(() => []),
       getSupplierContracts().then(({ data }) => data || []).catch(() => []),
       getPurchaseOrders(profile?.organization_id).then(({ data }) => data || []).catch(() => []),

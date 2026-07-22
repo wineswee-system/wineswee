@@ -130,7 +130,7 @@ export default function PurchaseOrders() {
   const handlePOMatch = async (po) => {
     setMatchLoading(po.id)
     try {
-      const { data: grRecords } = await getGoodsReceipts()
+      const { data: grRecords } = await getGoodsReceipts(orgId)
       const { data: apRecords } = await getAccountsPayable(orgId)
 
       const matchingGR = (grRecords || []).find(gr => gr.po_id === po.id)

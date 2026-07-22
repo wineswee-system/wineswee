@@ -64,6 +64,7 @@ export default function EmployeeFormModal({
       : n(form.base_salary)
     const insuredBase = base
       + n(form.meal_allowance) + n(form.transport_allowance) + n(form.housing_allowance)
+      + (form.custom_allowances || []).reduce((s, c) => s + n(c.amount), 0)
     if (insuredBase <= 0) { toast.error('請先填「本薪 / 時薪」與津貼'); return }
     const labor = findLaborBracket(insBrackets.labor, insuredBase, { isPartTime: isPT })?.insured_salary
     const health = isPT
@@ -73,6 +74,11 @@ export default function EmployeeFormModal({
     if (health) set('health_ins_grade', health)
     toast.success(`已依投保基數 ${Math.round(insuredBase).toLocaleString()} 帶入級距，可再手動調整`)
   }
+
+  // 自訂津貼（存進 salary_structures.custom_allowances；算入投保基數）
+  const addCustomAllowance = () => setForm(f => ({ ...f, custom_allowances: [...(f.custom_allowances || []), { name: '', amount: '' }] }))
+  const updateCustomAllowance = (idx, field, val) => setForm(f => ({ ...f, custom_allowances: (f.custom_allowances || []).map((c, i) => i === idx ? { ...c, [field]: val } : c) }))
+  const removeCustomAllowance = (idx) => setForm(f => ({ ...f, custom_allowances: (f.custom_allowances || []).filter((_, i) => i !== idx) }))
 
   return (
     <Modal title="新增員工（到職）" onClose={onClose} onSubmit={onSubmit}>
@@ -322,6 +328,26 @@ export default function EmployeeFormModal({
             </Field>
           ))}
         </div>
+        {/* 自訂津貼（自己打名稱;存進 salary_structures.custom_allowances,算入投保基數+加班費） */}
+        <div style={{ marginTop: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>✨ 自訂津貼（可自己新增名稱）</span>
+          <button type="button" onClick={addCustomAllowance}
+            style={{ fontSize: 12, color: 'var(--accent-cyan)', background: 'transparent', border: '1px dashed var(--accent-cyan)', borderRadius: 8, padding: '3px 10px', cursor: 'pointer' }}>
+            ＋ 新增
+          </button>
+        </div>
+        {(form.custom_allowances || []).length > 0 && (
+          <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {form.custom_allowances.map((c, idx) => (
+              <div key={idx} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <input className="form-input" placeholder="津貼名稱（例：證照津貼）" value={c.name} onChange={e => updateCustomAllowance(idx, 'name', e.target.value)} style={{ flex: 2 }} />
+                <input className="form-input" type="number" placeholder="金額" value={c.amount} onChange={e => updateCustomAllowance(idx, 'amount', e.target.value)} style={{ flex: 1 }} />
+                <button type="button" onClick={() => removeCustomAllowance(idx)}
+                  style={{ background: 'transparent', border: '1px solid var(--border-subtle)', color: 'var(--accent-red)', cursor: 'pointer', borderRadius: 6, padding: '6px 9px' }}>✕</button>
+              </div>
+            ))}
+          </div>
+        )}
         {/* 投保設定（寫入 employees，計薪依此判斷扣不扣勞健保/勞退） */}
         <div style={{ marginTop: 12, display: 'flex', gap: 18, flexWrap: 'wrap' }}>
           {[

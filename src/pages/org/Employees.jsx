@@ -208,7 +208,8 @@ export default function Employees() {
       const ROLE_ID_MAP = { super_admin: 1, admin: 2, manager: 3, office_staff: 4, store_staff: 5 }
       // employment_category / piece_rate 屬於 salary_structures，不寫進 employees 表
       // (labor_insurance/health_insurance/pension 是 employees 欄位，留著一起寫)
-      const { employment_category: _cat, piece_rate: _pr, ...formForEmployee } = form
+      // custom_allowances 非 employees 欄位(在 salary_structures),需剔除否則 employees insert 噴錯
+      const { employment_category: _cat, piece_rate: _pr, custom_allowances: _ca, ...formForEmployee } = form
       const payload = {
         ...formForEmployee,
         salary_type: _cat === 'parttime' ? 'hourly' : 'monthly',
@@ -255,6 +256,7 @@ export default function Employees() {
           base_salary: Number(form.base_salary) || 0,
           hourly_rate: Number(form.hourly_rate) || 0,
           piece_rate: Number(form.piece_rate) || 0,
+          custom_allowances: (form.custom_allowances || []).filter(c => c.name && Number(c.amount) > 0),
         })
         if (ssErr) { console.warn('salary_structures 建立失敗:', ssErr); toast.error('員工已建立，但薪資結構未建立：' + ssErr.message) }
         // 招募報到:建員工檔後回寫候選人 → 待報到(本人綁 LINE 後由 trigger 轉「已報到」)

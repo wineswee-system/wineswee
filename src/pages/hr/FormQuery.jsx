@@ -36,7 +36,7 @@ const STATUS_STYLE = (st) => {
 const daysAgo = (n) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10)
 
 export default function FormQuery() {
-  const { profile } = useAuth()
+  const { profile, role } = useAuth()
   const [category, setCategory] = useState('')
   const [formType, setFormType] = useState('')
   const [status, setStatus] = useState('')
@@ -49,7 +49,7 @@ export default function FormQuery() {
   const [loading, setLoading] = useState(false)
   const [selected, setSelected] = useState(new Set())  // "type-id"
   const [acting, setActing] = useState(false)
-  const isAdmin = ['admin', 'super_admin'].includes(profile?.role)
+  const isAdmin = ['admin', 'super_admin'].includes(role?.name)
 
   const rowKey = (r) => r.form_type + '-' + r.id
   const toggleSel = (r) => setSelected(prev => { const n = new Set(prev); const k = rowKey(r); n.has(k) ? n.delete(k) : n.add(k); return n })

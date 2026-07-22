@@ -3,8 +3,10 @@ import { Plus, Search, DollarSign } from 'lucide-react'
 import { getBudgets, createBudget } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
+import { useAuth } from '../../contexts/AuthContext'
 
 export default function Budgets() {
+  const { profile } = useAuth()
   const [budgets, setBudgets] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -13,8 +15,8 @@ export default function Budgets() {
   const [form, setForm] = useState({ department: '', category: '', period: '', budget_amount: '', spent_amount: '0', status: '執行中' })
 
   useEffect(() => {
-    getBudgets().then(({ data }) => { setBudgets(data || []) }).catch(err => { console.error('Failed to load data:', err); setError('資料載入失敗，請重新整理頁面') }).finally(() => { setLoading(false) })
-  }, [])
+    getBudgets(profile?.organization_id).then(({ data }) => { setBudgets(data || []) }).catch(err => { console.error('Failed to load data:', err); setError('資料載入失敗，請重新整理頁面') }).finally(() => { setLoading(false) })
+  }, [profile?.organization_id])
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 

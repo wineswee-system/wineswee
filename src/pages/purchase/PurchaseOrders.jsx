@@ -33,13 +33,13 @@ export default function PurchaseOrders() {
 
   useEffect(() => {
     Promise.all([
-      getPurchaseOrders(),
+      getPurchaseOrders(orgId),
       getCurrencies(),
     ]).then(([poRes, curRes]) => {
       setOrders(poRes.data || [])
       setCurrencies(curRes.length > 0 ? curRes : [{ code: 'NTD', name: '新台幣', symbol: 'NT$' }, { code: 'USD', name: '美元', symbol: '$' }, { code: 'EUR', name: '歐元', symbol: '€' }, { code: 'JPY', name: '日圓', symbol: '¥' }, { code: 'CNY', name: '人民幣', symbol: '¥' }, { code: 'GBP', name: '英鎊', symbol: '£' }, { code: 'HKD', name: '港幣', symbol: 'HK$' }])
     }).catch(err => { console.error('Failed to load data:', err); setError('資料載入失敗，請重新整理頁面') }).finally(() => { setLoading(false) })
-  }, [])
+  }, [orgId])
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 

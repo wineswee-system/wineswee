@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Search, Star, TrendingUp, TrendingDown, BarChart3, ChevronRight, ChevronDown, RefreshCw, Award, AlertTriangle } from 'lucide-react'
 import { getSuppliers, getPurchaseOrders, getGoodsReceipts } from '../../lib/db'
+import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 
 const MOCK_PERFORMANCE = [
@@ -12,6 +13,7 @@ const MOCK_PERFORMANCE = [
 ]
 
 export default function VendorPerformance() {
+  const { profile } = useAuth()
   const [performance, setPerformance] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -20,14 +22,14 @@ export default function VendorPerformance() {
 
   useEffect(() => {
     computePerformance()
-  }, [])
+  }, [profile?.organization_id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const computePerformance = async () => {
     setLoading(true)
     try {
       const [suppRes, poRes, grRes] = await Promise.all([
         getSuppliers().catch(() => ({ data: null })),
-        getPurchaseOrders().catch(() => ({ data: null })),
+        getPurchaseOrders(profile?.organization_id).catch(() => ({ data: null })),
         getGoodsReceipts().catch(() => ({ data: null })),
       ])
 

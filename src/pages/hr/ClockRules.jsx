@@ -4,6 +4,7 @@ import { getStores, updateStore } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import Time24 from '../../components/Time24'
+import { useAuth } from '../../contexts/AuthContext'
 import { geocodeAddress } from '../../lib/geocoding'
 import { toast } from '../../lib/toast'
 
@@ -71,6 +72,7 @@ const STATUS_META = {
 // ─── component ───────────────────────────────────────────────────────────────
 
 export default function ClockRules() {
+  const { profile } = useAuth()
   const [stores,       setStores]       = useState([])
   const [loading,      setLoading]      = useState(true)
   const [editingStore, setEditingStore] = useState(null)
@@ -79,10 +81,10 @@ export default function ClockRules() {
   const [saving,       setSaving]       = useState(false)
 
   useEffect(() => {
-    getStores()
+    getStores(profile?.organization_id)
       .then(({ data }) => setStores(data || []))
       .finally(() => setLoading(false))
-  }, [])
+  }, [profile?.organization_id])
 
   const set = useCallback((k, v) => setForm(f => ({ ...f, [k]: v })), [])
 

@@ -4,12 +4,14 @@ import { createPortal } from 'react-dom'
 import { Plus, Trash2, X, ChevronDown, ChevronRight, MapPin, Package, Warehouse } from 'lucide-react'
 import { getWarehouses, createWarehouse, getWarehouseZones, createWarehouseZone, deleteWarehouseZone, getWarehouseBins, createWarehouseBin, updateWarehouseBin, deleteWarehouseBin } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import { useAuth } from '../../contexts/AuthContext'
 
 import { confirm } from '../../lib/confirm'
 const ZONE_TYPES = ['收貨', '儲存', '揀貨', '出貨', '退貨']
 const BIN_STATUSES = ['可用', '已滿', '停用']
 
 export default function Bins() {
+  const { profile } = useAuth()
   const [warehouses, setWarehouses] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -28,13 +30,14 @@ export default function Bins() {
 
   const load = async () => {
     setLoading(true)
-    const { data, error } = await getWarehouses()
+    const orgId = profile?.organization_id
+    const { data, error } = await getWarehouses(orgId)
     if (error) setError(error.message)
     else setWarehouses(data || [])
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [profile?.organization_id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggleWh = async (id) => {
     if (expandedWh === id) { setExpandedWh(null); setExpandedZone(null); return }

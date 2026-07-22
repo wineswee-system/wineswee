@@ -4,6 +4,7 @@ import { getTrialBalance, getAccountType } from '../../lib/accounting'
 import { getAccounts } from '../../lib/db'
 import { exportTrialBalancePdf } from '../../lib/exportPdf'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import { useAuth } from '../../contexts/AuthContext'
 
 import { fmtNT as fmt } from '../../lib/currency'
 
@@ -40,6 +41,7 @@ function rollUpToParents(rows, accountsList) {
 }
 
 export default function TrialBalance() {
+  const { profile } = useAuth()
   const [trialData, setTrialData] = useState([])
   const [accounts, setAccounts] = useState([])
   const [loading, setLoading] = useState(true)
@@ -50,7 +52,7 @@ export default function TrialBalance() {
   const loadData = (date) => {
     setLoading(true)
     setError(null)
-    Promise.all([getTrialBalance(date), getAccounts()]).then(([data, accountsRes]) => {
+    Promise.all([getTrialBalance(date), getAccounts(profile?.organization_id)]).then(([data, accountsRes]) => {
       setTrialData(data || [])
       setAccounts(accountsRes.data || [])
     }).catch(err => {
@@ -63,7 +65,7 @@ export default function TrialBalance() {
 
   useEffect(() => {
     loadData(asOfDate)
-  }, [])
+  }, [profile?.organization_id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleDateChange = (newDate) => {
     setAsOfDate(newDate)

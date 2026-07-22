@@ -4,11 +4,13 @@ import { createPortal } from 'react-dom'
 import { Plus, X, ArrowRight, Trash2, Edit3 } from 'lucide-react'
 import { getWarehouseTransfers, createWarehouseTransfer, updateWarehouseTransfer, getWarehouses } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import { useAuth } from '../../contexts/AuthContext'
 
 import { confirm } from '../../lib/confirm'
 const STATUSES = ['待出庫', '運送中', '已入庫', '已取消']
 
 export default function Transfers() {
+  const { profile } = useAuth()
   const [transfers, setTransfers] = useState([])
   const [warehouses, setWarehouses] = useState([])
   const [loading, setLoading] = useState(true)
@@ -18,13 +20,14 @@ export default function Transfers() {
 
   const load = async () => {
     setLoading(true)
-    const [tRes, wRes] = await Promise.all([getWarehouseTransfers(), getWarehouses()])
+    const orgId = profile?.organization_id
+    const [tRes, wRes] = await Promise.all([getWarehouseTransfers(), getWarehouses(orgId)])
     setTransfers(tRes.data || [])
     setWarehouses(wRes.data || [])
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [profile?.organization_id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleCreate = async () => {
     if (!form.from_warehouse_id || !form.to_warehouse_id) return

@@ -3,11 +3,13 @@ import { Plus, Search, Star, Pencil, Trash2, FileText, Building2 } from 'lucide-
 import { getSuppliers, createSupplier, updateSupplier, deleteSupplier, getVendorCategories, getSupplierContracts, getPurchaseOrders } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
+import { useAuth } from '../../contexts/AuthContext'
 
 const PAYMENT_TERMS = ['COD', 'NET15', 'NET30', 'NET45', 'NET60']
 const EMPTY_FORM = { name: '', contact_person: '', phone: '', email: '', address: '', payment_terms: 'NET30', status: '合作中', tax_id: '', bank_name: '', bank_account: '', category_id: '', tags: '', notes: '' }
 
 export default function Suppliers() {
+  const { profile } = useAuth()
   const [suppliers, setSuppliers] = useState([])
   const [categories, setCategories] = useState([])
   const [contracts, setContracts] = useState([])
@@ -25,7 +27,7 @@ export default function Suppliers() {
       getSuppliers().then(({ data }) => data || []).catch(() => []),
       getVendorCategories().then(({ data }) => data || []).catch(() => []),
       getSupplierContracts().then(({ data }) => data || []).catch(() => []),
-      getPurchaseOrders().then(({ data }) => data || []).catch(() => []),
+      getPurchaseOrders(profile?.organization_id).then(({ data }) => data || []).catch(() => []),
     ]).then(([s, c, ct, o]) => {
       setSuppliers(s)
       setCategories(c)
@@ -35,7 +37,7 @@ export default function Suppliers() {
       console.error('Failed to load data:', err)
       setError('資料載入失敗，請重新整理頁面')
     }).finally(() => { setLoading(false) })
-  }, [])
+  }, [profile?.organization_id])
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 

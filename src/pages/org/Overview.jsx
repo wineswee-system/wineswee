@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react'
 import { Building, MapPin, Users, ClipboardList } from 'lucide-react'
 import { getCompanies, getStores, getDepartments, getEmployees } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import { useAuth } from '../../contexts/AuthContext'
 
 export default function OrgOverview() {
+  const { profile } = useAuth()
   const [companies, setCompanies] = useState([])
   const [stores, setStores] = useState([])
   const [departments, setDepartments] = useState([])
@@ -12,7 +14,8 @@ export default function OrgOverview() {
   const [error, setError] = useState(null)
 
   useEffect(() => {
-    Promise.all([getCompanies(), getStores(), getDepartments(), getEmployees()]).then(([c, s, d, e]) => {
+    const orgId = profile?.organization_id
+    Promise.all([getCompanies(orgId), getStores(orgId), getDepartments(orgId), getEmployees(orgId)]).then(([c, s, d, e]) => {
       setCompanies(c.data || [])
       setStores(s.data || [])
       setDepartments(d.data || [])
@@ -23,7 +26,7 @@ export default function OrgOverview() {
     }).finally(() => {
       setLoading(false)
     })
-  }, [])
+  }, [profile?.organization_id])
 
   if (loading) return <LoadingSpinner />
   if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>⚠ {error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>

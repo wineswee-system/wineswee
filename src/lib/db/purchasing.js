@@ -54,8 +54,11 @@ export const getPurchaseRequests = () =>
 export const createPurchaseRequest = (data) =>
   supabase.from('purchase_requests').insert(data).select().single()
 
-export const getPurchaseOrders = () =>
-  supabase.from('purchase_orders').select('*').order('id', { ascending: false }).limit(1000)
+export const getPurchaseOrders = (orgId) => {
+  let q = supabase.from('purchase_orders').select('*').order('id', { ascending: false }).limit(1000)
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
 
 export const createPurchaseOrder = (data) =>
   supabase.rpc('secure_create_purchase_order', {

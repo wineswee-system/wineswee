@@ -8,6 +8,7 @@ import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import { getEventBus } from '../../lib/events/index.js'
+import { useAuth } from '../../contexts/AuthContext'
 
 import { toast } from '../../lib/toast'
 import { fmtNT as fmt } from '../../lib/currency'
@@ -20,6 +21,7 @@ const emptyForm = {
 }
 
 export default function JournalEntries() {
+  const { profile } = useAuth()
   const [entries, setEntries] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -34,11 +36,11 @@ export default function JournalEntries() {
 
   useEffect(() => {
     loadEntries()
-  }, [])
+  }, [profile?.organization_id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadEntries = () => {
     setLoading(true)
-    getJournalEntries().then(({ data }) => {
+    getJournalEntries(profile?.organization_id).then(({ data }) => {
       setEntries(data || [])
     }).catch(err => {
       console.error('Failed to load data:', err)
@@ -259,7 +261,7 @@ export default function JournalEntries() {
       }
 
       // Refresh all entries
-      const { data: refreshed } = await getJournalEntries()
+      const { data: refreshed } = await getJournalEntries(profile?.organization_id)
       setEntries(refreshed || [])
       // Clear cached lines so they reload
       setLines({})

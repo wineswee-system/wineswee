@@ -34,7 +34,7 @@ export default function Allowances() {
   const [form, setForm] = useState(EMPTY_FORM)
 
   useEffect(() => {
-    Promise.all([getPurchaseAllowances(orgId), getPurchaseOrders()])
+    Promise.all([getPurchaseAllowances(orgId), getPurchaseOrders(orgId)])
       .then(([a, o]) => { setItems(a.data || []); setOrders(o.data || []) })
       .catch((err) => { console.error('Failed to load data:', err); setError('資料載入失敗，請重新整理頁面') })
       .finally(() => setLoading(false))

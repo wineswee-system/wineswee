@@ -208,7 +208,7 @@ When launching agents for this project, include relevant context:
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **sme-ops-system** (27310 symbols, 37592 relationships, 171 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **sme-ops-system** (28232 symbols, 38615 relationships, 172 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 

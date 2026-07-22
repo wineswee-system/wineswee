@@ -34,13 +34,15 @@ export default function ProcessOverview() {
   const [selectedTask, setSelectedTask] = useState(null)
 
   useEffect(() => {
+    const orgId = profile?.organization_id
+    const withOrg = (q) => orgId ? q.eq('organization_id', orgId) : q
     Promise.all([
-      getWorkflows(),
-      getWorkflowInstances(),
-      supabase.from('tasks').select('*').not('workflow_instance_id', 'is', null).order('step_order'),
-      getTasks(),
-      getChecklists(),
-      getEmployees(),
+      getWorkflows({ orgId }),
+      getWorkflowInstances({ orgId }),
+      withOrg(supabase.from('tasks').select('*').not('workflow_instance_id', 'is', null).order('step_order')),
+      getTasks({ orgId }),
+      getChecklists(orgId),
+      getEmployees(orgId),
     ]).then(([w, inst, st, t, c, emp]) => {
       setWorkflows(w.data || [])
       setInstances(inst.data || [])
@@ -56,7 +58,7 @@ export default function ProcessOverview() {
       // 每次 session 自動檢查今日到期及已逾期任務，依負責人發一則輪播提醒
       checkAndNotifyDailyTasks().catch(err => console.warn('[Overview] Task daily check failed:', err))
     })
-  }, [])
+  }, [profile?.organization_id])
 
   // Live-sync: tasks table drives both standalone tasks and workflow steps.
   // Scope channels to this org so Realtime doesn't decode every tenant's churn.
@@ -89,10 +91,11 @@ export default function ProcessOverview() {
 
   const reload = () => {
     setLoading(true)
+    const orgId = profile?.organization_id
     Promise.all([
-      getWorkflows(), getWorkflowInstances(),
-      supabase.from('tasks').select('*').not('workflow_instance_id', 'is', null).order('step_order'),
-      getTasks(), getChecklists(),
+      getWorkflows({ orgId }), getWorkflowInstances({ orgId }),
+      (orgId ? supabase.from('tasks').select('*').eq('organization_id', orgId) : supabase.from('tasks').select('*')).not('workflow_instance_id', 'is', null).order('step_order'),
+      getTasks({ orgId }), getChecklists(orgId),
     ]).then(([w, inst, st, t, c]) => {
       setWorkflows(w.data || [])
       setInstances(inst.data || [])

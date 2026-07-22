@@ -117,17 +117,20 @@ export default function Workflows() {
   const [deployForm, setDeployForm] = useState({ location: '', assignees: {} })
 
   useEffect(() => {
+    // 多租戶：流程/任務/員工/部門/專案/簽核鏈限本組織（避免混入其他組織資料）
+    const orgId = profile?.organization_id
+    const withOrg = (q) => orgId ? q.eq('organization_id', orgId) : q
     Promise.all([
-      getWorkflows(),
-      getWorkflowInstances({ excludeTemplates: HR_APPROVAL_TEMPLATE_NAMES }),
-      getTasks(),
-      supabase.from('employees').select('id, name, name_en, dept, position, department_id, store, store_id, departments!department_id(name), stores!store_id(name)').eq('status', '在職').order('name'),
-      supabase.from('checklists').select('*').order('id'),
+      getWorkflows({ orgId }),
+      getWorkflowInstances({ excludeTemplates: HR_APPROVAL_TEMPLATE_NAMES, orgId }),
+      getTasks({ orgId }),
+      withOrg(supabase.from('employees').select('id, name, name_en, dept, position, department_id, store, store_id, departments!department_id(name), stores!store_id(name)').eq('status', '在職').order('name')),
+      withOrg(supabase.from('checklists').select('*').order('id')),
       supabase.from('sop_templates').select('*').order('id'),
-      supabase.from('departments').select('*').order('name'),
-      getApprovalChains(),
+      withOrg(supabase.from('departments').select('*').order('name')),
+      getApprovalChains(orgId),
       getWorkflowCategories(),
-      supabase.from('projects').select('id, name').order('name'),
+      withOrg(supabase.from('projects').select('id, name').order('name')),
       supabase.from('line_groups').select('id, group_name').order('group_name'),
     ]).then(([w, inst, t, emp, cl, tpl, dept, ac, cat, proj, lg]) => {
       setWorkflows(w.data || [])
@@ -145,7 +148,7 @@ export default function Workflows() {
       console.error('Failed to load:', err)
       setError('資料載入失敗')
     }).finally(() => setLoading(false))
-  }, [])
+  }, [profile?.organization_id])
 
   useEffect(() => {
     if (!profile?.organization_id) return

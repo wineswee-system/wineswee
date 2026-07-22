@@ -188,17 +188,18 @@ export default function Projects() {
     const [pRes, wRes, eRes, sRes, cRes, tplRes, acRes, expRes, dRes, clRes] = await Promise.all([
       supabase.from('projects').select('*').eq('organization_id', orgId).order('created_at', { ascending: false }),
       supabase.from('workflow_instances').select('*').eq('organization_id', orgId).not('project_id', 'is', null).order('sort_order'),
-      getEmployees(),
-      supabase.from('stores').select('id, name').order('name'),
+      getEmployees(orgId),
+      supabase.from('stores').select('id, name').eq('organization_id', orgId).order('name'),
       supabase.from('project_comments').select('*').order('created_at', { ascending: false }),
       supabase.from('project_templates').select('*').order('id'),
-      supabase.from('approval_chains').select('id, name, steps:approval_chain_steps(id)').order('name'),
+      supabase.from('approval_chains').select('id, name, steps:approval_chain_steps(id)').eq('organization_id', orgId).order('name'),
       supabase.from('expense_requests')
         .select('id, title, employee, estimated_amount, actual_amount, status, project_id, account_name, store, created_at')
+        .eq('organization_id', orgId)
         .is('deleted_at', null)
         .order('created_at', { ascending: false }),
       getDepartments(orgId),
-      supabase.from('checklists').select('id, name, items').order('name'),
+      supabase.from('checklists').select('id, name, items').eq('organization_id', orgId).order('name'),
     ])
     // Load tasks that either carry project_id directly OR belong to a project's workflow instance.
     // Two separate queries avoids URL-length overflow: the old .or() with wIds.join(',') breaks

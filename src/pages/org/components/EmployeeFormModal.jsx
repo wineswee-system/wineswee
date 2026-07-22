@@ -6,6 +6,13 @@ import { loadPositions, groupPositions, DEFAULT_POSITIONS } from '../../../lib/p
 import { loadInsuranceBrackets, findLaborBracket, findHealthBracket, findPTInsuredSalary } from '../../../lib/insuranceBrackets'
 import { toast } from '../../../lib/toast'
 
+// 常見津貼快選（跟 SalaryFormModal / HrTabContent 一致）；點一下加進自訂津貼
+const PRESET_ALLOWANCES = [
+  '夜班津貼', '主管加給', '證照津貼', '外語津貼',
+  '專業加給', '危險津貼', '久任津貼', '油資補貼',
+  '通訊費補助', '託兒津貼', '績效獎金', '全勤獎金',
+]
+
 const EMPLOYMENT_TYPES = [
   { value: '正職', label: '正職' },
   { value: '約聘', label: '約聘' },
@@ -76,7 +83,7 @@ export default function EmployeeFormModal({
   }
 
   // 自訂津貼（存進 salary_structures.custom_allowances；算入投保基數）
-  const addCustomAllowance = () => setForm(f => ({ ...f, custom_allowances: [...(f.custom_allowances || []), { name: '', amount: '' }] }))
+  const addCustomAllowance = (name = '') => setForm(f => ({ ...f, custom_allowances: [...(f.custom_allowances || []), { name, amount: '' }] }))
   const updateCustomAllowance = (idx, field, val) => setForm(f => ({ ...f, custom_allowances: (f.custom_allowances || []).map((c, i) => i === idx ? { ...c, [field]: val } : c) }))
   const removeCustomAllowance = (idx) => setForm(f => ({ ...f, custom_allowances: (f.custom_allowances || []).filter((_, i) => i !== idx) }))
 
@@ -329,11 +336,23 @@ export default function EmployeeFormModal({
           ))}
         </div>
         {/* 自訂津貼（自己打名稱;存進 salary_structures.custom_allowances,算入投保基數+加班費） */}
-        <div style={{ marginTop: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>✨ 自訂津貼（可自己新增名稱）</span>
-          <button type="button" onClick={addCustomAllowance}
-            style={{ fontSize: 12, color: 'var(--accent-cyan)', background: 'transparent', border: '1px dashed var(--accent-cyan)', borderRadius: 8, padding: '3px 10px', cursor: 'pointer' }}>
-            ＋ 新增
+        <div style={{ marginTop: 10, marginBottom: 6, fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>✨ 自訂津貼（點快選或自己打名稱）</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+          {PRESET_ALLOWANCES.map(name => {
+            const used = (form.custom_allowances || []).some(c => c.name === name)
+            return (
+              <button key={name} type="button" disabled={used} onClick={() => !used && addCustomAllowance(name)}
+                style={{ padding: '4px 10px', borderRadius: 999, fontSize: 12, cursor: used ? 'default' : 'pointer',
+                  border: '1px solid var(--border-subtle)', background: used ? 'var(--bg-tertiary)' : 'transparent',
+                  color: used ? 'var(--text-muted)' : 'var(--accent-cyan)', opacity: used ? 0.5 : 1 }}>
+                {used ? '✓ ' : '+ '}{name}
+              </button>
+            )
+          })}
+          <button type="button" onClick={() => addCustomAllowance('')}
+            style={{ padding: '4px 10px', borderRadius: 999, fontSize: 12, cursor: 'pointer',
+              border: '1px dashed var(--accent-purple)', background: 'rgba(167,139,250,0.08)', color: 'var(--accent-purple)' }}>
+            + 完全自訂
           </button>
         </div>
         {(form.custom_allowances || []).length > 0 && (

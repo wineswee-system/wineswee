@@ -27,14 +27,25 @@ export function useRealtimeTable(table, { onInsert, onUpdate, onDelete, filter }
   const cbRef = useRef({ onInsert, onUpdate, onDelete })
   cbRef.current = { onInsert, onUpdate, onDelete }
 
-  // Stable serialisation of filter for dep array
-  const filterKey = filter ? `${filter.column}=${filter.value}` : ''
+  // Resolve the server-side row filter. When a filter is requested but its value
+  // isn't ready yet (e.g. the auth profile is still loading), skip the subscription
+  // entirely — do NOT fall back to an unfiltered full-table channel. Unfiltered
+  // Postgres-changes channels make Realtime decode & RLS-check every row change in
+  // the table for every connected client, which is the largest avoidable memory
+  // load on the instance. An `eq.undefined` channel would be a no-op that still
+  // holds server state, so we skip that too.
+  const filterReady = !filter || (filter.value !== undefined && filter.value !== null && filter.value !== '')
+  const filterStr = filter && filterReady ? `${filter.column}=eq.${filter.value}` : ''
+  // Dep key: re-subscribe when the resolved filter changes; 'pending' while unready.
+  const filterKey = filter ? (filterReady ? filterStr : 'pending') : 'all'
 
   useEffect(() => {
-    const changeOpts = { event: '*', schema: 'public', table }
-    if (filter) changeOpts.filter = `${filter.column}=eq.${filter.value}`
+    if (!filterReady) return
 
-    const channelName = `rt:${table}:${filterKey || 'all'}`
+    const changeOpts = { event: '*', schema: 'public', table }
+    if (filterStr) changeOpts.filter = filterStr
+
+    const channelName = `rt:${table}:${filterStr || 'all'}`
     const channel = supabase
       .channel(channelName)
       .on('postgres_changes', changeOpts, (payload) => {

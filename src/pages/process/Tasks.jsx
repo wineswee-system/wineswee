@@ -122,8 +122,9 @@ export default function Tasks() {
       .then(({ data }) => setStores(data || []))
   }, [profile?.organization_id])
 
-  // Live-sync: reflect DB changes made by other users or tabs without a full refresh
-  useRealtimeTasks(setTasks)
+  // Live-sync: reflect DB changes made by other users or tabs without a full refresh.
+  // Scope the channel to this org so Realtime doesn't decode every tenant's task churn.
+  useRealtimeTasks(setTasks, { column: 'organization_id', value: profile?.organization_id })
 
   // 從儀表板「我的任務」等處帶 ?focus=ID 進來 → 自動開該任務詳情
   useEffect(() => {

@@ -153,9 +153,11 @@ export default function Workflows() {
       .then(({ data }) => setStores(data || []))
   }, [profile?.organization_id])
 
-  // Live-sync: reflect task & workflow-instance changes from other users/tabs
-  useRealtimeTasks(setAllTasks)
-  useRealtimeWorkflowInstances(setInstances)
+  // Live-sync: reflect task & workflow-instance changes from other users/tabs.
+  // Scope channels to this org so Realtime doesn't decode every tenant's churn.
+  const orgFilter = { column: 'organization_id', value: profile?.organization_id }
+  useRealtimeTasks(setAllTasks, orgFilter)
+  useRealtimeWorkflowInstances(setInstances, orgFilter)
 
   // Dashboard ApprovalCenter 跳過來時 ?focus=ID 自動展開流程明細
   useEffect(() => {

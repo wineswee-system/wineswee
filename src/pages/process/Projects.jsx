@@ -241,9 +241,11 @@ export default function Projects() {
   // Re-run when auth profile resolves (avoids race where load() fires before profile is ready)
   useEffect(() => { if (profile?.organization_id) load() }, [profile?.organization_id])
 
-  // Live-sync: reflect task & workflow-instance changes from other users/tabs
-  useRealtimeTasks(setTasks)
-  useRealtimeWorkflowInstances(setWorkflows)
+  // Live-sync: reflect task & workflow-instance changes from other users/tabs.
+  // Scope channels to this org so Realtime doesn't decode every tenant's churn.
+  const orgFilter = { column: 'organization_id', value: profile?.organization_id }
+  useRealtimeTasks(setTasks, orgFilter)
+  useRealtimeWorkflowInstances(setWorkflows, orgFilter)
 
   useEffect(() => {
     if (!wfMenuId) return

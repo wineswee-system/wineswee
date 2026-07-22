@@ -4,6 +4,7 @@ import { Workflow, ListChecks, CheckSquare, TrendingUp, Clock, CheckCircle, XCir
 import { getWorkflows, getWorkflowInstances, getTasks, getChecklists, updateTask, getEmployees } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
 import { useRealtimeTable } from '../../lib/hooks/useRealtimeSync'
+import { useAuth } from '../../contexts/AuthContext'
 import { advanceWorkflow } from '../../lib/workflowIntegration'
 import { checkAndNotifyDailyTasks } from '../../lib/taskDueChecker'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -19,6 +20,7 @@ const STATUS_CONFIG = {
 }
 
 export default function ProcessOverview() {
+  const { profile } = useAuth()
   const [workflows, setWorkflows] = useState([])
   const [instances, setInstances] = useState([])
   const [steps, setSteps] = useState([])
@@ -56,8 +58,11 @@ export default function ProcessOverview() {
     })
   }, [])
 
-  // Live-sync: tasks table drives both standalone tasks and workflow steps
+  // Live-sync: tasks table drives both standalone tasks and workflow steps.
+  // Scope channels to this org so Realtime doesn't decode every tenant's churn.
+  const orgFilter = { column: 'organization_id', value: profile?.organization_id }
   useRealtimeTable('tasks', {
+    filter: orgFilter,
     onInsert: (row) => {
       if (row.workflow_instance_id) setSteps((p) => [row, ...p.filter((t) => t.id !== row.id)])
       else setTasks((p) => [row, ...p.filter((t) => t.id !== row.id)])
@@ -72,6 +77,7 @@ export default function ProcessOverview() {
     },
   })
   useRealtimeTable('workflow_instances', {
+    filter: orgFilter,
     onInsert: (row) => setInstances((p) => [...p.filter((i) => i.id !== row.id), row]),
     onUpdate: (row) => setInstances((p) => p.map((i) => (i.id === row.id ? row : i))),
     onDelete: (row) => setInstances((p) => p.filter((i) => i.id !== row.id)),

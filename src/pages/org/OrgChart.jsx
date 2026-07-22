@@ -40,7 +40,7 @@ export default function OrgChart() {
     if (!orgId) return
     const channel = supabase
       .channel(`org-depts-${orgId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'departments' }, () => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'departments', filter: `organization_id=eq.${orgId}` }, () => {
         getDepartments(orgId).then(res => setDepartments(res.data || []))
       })
       .subscribe()

@@ -7,6 +7,7 @@ import PunchCorrection from '../pages/hr/PunchCorrection'
 import EarlyLeaveForm from '../pages/hr/EarlyLeaveForm'
 import Leave from '../pages/hr/Leave'
 import Overtime from '../pages/hr/Overtime'
+import FormQuery from '../pages/hr/FormQuery'
 import Salary from '../pages/hr/Salary'
 import SalaryAdjust from '../pages/hr/SalaryAdjust'
 import PayrollAuditLog from '../pages/hr/PayrollAuditLog'
@@ -74,6 +75,7 @@ export default memo(function HRModule() {
       <Route path="early-leave" element={<EarlyLeaveForm />} />
       <Route path="leave" element={<Leave />} />
       <Route path="overtime" element={<Overtime />} />
+      <Route path="form-query" element={<FormQuery />} />
       <Route path="salary" element={<Salary />} />
       <Route path="salary-adjust" element={<SalaryAdjust />} />
       <Route path="salary-audit-log" element={<PayrollAuditLog />} />

@@ -213,12 +213,15 @@ export default function Schedule() {
   }, [authProfile?.organization_id])
 
   useEffect(() => {
+    // 多租戶：員工/部門/門市限本組織（有 org 欄零 null，安全）；避免跨組織門市/員工混入下拉
+    const orgId = authProfile?.organization_id
+    const withOrg = (q) => orgId ? q.eq('organization_id', orgId) : q
     Promise.all([
       // 不過濾 status：要支援「看歷史月份時，當時還在職、現在已離職」的員工顯示
       // 由 filtered 的 join_date/resign_date 範圍過濾掉跟 view 沒重疊的人
-      supabase.from('employees').select('id, name, dept, store, supervisor, department_id, position, store_id, employment_type, schedule_priority, schedule_sort, can_open, can_close, additional_stores, weekly_target_hours, personal_hour_cap, join_date, resign_date, status').order('name'),
-      supabase.from('departments').select('*').order('name'),
-      supabase.from('stores').select('*').order('name'),
+      withOrg(supabase.from('employees').select('id, name, dept, store, supervisor, department_id, position, store_id, employment_type, schedule_priority, schedule_sort, can_open, can_close, additional_stores, weekly_target_hours, personal_hour_cap, join_date, resign_date, status').order('name')),
+      withOrg(supabase.from('departments').select('*').order('name')),
+      withOrg(supabase.from('stores').select('*').order('name')),
       supabase.from('shift_definitions').select('*').order('sort_order'),
       supabase.from('holidays').select('date'),
       supabase.from('user_stores').select('employee_id, store_id, is_primary'),
@@ -259,7 +262,7 @@ export default function Schedule() {
     }).finally(() => {
       setLoading(false)
     })
-  }, [])
+  }, [authProfile?.organization_id])
 
   useEffect(() => {
     if (storeFilter === null) return  // 尚未選門市 → 先不載班表(避免一進去就撈/渲染全部)

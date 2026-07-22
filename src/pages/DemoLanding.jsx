@@ -1,24 +1,20 @@
 /*
- * Design Direction: Organic & Refined (Light Premium)
- * Display Font: Space Grotesk (tech-warm)
- * Body Font: DM Sans / Noto Sans TC
- * Palette: Indigo-Violet primary, Cyan accent, Slate neutrals
- * Motion: Staggered word entrance, scroll fade-up, hover lift
- * Layout: Asymmetric bento, generous whitespace
+ * SME Ops — Public showcase (/showcase)
+ * Focus: 三大核心模組 — 人力資源 (HRM) · 營運儀表板 (Dashboard) · 專案與簽核流程 (Project/Workflow)
+ * Real product screenshots live in /public/demo-shots/ (captured from the seeded demo org).
+ * Design language reuses the existing `lp-*` light-premium system in src/index.css.
  */
 
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import {
-  Users, GitBranch, HeadphonesIcon, Warehouse,
-  LayoutDashboard, BarChart3, ArrowRight,
-  ShoppingCart, CreditCard, TrendingUp,
-  Check, Package, Sun, Moon, ArrowUpRight, Monitor, Star,
-  Clock, Smartphone, Zap, MessageCircle, Shield, ChevronRight,
+  Users, CalendarClock, Fingerprint, Wallet, Brain, ShieldCheck, MessageSquare,
+  LayoutDashboard, Sparkles, TrendingUp, BellRing, Network,
+  GitBranch, KanbanSquare, FileCheck2, Workflow, Repeat2, Boxes,
+  ArrowRight, Check, Sun, Moon, Zap,
 } from 'lucide-react'
 
-import DemoLineSection from './components/DemoLineSection'
 import DemoContactSection from './components/DemoContactSection'
 
 // ── Hooks ──
@@ -51,7 +47,6 @@ function useCounter(target, duration = 2000, start = false) {
   return count
 }
 
-// ── Animated Section ──
 function Section({ children, id, className = '' }) {
   const [ref, inView] = useInView()
   return (
@@ -61,22 +56,17 @@ function Section({ children, id, className = '' }) {
   )
 }
 
-// ── Staggered Word Animation ──
 function AnimatedHeading({ text, highlight, delay = 0 }) {
   const words = text.split(' ')
   return (
     <h1 className="lp-hero-h1">
       {words.map((word, i) => (
-        <span key={i} className="lp-word" style={{ animationDelay: `${delay + i * 80}ms` }}>
-          {word}{' '}
-        </span>
+        <span key={i} className="lp-word" style={{ animationDelay: `${delay + i * 80}ms` }}>{word}{' '}</span>
       ))}
       {highlight && (
         <strong className="lp-hero-highlight">
           {highlight.split(' ').map((word, i) => (
-            <span key={i} className="lp-word" style={{ animationDelay: `${delay + (words.length + i) * 80}ms` }}>
-              {word}{' '}
-            </span>
+            <span key={i} className="lp-word" style={{ animationDelay: `${delay + (words.length + i) * 80}ms` }}>{word}{' '}</span>
           ))}
         </strong>
       )}
@@ -84,83 +74,111 @@ function AnimatedHeading({ text, highlight, delay = 0 }) {
   )
 }
 
-// ════════════════════════════════════════════
+// Browser-chrome framed screenshot
+function Shot({ src, alt, caption }) {
+  return (
+    <figure className="lp-shot">
+      <div className="lp-shot-bar">
+        <span className="lp-shot-dot" style={{ background: '#ff5f57' }} />
+        <span className="lp-shot-dot" style={{ background: '#febc2e' }} />
+        <span className="lp-shot-dot" style={{ background: '#28c840' }} />
+      </div>
+      <img src={src} alt={alt} loading="lazy" />
+      {caption && <figcaption>{caption}</figcaption>}
+    </figure>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════════
 //  DATA
-// ════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════
 
 const PAIN_POINTS = [
-  { emoji: '📋', pain: '員工打卡用紙本，月底人資手動算出勤', cost: '每月浪費 40+ 小時', solution: 'LINE GPS 打卡 → 自動統計' },
-  { emoji: '📊', pain: '排班用 Excel，改一個人要調半天', cost: '每週花 3-5 小時排班', solution: 'AI 一鍵排班 + 勞基法自動檢查' },
-  { emoji: '💰', pain: '薪資用計算機，怕算錯又怕漏', cost: '每月 2-3 天算薪', solution: '自動拉出勤 + 加班 + 請假計算' },
-  { emoji: '📦', pain: '庫存靠記憶，賣完才知道沒貨', cost: '缺貨損失 5-10% 營收', solution: '即時庫存 + 安全量自動補貨' },
-  { emoji: '📱', pain: '請假要填紙本，主管不在就卡住', cost: '審核平均等 2-3 天', solution: 'LINE 即時送簽 → 秒核' },
-  { emoji: '🔄', pain: '開新店流程混亂，總是漏東漏西', cost: '開店延誤 2-4 週', solution: 'SOP 範本 + 任務追蹤 + 進度透明' },
+  { emoji: '💣', pain: '每月算薪像拆炸彈', cost: '加班倍率、勞健保級距、二代健保、法扣，算錯就被檢舉', mod: '人資' },
+  { emoji: '🌙', pain: '排班排到半夜', cost: '誰不能連上七天、誰只排早班、國定假日誰加倍', mod: '人資' },
+  { emoji: '🚪', pain: '員工說走就走', cost: '等發現關鍵店員要離職，已經來不及找人', mod: '人資' },
+  { emoji: '🗂️', pain: '沒有一個地方看完公司', cost: '營收、應收、庫存、出勤散在 5 個系統與 Excel', mod: '儀表板' },
+  { emoji: '⏰', pain: '問題總是太晚發現', cost: '逾期應收、缺貨、簽核卡關，出事才知道', mod: '儀表板' },
+  { emoji: '🔀', pain: '開新店一片混亂', cost: '事情老是漏掉；主管請假，簽核就卡住', mod: '流程' },
 ]
 
-const BUNDLES = [
+const MODULES = [
   {
-    icon: Users, color: '#7c3aed', name: '人資行政包',
-    tagline: 'LINE 打卡 · AI 排班 · 勞基法自動合規',
-    features: ['GPS + WiFi 打卡驗證', 'AI 智慧排班', '14 種假別 + 自動算薪', '找人代班智能推薦', '員工 LIFF 自助操作'],
-    popular: false,
+    id: 'hr',
+    kicker: '人力資源 HRM',
+    color: '#7c3aed',
+    icon: Users,
+    title: '人資、排班、薪資，一次到位',
+    lead: '從 GPS 打卡到台灣勞基法薪資，AI 幫你排班、預測離職 — 把 HR 從每月拆炸彈，變成一次審核。',
+    shot: { src: '/demo-shots/hr-schedule.png', alt: 'AI 智慧排班畫面', caption: 'AI 智慧排班 — 一鍵排班、自動檢查勞基法違規' },
+    features: [
+      { icon: CalendarClock, t: 'AI 智慧排班', d: 'Gemini 產生班表草稿，勞基法規則自動檢查，違規一鍵修正，還能找人代班。' },
+      { icon: Fingerprint, t: 'GPS + WiFi 打卡', d: '定位與 IP 雙重驗證杜絕代打卡，月結核對報表自動比對排班與實打卡。' },
+      { icon: Wallet, t: '台灣薪資全合規', d: '加班費倍率、勞健保級距、二代健保補充保費、資遣費 §11/§13、法扣全自動計算。' },
+      { icon: Brain, t: 'AI 離職預測', d: '從出勤、績效、薪資、滿意度七大因子評分，關鍵員工離職前先預警。' },
+      { icon: MessageSquare, t: 'HR AI 助理', d: '用自然語言問「近 30 天遲到最多是誰」，立即回傳表格與圖表。' },
+    ],
   },
   {
-    icon: Package, color: '#059669', name: '進銷存管理包',
-    tagline: '採購到出貨 · 手機掃碼 · 智能補貨',
-    features: ['採購申請 → 三方比對 → 驗收入庫', '批號效期追蹤', '安全庫存自動補貨', '多倉調撥管理', '庫存成本估價'],
-    popular: true,
+    id: 'dashboard',
+    kicker: '營運儀表板 Dashboard',
+    color: '#2563eb',
+    icon: LayoutDashboard,
+    title: '打開一個畫面，看完整間公司',
+    lead: '跨模組即時 KPI、AI 智慧洞察與預警中心，讓你從「出事才知道」變成「提前部署」。',
+    shot: { src: '/demo-shots/dashboard.png', alt: '營運儀表板畫面', caption: '角色化營運儀表板 — 團隊出勤、待簽核、警示與 AI 洞察一次看' },
+    features: [
+      { icon: LayoutDashboard, t: '即時營運儀表板', d: '出勤率、待審核、應收應付、銷售漏斗、庫存警示，跨模組 KPI 即時彙整。' },
+      { icon: Sparkles, t: 'AI 智慧洞察 (Gemini)', d: '一鍵讓 Gemini 分析當日營運摘要，回傳 3–5 條可執行的洞察與建議。' },
+      { icon: TrendingUp, t: '跨系統深度分析', d: '把銷售×庫存×財務×人資×製造串起來:真實產品毛利、單位人工成本、需求預測。' },
+      { icon: BellRing, t: '預警中心', d: '逾期應收、低庫存、簽核卡關、證件到期，含「未來 7 天」預測警示，每天早上一次看完。' },
+      { icon: Network, t: '角色化與自訂', d: '老闆、店長、HR 各有專屬儀表板，也能拖拉自訂 KPI 卡片。' },
+    ],
   },
   {
-    icon: CreditCard, color: '#d97706', name: '財務會計包',
-    tagline: '傳票自動化 · 一鍵對帳 · 稅務申報',
-    features: ['應收應付自動沖帳', '銀行對帳自動比對', '資產負債表 + 損益表', '預算管理 + 成本中心'],
-    popular: false,
-  },
-  {
-    icon: GitBranch, color: '#2563eb', name: '流程管理包',
-    tagline: 'AI 生成 SOP · 任務追蹤 · 多層簽核',
-    features: ['AI 自動生成 SOP 流程', '任務指派 + LINE 通知', '多關卡簽核流程', '查核清單管理'],
-    popular: false,
-  },
-  {
-    icon: BarChart3, color: '#db2777', name: '數據分析包',
-    tagline: '跨模組洞察 · AI 異常偵測 · 自訂報表',
-    features: ['營運儀表板即時 KPI', '銷售預測 + 異常偵測', 'AI 助理對話式分析'],
-    popular: false,
+    id: 'process',
+    kicker: '專案與簽核流程 Workflow',
+    color: '#059669',
+    icon: GitBranch,
+    title: 'SOP、任務、簽核，全都跑得動',
+    lead: '用一句話讓 AI 生成 SOP,一鍵部署整個展店專案,任務、簽核、代理全自動,沒有事情會漏掉。',
+    shot: { src: '/demo-shots/tasks.png', alt: '任務看板畫面', caption: '任務管理 — 看板/時程/泳道/月曆/工作量 6 種視圖' },
+    features: [
+      { icon: KanbanSquare, t: '6 視圖任務板', d: '列表、看板、泳道、月曆、時程 (含相依甘特圖) 與工作量,一份任務多種看法。' },
+      { icon: Workflow, t: 'AI SOP 生成', d: '打字或用說的描述需求,Gemini 自動生成流程步驟,逐步確認後直接部署。' },
+      { icon: Boxes, t: '展店一鍵部署', d: '選好範本 → 自動建立整個專案的所有任務、指派對的人、排定期限、LINE 通知。' },
+      { icon: FileCheck2, t: '多關卡簽核', d: '並簽/會簽/簽核鏈、條件分支、金額分流,直屬主管與店長自動解析。' },
+      { icon: Repeat2, t: '簽核代理不卡關', d: '主管請假自動改由代理人簽核;跨部門交辦轉工單,完成自動回填。' },
+    ],
   },
 ]
 
-const TIMELINE = [
-  { week: '第 1 週', title: '需求訪談', desc: '了解公司流程，確認模組需求', icon: '📋', color: '#6366f1' },
-  { week: '第 2 週', title: '系統設定', desc: '門市建立、員工匯入、客製化', icon: '⚙️', color: '#06b6d4' },
-  { week: '第 3 週', title: '教育訓練', desc: '管理端操作、LINE Bot 綁定', icon: '🎓', color: '#8b5cf6' },
-  { week: '第 4 週', title: '正式上線', desc: '平行測試、微調、正式切換', icon: '🚀', color: '#059669' },
+const GALLERY = [
+  { src: '/demo-shots/attrition.png', alt: 'AI 離職預測', t: 'AI 離職預測', d: '員工流失風險評分' },
+  { src: '/demo-shots/process-overview.png', alt: '流程總覽', t: '流程總覽', d: '所有簽核與任務即時狀態' },
+  { src: '/demo-shots/hr-report.png', alt: 'HR 報表', t: 'HR 報表', d: '人力綜合數據分析' },
+]
+
+const AI_POINTS = [
+  { icon: CalendarClock, t: 'AI 排班', d: '一鍵產生合規班表' },
+  { icon: Brain, t: 'AI 離職預測', d: '關鍵員工先預警' },
+  { icon: Sparkles, t: 'AI 營運洞察', d: 'Gemini 分析每日營運' },
+  { icon: Workflow, t: 'AI SOP 生成', d: '一句話變成流程' },
+  { icon: MessageSquare, t: 'HR AI 助理', d: '自然語言查資料' },
 ]
 
 const COMPARISON = [
-  { item: '導入時間', us: '4 週', them: '3-6 個月' },
-  { item: '最低啟動費用', us: '按模組計費', them: '50 萬起' },
+  { item: '導入時間', us: '4 週', them: '3–6 個月' },
+  { item: '台灣勞基法薪資', us: '內建自動合規', them: '需大量客製' },
+  { item: 'AI 功能', us: '排班 / 離職 / 洞察 / SOP', them: '無' },
+  { item: '跨模組即時儀表板', us: '內建', them: '需另購 BI' },
   { item: '使用人數', us: '不限人數', them: '按授權數' },
-  { item: 'LINE 整合', us: '完整 LIFF + Bot', them: '需另外開發' },
-  { item: 'AI 功能', us: 'AI 排班 / 流程 / 分析', them: '無' },
   { item: '模組選購', us: '自由選配', them: '整包購買' },
 ]
 
-const SYSTEMS = [
-  { title: '營運儀表板', icon: LayoutDashboard, path: '/', color: '#6366f1' },
-  { title: '人事管理', icon: Users, path: '/hr/attendance', color: '#7c3aed' },
-  { title: '客戶經營', icon: HeadphonesIcon, path: '/crm/overview', color: '#f97316' },
-  { title: '倉儲管理', icon: Warehouse, path: '/wms/overview', color: '#059669' },
-  { title: 'POS 收銀', icon: Monitor, path: '/pos', color: '#06b6d4' },
-  { title: '採購管理', icon: ShoppingCart, path: '/purchase/suppliers', color: '#d97706' },
-  { title: '財務會計', icon: CreditCard, path: '/finance/overview', color: '#059669' },
-  { title: '流程管理', icon: GitBranch, path: '/process/workflows', color: '#2563eb' },
-  { title: '數據分析', icon: TrendingUp, path: '/analytics', color: '#db2777' },
-]
-
-// ════════════════════════════════════════════
-//  MAIN PAGE
-// ════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════
+//  MAIN
+// ════════════════════════════════════════════════════════════════════
 
 export default function DemoLanding() {
   const navigate = useNavigate()
@@ -176,11 +194,7 @@ export default function DemoLanding() {
     if (!emailValid) return
     setTrialStatus('sending')
     try {
-      await supabase.from('inquiries').insert({
-        company_name: '免費試用申請',
-        email: trialEmail.trim(),
-        interested_modules: ['免費試用'],
-      })
+      await supabase.from('inquiries').insert({ company_name: '免費試用申請', email: trialEmail.trim(), interested_modules: ['免費試用'] })
       setTrialStatus('success')
     } catch { setTrialStatus('error') }
   }
@@ -201,8 +215,8 @@ export default function DemoLanding() {
   }
 
   useEffect(() => { setTimeout(() => setVisible(true), 200) }, [])
-  const c0 = useCounter(16, 1400, visible)
-  const c1 = useCounter(136, 1800, visible)
+  const cModules = useCounter(3, 1200, visible)
+  const cLaws = useCounter(15, 1600, visible)
   const scrollTo = (id) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' })
 
   return (
@@ -216,74 +230,50 @@ export default function DemoLanding() {
             <span className="lp-logo-text">SME OPS</span>
           </div>
           <div className="lp-nav-links">
-            <button onClick={() => scrollTo('pain')}>痛點診斷</button>
-            <button onClick={() => scrollTo('bundles')}>方案</button>
-            <button onClick={() => scrollTo('line')}>LINE</button>
-            <button onClick={() => scrollTo('try')}>體驗</button>
+            <button onClick={() => scrollTo('pain')}>痛點</button>
+            <button onClick={() => scrollTo('hr')}>人資</button>
+            <button onClick={() => scrollTo('dashboard')}>儀表板</button>
+            <button onClick={() => scrollTo('process')}>專案流程</button>
           </div>
           <div className="lp-nav-actions">
             <button className="lp-nav-theme" onClick={toggleTheme}>{theme === 'light' ? <Moon size={16} /> : <Sun size={16} />}</button>
-            <button className="lp-cta-nav" onClick={() => scrollTo('contact')}>
-              預約諮詢 <ArrowRight size={14} />
-            </button>
+            <button className="lp-cta-nav" onClick={() => scrollTo('try')}>免費試用 <ArrowRight size={14} /></button>
           </div>
         </div>
       </nav>
 
       {/* ═══ Hero ═══ */}
       <section id="hero" className="lp-hero">
-        {/* Background effects */}
         <div className="lp-hero-orb lp-hero-orb-1" />
         <div className="lp-hero-orb lp-hero-orb-2" />
         <div className="lp-hero-orb lp-hero-orb-3" />
         <div className="lp-hero-grid" />
-        <div className="lp-particles">
-          {Array.from({ length: 15 }).map((_, i) => (
-            <div key={i} className="lp-particle" style={{
-              left: `${10 + Math.random() * 80}%`, top: `${10 + Math.random() * 80}%`,
-              width: `${3 + Math.random() * 6}px`, height: `${3 + Math.random() * 6}px`,
-              animationDelay: `${Math.random() * 8}s`, animationDuration: `${10 + Math.random() * 15}s`,
-            }} />
-          ))}
-        </div>
 
-        <div className={`lp-hero-content ${visible ? 'lp-visible' : ''}`}>
-          <div className="lp-eyebrow">
-            <Zap size={14} /> 按需選購，隨需擴充
-          </div>
-
-          <AnimatedHeading
-            text="從一個模組開始"
-            highlight="打造最適合您的數位大腦"
-          />
-
+        <div className={`lp-hero-content lp-hero-narrow ${visible ? 'lp-visible' : ''}`}>
+          <div className="lp-eyebrow"><Zap size={14} /> 人資 · 營運儀表板 · 專案簽核，AI 全整合</div>
+          <AnimatedHeading text="讓管理" highlight="像多請了一位營運長" />
           <p className="lp-hero-sub">
-            不限使用人數，彈性選購模組。<br />
-            現在解決最痛的點，未來隨公司成長無限擴充。
+            台灣中小企業的數位大腦：AI 排班與薪資合規、跨模組即時儀表板、<br />
+            一鍵部署的簽核流程 —— 三大核心，一個系統搞定。
           </p>
-
           <div className="lp-hero-ctas">
-            <button className="lp-cta-primary" onClick={() => scrollTo('contact')}>
-              預約專人導覽 <ArrowRight size={16} />
-            </button>
-            <button className="lp-cta-secondary" onClick={() => scrollTo('try')}>
-              免費開通試用
-            </button>
+            <button className="lp-cta-primary" onClick={() => scrollTo('try')}>免費開通試用 <ArrowRight size={16} /></button>
+            <button className="lp-cta-secondary" onClick={() => scrollTo('contact')}>預約專人導覽</button>
           </div>
-
           <div className="lp-hero-stats">
             {[
-              { value: '5', label: '解決方案包', color: '#6366f1' },
-              { value: `${c0}`, label: '大模組自由選配', color: '#06b6d4' },
-              { value: '4 週', label: '快速導入上線', color: '#8b5cf6' },
-              { value: '不限', label: '使用人數', color: '#059669' },
+              { value: `${cModules}`, label: '大核心模組', color: '#6366f1' },
+              { value: `${cLaws}+`, label: '勞基法自動檢查', color: '#7c3aed' },
+              { value: 'Gemini', label: 'AI 全模組驅動', color: '#2563eb' },
+              { value: '4 週', label: '快速導入上線', color: '#059669' },
             ].map((s, i) => (
-              <div key={i} className="lp-stat">
-                <strong style={{ color: s.color }}>{s.value}</strong>
-                <span>{s.label}</span>
-              </div>
+              <div key={i} className="lp-stat"><strong style={{ color: s.color }}>{s.value}</strong><span>{s.label}</span></div>
             ))}
           </div>
+        </div>
+
+        <div className={`lp-hero-shot ${visible ? 'lp-visible' : ''}`}>
+          <Shot src="/demo-shots/dashboard.png" alt="SME Ops 營運儀表板" />
         </div>
       </section>
 
@@ -293,114 +283,95 @@ export default function DemoLanding() {
           <div className="lp-section-header">
             <span className="lp-badge">💡 痛點診斷</span>
             <h2>這些問題，聽起來熟悉嗎？</h2>
-            <p>如果你中了 3 項以上，是時候考慮數位化了</p>
+            <p>如果你中了 3 項以上，是時候讓系統幫你了</p>
           </div>
           <div className="lp-pain-grid">
             {PAIN_POINTS.map((item, i) => (
               <div key={i} className="lp-pain-card" style={{ animationDelay: `${i * 100}ms` }}>
-                <div className="lp-pain-emoji">{item.emoji}</div>
+                <div className="lp-pain-top">
+                  <span className="lp-pain-emoji">{item.emoji}</span>
+                  <span className="lp-pain-tag">{item.mod}</span>
+                </div>
                 <div className="lp-pain-text">{item.pain}</div>
-                <div className="lp-pain-cost">💸 {item.cost}</div>
-                <div className="lp-pain-fix"><Check size={14} /> {item.solution}</div>
+                <div className="lp-pain-cost">{item.cost}</div>
               </div>
             ))}
           </div>
         </div>
       </Section>
 
-      {/* ═══ Hot Modules ═══ */}
-      <Section id="hot" className="lp-section-alt">
-        <div className="lp-container">
-          <div className="lp-section-header">
-            <span className="lp-badge">🔥 最受歡迎</span>
-            <h2>不知道從哪裡開始？</h2>
-            <p>超過 80% 客戶首選導入的模組</p>
-          </div>
-          <div className="lp-hot-grid">
-            {[
-              { icon: Smartphone, name: 'LINE 行動辦公', desc: '員工用 LINE 就能打卡、查薪資、請假、回報任務。零學習成本。', color: '#06b6d4', tag: '最多人選' },
-              { icon: Clock, name: 'AI 智慧排班', desc: '一鍵自動排班，15 條勞基法自動檢查。找人代班全自動化。', color: '#7c3aed', tag: 'AI 驅動' },
-              { icon: GitBranch, name: 'AI 流程助手', desc: '用自然語言描述需求，AI 自動生成 SOP 流程。任務追蹤 + LINE 通知。', color: '#2563eb', tag: '效率翻倍' },
-            ].map((item, i) => {
-              const Icon = item.icon
-              return (
-                <div key={i} className="lp-hot-card">
-                  <div className="lp-hot-icon" style={{ background: `${item.color}12`, color: item.color }}>
-                    <Icon size={28} strokeWidth={1.5} />
-                  </div>
-                  <div className="lp-hot-tag" style={{ background: `${item.color}15`, color: item.color }}>{item.tag}</div>
-                  <h3>{item.name}</h3>
-                  <p>{item.desc}</p>
-                  <div className="lp-hot-badge">可單獨導入</div>
+      {/* ═══ Module Sections ═══ */}
+      {MODULES.map((m, idx) => {
+        const Icon = m.icon
+        return (
+          <Section key={m.id} id={m.id} className={idx % 2 === 1 ? 'lp-section-alt' : ''}>
+            <div className="lp-container">
+              <div className={`lp-module ${idx % 2 === 1 ? 'lp-module-rev' : ''}`}>
+                <div className="lp-module-media">
+                  <Shot src={m.shot.src} alt={m.shot.alt} caption={m.shot.caption} />
                 </div>
-              )
-            })}
-          </div>
-        </div>
-      </Section>
-
-      {/* ═══ Solution Bundles ═══ */}
-      <Section id="bundles">
-        <div className="lp-container">
-          <div className="lp-section-header">
-            <span className="lp-badge">📦 解決方案</span>
-            <h2>依需求選擇方案包</h2>
-            <p>或自由組合單一模組，打造最適合你的系統</p>
-          </div>
-          <div className="lp-bundle-grid">
-            {BUNDLES.map((b, i) => {
-              const Icon = b.icon
-              return (
-                <div key={i} className={`lp-bundle-card ${b.popular ? 'lp-popular' : ''}`}>
-                  {b.popular && <div className="lp-popular-tag"><Star size={12} /> 最受歡迎</div>}
-                  <div className="lp-bundle-icon" style={{ background: `${b.color}12`, color: b.color }}>
-                    <Icon size={22} />
+                <div className="lp-module-body">
+                  <div className="lp-module-kicker" style={{ color: m.color, background: `${m.color}14` }}>
+                    <Icon size={15} /> {m.kicker}
                   </div>
-                  <h3>{b.name}</h3>
-                  <p className="lp-bundle-tagline">{b.tagline}</p>
-                  <ul className="lp-bundle-features">
-                    {b.features.map((f, j) => (
-                      <li key={j}><Check size={14} style={{ color: b.color, flexShrink: 0 }} /> {f}</li>
-                    ))}
+                  <h2 className="lp-module-title">{m.title}</h2>
+                  <p className="lp-module-lead">{m.lead}</p>
+                  <ul className="lp-feature-list">
+                    {m.features.map((f, j) => {
+                      const FIcon = f.icon
+                      return (
+                        <li key={j}>
+                          <span className="lp-feature-ic" style={{ color: m.color, background: `${m.color}12` }}><FIcon size={17} /></span>
+                          <span><strong>{f.t}</strong>{f.d}</span>
+                        </li>
+                      )
+                    })}
                   </ul>
-                  <button className="lp-bundle-cta" style={{ borderColor: b.color, color: b.color }} onClick={() => scrollTo('contact')}>
-                    了解方案 <ChevronRight size={14} />
-                  </button>
                 </div>
-              )
-            })}
+              </div>
+            </div>
+          </Section>
+        )
+      })}
+
+      {/* ═══ AI strip ═══ */}
+      <Section className="lp-section-alt">
+        <div className="lp-container">
+          <div className="lp-ai-band">
+            <div className="lp-ai-head">
+              <span className="lp-badge lp-badge-dark"><Sparkles size={14} /> AI 驅動</span>
+              <h2>每個模組，都內建一位 AI 助手</h2>
+              <p>由 Google Gemini 驅動，藏在你每天都要做的事情裡</p>
+            </div>
+            <div className="lp-ai-grid">
+              {AI_POINTS.map((a, i) => {
+                const AIcon = a.icon
+                return (
+                  <div key={i} className="lp-ai-card">
+                    <div className="lp-ai-ic"><AIcon size={20} /></div>
+                    <strong>{a.t}</strong>
+                    <span>{a.d}</span>
+                  </div>
+                )
+              })}
+            </div>
           </div>
         </div>
       </Section>
 
-      {/* ═══ LINE ═══ */}
-      <Section id="line" className="lp-section-alt">
+      {/* ═══ Screenshot gallery ═══ */}
+      <Section>
         <div className="lp-container">
           <div className="lp-section-header">
-            <span className="lp-badge"><MessageCircle size={14} /> LINE 整合</span>
-            <h2>LINE 行動辦公整合</h2>
-            <p>無需額外安裝 App，員工透過 LINE 即可完成日常操作</p>
+            <span className="lp-badge">🖥️ 更多實際畫面</span>
+            <h2>這些都是系統實際運作的畫面</h2>
+            <p>不是示意圖 —— 每一張都是真實操作截圖</p>
           </div>
-          <DemoLineSection />
-        </div>
-      </Section>
-
-      {/* ═══ Timeline ═══ */}
-      <Section id="timeline">
-        <div className="lp-container">
-          <div className="lp-section-header">
-            <span className="lp-badge">🚀 導入流程</span>
-            <h2>4 週快速導入</h2>
-            <p>從需求訪談到正式上線，一個月內完成</p>
-          </div>
-          <div className="lp-timeline">
-            {TIMELINE.map((t, i) => (
-              <div key={i} className="lp-timeline-item">
-                <div className="lp-timeline-dot" style={{ background: t.color }}>{t.icon}</div>
-                <div className="lp-timeline-line" />
-                <div className="lp-timeline-week" style={{ color: t.color }}>{t.week}</div>
-                <h3>{t.title}</h3>
-                <p>{t.desc}</p>
+          <div className="lp-gallery">
+            {GALLERY.map((g, i) => (
+              <div key={i} className="lp-gallery-item">
+                <Shot src={g.src} alt={g.alt} />
+                <div className="lp-gallery-cap"><strong>{g.t}</strong><span>{g.d}</span></div>
               </div>
             ))}
           </div>
@@ -411,7 +382,7 @@ export default function DemoLanding() {
       <Section className="lp-section-alt">
         <div className="lp-container">
           <div className="lp-section-header">
-            <span className="lp-badge"><Shield size={14} /> 比較</span>
+            <span className="lp-badge"><ShieldCheck size={14} /> 比較</span>
             <h2>跟傳統 ERP 有什麼不同？</h2>
           </div>
           <div className="lp-compare-table">
@@ -423,7 +394,7 @@ export default function DemoLanding() {
             {COMPARISON.map((row, i) => (
               <div key={i} className="lp-compare-row">
                 <div>{row.item}</div>
-                <div className="lp-compare-us">{row.us}</div>
+                <div className="lp-compare-us"><Check size={14} style={{ flexShrink: 0 }} /> {row.us}</div>
                 <div className="lp-compare-them">{row.them}</div>
               </div>
             ))}
@@ -450,52 +421,27 @@ export default function DemoLanding() {
               <>
                 <div className="lp-trial-form">
                   <input
-                    type="email"
-                    placeholder="you@company.com"
-                    value={trialEmail}
+                    type="email" placeholder="you@company.com" value={trialEmail}
                     onChange={e => { setTrialEmail(e.target.value); if (trialStatus === 'error') setTrialStatus(null) }}
                     onKeyDown={e => { if (e.key === 'Enter') handleTrialSubmit() }}
                   />
-                  <button
-                    className="lp-trial-btn"
-                    onClick={handleTrialSubmit}
-                    disabled={!emailValid || trialStatus === 'sending'}
-                  >
-                    {trialStatus === 'sending' ? '開通中…' : '開通試用帳號'}
-                    <ArrowRight size={16} />
+                  <button className="lp-trial-btn" onClick={handleTrialSubmit} disabled={!emailValid || trialStatus === 'sending'}>
+                    {trialStatus === 'sending' ? '開通中…' : '開通試用帳號'} <ArrowRight size={16} />
                   </button>
                 </div>
-                {trialStatus === 'error' && (
-                  <p className="lp-trial-err">送出失敗，請稍後再試，或使用下方聯繫表單。</p>
-                )}
-                <p className="lp-trial-note">
-                  已經有帳號了？
-                  <button className="lp-trial-login" onClick={() => navigate('/login')}>登入</button>
-                </p>
+                {trialStatus === 'error' && <p className="lp-trial-err">送出失敗，請稍後再試，或使用下方聯繫表單。</p>}
+                <p className="lp-trial-note">已經有帳號了？<button className="lp-trial-login" onClick={() => navigate('/login')}>登入</button></p>
               </>
             )}
           </div>
         </div>
       </Section>
 
-      {/* ═══ Final CTA ═══ */}
-      <Section className="lp-section-alt">
-        <div className="lp-container">
-          <div className="lp-final-cta">
-            <h2>不確定從哪裡開始？</h2>
-            <p>預約 30 分鐘線上營運診斷，由顧問協助盤點管理痛點</p>
-            <button className="lp-cta-primary lp-cta-big" onClick={() => scrollTo('contact')}>
-              預約免費營運診斷 <ArrowRight size={18} />
-            </button>
-          </div>
-        </div>
-      </Section>
-
       {/* ═══ Contact ═══ */}
-      <Section id="contact">
+      <Section id="contact" className="lp-section-alt">
         <div className="lp-container" style={{ maxWidth: 640 }}>
           <div className="lp-section-header">
-            <h2>聯繫我們</h2>
+            <h2>預約專人導覽</h2>
             <p>留下資料，將由專人於一個工作天內與您聯繫</p>
           </div>
           <DemoContactSection inquiry={inquiry} setInquiry={setInquiry} inquiryStatus={inquiryStatus} onSubmit={handleSubmit} toggleModule={toggleModule} />
@@ -507,7 +453,7 @@ export default function DemoLanding() {
         <div className="lp-footer-inner">
           <div className="lp-footer-brand">
             <div className="lp-logo">S</div>
-            <span>SME OPS — 按需選購，隨需擴充</span>
+            <span>SME OPS — 人資 · 儀表板 · 專案流程，一個系統搞定</span>
           </div>
           <span>專為台灣中小企業打造</span>
         </div>

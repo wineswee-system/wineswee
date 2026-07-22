@@ -1,9 +1,10 @@
 import React, { lazy, Suspense, useState, useEffect } from 'react'
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClient } from './lib/queryClient'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
-import { TenantProvider } from './contexts/TenantContext'
+import { TenantProvider, useTenant } from './contexts/TenantContext'
+import { parseOrgPath } from './lib/orgPath'
 import { LanguageProvider } from './contexts/LanguageContext'
 import Sidebar from './components/Sidebar'
 import OnboardingWizard from './components/OnboardingWizard'
@@ -69,6 +70,39 @@ class ErrorBoundary extends React.Component {
   }
 }
 
+// ── Org URL ↔ Tenant sync ──
+// 主要模組網址為 /{module}/:orgId/{page}。此元件負責:
+//  1) 舊網址/缺 orgId 段 → 自動補上目前使用者的 org 並 replace 導向
+//  2) 一般使用者若網址 orgId 非本人 org → 導回本人 org(URL 非授權邊界,RLS 才是)
+//  3) 將網址 orgId 同步進 TenantContext(super_admin 切換 org 的資料範圍 —— Phase 2 接續)
+function OrgRouteSync() {
+  const location = useLocation()
+  const navigate = useNavigate()
+  const { profile, isSuperAdmin } = useAuth()
+  const { tenant, switchTenant } = useTenant()
+  const ownOrg = profile?.organization_id ?? null
+
+  useEffect(() => {
+    const { orgScoped, prefix, orgId, rest } = parseOrgPath(location.pathname)
+    if (!orgScoped) return
+    // 缺 orgId 段 → 補上本人 org
+    if (orgId == null) {
+      if (ownOrg == null) return
+      navigate('/' + [prefix, ownOrg, ...rest].join('/') + location.search, { replace: true })
+      return
+    }
+    // 一般使用者不得瀏覽其他 org(super_admin 可)
+    if (!isSuperAdmin && ownOrg != null && orgId !== ownOrg) {
+      navigate('/' + [prefix, ownOrg, ...rest].join('/') + location.search, { replace: true })
+      return
+    }
+    // 同步租戶範圍(僅本人 org 或 super_admin 才會被 TenantContext 接受);相同則不重設避免多餘 re-render
+    if (tenant?.organization_id !== orgId) switchTenant({ organization_id: orgId })
+  }, [location.pathname, location.search, ownOrg, isSuperAdmin, navigate, switchTenant, tenant])
+
+  return null
+}
+
 // ── AdminApp ──
 function AdminApp() {
   const { hasPermission, isSuperAdmin } = useAuth()
@@ -87,6 +121,7 @@ function AdminApp() {
 
   return (
     <div className="app-layout">
+      <OrgRouteSync />
       {!isEmbedded && showOnboarding && <OnboardingWizard onComplete={() => setShowOnboarding(false)} />}
       {!isEmbedded && <Sidebar />}
       <main className="main-content">

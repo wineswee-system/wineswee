@@ -1,5 +1,6 @@
 import { Navigate, Route } from 'react-router-dom'
 import PagePermGuard from '../components/PagePermGuard'
+import { isOrgScopedPrefix } from '../lib/orgPath'
 
 // Converts a module manifest entry into an array of <Route> elements.
 // Handles four manifest patterns:
@@ -18,16 +19,20 @@ export function renderModule(m, { canAccess, canAccessWithPerm, isSuperAdmin }) 
   const guarded = <PagePermGuard><Comp /></PagePermGuard>
   const routes = []
 
+  // org-scoped 模組:網址帶入 org 段 → /{basePath}/:orgId/{page}
+  // (super_admin 專屬工具維持原路徑,不帶 orgId)
+  const orgSeg = isOrgScopedPrefix(m.basePath) ? '/:orgId' : ''
+
   for (const sub of m.subRoutes ?? []) {
     routes.push(
-      <Route key={`${m.basePath}/${sub.path}`} path={`${m.basePath}/${sub.path}`}
+      <Route key={`${m.basePath}/${sub.path}`} path={`${m.basePath}${orgSeg}/${sub.path}`}
         element={hasAccess(sub.perm) ? guarded : blocked} />
     )
   }
 
   if (m.alsoBase) {
     routes.push(
-      <Route key={m.basePath} path={m.basePath}
+      <Route key={m.basePath} path={`${m.basePath}${orgSeg}`}
         element={m.superAdminOnly
           ? (isSuperAdmin ? guarded : blocked)
           : (hasAccess(m.perm) ? guarded : blocked)} />
@@ -35,7 +40,7 @@ export function renderModule(m, { canAccess, canAccessWithPerm, isSuperAdmin }) 
   }
 
   routes.push(
-    <Route key={`${m.basePath}/*`} path={`${m.basePath}/*`}
+    <Route key={`${m.basePath}/*`} path={`${m.basePath}${orgSeg}/*`}
       element={m.superAdminOnly
         ? (isSuperAdmin ? guarded : blocked)
         : (hasAccess(m.perm) ? guarded : blocked)} />

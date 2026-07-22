@@ -14,7 +14,9 @@ import {
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../contexts/AuthContext'
+import { useTenant } from '../contexts/TenantContext'
 import { useLanguage } from '../contexts/LanguageContext'
+import { withOrg, stripOrg } from '../lib/orgPath'
 import FontSizeControl from './FontSizeControl'
 import { prefetchGroup } from '../modules/prefetch'
 import { majorGroups, groupNav } from './sidebar/sidebarConfig'
@@ -121,7 +123,12 @@ export default function Sidebar() {
   const { mentionCount, markSeen } = useMentionCount()
   const [showNotifPanel, setShowNotifPanel] = useState(false)
   const { profile, signOut, hasPermission } = useAuth()
-  const [activeGroup, setActiveGroup] = useState(() => routeToGroup(location.pathname))
+  const { tenant } = useTenant()
+  // 目前作用中的 organization id,供組建帶 orgId 的網址;active 比對則用去 org 段的 navPath
+  const orgId = tenant?.organization_id ?? profile?.organization_id ?? null
+  const link = (p) => withOrg(p, orgId)
+  const navPath = stripOrg(location.pathname)
+  const [activeGroup, setActiveGroup] = useState(() => routeToGroup(stripOrg(location.pathname)))
   const [openMenus, setOpenMenus] = useState({})
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light')
   const { lang, setLang } = useLanguage()
@@ -142,7 +149,7 @@ export default function Sidebar() {
 
   // Sync active group when route changes
   useEffect(() => {
-    setActiveGroup(routeToGroup(location.pathname))
+    setActiveGroup(routeToGroup(stripOrg(location.pathname)))
   }, [location.pathname])
 
   // Auto-expand only the section containing active route (accordion: close others)
@@ -150,7 +157,7 @@ export default function Sidebar() {
     const sections = groupNav[activeGroup] || []
     const matchSection = sections
       .filter(s => s.children)
-      .find(s => s.children.some(c => location.pathname === c.path || location.pathname.startsWith(c.path + '/')))
+      .find(s => s.children.some(c => stripOrg(location.pathname) === c.path || stripOrg(location.pathname).startsWith(c.path + '/')))
     if (matchSection) {
       setOpenMenus({ [matchSection.label]: true })
     }
@@ -201,7 +208,7 @@ export default function Sidebar() {
     if (group.path) {
       // Dashboard — just navigate, no dropdown
       setActiveGroup(group.key)
-      navigate(group.path)
+      navigate(link(group.path))
       setOpenDropdown(null)
       handleNavClick()
       return
@@ -217,7 +224,7 @@ export default function Sidebar() {
 
   const handleMegaItemClick = (path) => {
     setTooltip(null)  // 點擊立刻清 tooltip
-    navigate(path)
+    navigate(link(path))
     setOpenDropdown(null)
   }
 
@@ -230,8 +237,9 @@ export default function Sidebar() {
   }
 
   const isPathActive = (path) => {
-    if (path === '/') return location.pathname === '/'
-    return location.pathname === path || location.pathname.startsWith(path + '/')
+    const loc = stripOrg(location.pathname)
+    if (path === '/') return loc === '/'
+    return loc === path || loc.startsWith(path + '/')
   }
 
   // Search filter
@@ -617,7 +625,7 @@ export default function Sidebar() {
                       const childVisible = matchChild(child)
                       return (
                         <NavLink
-                          to={child.path}
+                          to={link(child.path)}
                           key={ci}
                           className={({ isActive: active }) => `nav-sub-item ${active ? 'active' : ''} ${childVisible ? '' : 'hidden'}`}
                           onClick={handleNavClick}
@@ -663,7 +671,7 @@ export default function Sidebar() {
                   const childVisible = matchChild(child)
                   return (
                     <NavLink
-                      to={child.path}
+                      to={link(child.path)}
                       key={ci}
                       className={({ isActive: active }) => `nav-sub-item ${active ? 'active' : ''} ${childVisible ? '' : 'hidden'}`}
                       onClick={handleNavClick}
@@ -688,7 +696,7 @@ export default function Sidebar() {
               const Icon = item.icon
               return (
                 <NavLink
-                  to={item.path}
+                  to={link(item.path)}
                   key={item.path}
                   className={({ isActive: active }) => `nav-sub-item ${active ? 'active' : ''}`}
                   onClick={handleNavClick}
@@ -712,7 +720,7 @@ export default function Sidebar() {
               const Icon = item.icon
               return (
                 <NavLink
-                  to={item.path}
+                  to={link(item.path)}
                   key={item.path}
                   className={({ isActive: active }) => `nav-sub-item ${active ? 'active' : ''}`}
                   onClick={handleNavClick}

@@ -112,16 +112,16 @@ export default function FormQuery() {
   const totalPages = Math.max(1, Math.ceil(data.total / size))
 
   return (
-    <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', height: 'calc((100vh - var(--topnav-height)) / var(--app-font-scale, 1))', overflow: 'hidden' }}>
+    <div className="fade-in" style={{ padding: 16 }}>
       <div className="page-header" style={{ marginBottom: 12 }}>
         <div className="page-header-row">
           <h2><span className="header-icon">📋</span> 表單查詢</h2>
         </div>
       </div>
 
-      <div style={{ display: 'flex', flex: 1, gap: 12, overflow: 'hidden', minHeight: 0 }}>
+      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
         {/* 分類側欄 */}
-        <div style={{ width: 180, flexShrink: 0, overflowY: 'auto', background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 10, padding: 8 }}>
+        <div style={{ width: 180, flexShrink: 0, background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 10, padding: 8 }}>
           {CATEGORIES.map(cat => (
             <div key={cat.key || 'all'}>
               <button onClick={() => { setCategory(cat.key); setFormType('') }}
@@ -145,7 +145,7 @@ export default function FormQuery() {
         </div>
 
         {/* 主區 */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0, background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 12 }}>
+        <div style={{ flex: 1, minWidth: 0, background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 12 }}>
           {/* 篩選列 */}
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', padding: '12px 14px', borderBottom: '1px solid var(--border-medium)', flexShrink: 0 }}>
             <select className="form-input" style={{ fontSize: 13, width: 120 }} value={status} onChange={e => setStatus(e.target.value)}>
@@ -177,7 +177,7 @@ export default function FormQuery() {
           </div>
 
           {/* 表格 */}
-          <div style={{ flex: 1, overflowY: 'auto' }}>
+          <div style={{ maxHeight: '62vh', overflowY: 'auto', overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr style={{ background: 'var(--bg-secondary)', position: 'sticky', top: 0, zIndex: 1 }}>

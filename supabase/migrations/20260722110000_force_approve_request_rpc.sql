@@ -84,10 +84,10 @@ BEGIN
   -- 明確稽核:強制通過 row(不能無痕)
   INSERT INTO approval_step_history
     (request_type, request_id, organization_id, chain_id, step_order, step_label,
-     entered_at, exited_at, duration_seconds, action, approver_id, approver_name, notes)
+     entered_at, exited_at, action, approver_id, approver_name, notes)
   VALUES
     (p_type, p_id, v_org, v_chain, COALESCE(v_cur, 0), '強制通過',
-     NOW(), NOW(), 0, 'approved', v_caller.id, v_caller.name, '強制通過（管理員）：' || p_reason);
+     NOW(), NOW(), 'approved', v_caller.id, v_caller.name, '強制通過（管理員）：' || p_reason);
 
   RETURN jsonb_build_object('ok', true, 'status', '已核准', 'forced_by', v_caller.name);
 END $function$;

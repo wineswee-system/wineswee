@@ -1249,7 +1249,7 @@ export default function Schedule() {
   const viewEnd = activeDates?.[activeDates.length - 1] || monthEnd
   const filtered = employees.filter(e =>
     e.employment_category !== 'admin' && e.employment_category !== 'piece' &&  // 行政(固定9-6)+計件(按件數)不排班 → 排除;督導請改成「正職」才會出現
-    (isAdmin || scopedStoreIds.has(e.store_id)) &&   // 非 admin 只看自己可排的店(不然 storeFilter='' 會洩漏全部)
+    (isAdmin || canScheduleAllStores || scopedStoreIds.has(e.store_id)) &&   // 非 admin 只看自己可排的店;有 schedule.view_all(營運部經理等全店權限)比照 admin 看全部(不然能選店卻看不到員工)
     (deptFilter === '' || e.dept === deptFilter) &&
     (storeFilter === '' || e.store === storeFilter) &&
     (!e.join_date   || e.join_date   <= viewEnd) &&   // 4/30 之後入職 → 4 月不顯示

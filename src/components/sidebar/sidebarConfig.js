@@ -263,7 +263,6 @@ export const groupNav = {
         { icon: ClipboardCheck, label: '打卡規則設定', path: '/hr/clock-rules' },
         { icon: ClipboardCheck, label: '月結核對報表', path: '/hr/attendance-diff-report', title: '比對排班 vs 打卡，找出待員工申請的差異（補卡/請假/加班）' },
         { icon: RotateCcw, label: '補登申請', path: '/hr/punch-correction' },
-        { icon: ClipboardCheck, label: '表單查詢', path: '/hr/form-query', title: '跨所有 HR 表單統一查詢（假勤/異動…），可篩選狀態/日期/姓名' },
         { icon: CalendarPlus, label: '加班申請', path: '/hr/overtime' },
         { icon: CalendarOff, label: '請假管理', path: '/hr/leave' },
         { icon: Calendar, label: '請假日曆', path: '/hr/leave-calendar' },
@@ -292,6 +291,7 @@ export const groupNav = {
       icon: FileText,
       children: [
         { icon: FileText, label: 'HR 表單中心', path: '/hr/forms' },
+        { icon: ClipboardCheck, label: '表單查詢', path: '/hr/form-query', title: '跨所有 HR 表單統一查詢（假勤/異動…），可篩選狀態/日期/姓名，管理員可強制通過/抽單' },
         { icon: ClipboardCheck, label: '我的提交', path: '/hr/forms/submissions' },
         { icon: UserMinus, label: '離職申請', path: '/hr/forms/resignation' },
         { icon: PauseCircle, label: '留職停薪', path: '/hr/forms/loa' },

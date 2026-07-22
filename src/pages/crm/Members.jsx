@@ -72,7 +72,7 @@ export default function Members() {
     Promise.all([
       getMembers(orgId),
       getAllPointTransactions(),
-      getReferralCodes(),
+      getReferralCodes(orgId),
       getAllReferralRedemptions(),
     ]).then(([membersRes, txRes, refRes, redemptionsRes]) => {
       setMembers(membersRes.data || [])

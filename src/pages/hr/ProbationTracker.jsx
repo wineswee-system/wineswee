@@ -19,7 +19,7 @@ const STATUS_STYLES = {
 const EMPTY_FORM = { employee: '', start_date: '', end_date: '', mentor: '', notes: '' }
 
 export default function ProbationTracker() {
-  const { hasPermission } = useAuth()
+  const { hasPermission, profile } = useAuth()
   const canEval = hasPermission('probation.evaluate')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -36,7 +36,7 @@ export default function ProbationTracker() {
 
   useEffect(() => {
     Promise.all([
-      getProbationRecords(),
+      getProbationRecords(profile?.organization_id),
       supabase.from('employees').select('id, name, name_en, dept, department_id, store, store_id, position, join_date, departments!department_id(name), stores!store_id(name)').eq('status', '在職').order('name'),
     ]).then(([r, e]) => {
       setRecords(r.data || [])
@@ -45,7 +45,7 @@ export default function ProbationTracker() {
       console.error('Failed to load probation data:', err)
       setError('資料載入失敗')
     }).finally(() => setLoading(false))
-  }, [])
+  }, [profile?.organization_id])
 
   const handleCreate = async () => {
     if (!form.employee || !form.start_date || !form.end_date) return toast.warning('請填寫必要欄位')

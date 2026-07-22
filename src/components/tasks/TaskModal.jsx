@@ -143,7 +143,7 @@ export default function TaskModal({
       safe(getTaskAttachments(task.id)),
       safe(getTaskChecklists(task.id)),
       safe(getTaskDependencies(task.id)),
-      safe(getApprovalChains()),
+      safe(getApprovalChains(profile?.organization_id)),
       safe(getApprovalFormByTask(task.id)),
       safe(getTaskConfirmations(task.id)),
       safe(supabase.from('task_form_bindings').select('*').eq('task_id', task.id).order('id')),
@@ -183,7 +183,7 @@ export default function TaskModal({
         })
       }
     }).catch(() => {})
-  }, [task?.id, employees]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [task?.id, employees, profile?.organization_id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Realtime: sync 填寫狀態 when DB binding status changes (e.g. after employee submits form or approval finishes)
   useEffect(() => {

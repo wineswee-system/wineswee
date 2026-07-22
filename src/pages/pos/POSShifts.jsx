@@ -36,11 +36,11 @@ export default function POSShifts() {
   const [otSubmitting, setOtSubmitting] = useState(false)
 
   useEffect(() => {
-    getPOSShifts()
+    getPOSShifts(orgId)
       .then(({ data }) => setItems(data || []))
       .catch(() => setError('資料載入失敗，請重新整理頁面'))
       .finally(() => setLoading(false))
-  }, [])
+  }, [orgId])
 
   const toggleExpand = async (shiftId) => {
     if (expandedId === shiftId) { setExpandedId(null); setShiftTransactions([]); return }

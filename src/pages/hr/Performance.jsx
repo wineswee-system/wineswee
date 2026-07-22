@@ -30,7 +30,7 @@ export default function Performance() {
 
   useEffect(() => {
     Promise.all([
-      getPerformanceReviews(),
+      getPerformanceReviews(profile?.organization_id),
       supabase.from('performance_goals').select('*').order('id'),
       supabase.from('employees').select('id, name, dept, department_id, position, departments!department_id(name)').eq('status', '在職').order('name'),
       supabase.from('departments').select('*').order('name'),
@@ -45,7 +45,7 @@ export default function Performance() {
     }).finally(() => {
       setLoading(false)
     })
-  }, [])
+  }, [profile?.organization_id])
 
   const setR = (k, v) => setReviewForm(f => ({ ...f, [k]: v }))
   const setG = (k, v) => setGoalForm(f => ({ ...f, [k]: v }))

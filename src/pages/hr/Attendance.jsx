@@ -101,7 +101,7 @@ export default function Attendance() {
       getAttendance(null, { orgId, from: startDate, to: endDate }),
       getActiveEmployees('id, name, dept, store, department_id, position, store_id, departments!department_id(name), stores!store_id(name)', orgId),
       getDepartments(orgId),
-      getStores(),
+      getStores(orgId),
       supabase.from('overtime_requests')
         .select('id, employee, date, start_time, end_time, ot_hours, hours, ot_category, store, status, organization_id')
         .eq('organization_id', orgId).eq('status', '已核准')

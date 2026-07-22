@@ -68,7 +68,7 @@ export default function EngagementSurveys() {
     const orgId = profile?.organization_id
     if (!orgId) { setLoading(false); return }
     Promise.all([
-      getEngagementSurveys(),  // ← 表 query 走 db.js helper，後續可加 org param
+      getEngagementSurveys(orgId),
       supabase.from('employees').select('id, name, name_en, dept, department_id, store, store_id, position, departments!department_id(name), stores!store_id(name)').eq('status', '在職').eq('organization_id', orgId).order('name'),
     ]).then(([s, e]) => {
       setSurveys(s.data || [])

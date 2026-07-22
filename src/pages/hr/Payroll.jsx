@@ -41,7 +41,7 @@ export default function Payroll() {
   const loadData = () => {
     setLoading(true)
     Promise.all([
-      getPayrollRuns(),
+      getPayrollRuns(profile?.organization_id),
       getActiveEmployees('id, name, department_id, store_id, departments(name), stores(name)', profile?.organization_id),
     ]).then(([r, e]) => {
       setRuns(r.data || [])
@@ -54,7 +54,7 @@ export default function Payroll() {
     })
   }
 
-  useEffect(() => { loadData() }, [])
+  useEffect(() => { loadData() }, [profile?.organization_id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const empMap = useMemo(() => {
     const m = {}
@@ -104,7 +104,7 @@ export default function Payroll() {
         await supabase.rpc('apply_fw_deductions', { p_payroll_run_id: result.payroll_run_id })
       }
       toast.success(`薪資計算完成！共產生 ${result?.records_created || 0} 筆薪資記錄`)
-      const { data: freshRuns } = await getPayrollRuns()
+      const { data: freshRuns } = await getPayrollRuns(profile?.organization_id)
       setRuns(freshRuns || [])
       setShowCreateModal(false)
     } catch (err) {

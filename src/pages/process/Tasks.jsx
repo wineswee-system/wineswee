@@ -86,14 +86,15 @@ export default function Tasks() {
   }
 
   const refresh = () => {
+    const orgId = profile?.organization_id
     return Promise.all([
-      getTasks(),
+      getTasks({ orgId }),
       supabase.from('employees').select('id, name, department_id, position, dept').eq('status', '在職').order('name'),
       supabase.from('departments').select('id, name').order('name'),
       supabase.from('projects').select('id, name').order('name'),
       getCategories('task'),
-      getWorkflows(),
-      getApprovalChains(),
+      getWorkflows({ orgId }),
+      getApprovalChains(orgId),
     ]).then(([t, e, d, p, cat, wf, ac]) => {
       const rows = t.data || []
       setTasks(rows)
@@ -114,7 +115,7 @@ export default function Tasks() {
     refresh()
       .catch(err => { console.error('Failed to load:', err); setError('資料載入失敗') })
       .finally(() => setLoading(false))
-  }, [])
+  }, [profile?.organization_id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!profile?.organization_id) return

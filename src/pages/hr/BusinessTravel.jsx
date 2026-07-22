@@ -48,7 +48,7 @@ export default function BusinessTravel() {
   const load = () => {
     const orgId = profile?.organization_id
     return Promise.all([
-      getBusinessTrips(),
+      getBusinessTrips(orgId),
       supabase.from('employees').select('id, name, dept, department_id, position, signature_url, departments!department_id(name)').eq('status', '在職').order('name'),
       supabase.from('departments').select('*').order('name'),
       orgId ? supabase.from('organizations').select('name, logo_url').eq('id', orgId).maybeSingle() : Promise.resolve({ data: null }),
@@ -67,7 +67,7 @@ export default function BusinessTravel() {
     })
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [profile?.organization_id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Dashboard ApprovalCenter 跳過來時 ?focus=ID 自動開明細
   const [searchParams, setSearchParams] = useSearchParams()

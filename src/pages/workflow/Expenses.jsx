@@ -101,14 +101,14 @@ export default function Expenses() {
 
   // 核准/駁回後重抓清單（明細 modal onChanged 用）。只刷 expenses，不重置表單。
   const load = async () => {
-    const { data } = await getExpenses()
+    const { data } = await getExpenses(profile?.organization_id)
     setExpenses(data || [])
   }
 
   useEffect(() => {
     const orgId = profile?.organization_id
     Promise.all([
-      getExpenses(),
+      getExpenses(orgId),
       supabase.from('employees').select('id, name, name_en, dept, department_id, store, store_id, position, signature_url, departments!department_id(name), stores!store_id(name)').eq('status', '在職').order('name'),
       supabase.from('departments').select('*').order('name'),
       orgId ? supabase.from('organizations').select('name, logo_url').eq('id', orgId).maybeSingle() : Promise.resolve({ data: null }),
@@ -134,7 +134,7 @@ export default function Expenses() {
     }).finally(() => {
       setLoading(false)
     })
-  }, [])
+  }, [profile?.organization_id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Dashboard ApprovalCenter 跳過來時 ?focus=ID 自動開明細
   const [searchParams, setSearchParams] = useSearchParams()

@@ -97,8 +97,9 @@ function AdminDashboard({ profile }) {
   const tick = useMemo(() => ({ color: T.tertiary, font: { size: 11 } }), [T])
 
   useEffect(() => {
+    const orgId = profile?.organization_id
     Promise.all([
-      getEmployees(), getTasks(), getWorkflows(), getAttendance(null, { from: monthStart, columns: 'date, status, hours', orgId: profile?.organization_id }), getLeaveRequests(),
+      getEmployees(orgId), getTasks({ orgId }), getWorkflows({ orgId }), getAttendance(null, { from: monthStart, columns: 'date, status, hours', orgId }), getLeaveRequests({ orgId }),
       supabase.from('accounts_receivable').select('amount, paid_amount, status, due_date'),
       supabase.from('accounts_payable').select('amount, paid_amount, status'),
       supabase.from('opportunities').select('stage, amount'),
@@ -119,7 +120,7 @@ function AdminDashboard({ profile }) {
         console.error('Failed to load data:', err)
         setError('資料載入失敗，請重新整理頁面')
       }).finally(() => setLoading(false))
-  }, [])
+  }, [profile?.organization_id])
 
   if (loading) return <LoadingSpinner />
   if (error) return (

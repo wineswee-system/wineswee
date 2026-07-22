@@ -125,7 +125,7 @@ export default function TaskDetailPanel({
       safe(getTaskAttachments(task.id)),
       safe(getTaskChecklists(task.id)),
       safe(getTaskDependencies(task.id)),
-      safe(getApprovalChains()),
+      safe(getApprovalChains(profile?.organization_id)),
       safe(getApprovalFormByTask(task.id)),
       safe(getTaskConfirmations(task.id)),
       safe(supabase.from('task_form_bindings').select('*').eq('task_id', task.id).order('id')),
@@ -168,7 +168,7 @@ export default function TaskDetailPanel({
         setChecklistItemsMap({})
       }
     }).catch(() => {})
-  }, [task?.id])
+  }, [task?.id, profile?.organization_id])
 
   // 一次性抓 super_admin_only template id 清單（不靠 FK join，直接獨立 query）
   useEffect(() => {

@@ -51,7 +51,7 @@ export default function CompensationBenchmark() {
     const orgId = profile?.organization_id
     if (!orgId) { setLoading(false); return }
     Promise.all([
-      getCompensationBands(),
+      getCompensationBands(orgId),
       supabase.from('employees').select('id, name, dept, store, department_id, position, store_id, status, departments!department_id(name), stores!store_id(name)').eq('status', '在職').eq('organization_id', orgId).order('name'),
       supabase.from('salary_records').select('employee_id, base_salary, allowance, month, employees(name)').eq('organization_id', orgId).order('month', { ascending: false }),
       getDepartments(orgId),

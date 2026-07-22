@@ -696,7 +696,8 @@ export function validateLeisureQuota({ schedules, workHourSystem, anchorDate, st
     const endM = parseInt((d.end_time || '').split(':')[1]) || 0
     const start = startH + startM / 60
     const end = endH + endM / 60
-    hoursMap[d.name] = end > start ? end - start : (24 - start + end)
+    const _gross = end > start ? end - start : (24 - start + end)
+    hoursMap[d.name] = _gross - getShiftRestMinutes(d, _gross) / 60   // ★扣休息=淨工時(對齊計薪/班表;09-18=9h→淨8h)
   })
 
   // 取得 workHourSystem 的 cycle 工時上限（沒 shiftDefs 也能跑，純基於 constraint）
@@ -930,7 +931,8 @@ export function validateMonthlyOvertime({ schedules, shiftDefs = [] }) {
     const endM = parseInt((d.end_time || '').split(':')[1]) || 0
     const start = startH + startM / 60
     const end = endH + endM / 60
-    hoursMap[d.name] = end > start ? end - start : (24 - start + end)
+    const _gross = end > start ? end - start : (24 - start + end)
+    hoursMap[d.name] = _gross - getShiftRestMinutes(d, _gross) / 60   // ★扣休息=淨工時(對齊計薪/班表;09-18=9h→淨8h)
   })
 
   // group by employee + YYYY-MM

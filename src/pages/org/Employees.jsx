@@ -172,12 +172,16 @@ export default function Employees() {
   useEffect(() => { loadPositions().then(setPositions) }, [])
 
   useEffect(() => {
+    const orgId = profile?.organization_id
+    let deptQ = supabase.from('departments').select('*').order('name')
+    let storeQ = supabase.from('stores').select('*').order('name')
+    if (orgId) { deptQ = deptQ.eq('organization_id', orgId); storeQ = storeQ.eq('organization_id', orgId) }
     Promise.all([
-      getEmployeesList(),
-      supabase.from('departments').select('*').order('name'),
-      supabase.from('stores').select('*').order('name'),
-      profile?.organization_id
-        ? supabase.from('organizations').select('name, tax_id, contact_person, address, phone, logo_url').eq('id', profile.organization_id).maybeSingle()
+      getEmployeesList(orgId),
+      deptQ,
+      storeQ,
+      orgId
+        ? supabase.from('organizations').select('name, tax_id, contact_person, address, phone, logo_url').eq('id', orgId).maybeSingle()
         : Promise.resolve({ data: null }),
     ]).then(([e, d, l, org]) => {
       const depts = d.data || []
@@ -193,7 +197,7 @@ export default function Employees() {
     }).finally(() => {
       setLoading(false)
     })
-  }, [])
+  }, [profile?.organization_id])
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
@@ -914,7 +918,7 @@ export default function Employees() {
           onClose={() => setShowCsvImport(false)}
           onDone={() => {
             // refresh employee list so counts/stat cards update
-            getEmployeesList().then(r => setEmployees(r.data || []))
+            getEmployeesList(profile?.organization_id).then(r => setEmployees(r.data || []))
           }}
         />
       )}

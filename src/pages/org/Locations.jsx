@@ -28,7 +28,8 @@ export default function Locations() {
   const [form, setForm] = useState(EMPTY_FORM)
 
   useEffect(() => {
-    Promise.all([getStores(), getEmployees(), getCompanies(), getDepartmentSectionsAll()]).then(([s, e, c, sec]) => {
+    const orgId = profile?.organization_id
+    Promise.all([getStores(orgId), getEmployees(orgId), getCompanies(orgId), getDepartmentSectionsAll(orgId)]).then(([s, e, c, sec]) => {
       setStores(s.data || [])
       setEmployees(e.data || [])
       setCompanies(c.data || [])
@@ -37,7 +38,7 @@ export default function Locations() {
       console.error('Failed to load data:', err)
       setError('資料載入失敗，請重新整理頁面')
     }).finally(() => { setLoading(false) })
-  }, [])
+  }, [profile?.organization_id])
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 

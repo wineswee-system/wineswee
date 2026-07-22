@@ -37,7 +37,7 @@ export default function Departments() {
 
   useEffect(() => {
     const orgId = profile?.organization_id
-    Promise.all([getDepartments(), getEmployees(), getDepartmentSectionsAll(orgId)]).then(([d, e, s]) => {
+    Promise.all([getDepartments(orgId), getEmployees(orgId), getDepartmentSectionsAll(orgId)]).then(([d, e, s]) => {
       setDepartments(d.data || [])
       setEmployees(e.data || [])
       setSections(s.data || [])

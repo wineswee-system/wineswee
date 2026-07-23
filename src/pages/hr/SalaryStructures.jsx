@@ -116,6 +116,14 @@ export default function SalaryStructures() {
     ? Math.round(structures.reduce((sum, s) => sum + (s.base_salary || 0), 0) / structures.length)
     : 0
 
+  // 整理畫面:0/空 → 淡色「—」(不再滿版 NT$ 0);有值才顯示金額,讓真的有津貼的跳出來
+  const money = (v, muted = false) => {
+    const n = Number(v) || 0
+    if (n <= 0) return <span style={{ color: 'var(--text-muted)' }}>—</span>
+    return muted ? <span style={{ color: 'var(--text-muted)' }}>{fmt(n)}</span> : fmt(n)
+  }
+  const anyPos = (...vals) => vals.some(v => (Number(v) || 0) > 0)
+
   const openAdd = () => {
     setEditingId(null)
     setForm(emptyForm)
@@ -392,18 +400,30 @@ export default function SalaryStructures() {
                       })()}
                     </td>
                     <td style={{ padding: '10px 14px', fontSize: 12, lineHeight: 1.3 }}>
-                      <div style={{ fontWeight: 600 }}>{fmt(s.base_salary)}</div>
-                      <div style={{ color: 'var(--text-muted)' }}>投保 {fmt(s.base_insured || s.base_salary)}</div>
+                      {Number(s.base_salary) > 0 ? (
+                        <>
+                          <div style={{ fontWeight: 600 }}>{fmt(s.base_salary)}</div>
+                          <div style={{ color: 'var(--text-muted)' }}>投保 {fmt(s.base_insured || s.base_salary)}</div>
+                        </>
+                      ) : <span style={{ color: 'var(--text-muted)' }}>—</span>}
                     </td>
                     <td style={{ padding: '10px 14px', fontSize: 12, lineHeight: 1.3 }}>
-                      <div>{fmt(s.supervisor_allowance)}</div>
-                      <div style={{ color: 'var(--text-muted)' }}>{fmt(s.night_shift_allowance)} / {fmt(s.cross_store_allowance)}</div>
+                      {anyPos(s.supervisor_allowance, s.night_shift_allowance, s.cross_store_allowance) ? (
+                        <>
+                          <div>{money(s.supervisor_allowance)}</div>
+                          <div style={{ color: 'var(--text-muted)' }}>{money(s.night_shift_allowance, true)} / {money(s.cross_store_allowance, true)}</div>
+                        </>
+                      ) : <span style={{ color: 'var(--text-muted)' }}>—</span>}
                     </td>
                     <td style={{ padding: '10px 14px', fontSize: 12, lineHeight: 1.3 }}>
-                      <div>{fmt(s.meal_allowance)}</div>
-                      <div style={{ color: 'var(--text-muted)' }}>{fmt(s.transport_allowance)}</div>
+                      {anyPos(s.meal_allowance, s.transport_allowance) ? (
+                        <>
+                          <div>{money(s.meal_allowance)}</div>
+                          <div style={{ color: 'var(--text-muted)' }}>{money(s.transport_allowance, true)}</div>
+                        </>
+                      ) : <span style={{ color: 'var(--text-muted)' }}>—</span>}
                     </td>
-                    <td style={{ padding: '10px 14px' }}>{fmt(s.attendance_bonus)}</td>
+                    <td style={{ padding: '10px 14px' }}>{money(s.attendance_bonus)}</td>
                     <td style={{ padding: '10px 14px' }}>
                       {Array.isArray(s.custom_allowances) && s.custom_allowances.length > 0 ? (
                         <div title={s.custom_allowances.map(c => `${c.name}: ${fmt(c.amount)}`).join('\n')}>

@@ -269,8 +269,25 @@ export function printHireApprovalSignOff(ol, opts = {}) {
   const base = baseOpts(opts)
   const candidateName = opts.candidateName || ol.candidates?.name || '—'
 
+  // 實際錄取簽核鏈(offer_approval_steps)→ 智慧渲染簽核欄;狀態中文轉 printSignOff 的 token。
+  // 沒鏈(舊單/未設簽核人)才 fallback 靜態 3 格。
+  const chainSteps = (ol.steps || [])
+    .slice()
+    .sort((a, b) => (a.step_order || 0) - (b.step_order || 0))
+    .map((s, idx) => ({
+      label: `第 ${idx + 1} 關`,
+      name: s.approver?.name || '—',
+      status: s.status === '已核准' ? 'completed'
+            : (s.status === '已駁回' || s.status === '已拒絕') ? 'rejected'
+            : 'pending',
+      completedBy: s.approver?.name,
+      completedAt: s.decided_at,
+      rejectReason: s.reason,
+    }))
+
   printSignOff({
     ...base,
+    chainSteps,
     docTitle: '錄取核准簽呈',
     docNo: ol.id,
     applicant: {

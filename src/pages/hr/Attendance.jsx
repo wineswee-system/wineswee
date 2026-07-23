@@ -88,6 +88,7 @@ export default function Attendance() {
   const [editModal, setEditModal] = useState(null) // record being edited
   const [editClockIn, setEditClockIn] = useState('')
   const [editClockOut, setEditClockOut] = useState('')
+  const [editDate, setEditDate] = useState('')      // 可改日期（跨日班把紀錄搬到正確那天）
   const [editHours, setEditHours] = useState('')   // 手動工時（空=用自動扣休息值）
   const [editReason, setEditReason] = useState('')
   const [editHistory, setEditHistory] = useState([])
@@ -273,6 +274,7 @@ export default function Attendance() {
     setEditModal(r)
     setEditClockIn(r.clock_in || '')
     setEditClockOut(r.clock_out || '')
+    setEditDate(r.date || '')
     setEditHours('')            // 空=用自動扣休息值；填了=用手動值
     setEditReason('')
     setEditHistory([])
@@ -291,6 +293,8 @@ export default function Attendance() {
     const payload = {}
     if (editClockIn) payload.clock_in = editClockIn
     if (editClockOut) payload.clock_out = editClockOut
+    const dateChanged = editDate && editDate !== r.date   // 跨日班把整筆搬到正確那天
+    if (dateChanged) payload.date = editDate
     // 工時：有手動填就用手動值（固定不浮動）；沒填才自動算（扣休息）
     if (editHours !== '' && !isNaN(Number(editHours))) {
       payload.total_hours = Math.round(Number(editHours) * 100) / 100
@@ -308,18 +312,18 @@ export default function Attendance() {
     await supabase.from('attendance_clock_edits').insert({
       attendance_record_id: r.id,
       employee: r.employee,
-      date: r.date,
+      date: editDate || r.date,
       old_clock_in: r.clock_in || null,
       new_clock_in: editClockIn || null,
       old_clock_out: r.clock_out || null,
       new_clock_out: editClockOut || null,
-      reason: editReason.trim(),
+      reason: dateChanged ? `${editReason.trim()}（日期 ${r.date}→${editDate}）` : editReason.trim(),
       edited_by: profile?.name || '',
       edited_by_id: editorEmp?.id || null,
       organization_id: profile?.organization_id || null,
     })
     setRecords(prev => prev.map(rec => rec.id === r.id ? { ...rec, ...payload } : rec))
-    setClockMsg({ type: 'success', text: `${r.employee} ${r.date} 打卡時間已更新` })
+    setClockMsg({ type: 'success', text: `${r.employee} ${editDate || r.date} 打卡時間已更新${dateChanged ? `（已從 ${r.date} 搬移）` : ''}` })
     setSaving(false)
     cancelEdit()
   }
@@ -631,6 +635,17 @@ export default function Attendance() {
               {editModal.employee}・{editModal.date}
             </div>
 
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>日期</div>
+              <input type="date" value={editDate} onChange={e => setEditDate(e.target.value)}
+                className="form-input" style={{ width: '100%' }} />
+              {editDate && editDate !== editModal.date && (
+                <div style={{ fontSize: 11, color: 'var(--accent-orange)', marginTop: 4 }}>
+                  ⚠️ 這筆打卡紀錄會從 {editModal.date} 搬到 {editDate}
+                </div>
+              )}
+            </div>
+
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
               <div>
                 <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>上班打卡</div>
@@ -638,7 +653,11 @@ export default function Attendance() {
                   className="form-input" style={{ width: '100%' }} />
               </div>
               <div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>下班打卡</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>
+                  下班打卡{editClockIn && editClockOut && editClockOut < editClockIn && (
+                    <span style={{ color: 'var(--accent-cyan)', marginLeft: 4 }}>· 隔天</span>
+                  )}
+                </div>
                 <input type="time" value={editClockOut} onChange={e => setEditClockOut(e.target.value)}
                   className="form-input" style={{ width: '100%' }} />
               </div>

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import Modal, { Field } from '../../../components/Modal'
 import { supabase } from '../../../lib/supabase'
+import { useAuth } from '../../../contexts/AuthContext'
 import { displaySettleStatus } from '../../../lib/displayLabel'
 import {
   Plus, ChevronRight, ChevronDown, Check, Clock, Pause, Ban, Play,
@@ -42,6 +43,7 @@ const fmt = (n) => n != null ? `NT$ ${Number(n).toLocaleString()}` : '-'
 
 // ─── 列表 tab component ───
 function ProjectListsTab({ projectId, tasks }) {
+  const { profile } = useAuth()
   const [lists, setLists] = useState([])
   const [newName, setNewName] = useState('')
   const [adding, setAdding] = useState(false)
@@ -57,7 +59,7 @@ function ProjectListsTab({ projectId, tasks }) {
   const addList = async () => {
     if (!newName.trim()) return
     setSaving(true)
-    const { data } = await supabase.from('project_lists').insert({ project_id: projectId, name: newName.trim(), sort_order: lists.length }).select().single()
+    const { data } = await supabase.from('project_lists').insert({ project_id: projectId, name: newName.trim(), sort_order: lists.length, org_id: profile?.organization_id }).select().single()
     if (data) setLists(prev => [...prev, data])
     setNewName(''); setAdding(false); setSaving(false)
   }

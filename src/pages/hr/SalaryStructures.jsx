@@ -112,8 +112,10 @@ export default function SalaryStructures() {
 
   // Summary cards
   const totalConfigured = new Set(structures.map(s => s.employee_id)).size
-  const avgBase = structures.length > 0
-    ? Math.round(structures.reduce((sum, s) => sum + (s.base_salary || 0), 0) / structures.length)
+  // 平均底薪:只算有設底薪者(排除兼職/未設定的 0,避免被拉低失真)
+  const basedRows = structures.filter(s => (Number(s.base_salary) || 0) > 0)
+  const avgBase = basedRows.length > 0
+    ? Math.round(basedRows.reduce((sum, s) => sum + (Number(s.base_salary) || 0), 0) / basedRows.length)
     : 0
 
   // 整理畫面:0/空 → 淡色「—」(不再滿版 NT$ 0);有值才顯示金額,讓真的有津貼的跳出來
@@ -123,6 +125,13 @@ export default function SalaryStructures() {
     return muted ? <span style={{ color: 'var(--text-muted)' }}>{fmt(n)}</span> : fmt(n)
   }
   const anyPos = (...vals) => vals.some(v => (Number(v) || 0) > 0)
+  // 總薪水 = 本薪 + 所有固定津貼(含職務津貼與自訂津貼);兼職時薪制無固定月薪 → 多為 0(顯示「—」)
+  const totalSalary = (s) => {
+    const custom = Array.isArray(s.custom_allowances) ? s.custom_allowances.reduce((a, c) => a + (Number(c.amount) || 0), 0) : 0
+    return (Number(s.base_salary) || 0) + (Number(s.role_allowance) || 0) + (Number(s.supervisor_allowance) || 0)
+      + (Number(s.night_shift_allowance) || 0) + (Number(s.cross_store_allowance) || 0) + (Number(s.meal_allowance) || 0)
+      + (Number(s.transport_allowance) || 0) + (Number(s.attendance_bonus) || 0) + custom
+  }
 
   const openAdd = () => {
     setEditingId(null)
@@ -264,6 +273,7 @@ export default function SalaryStructures() {
           '交通津貼': Number(s.transport_allowance) || 0,
           '全勤獎金': Number(s.attendance_bonus) || 0,
           '其他自訂津貼': custom,
+          '總薪水(本薪+津貼)': totalSalary(s),
           // 銀行代號/帳號維持文字，避免 Excel 變科學記號或吃掉開頭 0
           '銀行代號': String(bank.bank_code || ''),
           '銀行': bank.bank_name || '',
@@ -357,14 +367,14 @@ export default function SalaryStructures() {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-tertiary)' }}>
-                {['員工', '狀態', '部門', '門市', '薪資類型', '本薪 / 投保', '主管/夜班/跨區', '餐費/交通', '全勤', '其他津貼', '生效日', '操作'].map(h => (
+                {['員工', '狀態', '部門', '門市', '薪資類型', '本薪', '主管/夜班/跨區', '餐費/交通', '全勤', '其他津貼', '總薪水', '生效日', '操作'].map(h => (
                   <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 600, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={12} style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>尚無薪資結構資料</td></tr>
+                <tr><td colSpan={13} style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>尚無薪資結構資料</td></tr>
               ) : filtered.map(s => {
                 const emp = empMap[s.employee_id]
                 return (
@@ -400,12 +410,13 @@ export default function SalaryStructures() {
                       })()}
                     </td>
                     <td style={{ padding: '10px 14px', fontSize: 12, lineHeight: 1.3 }}>
-                      {Number(s.base_salary) > 0 ? (
-                        <>
-                          <div style={{ fontWeight: 600 }}>{fmt(s.base_salary)}</div>
-                          <div style={{ color: 'var(--text-muted)' }}>投保 {fmt(s.base_insured || s.base_salary)}</div>
-                        </>
-                      ) : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                      {Number(s.base_salary) > 0
+                        ? <div style={{ fontWeight: 600 }}>{fmt(s.base_salary)}</div>
+                        : Number(s.hourly_rate) > 0
+                          ? <div>時薪 {fmt(s.hourly_rate)}</div>
+                          : Number(s.piece_rate) > 0
+                            ? <div>件 {fmt(s.piece_rate)}</div>
+                            : <span style={{ color: 'var(--text-muted)' }}>—</span>}
                     </td>
                     <td style={{ padding: '10px 14px', fontSize: 12, lineHeight: 1.3 }}>
                       {anyPos(s.supervisor_allowance, s.night_shift_allowance, s.cross_store_allowance) ? (
@@ -434,6 +445,7 @@ export default function SalaryStructures() {
                         </div>
                       ) : <span style={{ color: 'var(--text-muted)' }}>—</span>}
                     </td>
+                    <td style={{ padding: '10px 14px', fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>{money(totalSalary(s))}</td>
                     <td style={{ padding: '10px 14px' }}>{s.effective_from || '-'}</td>
                     <td style={{ padding: '10px 14px' }}>
                       <button onClick={() => openEdit(s)} style={{ background: 'none', border: 'none', color: 'var(--accent-cyan)', cursor: 'pointer', padding: 4 }}>

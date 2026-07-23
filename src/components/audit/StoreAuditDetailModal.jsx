@@ -67,7 +67,9 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
       supabase.from('store_audits').select('*').eq('id', auditId).single(),
       supabase.from('store_audit_items').select('*').eq('audit_id', auditId).order('item_no'),
       supabase.from('store_audit_on_duty').select('*').eq('audit_id', auditId).order('sort_order'),
-      supabase.from('employees').select('id, name, name_en, position, dept, store, department_id, store_id, departments!department_id(name), stores!store_id(name)').eq('status', '在職').order('name'),
+      // 當班人員選單：走 SECURITY DEFINER RPC 撈全 org 在職員工,對齊 LIFF(liff_list_employees)。
+      // 不用 from('employees')(受 RLS 限,多租戶 org 收緊後只回本 org/本店 → 選人少一半)。
+      supabase.rpc('list_org_active_employees'),
     ])
     if (a.error) { toast.error('載入失敗：' + a.error.message); onClose(); return }
     setAudit(a.data)

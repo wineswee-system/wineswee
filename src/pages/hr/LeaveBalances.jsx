@@ -132,8 +132,10 @@ export default function LeaveBalances() {
           .is('deleted_at', null)
           .eq('status', '申請中').gte('start_date', yearStart).lt('start_date', yearEnd),
         // 補休：改讀 comp_time_ledger（與補休管理 tab / 104 同源，不用 leave_balances 那套髒的）
+        // 可休/已休要算「賺過的全部」(active 未用完 + exhausted 已用完),不能只算 active,
+        // 否則已用完的 11 筆被排除→可休/已休失真(只剩餘正確)。排除 settled(已折現非休)。
         supabase.from('comp_time_ledger').select('hours,hours_used,status')
-          .eq('employee_id', selectedEmpId).eq('status', 'active'),
+          .eq('employee_id', selectedEmpId).in('status', ['active', 'exhausted']),
       ])
       const bals    = balRes.data  || []
       const lrs     = lrRes.data   || []

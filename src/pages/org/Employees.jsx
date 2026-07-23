@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Plus, Search, UserMinus, UserPlus, Pencil, Mail, Upload, Download, Building2, Trash2, Users, FileText, UserCheck, Power } from 'lucide-react'
 import { exportEmployeeCertificate } from '../../lib/exportCertificate'
@@ -202,8 +202,11 @@ export default function Employees() {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
   // 新增員工
+  const submittingRef = useRef(false)
   const handleSubmit = async () => {
     if (!form.name || !form.email) return
+    if (submittingRef.current) return  // 防重複提交:表單 Enter 提交 + 點儲存/連點 → 兩次 createEmployee 同時跑 → trigger 算出同一員工編號 → 撞 unique(員工編號已被使用)
+    submittingRef.current = true
     try {
       const avatar = AVATARS[Math.floor(Math.random() * AVATARS.length)]
       const posInfo = positions.find(p => p.label === form.position)
@@ -291,6 +294,8 @@ export default function Employees() {
       } else {
         toast.error('操作失敗：' + (err.message || '未知錯誤'))
       }
+    } finally {
+      submittingRef.current = false
     }
   }
 

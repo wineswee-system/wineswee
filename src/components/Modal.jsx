@@ -36,6 +36,7 @@ export default function Modal({
   onCloseRef.current = onClose
   const submittingRef = useRef(false)
   submittingRef.current = submitting
+  const submitLockRef = useRef(false)  // 同步鎖:setSubmitting 是非同步,連點兩下會在 re-render 前都通過 state 檢查 → onSubmit 跑兩次(如新增員工併發 insert 撞員工編號)。ref 同步關窗。
   const isDirtyRef = useRef(isDirty)
   isDirtyRef.current = isDirty
 
@@ -68,13 +69,15 @@ export default function Modal({
   // 防重複點擊；submitting 期間 ESC、backdrop click、cancel 全擋掉
   // 若有傳 successMessage，submit 成功後自動切到 success state 並倒數關閉
   const handleSubmit = async () => {
-    if (submitting || submitDisabled || !onSubmit) return
+    if (submitLockRef.current || submitting || submitDisabled || !onSubmit) return
+    submitLockRef.current = true  // 同步鎖:擋連點在 setSubmitting 生效前的第二次呼叫
     setSubmitting(true)
     let result
     try {
       result = await onSubmit()
     } finally {
       setSubmitting(false)
+      submitLockRef.current = false
     }
     // submit 完成後若有 successMessage → 顯示綠色 success state，N 秒後 auto close
     // 呼叫端可以從 onSubmit 回傳 false 取消（例如驗證失敗已自行 toast 過）

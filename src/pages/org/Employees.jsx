@@ -205,7 +205,7 @@ export default function Employees() {
   const submittingRef = useRef(false)
   const handleSubmit = async () => {
     if (!form.name || !form.email) return
-    if (submittingRef.current) return  // 防重複提交:表單 Enter 提交 + 點儲存/連點 → 兩次 createEmployee 同時跑 → trigger 算出同一員工編號 → 撞 unique(員工編號已被使用)
+    if (submittingRef.current) return  // 防呆(第二層,Modal 已有同步鎖):連點儲存時兩次 createEmployee 併發 → trigger 算出同一員工編號 → 撞 unique(員工編號已被使用)
     submittingRef.current = true
     try {
       const avatar = AVATARS[Math.floor(Math.random() * AVATARS.length)]

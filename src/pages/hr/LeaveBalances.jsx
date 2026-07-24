@@ -220,7 +220,11 @@ export default function LeaveBalances() {
       if (dbBal?.period_start) _periodStartStr = dbBal.period_start
       else if (type === 'annual' && emp.join_date) {
         const _jj = new Date(emp.join_date)
-        _periodStartStr = `${yearFilter}-${_pad2s(_jj.getMonth() + 1)}-${_pad2s(_jj.getDate())}`
+        // 特休生效日:第一個週年期(到職當年)滿6個月才生效 → 到職+6個月;第二年起=到職週年日
+        const _es = new Date(_jj)
+        if (yearFilter === _jj.getFullYear()) _es.setMonth(_es.getMonth() + 6)
+        else _es.setFullYear(yearFilter)
+        _periodStartStr = `${_es.getFullYear()}-${_pad2s(_es.getMonth() + 1)}-${_pad2s(_es.getDate())}`
       } else _periodStartStr = `${yearFilter}-01-01`
       const notStarted     = _periodStartStr > _todayStr
       const effectiveDays  = dbTotal > 0 ? dbTotal : computedDays       // 未生效不歸 0,照顯示額度
@@ -236,7 +240,10 @@ export default function LeaveBalances() {
       if (type === 'annual') {
         if (emp.join_date) {
           const join = new Date(emp.join_date)
-          const startYear = new Date(yearFilter, join.getMonth(), join.getDate())
+          // 第一個週年期:特休滿6個月才生效 → 可休起日=到職+6個月;第二年起=到職週年日
+          const startYear = yearFilter === join.getFullYear()
+            ? new Date(join.getFullYear(), join.getMonth() + 6, join.getDate())
+            : new Date(yearFilter, join.getMonth(), join.getDate())
           const endYear   = new Date(yearFilter + 1, join.getMonth(), join.getDate() - 1)
           const pad2 = (n) => String(n).padStart(2, '0')
           const iso = (d) => `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`

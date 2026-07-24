@@ -18,6 +18,7 @@ import { logError } from './lib/systemLogger.js'
 
 // ── Standalone pages (not part of any module) ──
 const DemoLanding = lazy(() => import('./pages/DemoLanding'))
+const Wineswee    = lazy(() => import('./pages/Wineswee'))
 const Dashboard   = lazy(() => import('./pages/Dashboard'))
 const GuestMenu   = lazy(() => import('./pages/pos/GuestMenu'))
 // 舊的 Liff* 頁面（2026-04-23 移除）已搬到獨立 repo aska911023/sme-ops-liff
@@ -267,6 +268,8 @@ export default function App() {
           <Route path="/demo" element={<PortalGuard><DemoLanding /></PortalGuard>} />
           {/* Public marketing landing — no auth required (shareable demo URL) */}
           <Route path="/showcase" element={<Suspense fallback={<LoadingSpinner />}><DemoLanding /></Suspense>} />
+          {/* Wineswee 威士威 酒食超市 品牌形象頁 — 公開,不需登入 */}
+          <Route path="/wineswee" element={<Suspense fallback={<LoadingSpinner />}><Wineswee /></Suspense>} />
           <Route path="/login" element={<Suspense fallback={<LoadingSpinner />}><Login /></Suspense>} />
           {/* Guest QR self-order menu — public, no auth required */}
           <Route path="/menu/:storeId/:tableId" element={<Suspense fallback={<LoadingSpinner />}><GuestMenu /></Suspense>} />

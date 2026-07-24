@@ -57,6 +57,8 @@ export default function PayslipRow({ record: rec, employee: emp, selectedRun, pr
             {rec.other_bonus > 0 && <DetailRow label="其他獎金" value={fmt(rec.other_bonus)} />}
             {rec.year_end_bonus > 0 && <DetailRow label="年終獎金" value={fmt(rec.year_end_bonus)} />}
             {rec.unused_leave_payout > 0 && <DetailRow label={`未休特休折現（${rec.unused_leave_days || 0} 天）`} value={fmt(rec.unused_leave_payout)} />}
+            {rec.severance_amount > 0 && <DetailRow label="資遣費" value={fmt(rec.severance_amount)} />}
+            {rec.notice_wage > 0 && <DetailRow label="預告工資" value={fmt(rec.notice_wage)} />}
             {Array.isArray(rec.custom_allowances_breakdown) && rec.custom_allowances_breakdown.length > 0 && (
               <>
                 {rec.custom_allowances_breakdown.map((c, i) => (

@@ -365,7 +365,7 @@ export default function Severance() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 13 }}>
                 <div><span style={{ color: 'var(--text-muted)' }}>員工：</span><b>{calcResult.employee_name}</b> {calcResult.employee_number && <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace' }}>({calcResult.employee_number})</span>}</div>
                 <div><span style={{ color: 'var(--text-muted)' }}>到職日：</span>{calcResult.join_date}</div>
-                <div><span style={{ color: 'var(--text-muted)' }}>服務年資：</span><b>{calcResult.service_label}</b> ({Number(calcResult.service_years).toFixed(3)} 年)</div>
+                <div><span style={{ color: 'var(--text-muted)' }}>服務年資：</span><b>{calcResult.service_label}</b> ({Number(calcResult.service_years).toFixed(2)} 年)</div>
                 <div><span style={{ color: 'var(--text-muted)' }}>平均月薪：</span><b style={{ fontFamily: 'monospace' }}>{fmt(calcResult.average_monthly_wage)}</b>
                   <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 6 }}>
                     ({calcResult.avg_wage_source === 'manual' ? '手動' : calcResult.avg_wage_source === 'payroll_6m_avg' ? '近 6 月平均' : '薪資結構'})

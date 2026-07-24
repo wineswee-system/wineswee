@@ -544,6 +544,9 @@ export default function Recruitment() {
   }, [candForm.email, candForm.phone, candidates, editingCand])
   const [offerForm,   setOfferForm]   = useState({ template_id: '', position: '', dept: '', salary: '', start_date: '', probation_days: 90, approver_ids: [] })
   const [searchQuery, setSearchQuery] = useState('')
+  // 面試分頁專用篩選（與候選人分頁的 searchQuery/jobFilter 獨立）
+  const [intQuery,     setIntQuery]     = useState('')
+  const [intJobFilter, setIntJobFilter] = useState('')
 
   const [editingTpl, setEditingTpl] = useState(null)  // null=list, 'new'=new, obj=editing
 
@@ -975,6 +978,14 @@ export default function Recruitment() {
   const candInterviews = selectedCand
     ? interviews.filter(iv => iv.candidate_id === selectedCand.id)
     : []
+  // 面試分頁：依候選人姓名搜尋 + 職缺篩選
+  const filteredInterviews = interviews.filter(iv => {
+    const cand = candidates.find(c => c.id === iv.candidate_id)
+    const q = intQuery.trim().toLowerCase()
+    const matchSearch = !q || (cand?.name || '').toLowerCase().includes(q)
+    const matchJob = intJobFilter === '' || String(cand?.job_id) === intJobFilter
+    return matchSearch && matchJob
+  })
 
   if (loading) return <LoadingSpinner />
   if (error)   return (
@@ -1267,8 +1278,18 @@ export default function Recruitment() {
       {/* ─── 面試 ─── */}
       {tab === 'interviews' && (
         <>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
-            <button className="btn btn-primary" onClick={() => {
+          <div style={{ display: 'flex', gap: 12, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+            <div style={{ position: 'relative', flex: '1 1 180px', maxWidth: 240 }}>
+              <Search size={13} style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+              <input className="form-input" style={{ fontSize: 13, paddingLeft: 28 }} placeholder="搜尋候選人姓名"
+                value={intQuery} onChange={e => setIntQuery(e.target.value)} />
+            </div>
+            <select className="form-input" style={{ fontSize: 13, minWidth: 160 }} value={intJobFilter} onChange={e => setIntJobFilter(e.target.value)}>
+              <option value="">全部職缺</option>
+              {jobs.map(j => <option key={j.id} value={String(j.id)}>{j.title}</option>)}
+            </select>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>共 {filteredInterviews.length} 場</span>
+            <button className="btn btn-primary" style={{ marginLeft: 'auto' }} onClick={() => {
               setQuickIntForm({ candidate_id: '', round: '初試', scheduled_at: '', interviewer_id: '', location: '', note: '' })
               setShowQuickIntModal(true)
             }}>
@@ -1282,10 +1303,12 @@ export default function Recruitment() {
                 <tr><th>候選人</th><th>職缺</th><th>輪次</th><th>時間</th><th>地點</th><th>面試官</th><th>結果</th><th>操作</th></tr>
               </thead>
               <tbody>
-                {interviews.length === 0 && (
-                  <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>尚無面試排程</td></tr>
+                {filteredInterviews.length === 0 && (
+                  <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
+                    {interviews.length === 0 ? '尚無面試排程' : '沒有符合條件的面試'}
+                  </td></tr>
                 )}
-                {interviews.map(iv => {
+                {filteredInterviews.map(iv => {
                   const cand = candidates.find(c => c.id === iv.candidate_id)
                   return (
                     <tr key={iv.id}>
@@ -1299,12 +1322,26 @@ export default function Recruitment() {
                         <span className={`badge ${iv.result === '通過' ? 'badge-success' : iv.result === '不通過' ? 'badge-error' : 'badge-neutral'}`}>
                           {iv.result}
                         </span>
+                        {iv.note && (
+                          <div style={{ fontSize: 11, color: iv.result === '不通過' ? 'var(--accent-red)' : 'var(--text-muted)', marginTop: 3, maxWidth: 220, whiteSpace: 'normal' }}>
+                            {iv.result === '不通過' ? '原因：' : ''}{iv.note}
+                          </div>
+                        )}
                       </td>
                       <td>
                         <div style={{ display: 'flex', gap: 4 }}>
                           {RESULTS.filter(r => r !== iv.result).map(r => (
                             <button key={r} className="btn btn-sm btn-secondary"
-                              onClick={() => updateInterview(iv.id, { result: r }).then(refreshInterviews)}>
+                              onClick={async () => {
+                                const patch = { result: r }
+                                if (r === '不通過') {
+                                  const reason = window.prompt('不通過原因（選填）：', iv.note || '')
+                                  if (reason === null) return   // 取消
+                                  if (reason.trim()) patch.note = reason.trim()
+                                }
+                                await updateInterview(iv.id, patch)
+                                refreshInterviews()
+                              }}>
                               {r}
                             </button>
                           ))}

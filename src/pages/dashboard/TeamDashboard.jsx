@@ -353,6 +353,8 @@ export default function TeamDashboard() {
   const [monthLeaveDays, setMonthLeaveDays] = useState(0)
   const [monthOtHours, setMonthOtHours] = useState(0)
   const [monthTripCount, setMonthTripCount] = useState(0)
+  const [otByStore, setOtByStore] = useState([])       // 本月加班分門市 [{store, hours}]
+  const [expenseStats, setExpenseStats] = useState(null) // 費用預算:核准/驗收/申請中金額 + 核准率
   const [yesterdayLateCount, setYesterdayLateCount] = useState(0)
   const [last7Att, setLast7Att] = useState([])  // [{date, normal, late, leave}]
   const [taskStatusDist, setTaskStatusDist] = useState({})  // status -> count
@@ -523,12 +525,19 @@ export default function TeamDashboard() {
 
     // 本月加班接近上限（>= 36h；46h 法定上限）+ 本月累計
     const { data: monthOT } = await supabase.from('overtime_requests')
-      .select('employee, hours').eq('status', '已核准').in('employee_id', teamIds)
+      .select('employee, hours, store').eq('status', '已核准').in('employee_id', teamIds)
       .is('deleted_at', null)
       .gte('date', month + '-01').lte('date', today)
     const otSum = {}
     for (const r of monthOT || []) otSum[r.employee] = (otSum[r.employee] || 0) + Number(r.hours || 0)
     setMonthOtHours((monthOT || []).reduce((s, r) => s + Number(r.hours || 0), 0))
+    // 本月加班分門市（抓預算/缺人）
+    const otStoreSum = {}
+    for (const r of monthOT || []) {
+      const k = r.store || '未指定門市'
+      otStoreSum[k] = (otStoreSum[k] || 0) + Number(r.hours || 0)
+    }
+    setOtByStore(Object.entries(otStoreSum).map(([store, hours]) => ({ store, hours })).sort((a, b) => b.hours - a.hours))
 
     // 本月請假累計 / 出差累計
     const [{ data: monthLeave }, { data: monthTrip }] = await Promise.all([
@@ -543,6 +552,27 @@ export default function TeamDashboard() {
     ])
     setMonthLeaveDays((monthLeave || []).reduce((s, r) => s + Number(r.days || 0), 0))
     setMonthTripCount((monthTrip || []).length)
+
+    // ── 本月費用預算：核准了多少 / 驗收了多少 / 申請中 / 核准率（比照 LIFF 費用儀表板；只計 TWD 避免混幣）──
+    const { data: expRows } = await supabase.from('expense_requests')
+      .select('status, estimated_amount, actual_amount, currency')
+      .in('employee_id', teamIds).is('deleted_at', null)
+      .gte('created_at', month + '-01')
+    if (expRows && expRows.length) {
+      const APPROVED = ['已核准', '待核銷', '已核銷', '核銷已退回']
+      const twd = expRows.filter(r => !r.currency || r.currency === 'TWD')
+      const sum = (arr, f) => arr.reduce((s, r) => s + Number(f(r) || 0), 0)
+      const approvedRows = twd.filter(r => APPROVED.includes(r.status))
+      const rejectedCnt  = twd.filter(r => r.status === '已駁回').length
+      setExpenseStats({
+        approved: sum(approvedRows, r => r.estimated_amount),
+        settled:  sum(twd.filter(r => r.status === '已核銷'), r => r.actual_amount || r.estimated_amount),
+        pending:  sum(twd.filter(r => r.status === '申請中'), r => r.estimated_amount),
+        approveRate: (approvedRows.length + rejectedCnt) > 0
+          ? Math.round(approvedRows.length / (approvedRows.length + rejectedCnt) * 100) : null,
+        count: twd.length,
+      })
+    } else setExpenseStats(null)
 
     // 昨日未打卡（vs 今日對比）— 簡單算法：在職 - 昨日有 attendance 紀錄的人數
     const yesterday = new Date()
@@ -1165,64 +1195,76 @@ export default function TeamDashboard() {
         </div>
       )}
 
-      {/* ─── 薪資成本（僅有薪資權限者，後端 RPC 沒回就不顯示）─── */}
-      {hrDash?.salary_cost && (() => {
-        const sc = hrDash.salary_cost
-        const delta = sc.last_total > 0 ? ((sc.this_total - sc.last_total) / sc.last_total) * 100 : null
-        const otPct = sc.this_total > 0 ? (sc.ot_total / sc.this_total) * 100 : 0
-        const maxDept = Math.max(1, ...(sc.by_dept || []).map(d => Number(d.total) || 0))
+      {/* ─── 本月費用預算：核准了多少 / 驗收了多少 / 申請中 / 核准率（參考 LIFF 費用儀表板）─── */}
+      {expenseStats && expenseStats.count > 0 && (
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16, marginBottom: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <div style={{ fontSize: 14, fontWeight: 700 }}>💰 本月費用預算</div>
+            <button onClick={() => navigate('/hr/expense-requests')} style={{ background: 'transparent', border: 'none', color: C.cyan, cursor: 'pointer', fontSize: 13 }}>明細 ›</button>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px,1fr))', gap: 12 }}>
+            <div style={{ padding: 12, borderRadius: 8, background: C.bg2 }}>
+              <div style={{ fontSize: 13, color: C.muted }}>已核准（預估）</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: C.green }}>NT$ {Math.round(expenseStats.approved).toLocaleString()}</div>
+            </div>
+            <div style={{ padding: 12, borderRadius: 8, background: C.bg2 }}>
+              <div style={{ fontSize: 13, color: C.muted }}>已驗收（實際）</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: C.cyan }}>NT$ {Math.round(expenseStats.settled).toLocaleString()}</div>
+            </div>
+            <div style={{ padding: 12, borderRadius: 8, background: C.bg2 }}>
+              <div style={{ fontSize: 13, color: C.muted }}>申請中</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: C.orange }}>NT$ {Math.round(expenseStats.pending).toLocaleString()}</div>
+            </div>
+            {expenseStats.approveRate != null && (
+              <div style={{ padding: 12, borderRadius: 8, background: C.bg2 }}>
+                <div style={{ fontSize: 13, color: C.muted }}>核准率</div>
+                <div style={{ fontSize: 20, fontWeight: 800 }}>{expenseStats.approveRate}%</div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ─── 本月請假：已核准 + 申請中(標記) ─── */}
+      {(monthLeaveDays > 0 || pendingLeaves.length > 0) && (() => {
+        const pendDays = pendingLeaves.reduce((s, r) => s + Number(r.days || 0), 0)
         return (
           <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16, marginBottom: 16 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <div style={{ fontSize: 14, fontWeight: 700 }}>💰 薪資成本（{sc.month}）</div>
-              <button onClick={() => navigate('/hr/salary')} style={{ background: 'transparent', border: 'none', color: C.cyan, cursor: 'pointer', fontSize: 13 }}>明細 ›</button>
+              <div style={{ fontSize: 14, fontWeight: 700 }}>🌴 本月請假</div>
+              <button onClick={() => navigate('/hr/leave')} style={{ background: 'transparent', border: 'none', color: C.cyan, cursor: 'pointer', fontSize: 13 }}>明細 ›</button>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px,1fr))', gap: 12, marginBottom: (sc.by_dept || []).length ? 14 : 0 }}>
-              <div style={{ padding: 12, borderRadius: 8, background: C.bg2 }}>
-                <div style={{ fontSize: 13, color: C.muted }}>本月人事成本（實領）</div>
-                <div style={{ fontSize: 22, fontWeight: 800 }}>NT$ {Math.round(sc.this_total).toLocaleString()}</div>
-                {delta != null && (
-                  <div style={{ fontSize: 12, color: delta > 0 ? C.red : C.green }}>
-                    比上月 {delta > 0 ? '↑' : '↓'} {Math.abs(delta).toFixed(1)}%
-                  </div>
-                )}
+            <div style={{ display: 'flex', gap: 12 }}>
+              <div style={{ flex: 1, padding: 12, borderRadius: 8, background: C.bg2 }}>
+                <div style={{ fontSize: 13, color: C.muted }}>已核准</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: C.green }}>{monthLeaveDays.toFixed(1)} 天</div>
               </div>
-              <div style={{ padding: 12, borderRadius: 8, background: C.bg2 }}>
-                <div style={{ fontSize: 13, color: C.muted }}>加班費佔比</div>
-                <div style={{ fontSize: 22, fontWeight: 800, color: otPct > 15 ? C.orange : 'var(--text-primary)' }}>{otPct.toFixed(1)}%</div>
-                <div style={{ fontSize: 12, color: C.muted }}>加班費 NT$ {Math.round(sc.ot_total).toLocaleString()}</div>
+              <div style={{ flex: 1, padding: 12, borderRadius: 8, background: C.bg2, border: pendDays > 0 ? `1px solid ${C.orange}` : `1px solid ${C.border}` }}>
+                <div style={{ fontSize: 13, color: C.muted }}>🔵 申請中（待審）</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: pendDays > 0 ? C.orange : C.muted }}>{pendDays.toFixed(1)} 天</div>
+                <div style={{ fontSize: 11, color: C.muted }}>{pendingLeaves.length} 件待簽</div>
               </div>
             </div>
-            {(sc.by_dept || []).slice(0, 6).map((d, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                <div style={{ width: 90, fontSize: 12, color: C.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.dept}</div>
-                <div style={{ flex: 1, height: 8, background: C.bg2, borderRadius: 4 }}>
-                  <div style={{ width: `${(Number(d.total) / maxDept) * 100}%`, height: '100%', background: C.cyan, borderRadius: 4 }} />
-                </div>
-                <div style={{ width: 90, fontSize: 12, textAlign: 'right' }}>NT$ {Math.round(Number(d.total)).toLocaleString()}</div>
-              </div>
-            ))}
           </div>
         )
       })()}
 
-      {/* ─── 本月加班 Top（fn_hr_analytics）─── */}
-      {hrStats?.overtime?.top_overtimers?.length > 0 && (() => {
-        const ot = hrStats.overtime
-        const maxH = Math.max(1, ...ot.top_overtimers.map(o => Number(o.hours) || 0))
+      {/* ─── 本月加班分門市（抓預算/缺人）─── */}
+      {otByStore.length > 0 && (() => {
+        const maxH = Math.max(1, ...otByStore.map(o => o.hours))
         return (
           <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16, marginBottom: 16 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <div style={{ fontSize: 14, fontWeight: 700 }}>🔥 本月加班 Top{ot.this_month_total_hours != null ? `（共 ${Number(ot.this_month_total_hours).toFixed(0)}h）` : ''}</div>
+              <div style={{ fontSize: 14, fontWeight: 700 }}>🔥 本月加班分門市{monthOtHours > 0 ? `（共 ${monthOtHours.toFixed(0)}h）` : ''}</div>
               <button onClick={() => navigate('/hr/overtime')} style={{ background: 'transparent', border: 'none', color: C.cyan, cursor: 'pointer', fontSize: 13 }}>明細 ›</button>
             </div>
-            {ot.top_overtimers.slice(0, 5).map((o, i) => (
+            {otByStore.slice(0, 8).map((o, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                <div style={{ width: 90, fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{o.name}</div>
+                <div style={{ width: 100, fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{o.store}</div>
                 <div style={{ flex: 1, height: 8, background: C.bg2, borderRadius: 4 }}>
-                  <div style={{ width: `${(Number(o.hours) / maxH) * 100}%`, height: '100%', background: Number(o.hours) >= 46 ? C.red : C.orange, borderRadius: 4 }} />
+                  <div style={{ width: `${(o.hours / maxH) * 100}%`, height: '100%', background: C.orange, borderRadius: 4 }} />
                 </div>
-                <div style={{ width: 56, fontSize: 12, textAlign: 'right', color: Number(o.hours) >= 46 ? C.red : 'var(--text-primary)' }}>{Number(o.hours).toFixed(1)}h</div>
+                <div style={{ width: 56, fontSize: 12, textAlign: 'right' }}>{o.hours.toFixed(1)}h</div>
               </div>
             ))}
           </div>

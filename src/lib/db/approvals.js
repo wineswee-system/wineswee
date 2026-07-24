@@ -105,7 +105,7 @@ export const updateApprovalFormStep = (id, data) =>
   supabase.from('approval_form_steps').update(data).eq('id', id).select().single()
 
 export const getApprovalRules = (module, orgId) => {
-  let q = supabase.from('approval_rules').select('*').order('approval_order').limit(200)
+  let q = supabase.from('approval_rules').select('*').order('id').limit(200)
   if (module) q = q.eq('module', module)
   if (orgId) q = q.eq('organization_id', orgId)
   return q

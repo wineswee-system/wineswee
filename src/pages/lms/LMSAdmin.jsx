@@ -38,7 +38,7 @@ export default function LMSAdmin() {
       supabase.from('lms_courses').select('*').eq('organization_id', profile.organization_id).order('created_at', { ascending: false }),
       supabase.from('lms_enrollments').select('course_id, status, employee_id, id').eq('organization_id', profile.organization_id),
       supabase.from('lms_certificates').select('course_id, employee_id, issued_at').eq('organization_id', profile.organization_id),
-      supabase.from('employees').select('id, name, email').eq('organization_id', profile.organization_id).eq('is_active', true).order('name'),
+      supabase.from('employees').select('id, name, email').eq('organization_id', profile.organization_id).eq('status', '在職').order('name'),
     ]).then(([c, e, cert, emp]) => {
       setCourses(c.data || [])
       setEnrollments(e.data || [])

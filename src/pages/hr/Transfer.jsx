@@ -113,9 +113,9 @@ export default function Transfer() {
     setLoadingAssign(true)
     setAssignError(null)
     supabase
+      // employee_assignments 無 organization_id 欄;範圍由 RLS can_see_request(employee_id) 控(org-aware)
       .from('employee_assignments')
       .select('*, departments(name), stores(name), employees!employee_id(name, dept, store)')
-      .eq('organization_id', profile?.organization_id)
       .order('start_date', { ascending: false })
       .limit(200)
       .then(({ data, error }) => {

@@ -23,6 +23,8 @@ export default function CourseDetail() {
   const [enrolling, setEnrolling] = useState(false)
 
   useEffect(() => {
+    // 防呆:courseId 非數字(如網址誤帶 /lms/course/courses)不查 int 欄,導回課程列表
+    if (!/^\d+$/.test(String(courseId))) { navigate('/lms/courses', { replace: true }); return }
     Promise.all([
       supabase.from('lms_courses').select('*').eq('id', courseId).single(),
       supabase.from('lms_sections').select('*, lms_lessons(*)').eq('course_id', courseId).order('sort_order'),

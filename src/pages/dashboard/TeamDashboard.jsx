@@ -362,6 +362,7 @@ export default function TeamDashboard() {
   const [monthTripCount, setMonthTripCount] = useState(0)
   const [otByStore, setOtByStore] = useState([])       // 本月加班分門市 [{store, hours}]
   const [expenseStats, setExpenseStats] = useState(null) // 費用預算:核准/驗收/申請中金額 + 核准率
+  const [expensePeriod, setExpensePeriod] = useState('this_month') // 費用預算時間區間
   const [yesterdayLateCount, setYesterdayLateCount] = useState(0)
   const [last7Att, setLast7Att] = useState([])  // [{date, normal, late, leave}]
   const [taskStatusDist, setTaskStatusDist] = useState({})  // status -> count
@@ -559,27 +560,7 @@ export default function TeamDashboard() {
     ])
     setMonthLeaveDays((monthLeave || []).reduce((s, r) => s + Number(r.days || 0), 0))
     setMonthTripCount((monthTrip || []).length)
-
-    // ── 本月費用預算：核准了多少 / 驗收了多少 / 申請中 / 核准率（比照 LIFF 費用儀表板；只計 TWD 避免混幣）──
-    const { data: expRows } = await supabase.from('expense_requests')
-      .select('status, estimated_amount, actual_amount, currency')
-      .in('employee_id', teamIds).is('deleted_at', null)
-      .gte('created_at', month + '-01')
-    if (expRows && expRows.length) {
-      const APPROVED = ['已核准', '待核銷', '已核銷', '核銷已退回']
-      const twd = expRows.filter(r => !r.currency || r.currency === 'TWD')
-      const sum = (arr, f) => arr.reduce((s, r) => s + Number(f(r) || 0), 0)
-      const approvedRows = twd.filter(r => APPROVED.includes(r.status))
-      const rejectedCnt  = twd.filter(r => r.status === '已駁回').length
-      setExpenseStats({
-        approved: sum(approvedRows, r => r.estimated_amount),
-        settled:  sum(twd.filter(r => r.status === '已核銷'), r => r.actual_amount || r.estimated_amount),
-        pending:  sum(twd.filter(r => r.status === '申請中'), r => r.estimated_amount),
-        approveRate: (approvedRows.length + rejectedCnt) > 0
-          ? Math.round(approvedRows.length / (approvedRows.length + rejectedCnt) * 100) : null,
-        count: twd.length,
-      })
-    } else setExpenseStats(null)
+    // 費用預算改由獨立 effect 管（可切時間區間，見下方 useEffect）
 
     // 昨日未打卡（vs 今日對比）— 簡單算法：在職 - 昨日有 attendance 紀錄的人數
     const yesterday = new Date()
@@ -652,6 +633,47 @@ export default function TeamDashboard() {
   }, [orgId, scopeStoreId])
 
   useEffect(() => { loadAll() }, [loadAll, refreshTick])
+
+  // ── 費用預算（可切時間區間）：改區間只重抓費用，不重載整個儀表板 ──
+  useEffect(() => {
+    if (!orgId || team.length === 0) { setExpenseStats(null); return }
+    const teamIds = team.map(e => e.id)
+    const pad = n => String(n).padStart(2, '0')
+    const iso = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+    const now = new Date()
+    let from = null, to = null
+    if (expensePeriod === 'this_month') from = iso(new Date(now.getFullYear(), now.getMonth(), 1))
+    else if (expensePeriod === 'last_month') {
+      from = iso(new Date(now.getFullYear(), now.getMonth() - 1, 1))
+      to = iso(new Date(now.getFullYear(), now.getMonth(), 0)) + ' 23:59:59'
+    } else if (expensePeriod === 'last_3_months') from = iso(new Date(now.getFullYear(), now.getMonth() - 2, 1))
+    else if (expensePeriod === 'this_year') from = `${now.getFullYear()}-01-01`
+    // 'all' → from/to 皆 null（全部）
+
+    let q = supabase.from('expense_requests')
+      .select('status, estimated_amount, actual_amount, currency')
+      .in('employee_id', teamIds).is('deleted_at', null)
+    if (from) q = q.gte('created_at', from)
+    if (to) q = q.lte('created_at', to)
+    let cancelled = false
+    q.then(({ data: expRows }) => {
+      if (cancelled) return
+      const rows = (expRows || []).filter(r => !r.currency || r.currency === 'TWD')  // 只計 TWD 避免混幣
+      const APPROVED = ['已核准', '待核銷', '已核銷', '核銷已退回']
+      const sum = (arr, f) => arr.reduce((s, r) => s + Number(f(r) || 0), 0)
+      const approvedRows = rows.filter(r => APPROVED.includes(r.status))
+      const rejectedCnt = rows.filter(r => r.status === '已駁回').length
+      setExpenseStats({
+        approved: sum(approvedRows, r => r.estimated_amount),
+        settled: sum(rows.filter(r => r.status === '已核銷'), r => r.actual_amount || r.estimated_amount),
+        pending: sum(rows.filter(r => r.status === '申請中'), r => r.estimated_amount),
+        approveRate: (approvedRows.length + rejectedCnt) > 0
+          ? Math.round(approvedRows.length / (approvedRows.length + rejectedCnt) * 100) : null,
+        count: rows.length,
+      })
+    })
+    return () => { cancelled = true }
+  }, [orgId, team, expensePeriod])
 
   // ── process tab 資料：只在第一次切到 process tab 或 refresh 時 load ──
   const loadProcessData = useCallback(async () => {
@@ -1215,12 +1237,22 @@ export default function TeamDashboard() {
         </div>
       )}
 
-      {/* ─── 本月費用預算：核准了多少 / 驗收了多少 / 申請中 / 核准率（參考 LIFF 費用儀表板）─── */}
-      {expenseStats && expenseStats.count > 0 && (
+      {/* ─── 費用預算：核准了多少 / 驗收了多少 / 申請中 / 核准率（可切時間區間，參考 LIFF 費用儀表板）─── */}
+      {expenseStats && (
         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16, marginBottom: 16 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <div style={{ fontSize: 14, fontWeight: 700 }}>💰 本月費用預算</div>
-            <button onClick={() => navigate('/hr/expense-requests')} style={{ background: 'transparent', border: 'none', color: C.cyan, cursor: 'pointer', fontSize: 13 }}>明細 ›</button>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 8, flexWrap: 'wrap' }}>
+            <div style={{ fontSize: 14, fontWeight: 700 }}>💰 費用預算</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <select value={expensePeriod} onChange={e => setExpensePeriod(e.target.value)}
+                style={{ background: C.bg2, color: 'var(--text-primary)', border: `1px solid ${C.border}`, borderRadius: 8, padding: '4px 8px', fontSize: 12, cursor: 'pointer' }}>
+                <option value="this_month">本月</option>
+                <option value="last_month">上月</option>
+                <option value="last_3_months">近 3 個月</option>
+                <option value="this_year">今年</option>
+                <option value="all">全部</option>
+              </select>
+              <button onClick={() => navigate('/hr/expense-requests')} style={{ background: 'transparent', border: 'none', color: C.cyan, cursor: 'pointer', fontSize: 13 }}>明細 ›</button>
+            </div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px,1fr))', gap: 12 }}>
             <div style={{ padding: 12, borderRadius: 8, background: C.bg2 }}>
@@ -1235,13 +1267,14 @@ export default function TeamDashboard() {
               <div style={{ fontSize: 13, color: C.muted }}>申請中</div>
               <div style={{ fontSize: 20, fontWeight: 800, color: C.orange }}>NT$ {Math.round(expenseStats.pending).toLocaleString()}</div>
             </div>
-            {expenseStats.approveRate != null && (
-              <div style={{ padding: 12, borderRadius: 8, background: C.bg2 }}>
-                <div style={{ fontSize: 13, color: C.muted }}>核准率</div>
-                <div style={{ fontSize: 20, fontWeight: 800 }}>{expenseStats.approveRate}%</div>
-              </div>
-            )}
+            <div style={{ padding: 12, borderRadius: 8, background: C.bg2 }}>
+              <div style={{ fontSize: 13, color: C.muted }}>核准率</div>
+              <div style={{ fontSize: 20, fontWeight: 800 }}>{expenseStats.approveRate != null ? `${expenseStats.approveRate}%` : '—'}</div>
+            </div>
           </div>
+          {expenseStats.count === 0 && (
+            <div style={{ fontSize: 12, color: C.muted, marginTop: 10 }}>本區間尚無費用申請</div>
+          )}
         </div>
       )}
 

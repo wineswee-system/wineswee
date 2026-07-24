@@ -129,6 +129,11 @@ const STATUS_META = {
   late:     { icon: '🔴', label: '未打卡',  color: C.red },
   off:      { icon: '⚪', label: '休息日',  color: C.muted },
   unknown:  { icon: '⚫', label: '未排班',  color: C.muted },
+  // 申請中(待審)變體 — 尚未核准,卡片用虛線+「申請中」標記區隔
+  leave_pending:    { icon: '🌴', label: '休假·申請中', color: C.cyan,   pending: true },
+  sick_pending:     { icon: '🏥', label: '請假·申請中', color: C.orange, pending: true },
+  overtime_pending: { icon: '⚡', label: '加班·申請中', color: C.purple, pending: true },
+  trip_pending:     { icon: '✈️', label: '出差·申請中', color: C.blue,   pending: true },
 }
 
 function TeamMemberCard({ emp, status }) {
@@ -137,11 +142,13 @@ function TeamMemberCard({ emp, status }) {
   return (
     <div title={`${emp.name} · ${meta.label}`} style={{
       display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
-      padding: 10, borderRadius: 10, background: C.card, border: `1px solid ${C.borderSubtle}`,
+      padding: 10, borderRadius: 10, background: C.card,
+      border: meta.pending ? `1.5px dashed ${meta.color}` : `1px solid ${C.borderSubtle}`,
       minWidth: 88, position: 'relative',
     }}>
       <div style={{
         width: 44, height: 44, borderRadius: '50%', background: meta.color,
+        opacity: meta.pending ? 0.65 : 1,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         color: '#fff', fontWeight: 700, fontSize: 18, position: 'relative',
       }}>
@@ -450,9 +457,9 @@ export default function TeamDashboard() {
 
     // 待簽核 — 不嚴格做「指派給我」(那要解 chain step)，先列「我 scope 內的待審核」
     const [pl, po, pt, pc] = await Promise.all([
-      supabase.from('leave_requests').select('id, employee, type, start_date, end_date, days, reason, created_at').eq('status', '待審核').in('employee_id', teamIds).is('deleted_at', null).order('created_at', { ascending: false }).limit(20),
-      supabase.from('overtime_requests').select('id, employee, date, hours, reason, created_at').eq('status', '待審核').in('employee_id', teamIds).is('deleted_at', null).order('created_at', { ascending: false }).limit(20),
-      supabase.from('business_trips').select('id, employee, start_date, end_date, destination, purpose, created_at').eq('status', '待審核').in('employee_id', teamIds).is('deleted_at', null).order('created_at', { ascending: false }).limit(20),
+      supabase.from('leave_requests').select('id, employee_id, employee, type, start_date, end_date, days, reason, created_at').eq('status', '待審核').in('employee_id', teamIds).is('deleted_at', null).order('created_at', { ascending: false }).limit(20),
+      supabase.from('overtime_requests').select('id, employee_id, employee, date, hours, reason, created_at').eq('status', '待審核').in('employee_id', teamIds).is('deleted_at', null).order('created_at', { ascending: false }).limit(20),
+      supabase.from('business_trips').select('id, employee_id, employee, start_date, end_date, destination, purpose, created_at').eq('status', '待審核').in('employee_id', teamIds).is('deleted_at', null).order('created_at', { ascending: false }).limit(20),
       supabase.from('clock_corrections').select('id, employee, date, reason, created_at').eq('status', '待審核').in('employee_id', teamIds).is('deleted_at', null).order('created_at', { ascending: false }).limit(20),
     ])
     setPendingLeaves(pl.data || [])
@@ -753,6 +760,11 @@ export default function TeamDashboard() {
     const leaveByEmp = new Map(todayLeaves.map(l => [l.employee_id, l]))
     const otByEmp = new Map(todayOvertimes.map(o => [o.employee_id, o]))
     const tripByEmp = new Map(todayTrips.map(t => [t.employee_id, t]))
+    const today = todayStr()
+    const inRange = (r) => r.start_date && r.start_date <= today && (r.end_date || r.start_date) >= today
+    const pLeaveByEmp = new Map(pendingLeaves.filter(inRange).map(l => [l.employee_id, l]))
+    const pOtByEmp = new Map(pendingOvertimes.filter(o => o.date === today).map(o => [o.employee_id, o]))
+    const pTripByEmp = new Map(pendingTrips.filter(inRange).map(t => [t.employee_id, t]))
     const hourNow = new Date().getHours()
 
     return team.map(emp => {
@@ -772,9 +784,17 @@ export default function TeamDashboard() {
         // 過了 10 點還沒打卡 → 未打卡警示
         status = 'late'
       }
+      // 申請中(待審):沒有已核准的特殊狀態 → 今日有待審的假/加班/出差就標申請中
+      if (!['trip', 'leave', 'sick', 'overtime'].includes(status)) {
+        if (pTripByEmp.has(emp.id)) status = 'trip_pending'
+        else if (pLeaveByEmp.has(emp.id)) {
+          const t = pLeaveByEmp.get(emp.id).type
+          status = ['病假', '事假'].includes(t) ? 'sick_pending' : 'leave_pending'
+        } else if (pOtByEmp.has(emp.id)) status = 'overtime_pending'
+      }
       return { emp, status }
     })
-  }, [team, attendance, todayLeaves, todayOvertimes, todayTrips])
+  }, [team, attendance, todayLeaves, todayOvertimes, todayTrips, pendingLeaves, pendingOvertimes, pendingTrips])
 
   // ── KPI 計算 ──
   const kpi = useMemo(() => {
@@ -1341,7 +1361,7 @@ export default function TeamDashboard() {
         // 這邊只列「在班的特殊狀態」(休假/請假/加班中/出差)，避免 dashboard 被未打卡淹沒
         const visible = showAll
           ? teamWithStatus
-          : teamWithStatus.filter(t => ['leave', 'sick', 'overtime', 'trip'].includes(t.status))
+          : teamWithStatus.filter(t => ['leave', 'sick', 'overtime', 'trip', 'leave_pending', 'sick_pending', 'overtime_pending', 'trip_pending'].includes(t.status))
         const title = showAll ? '團隊狀態' : '今日特殊狀態'
         const countLabel = showAll ? `${team.length} 人` : `${visible.length} 人`
         return (

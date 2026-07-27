@@ -24,7 +24,7 @@ function parseCards(html) {
     const num = priceRaw && (priceRaw.match(/([0-9,]+)/) || [])[1]?.replace(/,/g, '')
     const img = (seg.match(/upload\/product\/image\/[^\s"'?)]+\.(?:jpg|jpeg|png|webp)/i) || [])[0]
     const sold = /sold-out/.test(c.slice(0, 40))
-    if (name) out.push({ name, price: num ? +num : null, image: img ? `${BASE}/${img}` : null, sold_out: sold })
+    if (name) out.push({ name, price: num ? +num : null, image: img ? `${BASE}/storage/${img}` : null, sold_out: sold })
   }
   return out
 }

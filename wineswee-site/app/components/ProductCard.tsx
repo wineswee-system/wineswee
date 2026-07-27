@@ -1,25 +1,19 @@
-import Image from 'next/image'
+import Link from 'next/link'
 import type { Product } from '../lib/products'
-import { SITE } from '../lib/site'
 
-export default function ProductCard({ p }: { p: Product }) {
+export default function ProductCard({ p, idx }: { p: Product; idx?: number }) {
   return (
-    <a className={'card' + (p.sold_out ? ' sold' : '')} href={SITE.shop} target="_blank" rel="noreferrer">
-      <div className="card-img">
+    <Link className={'card' + (p.sold_out ? ' sold' : '')} href={`/product/${p.id}`}>
+      <div className="card-frame">
         {p.image ? (
-          <Image
-            src={p.image}
-            alt={p.name}
-            fill
-            sizes="(max-width:520px) 44vw, 236px"
-            style={{ objectFit: 'cover' }}
-            unoptimized={false}
-          />
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={p.image} alt={p.name} loading="lazy" />
         ) : (
-          <span className="card-ph">WINESWEE</span>
+          <span className="card-ph">Wineswee</span>
         )}
-        {p.sold_out && <span className="tag-sold">SOLD OUT</span>}
-        <span className="card-shop">立即選購</span>
+        {idx != null && <span className="card-idx">{String(idx).padStart(2, '0')}</span>}
+        {p.sold_out && <span className="card-sold">SOLD OUT</span>}
+        <span className="card-cta">VIEW</span>
       </div>
       <div className="card-body">
         <h3 title={p.name}>{p.name}</h3>
@@ -29,6 +23,6 @@ export default function ProductCard({ p }: { p: Product }) {
           <span className="price ask">價格洽詢</span>
         )}
       </div>
-    </a>
+    </Link>
   )
 }

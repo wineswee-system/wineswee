@@ -1,127 +1,114 @@
-import Image from 'next/image'
 import { CATEGORIES, byCategory, ALL, type Product } from './lib/products'
-import { SITE, BANNERS, STORES } from './lib/site'
+import { SITE } from './lib/site'
+import STORES from './data/stores.json'
+import Header from './components/Header'
 import HeroSlider from './components/HeroSlider'
 import ProductRow from './components/ProductRow'
 import Reveal from './components/Reveal'
+import Footer from './components/Footer'
+import NEWS from './data/news.json'
 
-const FEATS: [string, string, string][] = [
-  ['01', '全球嚴選餐酒', '法國・西班牙・義大利・南非・紐西蘭'],
+const MANIFESTO: [string, string, string][] = [
+  ['01', '全球嚴選', '法國・西班牙・義大利・南非・紐西蘭'],
   ['02', '酒食一次備齊', '火腿・乳酪・肉品・海鮮'],
-  ['03', '全台宅配到府', '線上下單・滿額免運'],
-  ['04', '七家實體門市', '現場試味・專人選酒'],
+  ['03', '宅配到府', '線上下單・全台配送'],
+  ['04', '十一家門市', '現場試味・專人選酒'],
 ]
-
-function pickSpotlight(): Product[] {
+function spotlight(): Product[] {
   const cats = byCategory()
-  const wants = ['red', 'whisky', 'cheese', 'sparkling'] as const
+  const want = ['red', 'whisky', 'cheese', 'sparkling'] as const
   const out: Product[] = []
-  for (const k of wants) {
-    const hit = (cats[k] || []).find(p => p.image && !p.sold_out)
-    if (hit) out.push(hit)
-  }
-  while (out.length < 4) {
-    const extra = ALL.find(p => p.image && !p.sold_out && !out.includes(p))
-    if (!extra) break
-    out.push(extra)
-  }
+  for (const k of want) { const h = (cats[k] || []).find(p => p.image && !p.sold_out); if (h) out.push(h) }
+  while (out.length < 4) { const e = ALL.find(p => p.image && !p.sold_out && !out.includes(p)); if (!e) break; out.push(e) }
   return out.slice(0, 4)
 }
 
 export default function Home() {
   const cats = byCategory()
   const rows = CATEGORIES.filter(c => (cats[c.key] || []).length >= 3)
-  const spotlight = pickSpotlight()
+  const spot = spotlight()
+  const tones: ('light' | 'cream')[] = ['light', 'cream']
 
   return (
     <>
-      {/* top bar */}
-      <div className="topbar">全台七家門市・線上商城　｜　滿額免運・宅配到府　｜　未滿十八歲禁止飲酒</div>
+      <div className="announce">全台十一家門市・線上商城宅配到府　—　滿額免運・當日出貨　—　未滿十八歲禁止飲酒</div>
 
-      {/* header */}
-      <header className="header">
-        <div className="wrap header-in">
-          <a className="logo" href="#top" aria-label="Wineswee 威士威酒食超市">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={SITE.logo} alt="Wineswee 威士威酒食超市" />
-          </a>
-          <nav className="nav">
-            {CATEGORIES.slice(0, 6).map(c => (
-              <a key={c.key} href={`#cat-${c.key}`}>{c.label}</a>
-            ))}
-          </nav>
-          <div className="header-cta">
-            <a className="mini mini-line" href={SITE.line} target="_blank" rel="noreferrer">LINE 訂購</a>
-            <a className="mini" href={SITE.shop} target="_blank" rel="noreferrer">官網商城</a>
-          </div>
-        </div>
-      </header>
-
-      {/* hero */}
+      <Header />
       <HeroSlider />
 
-      {/* feature strip */}
-      <div className="feats">
-        <div className="wrap feats-in">
-          {FEATS.map(([n, t, s]) => (
-            <div key={n} className="feat"><i>{n}</i><b>{t}</b><span>{s}</span></div>
+      {/* manifesto */}
+      <section className="mani">
+        <div className="wrap mani-in">
+          {MANIFESTO.map(([n, t, s]) => (
+            <div className="mani-cell" key={n}>
+              <div className="n">{n}</div>
+              <h4>{t}</h4>
+              <p>{s}</p>
+            </div>
           ))}
         </div>
-      </div>
+      </section>
 
-      {/* spotlight — 精選聚焦 */}
-      <Reveal as="section" className="spot">
-        <div className="wrap spot-in">
-          <div className="spot-txt">
-            <span className="eyebrow">Curated</span>
-            <h2>本季精選，值得為它開一瓶</h2>
-            <p>從波爾多列級酒莊到單一麥芽威士忌、荷蘭陳年高達乳酪，這幾支是我們最想推薦給你的味道。</p>
-            <a className="btn btn-wine" href="#cat-red">看全部選品</a>
+      {/* product rows + spotlight interleaved */}
+      {rows.map((c, i) => {
+        const row = (
+          <ProductRow key={c.key} no={String(i + 1).padStart(2, '0')} id={`cat-${c.key}`}
+            title={c.label} en={c.en} items={(cats[c.key] || []).slice(0, 14)} tone={tones[i % 2]} />
+        )
+        if (i !== 1) return row
+        // 在第 2 個分類後插入編輯聚焦
+        return (
+          <div key={c.key + '-wrap'}>
+            {row}
+            <Reveal as="section" className="spot">
+              <div className="wrap spot-in">
+                <div className="spot-txt">
+                  <span className="kicker on-dark">Curated Nº 01</span>
+                  <h2>本季精選，<br />值得為它<em>開一瓶</em></h2>
+                  <p>從波爾多列級酒莊到單一麥芽威士忌、荷蘭陳年高達乳酪——這幾支是我們最想與你分享的味道。</p>
+                  <a className="btn btn-gold" href="#cat-red">看全部選品</a>
+                </div>
+                <div className="spot-grid">
+                  {spot.map((p, k) => (
+                    <a key={k} className="spot-fig" href={`/product/${p.id}`}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      {p.image && <img src={p.image} alt={p.name} loading="lazy" />}
+                      <figcaption>Selection<b>{p.name}</b></figcaption>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            </Reveal>
           </div>
-          <div className="spot-figs">
-            {spotlight.map((p, i) => (
-              <a key={i} className="spot-fig" href={SITE.shop} target="_blank" rel="noreferrer">
-                {p.image && <Image src={p.image} alt={p.name} fill sizes="(max-width:860px) 45vw, 280px" style={{ objectFit: 'cover' }} />}
-                <figcaption>精選<b>{p.name}</b></figcaption>
-              </a>
-            ))}
-          </div>
-        </div>
-      </Reveal>
-
-      {/* product carousels */}
-      <main>
-        {rows.map(c => (
-          <ProductRow key={c.key} id={`cat-${c.key}`} title={c.label} en={c.en} items={(cats[c.key] || []).slice(0, 14)} />
-        ))}
-      </main>
+        )
+      })}
 
       {/* story */}
-      <Reveal as="section" className="story" >
+      <Reveal as="section" className="story">
         <div className="wrap story-in" id="story">
-          <span className="eyebrow">About Wineswee</span>
-          <h2>把餐桌上的美好，一次備齊</h2>
+          <span className="kicker on-dark">The House of Wineswee</span>
+          <h2>把餐桌上的美好，<br /><em>一次備齊</em></h2>
           <p>
             從法國波爾多、西班牙里奧哈到南非與紐西蘭，我們嚴選世界各地的紅白葡萄酒、威士忌與清酒；
-            再備上伊比利火腿、歐陸乳酪與新鮮肉品海鮮——佐酒的一切都在同一個超市。
+            再備上伊比利火腿、歐陸乳酪與新鮮肉品海鮮——佐酒的一切，都在同一個超市。
             無論日常小酌、宴客或送禮，威士威都幫你配到剛剛好的那一支。
           </p>
           <div className="story-stats">
-            <div><b>{ALL.length}+</b><span>嚴選品項</span></div>
-            <div><b>7</b><span>全台門市</span></div>
+            <div><b>{ALL.length}</b><span>嚴選品項</span></div>
+            <div><b>11</b><span>全台門市</span></div>
             <div><b>NT$79</b><span>入手價起</span></div>
           </div>
         </div>
       </Reveal>
 
       {/* video */}
-      <Reveal as="section" className="sec">
+      <Reveal as="section" className="sec sec-light">
         <div className="wrap video-in">
           <div className="video-txt">
-            <span className="eyebrow">Story Film</span>
-            <h2>看見威士威的酒食日常</h2>
-            <p>一支酒、一塊乳酪、一段相聚。這就是我們想帶給你的生活風景。</p>
-            <a className="btn btn-wine" href={SITE.shop} target="_blank" rel="noreferrer">探索更多</a>
+            <span className="kicker">Story Film</span>
+            <h2>看見威士威的<br />酒食日常</h2>
+            <p>一支酒、一塊乳酪、一段相聚——這就是我們想帶給你的生活風景。</p>
+            <a className="btn btn-ink" href={SITE.shop} target="_blank" rel="noreferrer">探索更多</a>
           </div>
           <div className="video-frame">
             <iframe src={SITE.ytEmbed} title="Wineswee" allow="accelerometer; encrypted-media; gyroscope; picture-in-picture" allowFullScreen loading="lazy" />
@@ -129,64 +116,69 @@ export default function Home() {
         </div>
       </Reveal>
 
-      {/* stores */}
-      <Reveal as="section" className="stores">
-        <div className="wrap sec center" id="store">
-          <span className="eyebrow">Our Stores</span>
-          <h2>全台七家門市，來選一支酒</h2>
-          <p className="stores-sub">親臨門市，現場試味、聊聊你的餐桌，我們幫你配到對的那一支。</p>
-          <div className="store-grid">
-            {STORES.map((s, i) => (
-              <a key={i} className="store" href={`tel:${s.tel.replace(/-/g, '')}`}>
-                <span className="rg">{s.region}門市</span>
-                <b>{s.tel}</b>
-                <em>撥打預約・選酒</em>
+      {/* news */}
+      <Reveal as="section" className="sec sec-light">
+        <div className="wrap" id="news">
+          <div className="sec-head">
+            <span className="numeral">＊</span>
+            <div className="ht">
+              <span className="kicker">Journal</span>
+              <h2>最新消息 <span className="en">/ News</span></h2>
+            </div>
+            <a className="rowmore-link" href={SITE.shop} target="_blank" rel="noreferrer">前往官網</a>
+          </div>
+          <div className="news-grid">
+            {NEWS.map((n) => (
+              <a key={n.id} className="news-card" href={n.url} target="_blank" rel="noreferrer">
+                <div className="news-img">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  {n.image && <img src={n.image} alt={n.title} loading="lazy" />}
+                  <span className="news-go">閱讀更多</span>
+                </div>
+                <div className="news-body">
+                  <span className="news-tag">Journal</span>
+                  <h3>{n.title}</h3>
+                </div>
               </a>
             ))}
           </div>
         </div>
       </Reveal>
 
-      {/* CTA band */}
+      {/* stores — 名錄式 */}
+      <Reveal as="section" className="sec sec-cream">
+        <div className="wrap" id="store">
+          <div className="sec-head">
+            <span className="numeral">11</span>
+            <div className="ht">
+              <span className="kicker">Our Stores</span>
+              <h2>全台 11 家門市 <span className="en">/ Visit us</span></h2>
+            </div>
+          </div>
+          <div className="stores-list">
+            {STORES.map((s, i) => (
+              <a key={i} className="store" href={`https://www.google.com/maps/search/${encodeURIComponent('威士威酒食超市 ' + s.full)}`} target="_blank" rel="noreferrer">
+                <span className="no">{String(i + 1).padStart(2, '0')}</span>
+                <span className="rg">{s.region}</span>
+                <span className="tel">{s.name}</span>
+              </a>
+            ))}
+          </div>
+        </div>
+      </Reveal>
+
+      {/* cta */}
       <Reveal as="section" className="cta">
         <div className="wrap cta-in">
           <div>
-            <h2>加入 LINE，讓我們為你選酒</h2>
+            <h2>加入 LINE，<em>讓我們為你選酒</em></h2>
             <p>新品到貨、限時優惠與選酒建議，第一手都在 LINE。</p>
           </div>
           <a className="btn btn-line" href={SITE.line} target="_blank" rel="noreferrer">加入 LINE 官方帳號</a>
         </div>
       </Reveal>
 
-      {/* footer */}
-      <footer className="footer">
-        <div className="wrap footer-top">
-          <div className="footer-brand">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={SITE.logo} alt="Wineswee" />
-            <p>威士威酒食超市｜紅白葡萄酒・威士忌・清酒・肉品・乳酪・海鮮・酒器禮盒，一站備齊你的餐桌。</p>
-          </div>
-          <div className="footer-col">
-            <h4>選購</h4>
-            {CATEGORIES.slice(0, 6).map(c => <a key={c.key} href={`#cat-${c.key}`}>{c.label}</a>)}
-          </div>
-          <div className="footer-col">
-            <h4>聯絡</h4>
-            <a href={`mailto:${SITE.email}`}>{SITE.email}</a>
-            <a href={SITE.shop} target="_blank" rel="noreferrer">官網商城</a>
-            <a href={SITE.line} target="_blank" rel="noreferrer">LINE 官方帳號</a>
-          </div>
-          <div className="footer-col">
-            <h4>追蹤</h4>
-            <a href={SITE.fb} target="_blank" rel="noreferrer">Facebook</a>
-            <a href={SITE.ig} target="_blank" rel="noreferrer">Instagram</a>
-          </div>
-        </div>
-        <div className="wrap footer-bar">
-          <span>© 2026 Wineswee 威士威酒食超市</span>
-          <span>未滿十八歲禁止飲酒・飲酒過量有害健康・禁止酒駕</span>
-        </div>
-      </footer>
+      <Footer />
     </>
   )
 }

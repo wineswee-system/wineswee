@@ -1,6 +1,7 @@
 import raw from '../data/products.json'
 
 export type Product = {
+  id: number
   name: string
   price: number | null
   image: string | null
@@ -34,16 +35,25 @@ function classify(name: string): CategoryKey {
 }
 
 type RawProduct = { name: string; price: number | null; image: string | null; sold_out: boolean; category?: string }
+type Scored = Omit<Product, 'id'>
 
 // 排序:有圖優先、未售完優先
-function rank(a: Product, b: Product) {
+function rank(a: Scored, b: Scored) {
   return (b.image ? 1 : 0) - (a.image ? 1 : 0) || (a.sold_out ? 1 : 0) - (b.sold_out ? 1 : 0)
 }
 
 export const ALL: Product[] = (raw as RawProduct[])
   .filter(p => p.name)
-  .map(p => ({ ...p, cat: classify(p.name) }))
+  .map((p): Scored => ({ ...p, cat: classify(p.name) }))
   .sort(rank)
+  .map((p, i) => ({ ...p, id: i }))
+
+export function getProduct(id: number): Product | undefined {
+  return ALL[id]?.id === id ? ALL[id] : ALL.find(p => p.id === id)
+}
+export function related(p: Product, n = 6): Product[] {
+  return ALL.filter(x => x.cat === p.cat && x.id !== p.id).slice(0, n)
+}
 
 export function byCategory(): Record<CategoryKey, Product[]> {
   const m = {} as Record<CategoryKey, Product[]>

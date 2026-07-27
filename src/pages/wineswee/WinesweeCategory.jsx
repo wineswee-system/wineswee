@@ -2,9 +2,10 @@ import { useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import './wineswee.css'
 import { CATEGORIES, byCategory } from './data'
-import { Header, ProductCard, Footer } from './parts'
+import { Header, ProductCard, Footer, useBodyScroll } from './parts'
 
 export default function WinesweeCategory() {
+  useBodyScroll()
   const { key } = useParams()
   useEffect(() => { window.scrollTo(0, 0) }, [key])
   const c = CATEGORIES.find(x => x.key === key)

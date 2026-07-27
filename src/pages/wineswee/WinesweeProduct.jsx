@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import './wineswee.css'
 import { getProduct, related, CAT_LABEL, CAT_EN, SITE } from './data'
-import { Header, ProductRow, Footer } from './parts'
+import { Header, ProductRow, Footer, useBodyScroll } from './parts'
 
 const BLURB = {
   red: '飽滿而有層次的紅葡萄酒，單寧細緻、餘韻悠長，佐紅肉、乳酪或獨飲皆宜。',

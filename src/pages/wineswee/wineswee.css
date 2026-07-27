@@ -11,7 +11,7 @@
 .ws *{margin:0;padding:0;box-sizing:border-box}
 .ws{scroll-behavior:smooth;background:var(--night)}
 .ws{font-family:var(--sans);color:var(--ink);background:var(--paper);line-height:1.7;
-  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;overflow-x:hidden}
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;}
 .ws::after{content:"";position:fixed;inset:0;z-index:9999;pointer-events:none;opacity:.05;mix-blend-mode:overlay;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
 .ws a{color:inherit;text-decoration:none}
@@ -263,3 +263,58 @@
 .ws .pdp-meta dd{color:var(--ink)}
 @media(max-width:900px){.ws .nav{display:none}.ws .pdp{grid-template-columns:1fr}.ws .mani-in{grid-template-columns:1fr 1fr}.ws .mani-cell:nth-child(-n+2){border-bottom:1px solid var(--line-dk)}.ws .mani-cell:nth-child(odd){border-left:0}.ws .spot-in,.ws .video-in{grid-template-columns:1fr}.ws .footer-top{grid-template-columns:1fr 1fr}}
 @media(max-width:560px){.ws .header-in{height:64px}.ws .logo img{height:40px}.ws .store{grid-template-columns:auto 1fr;gap:14px}.ws .store .tel{grid-column:2;justify-self:start;font-size:16px}.ws .hero-sub{display:none}}
+/* ── 圖片比例修正:酒瓶類用 contain 顯示完整、不裁切 ─────────────────────── */
+.ws .card-frame{background:#fff}
+.ws .card-frame img,.ws .pdp-media img,.ws .spot-fig img{object-fit:contain;padding:10px}
+.ws .pdp-media{background:#fff}
+.ws .pdp-media img{padding:clamp(16px,3vw,40px)}
+.ws .spot-fig{background:linear-gradient(160deg,#2a1012,#1a0809)}
+.ws .spot-fig img{padding:14px}
+
+/* ── 分類入口 grid(首頁門面) ───────────────────────────────────────────── */
+.ws .entry-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:clamp(14px,1.6vw,22px)}
+.ws .entry{position:relative;aspect-ratio:4/5;overflow:hidden;background:#1a0809;display:block;border:1px solid var(--line-dk)}
+.ws .entry img{width:100%;height:100%;object-fit:contain;padding:22px 22px 46px;transition:transform 1s cubic-bezier(.19,1,.22,1)}
+.ws .entry:hover img{transform:scale(1.06)}
+.ws .entry-veil{position:absolute;inset:0;background:linear-gradient(transparent 45%,rgba(20,6,7,.9))}
+.ws .entry-cap{position:absolute;left:0;right:0;bottom:0;padding:22px;z-index:2}
+.ws .entry-cap .en{font-family:var(--display);font-style:italic;color:var(--gold);font-size:13px;display:block;margin-bottom:4px}
+.ws .entry-cap h3{font-family:var(--tc);color:var(--cream);font-size:clamp(20px,2vw,26px);font-weight:600;display:flex;align-items:baseline;gap:10px}
+.ws .entry-cap h3 i{font-family:var(--display);font-style:normal;font-size:14px;color:var(--gold-dim)}
+.ws .entry-cap .arw{position:absolute;right:22px;bottom:26px;color:var(--gold-hi);font-size:20px;opacity:0;transform:translateX(-6px);transition:.35s}
+.ws .entry:hover .entry-cap .arw{opacity:1;transform:none}
+
+/* ── 首頁 teaser 連結 ──────────────────────────────────────────────────── */
+.ws .teaser-more{display:flex;justify-content:center;margin-top:clamp(28px,4vw,48px)}
+.ws .teaser-more a{font-family:var(--sans);font-size:14px;font-weight:600;letter-spacing:.08em;color:var(--wine);
+  border:1px solid var(--wine);padding:14px 34px;transition:.3s;display:inline-flex;gap:10px}
+.ws .teaser-more a:hover{background:var(--wine);color:var(--cream)}
+.ws .sec-dark .teaser-more a{color:var(--gold-hi);border-color:rgba(201,170,130,.5)}
+.ws .sec-dark .teaser-more a:hover{background:var(--gold);color:var(--wine-deep);border-color:var(--gold)}
+
+/* ── 門市詳細卡(門市頁) ────────────────────────────────────────────────── */
+.ws .storefull-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:clamp(16px,2vw,26px)}
+.ws .storefull{background:var(--paper);border:1px solid var(--line);padding:clamp(22px,2.4vw,32px);transition:.3s;display:flex;flex-direction:column;gap:14px}
+.ws .storefull:hover{border-color:var(--gold);transform:translateY(-4px);box-shadow:var(--shadow)}
+.ws .storefull-top{display:flex;align-items:baseline;gap:12px}
+.ws .storefull-rg{font-family:var(--display);font-style:italic;color:var(--gold-dim);font-size:15px}
+.ws .storefull h3{font-family:var(--tc);color:var(--wine);font-size:22px;font-weight:600}
+.ws .storefull-row{display:flex;gap:12px;font-size:14px;color:var(--ink-soft);line-height:1.6}
+.ws .storefull-row .lb{color:var(--muted-d);flex:0 0 auto;font-weight:500}
+.ws .storefull-map{margin-top:6px;font-family:var(--sans);font-size:13.5px;font-weight:600;color:var(--wine);
+  border-top:1px solid var(--line);padding-top:14px;display:inline-flex;gap:8px;transition:.25s}
+.ws .storefull:hover .storefull-map{color:var(--gold-d)}
+
+/* ── 頁面 masthead 大標(about/news/stores) ────────────────────────────── */
+.ws .page-lead{max-width:60ch;margin-top:18px;color:#e7d6c4;font-size:clamp(15px,1.4vw,17px);font-weight:300}
+
+/* ── 開場過場動畫(cinematic intro) ─────────────────────────────────────── */
+.ws-intro{position:fixed;inset:0;z-index:9998;background:var(--night);display:grid;place-items:center;transition:opacity .8s ease,visibility .8s}
+.ws-intro.out{opacity:0;visibility:hidden}
+.ws-intro-in{display:flex;flex-direction:column;align-items:center;gap:16px}
+.ws-intro-word{font-family:var(--display);font-weight:300;font-size:clamp(38px,7vw,86px);letter-spacing:.16em;color:var(--gold-hi);opacity:0;animation:introUp 1s .1s forwards}
+.ws-intro-line{width:0;height:1px;background:var(--gold);animation:introLine 1.1s .5s forwards}
+.ws-intro-sub{font-family:"Noto Serif TC",serif;letter-spacing:.34em;font-size:13px;color:var(--gold-dim);opacity:0;animation:introUp 1s .65s forwards}
+@keyframes introUp{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
+@keyframes introLine{from{width:0}to{width:200px}}
+

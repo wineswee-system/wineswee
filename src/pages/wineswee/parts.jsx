@@ -2,6 +2,43 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { CATEGORIES, WINE_KEYS, FOOD_KEYS, BANNERS, SITE } from './data'
 
+// 開場過場動畫(cinematic intro)— 只在首頁進場播一次
+export function Intro() {
+  const [phase, setPhase] = useState('in')
+  useEffect(() => {
+    const t1 = setTimeout(() => setPhase('out'), 1200)
+    const t2 = setTimeout(() => setPhase('done'), 2000)
+    return () => { clearTimeout(t1); clearTimeout(t2) }
+  }, [])
+  if (phase === 'done') return null
+  return (
+    <div className={'ws-intro' + (phase === 'out' ? ' out' : '')}>
+      <div className="ws-intro-in">
+        <span className="ws-intro-word">WINESWEE</span>
+        <span className="ws-intro-line" />
+        <span className="ws-intro-sub">威士威酒食超市</span>
+      </div>
+    </div>
+  )
+}
+
+// ERP body 是 overflow:hidden(儀表板外殼),wine 頁掛載時放開原生捲動,離開還原
+// wine 頁全螢幕接管:把 ERP #root 的 zoom 設回 1(避免縮放破壞滾動)+ 放開 body 原生捲動。離開還原。
+export function useBodyScroll() {
+  useEffect(() => {
+    const root = document.getElementById('root'), b = document.body, h = document.documentElement
+    const prev = { z: root?.style.zoom, bo: b.style.overflow, ho: h.style.overflow }
+    if (root) root.style.zoom = '1'
+    b.style.overflow = 'visible'
+    b.style.overflowX = 'hidden'
+    h.style.overflow = 'auto'
+    return () => {
+      if (root) root.style.zoom = prev.z || ''
+      b.style.overflow = prev.bo; b.style.overflowX = ''; h.style.overflow = prev.ho
+    }
+  }, [])
+}
+
 export function Reveal({ children, className = '', tag = 'div' }) {
   const ref = useRef(null)
   const [shown, setShown] = useState(false)
@@ -101,8 +138,7 @@ export function HeroSlider() {
   )
 }
 
-export function Header({ home = false }) {
-  const sec = a => (home ? a : '/wineswee' + a)
+export function Header() {
   const wine = CATEGORIES.filter(c => WINE_KEYS.includes(c.key))
   const food = CATEGORIES.filter(c => FOOD_KEYS.includes(c.key))
   const Drop = ({ label, items }) => (
@@ -118,12 +154,12 @@ export function Header({ home = false }) {
       <div className="wrap header-in">
         <Link className="logo" to="/wineswee" aria-label="Wineswee 威士威酒食超市"><img src={SITE.logo} alt="Wineswee 威士威酒食超市" /></Link>
         <nav className="nav">
-          <a className="nav-top" href={sec('#story')}>關於我們</a>
+          <Link className="nav-top" to="/wineswee/about">關於我們</Link>
           <Drop label="酒類專區" items={wine} />
           <Drop label="美食／酒器" items={food} />
-          <a className="nav-top" href={sec('#news')}>主題活動</a>
-          <a className="nav-top" href={sec('#story')}>酒品知識</a>
-          <a className="nav-top" href={sec('#store')}>門市資訊</a>
+          <Link className="nav-top" to="/wineswee/news">主題活動</Link>
+          <Link className="nav-top" to="/wineswee/news">酒品知識</Link>
+          <Link className="nav-top" to="/wineswee/stores">門市資訊</Link>
           <a className="nav-top" href={SITE.shop} target="_blank" rel="noreferrer">加入會員</a>
           <a className="nav-top" href={SITE.shop} target="_blank" rel="noreferrer">訂單查詢</a>
           <a className="nav-top" href={SITE.shop} target="_blank" rel="noreferrer">加盟專區</a>

@@ -21,6 +21,9 @@ const DemoLanding = lazy(() => import('./pages/DemoLanding'))
 const Wineswee         = lazy(() => import('./pages/wineswee/Wineswee'))
 const WinesweeProduct  = lazy(() => import('./pages/wineswee/WinesweeProduct'))
 const WinesweeCategory = lazy(() => import('./pages/wineswee/WinesweeCategory'))
+const WinesweeAbout    = lazy(() => import('./pages/wineswee/WinesweeAbout'))
+const WinesweeNews     = lazy(() => import('./pages/wineswee/WinesweeNews'))
+const WinesweeStores   = lazy(() => import('./pages/wineswee/WinesweeStores'))
 const Dashboard   = lazy(() => import('./pages/Dashboard'))
 const GuestMenu   = lazy(() => import('./pages/pos/GuestMenu'))
 // 舊的 Liff* 頁面（2026-04-23 移除）已搬到獨立 repo aska911023/sme-ops-liff
@@ -272,6 +275,9 @@ export default function App() {
           <Route path="/showcase" element={<Suspense fallback={<LoadingSpinner />}><DemoLanding /></Suspense>} />
           {/* Wineswee 威士威 酒食超市 官網 — 公開,不需登入 */}
           <Route path="/wineswee" element={<Suspense fallback={<LoadingSpinner />}><Wineswee /></Suspense>} />
+          <Route path="/wineswee/about" element={<Suspense fallback={<LoadingSpinner />}><WinesweeAbout /></Suspense>} />
+          <Route path="/wineswee/news" element={<Suspense fallback={<LoadingSpinner />}><WinesweeNews /></Suspense>} />
+          <Route path="/wineswee/stores" element={<Suspense fallback={<LoadingSpinner />}><WinesweeStores /></Suspense>} />
           <Route path="/wineswee/category/:key" element={<Suspense fallback={<LoadingSpinner />}><WinesweeCategory /></Suspense>} />
           <Route path="/wineswee/product/:id" element={<Suspense fallback={<LoadingSpinner />}><WinesweeProduct /></Suspense>} />
           <Route path="/login" element={<Suspense fallback={<LoadingSpinner />}><Login /></Suspense>} />

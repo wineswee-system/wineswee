@@ -533,3 +533,131 @@
 .ws .newspage-cta{max-width:820px;margin:clamp(36px,5vw,60px) auto 0;text-align:center;
   border-top:1px solid var(--line);padding-top:clamp(30px,4vw,44px)}
 .ws .newspage-cta p{color:var(--ink-soft);font-size:16px;margin-bottom:20px;font-weight:300}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   精修 v4 — 去 AI 感:編輯風留白 / 拆掉公式化裝飾 / 字體與影像當主角
+   原則:少即是多。移除重複的英文 kicker 公式、克制金色、放大留白與字體。
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── 留白加大:讓每個區塊呼吸 ─────────────────────────────────────────────── */
+.ws .sec{padding-block:clamp(84px,11vw,176px)}
+.ws .wrap{max-width:1240px}
+
+/* ── 標題群改編輯風:大型淡 folio 數字 + 純中文標題(拿掉「/English」後綴) ──── */
+.ws .sec-head{align-items:flex-start;gap:clamp(18px,2.4vw,40px);margin-bottom:clamp(44px,5.5vw,80px)}
+.ws .sec-head .en{display:none}                    /* 拿掉重複的斜體英文後綴 */
+.ws .sec-head h2{font-size:clamp(34px,5vw,74px);font-weight:200;letter-spacing:.005em;line-height:1.12}
+.ws .sec-head .ht .kicker{margin-bottom:18px}
+.ws .numeral{font-size:clamp(52px,8vw,132px);font-style:normal;font-weight:200;opacity:.14;line-height:.85;
+  color:var(--wine)}
+.ws .sec-dark .numeral,.ws .spot .numeral{color:var(--gold);opacity:.2}
+
+/* ── kicker 收斂:小、細、克制(不再是滿版大寫英文條) ─────────────────────── */
+.ws .kicker{font-size:10.5px;letter-spacing:.36em;gap:9px;color:var(--gold-dim);font-weight:500}
+.ws .kicker::before{width:22px;opacity:.5}
+
+/* ── 拿掉小裝飾雜訊:英雄側邊直書、卡片序號 ───────────────────────────────── */
+.ws .hero-est{display:none}
+.ws .card-idx{display:none}
+
+/* ── 英雄字體更大器、更輕 ────────────────────────────────────────────────── */
+.ws .hero h1{font-weight:200;font-size:clamp(34px,4vw,66px);letter-spacing:-.01em;line-height:1.14}
+.ws .hero-sub{font-weight:300;letter-spacing:.02em;line-height:1.9}
+.ws .hero-left{background:linear-gradient(150deg,#2a0d0e 0%,var(--night-2) 60%,var(--night))}
+
+/* ── 商品卡:更乾淨、留白多、hover 更收斂 ─────────────────────────────────── */
+.ws .card-body{padding-top:22px}
+.ws .card-body h3{font-size:14px;font-weight:400;letter-spacing:.02em;line-height:1.65;min-height:2.9em;color:var(--ink-soft)}
+.ws .card:hover .card-body h3{color:var(--wine)}
+.ws .price{font-weight:400;font-size:18px;margin-top:11px}
+.ws .card-frame{border-color:#ece2d0}
+.ws .card-frame::before{box-shadow:none}          /* 拿掉卡片內陰影,更乾淨 */
+.ws .card-cta{background:rgba(58,15,17,.9);letter-spacing:.24em;font-weight:500;font-size:11px}
+
+/* ── manifesto 改亮底細線,不再整條深色(減黑、增精緻) ─────────────────────── */
+.ws .mani{background:var(--paper-2);color:var(--ink);border-color:var(--line)}
+.ws .mani-cell{border-left-color:var(--line);padding-block:clamp(40px,4.5vw,64px)}
+.ws .mani-cell .n{color:var(--gold-dim)}
+.ws .mani-cell h4{color:var(--wine);font-weight:500}
+.ws .mani-cell p{color:var(--muted-d)}
+
+/* ── 分類入口:更大留白、標題更大、拿掉多餘箭頭圈 ─────────────────────────── */
+.ws .entry-grid{gap:clamp(16px,1.8vw,28px)}
+.ws .entry-cap h3{font-weight:500;font-size:clamp(19px,1.9vw,24px)}
+.ws .entry-cap .en{letter-spacing:.06em;font-size:12px}
+
+/* ── 區塊間金線分隔改為極細中性線(克制) ──────────────────────────────────── */
+.ws .rowmore a,.ws .rowmore-link{border-bottom-color:var(--gold-dim);font-size:14px}
+.ws .arrows button{border-color:#e0d4c0}
+
+/* ── 頁尾更輕 ────────────────────────────────────────────────────────────── */
+.ws .footer-logo{height:58px}
+
+/* ── 全站微調:中文字體行高與字距(閱讀更舒服、更像編輯排版) ───────────────── */
+.ws{line-height:1.75}
+.ws p{letter-spacing:.01em}
+
+/* ── 英雄右側 banner:偏移構圖突顯酒瓶、加重過場暗角讓內建促銷字沉為氛圍 ───── */
+.ws .hero-slide img{object-position:72% center}
+.ws .hero-rt-veil{background:
+  linear-gradient(90deg,var(--night) 0%,rgba(26,8,9,.7) 12%,rgba(26,8,9,.12) 30%,transparent 46%),
+  linear-gradient(0deg,rgba(20,6,7,.62),transparent 46%),
+  radial-gradient(120% 80% at 30% 40%,rgba(20,6,7,.34),transparent 60%)}
+@media(max-width:900px){.ws .hero-slide img{object-position:center}}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   精修 v5 — 氛圍與質地:柔光暈 / 紙紋 / 裝飾水印 / 商品聚光不再浮空
+   (克制、編輯感,非 AI 貼圖)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── 亮區加柔光暈 + 極淡紙紋,不再死平 ───────────────────────────────────── */
+.ws .sec-light{background:
+  radial-gradient(56% 42% at 6% -4%,rgba(201,170,130,.13),transparent 60%),
+  radial-gradient(48% 40% at 104% 106%,rgba(112,31,33,.06),transparent 60%),
+  var(--paper)}
+.ws .sec-cream{background:
+  radial-gradient(52% 40% at 102% -6%,rgba(201,170,130,.15),transparent 58%),
+  radial-gradient(46% 40% at -4% 104%,rgba(112,31,33,.055),transparent 60%),
+  var(--paper-2)}
+/* 極淡對角紙紋(疊在 grain 之上,增質地) */
+.ws .sec-light::after,.ws .sec-cream::after{content:"";position:absolute;inset:0;z-index:0;pointer-events:none;opacity:.5;
+  background-image:repeating-linear-gradient(135deg,rgba(112,31,33,.018) 0 1px,transparent 1px 7px)}
+.ws .sec-light>.wrap,.ws .sec-cream>.wrap{position:relative;z-index:1}
+
+/* ── 裝飾水印:區塊角落大型淡色襯字(編輯排版感) ─────────────────────────── */
+.ws .sec{overflow:clip}
+.ws .sec-light .sec-head,.ws .sec-cream .sec-head{position:relative}
+.ws .sec-light .sec-head::before{content:"Wineswee";position:absolute;right:-2%;top:-56%;font-family:var(--display);
+  font-style:italic;font-weight:200;font-size:clamp(80px,13vw,220px);color:var(--wine);opacity:.035;
+  letter-spacing:-.02em;pointer-events:none;white-space:nowrap;z-index:0}
+
+/* ── 關鍵:酒瓶照片的白底用 multiply 溶掉,讓瓶身直接站在有質地的暖底上 ──── */
+/*    (原本白底照片浮成一塊白方塊,現在白→融入暖色底,瓶身自然坐落) ─────────── */
+.ws .entry{background:linear-gradient(176deg,#f3e9d6 0%,#eee2cd 52%,#e6d8bf 100%)}
+.ws .entry img{padding:12px 12px 70px;mix-blend-mode:multiply}
+.ws .entry::after{content:"";position:absolute;left:26%;right:26%;bottom:58px;height:20px;z-index:0;
+  background:radial-gradient(ellipse at center,rgba(58,15,17,.24),transparent 72%);filter:blur(4px)}
+.ws .entry .entry-cap{position:relative;z-index:2}
+.ws .entry img{position:relative;z-index:1}
+/* 覆蓋 v3 的白色 veil → 融入暖底(修掉底部白塊) */
+.ws .entry-veil{background:linear-gradient(transparent 46%,#ece0ca 80%)}
+.ws .entry.cover .entry-veil{background:linear-gradient(transparent 42%,rgba(20,6,7,.86))}
+/* 食材/酒器情境圖版本:維持深底覆蓋、不 multiply */
+.ws .entry.cover::after{display:none}
+.ws .entry.cover{background:#1a0809}
+.ws .entry.cover img{mix-blend-mode:normal}
+
+/* ── 商品卡同理:暖底聚光 + 白底照片 multiply 融合 ───────────────────────── */
+.ws .card-frame{background:linear-gradient(176deg,#f3e9d6 0%,#eee2cd 55%,#e7d9c1 100%)}
+.ws .card-frame img{mix-blend-mode:multiply}
+/* 深底商品照(乳酪/火腿等)在深類別卡不 multiply,避免變暗塊 */
+.ws .card.dark-shot .card-frame{background:#1a0809}
+.ws .card.dark-shot .card-frame img{mix-blend-mode:normal}
+
+/* ── 焦點外框改金色(修掉瀏覽器紅框) ─────────────────────────────────────── */
+.ws a:focus{outline:none}
+.ws a:focus-visible,.ws button:focus-visible{outline:2px solid var(--gold);outline-offset:3px}
+
+/* ── 金色細線微光效(kicker 線呼吸) ──────────────────────────────────────── */
+.ws .kicker::before{background:linear-gradient(90deg,var(--gold),transparent);animation:kglow 3.6s ease-in-out infinite}
+@keyframes kglow{0%,100%{opacity:.35}50%{opacity:.75}}

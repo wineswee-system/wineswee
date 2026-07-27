@@ -50,7 +50,7 @@ export default function Wineswee() {
           </div>
           <div className="entry-grid">
             {CATEGORIES.filter(c => (cats[c.key] || []).length).map(c => (
-              <Link key={c.key} className="entry" to={`/wineswee/category/${c.key}`}>
+              <Link key={c.key} className={'entry' + (['ham'].includes(c.key) ? ' cover' : '')} to={`/wineswee/category/${c.key}`}>
                 {catImg(c.key) && <img src={catImg(c.key)} alt={c.label} loading="lazy" />}
                 <div className="entry-veil" />
                 <div className="entry-cap">

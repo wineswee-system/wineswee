@@ -23,6 +23,7 @@ const WinesweeProduct  = lazy(() => import('./pages/wineswee/WinesweeProduct'))
 const WinesweeCategory = lazy(() => import('./pages/wineswee/WinesweeCategory'))
 const WinesweeAbout    = lazy(() => import('./pages/wineswee/WinesweeAbout'))
 const WinesweeNews     = lazy(() => import('./pages/wineswee/WinesweeNews'))
+const WinesweeNewsDetail = lazy(() => import('./pages/wineswee/WinesweeNewsDetail'))
 const WinesweeStores   = lazy(() => import('./pages/wineswee/WinesweeStores'))
 const Dashboard   = lazy(() => import('./pages/Dashboard'))
 const GuestMenu   = lazy(() => import('./pages/pos/GuestMenu'))
@@ -277,6 +278,7 @@ export default function App() {
           <Route path="/wineswee" element={<Suspense fallback={<LoadingSpinner />}><Wineswee /></Suspense>} />
           <Route path="/wineswee/about" element={<Suspense fallback={<LoadingSpinner />}><WinesweeAbout /></Suspense>} />
           <Route path="/wineswee/news" element={<Suspense fallback={<LoadingSpinner />}><WinesweeNews /></Suspense>} />
+          <Route path="/wineswee/news/:id" element={<Suspense fallback={<LoadingSpinner />}><WinesweeNewsDetail /></Suspense>} />
           <Route path="/wineswee/stores" element={<Suspense fallback={<LoadingSpinner />}><WinesweeStores /></Suspense>} />
           <Route path="/wineswee/category/:key" element={<Suspense fallback={<LoadingSpinner />}><WinesweeCategory /></Suspense>} />
           <Route path="/wineswee/product/:id" element={<Suspense fallback={<LoadingSpinner />}><WinesweeProduct /></Suspense>} />

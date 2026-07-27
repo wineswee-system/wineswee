@@ -112,10 +112,10 @@ export default function Wineswee() {
           </div>
           <div className="news-grid">
             {NEWS.slice(0, 4).map(n => (
-              <a key={n.id} className="news-card" href={SITE.line} target="_blank" rel="noreferrer">
-                <div className="news-img">{n.image && <img src={n.image} alt={n.title} loading="lazy" />}<span className="news-go">LINE 看更多</span></div>
+              <Link key={n.id} className="news-card" to={`/wineswee/news/${n.id}`}>
+                <div className="news-img">{n.image && <img src={n.image} alt={n.title} loading="lazy" />}<span className="news-go">閱讀更多</span></div>
                 <div className="news-body"><span className="news-tag">Journal</span><h3>{n.title}</h3></div>
-              </a>
+              </Link>
             ))}
           </div>
         </div>

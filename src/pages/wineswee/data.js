@@ -3,9 +3,10 @@ import RAW from '../../data/wineswee-products.json'
 import NEWS from '../../data/news.json'
 import STORES from '../../data/stores.json'
 import DETAILS from '../../data/wineswee-details.json'
+import NEWS_DETAILS from '../../data/news-details.json'
 
 export const SITE = {
-  logo: 'https://www.wineswee.com/resources/_img/layout/logo.svg',
+  logo: '/wineswee-logo.svg',
   line: 'https://page.line.me/?accountId=wineswee01',
   fb: 'https://www.facebook.com/wineswee90370708/',
   ig: 'https://www.instagram.com/wineswee/',
@@ -18,7 +19,8 @@ export const BANNERS = [
   'https://www.wineswee.com/storage/upload/banner/image/2026-04-16/cmx82g7NBRrsOxFo0WZjFHd069ku19MWl48Ubu5A.jpg',
   'https://www.wineswee.com/storage/upload/banner/image/2025-01-17/76YcWU0PLnHZUp8FsZlMaXN7sEbMqHXojnA0md8C.jpg',
 ]
-export { NEWS, STORES }
+export { NEWS, STORES, NEWS_DETAILS }
+export const getNews = (id) => NEWS_DETAILS.find(n => String(n.id) === String(id))
 
 export const CATEGORIES = [
   { key: 'red', label: '紅酒', en: 'Red Wine', test: n => /紅葡萄酒|紅酒/.test(n) },

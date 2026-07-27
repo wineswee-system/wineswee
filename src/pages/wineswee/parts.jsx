@@ -173,6 +173,7 @@ export function Header() {
           <Link className="nav-top" to="/wineswee/news">酒品知識</Link>
           <Link className="nav-top" to="/wineswee/stores">門市資訊</Link>
           <a className="nav-top" href={SITE.line} target="_blank" rel="noreferrer">加入會員</a>
+          <a className="nav-top" href={SITE.line} target="_blank" rel="noreferrer">訂單查詢</a>
           <a className="nav-top" href={`mailto:${SITE.email}`}>加盟專區</a>
         </nav>
         <div className="header-cta"><a className="chip chip-line" href={SITE.line} target="_blank" rel="noreferrer">LINE 訂購</a></div>

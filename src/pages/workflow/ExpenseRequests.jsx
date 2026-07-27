@@ -811,7 +811,7 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
   const filtered = requests.filter(r => {
     if (tab !== 'all') {
       if (tab === '未送核銷') {
-        if (r.status !== '已核准') return false
+        if (r.status !== '已核准' || r.is_expense === false) return false  // 非費用核准即完成,不算未送核銷
       } else if (tab === '已核准') {
         if (!APPROVED_GROUP.includes(r.status)) return false
       } else {
@@ -824,10 +824,10 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
 
   const counts = {}
   requests.forEach(r => { counts[r.status] = (counts[r.status] || 0) + 1 })
-  // 「未送核銷」= DB 內 status='已核准' 還沒按送核銷的
-  counts['未送核銷'] = counts['已核准'] || 0
-  // 「已核准」總數 = 已通過簽核累計（含後續核銷階段）= 未送 + 待核銷 + 已核銷 + 核銷已退回
-  counts['已核准'] = (counts['未送核銷'] || 0) + (counts['待核銷'] || 0) + (counts['已核銷'] || 0) + (counts['核銷已退回'] || 0)
+  // 「未送核銷」= DB 內 status='已核准' 還沒按送核銷的(非費用核准即完成,不列入)
+  counts['未送核銷'] = requests.filter(r => r.status === '已核准' && r.is_expense !== false).length
+  // 「已核准」總數 = 已通過簽核累計（含後續核銷階段 + 核准即完成的非費用）
+  counts['已核准'] = requests.filter(r => APPROVED_GROUP.includes(r.status)).length
 
   if (loading) return <LoadingSpinner />
 

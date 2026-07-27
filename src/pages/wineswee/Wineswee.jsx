@@ -51,10 +51,9 @@ export default function Wineswee() {
             {CATEGORIES.filter(c => (cats[c.key] || []).length).map(c => {
               const n = (cats[c.key] || []).length
               const from = catPriceFrom(c.key)
-              const cover = ['ham'].includes(c.key)
               const img = catHeroImage(c.key)
               return (
-                <Link key={c.key} className={'entry' + (cover ? ' cover' : '')} to={`/wineswee/category/${c.key}`}>
+                <Link key={c.key} className="entry" to={`/wineswee/category/${c.key}`}>
                   <div className="entry-media">
                     {img && <img src={img} alt={c.label} loading="lazy" />}
                     <span className="entry-tag">{c.en}</span>

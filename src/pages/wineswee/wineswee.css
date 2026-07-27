@@ -700,3 +700,92 @@
   letter-spacing:.04em;color:var(--wine)}
 .ws .entry-go i{font-style:normal;transition:transform .35s cubic-bezier(.19,1,.22,1)}
 .ws .entry:hover .entry-go i{transform:translateX(5px)}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   精修 v7 — 手機/平板選單 + 金色元素 + 修 spotlight 標題 + 響應式 + 字色
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── 漢堡選單鈕(桌機隱藏,平板/手機顯示) ─────────────────────────────────── */
+.ws .burger{display:none;width:46px;height:46px;border:1px solid var(--gold);background:transparent;border-radius:2px;
+  cursor:pointer;flex-direction:column;gap:5px;align-items:center;justify-content:center;padding:0;flex:0 0 auto}
+.ws .burger span{display:block;width:20px;height:1.6px;background:var(--wine);transition:.3s cubic-bezier(.19,1,.22,1)}
+.ws .burger.on span:nth-child(1){transform:translateY(6.6px) rotate(45deg)}
+.ws .burger.on span:nth-child(2){opacity:0}
+.ws .burger.on span:nth-child(3){transform:translateY(-6.6px) rotate(-45deg)}
+
+/* ── 手機/平板選單面板(右側滑入) ────────────────────────────────────────── */
+.ws .navmob{position:fixed;inset:0;z-index:58;background:rgba(20,6,7,.55);backdrop-filter:blur(4px);opacity:0;visibility:hidden;transition:.35s}
+.ws .navmob.open{opacity:1;visibility:visible}
+.ws .navmob-in{position:absolute;top:0;right:0;height:100%;width:min(90vw,400px);background:var(--paper);
+  padding:100px clamp(24px,6vw,40px) 40px;overflow-y:auto;transform:translateX(100%);
+  transition:transform .42s cubic-bezier(.19,1,.22,1);display:flex;flex-direction:column;gap:18px;
+  border-left:2px solid var(--gold);box-shadow:-30px 0 60px -30px rgba(20,6,7,.5)}
+.ws .navmob.open .navmob-in{transform:none}
+.ws .nm-lead{font-family:var(--tc);font-size:18px;color:var(--ink);font-weight:500;padding:8px 0;border-bottom:1px solid var(--line);transition:.2s}
+.ws .nm-lead:hover{color:var(--wine);padding-left:4px}
+.ws .nm-grp h5{font-family:var(--display);font-style:italic;color:var(--gold-d);font-size:14px;margin-bottom:10px}
+.ws .nm-cats{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.ws .nm-cats a{display:flex;flex-direction:column;gap:1px;font-family:var(--tc);font-size:15px;color:var(--ink);
+  padding:9px 11px;background:var(--paper-2);border-radius:2px;border:1px solid transparent;transition:.2s}
+.ws .nm-cats a:hover{border-color:var(--gold);color:var(--wine)}
+.ws .nm-cats a em{font-style:italic;font-size:10.5px;color:var(--gold-dim);font-family:var(--display)}
+.ws .nm-line{margin-top:10px;justify-content:center}
+@media(max-width:900px){.ws .burger{display:flex}.ws .header-cta .chip-line{display:none}.ws .header-in{height:72px}}
+
+/* ── 金色元素:卡片頂金線 + 分隔鑽石 + CTA 金 + 標題金飾 ─────────────────── */
+/* 卡片頂端流動金線(hover 亮起) */
+.ws .entry{position:relative}
+.ws .entry::before{content:"";position:absolute;top:0;left:0;right:0;height:2px;z-index:4;transform:scaleX(0);transform-origin:center;
+  background:linear-gradient(90deg,transparent,var(--gold-dim) 20%,var(--gold-hi) 50%,var(--gold-dim) 80%,transparent);
+  transition:transform .55s cubic-bezier(.19,1,.22,1)}
+.ws .entry:hover::before{transform:scaleX(1)}
+.ws .entry-go{color:var(--gold-d)}
+.ws .entry:hover .entry-go{color:var(--wine)}
+/* 區塊標題:folio 數字加細金線 + 金鑽 */
+.ws .sec-head .numeral{position:relative}
+.ws .sec-head{position:relative}
+.ws .sec-light .sec-head::after,.ws .sec-cream .sec-head::after{content:"◆";position:absolute;left:0;bottom:-18px;
+  font-size:9px;color:var(--gold);opacity:.6}
+/* 金色分隔飾條(區塊之間) */
+.ws .goldrule{display:flex;align-items:center;justify-content:center;gap:16px;padding:0;height:0}
+.ws .goldrule::before,.ws .goldrule::after{content:"";height:1px;width:min(30vw,220px);
+  background:linear-gradient(90deg,transparent,var(--gold-dim))}
+.ws .goldrule::after{background:linear-gradient(90deg,var(--gold-dim),transparent)}
+.ws .goldrule i{color:var(--gold);font-size:10px;font-style:normal}
+/* 標題底金線(section h2 下) */
+.ws .sec-head h2{background-image:linear-gradient(90deg,var(--gold),transparent);background-size:64px 2px;
+  background-repeat:no-repeat;background-position:0 100%;padding-bottom:16px}
+.ws .sec-dark .sec-head h2,.ws .spot-txt h2,.ws .story h2,.ws .cta h2{background-image:none;padding-bottom:0}
+
+/* ── 修 spotlight:去除錯位 + 乾淨金標題 caption ──────────────────────────── */
+.ws .spot-fig:nth-child(1),.ws .spot-fig:nth-child(4){transform:none}
+.ws .spot-fig{border:1px solid rgba(201,170,130,.28)}
+.ws .spot-fig figcaption{padding:44px 16px 16px;background:linear-gradient(transparent,rgba(20,6,7,.6) 40%,rgba(20,6,7,.94))}
+.ws .spot-fig figcaption{font-family:var(--display);font-style:italic;font-size:10px;letter-spacing:.24em;
+  text-transform:uppercase;color:var(--gold)}
+.ws .spot-fig figcaption b{font-style:normal;font-family:var(--tc);color:var(--cream);font-size:14px;letter-spacing:0;
+  margin-top:6px;line-height:1.4;font-weight:500}
+
+/* ── 商品列箭頭:手機隱藏(改用滑動) ─────────────────────────────────────── */
+@media(max-width:760px){.ws .sec-head .arrows{display:none}}
+
+/* ── 響應式:英雄手機不露促銷字 + 版面收斂 ───────────────────────────────── */
+@media(max-width:900px){
+  .ws .hero{grid-template-columns:1fr;grid-template-rows:auto 46vh}
+  .ws .hero-slide img{object-position:78% center}
+  .ws .hero-rt-veil{background:linear-gradient(0deg,rgba(20,6,7,.75),transparent 55%),linear-gradient(90deg,rgba(20,6,7,.4),transparent 30%)}
+  .ws .sec-light .sec-head::before{font-size:64px;top:-30%}
+}
+@media(max-width:560px){
+  .ws .hero h1{font-size:31px}
+  .ws .hero-cta{gap:10px}
+  .ws .hero-cta .btn{padding:13px 22px;font-size:13px}
+  .ws .sec-head{flex-wrap:wrap}
+  .ws .numeral{font-size:44px}
+}
+
+/* ── 字色微調:內文更暖實、標題更飽和,層次更清楚 ─────────────────────────── */
+.ws{--ink-soft:#54453b;--muted-d:#786a5e}
+.ws .entry-desc{color:#5a4c41}
+.ws .sec-head h2{color:#6a1d1f}
+.ws .entry-hd h3{color:#6a1d1f}

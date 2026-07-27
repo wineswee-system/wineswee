@@ -151,8 +151,10 @@ export function HeroSlider() {
 }
 
 export function Header() {
+  const [open, setOpen] = useState(false)
   const wine = CATEGORIES.filter(c => WINE_KEYS.includes(c.key))
   const food = CATEGORIES.filter(c => FOOD_KEYS.includes(c.key))
+  useEffect(() => { document.body.style.overflow = open ? 'hidden' : ''; return () => { document.body.style.overflow = '' } }, [open])
   const Drop = ({ label, items }) => (
     <div className="nav-drop">
       <span className="nav-top">{label}<i className="caret" /></span>
@@ -161,10 +163,12 @@ export function Header() {
       </div></div>
     </div>
   )
+  const close = () => setOpen(false)
   return (
+    <>
     <header className="header">
       <div className="wrap header-in">
-        <Link className="logo" to="/wineswee" aria-label="Wineswee 威士威酒食超市"><img src={SITE.logo} alt="Wineswee 威士威酒食超市" /></Link>
+        <Link className="logo" to="/wineswee" aria-label="Wineswee 威士威酒食超市" onClick={close}><img src={SITE.logo} alt="Wineswee 威士威酒食超市" /></Link>
         <nav className="nav">
           <Link className="nav-top" to="/wineswee/about">關於我們</Link>
           <Drop label="酒類專區" items={wine} />
@@ -176,9 +180,27 @@ export function Header() {
           <a className="nav-top" href={SITE.line} target="_blank" rel="noreferrer">訂單查詢</a>
           <a className="nav-top" href={`mailto:${SITE.email}`}>加盟專區</a>
         </nav>
-        <div className="header-cta"><a className="chip chip-line" href={SITE.line} target="_blank" rel="noreferrer">LINE 訂購</a></div>
+        <div className="header-cta">
+          <a className="chip chip-line" href={SITE.line} target="_blank" rel="noreferrer">LINE 訂購</a>
+          <button className={'burger' + (open ? ' on' : '')} onClick={() => setOpen(o => !o)} aria-label="選單" aria-expanded={open}><span /><span /><span /></button>
+        </div>
       </div>
     </header>
+
+      {/* 手機/平板選單(置於 header 外,避免 backdrop-filter 造成 fixed containing block) */}
+      <div className={'navmob' + (open ? ' open' : '')} onClick={close}>
+        <div className="navmob-in" onClick={e => e.stopPropagation()}>
+          <Link className="nm-lead" to="/wineswee/about" onClick={close}>關於我們</Link>
+          <div className="nm-grp"><h5>酒類專區</h5><div className="nm-cats">{wine.map(c => <Link key={c.key} to={`/wineswee/category/${c.key}`} onClick={close}>{c.label}<em>{c.en}</em></Link>)}</div></div>
+          <div className="nm-grp"><h5>美食・酒器</h5><div className="nm-cats">{food.map(c => <Link key={c.key} to={`/wineswee/category/${c.key}`} onClick={close}>{c.label}<em>{c.en}</em></Link>)}</div></div>
+          <Link className="nm-lead" to="/wineswee/news" onClick={close}>主題活動・酒品知識</Link>
+          <Link className="nm-lead" to="/wineswee/stores" onClick={close}>門市資訊</Link>
+          <a className="nm-lead" href={SITE.line} target="_blank" rel="noreferrer">加入會員・訂單查詢</a>
+          <a className="nm-lead" href={`mailto:${SITE.email}`}>加盟專區</a>
+          <a className="btn btn-line nm-line" href={SITE.line} target="_blank" rel="noreferrer">加入 LINE 訂購</a>
+        </div>
+      </div>
+    </>
   )
 }
 

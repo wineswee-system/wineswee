@@ -222,7 +222,7 @@ export function SideRail() {
         <svg viewBox="0 0 24 24"><path d="M13.5 22v-8h2.7l.4-3.1h-3.1V8.9c0-.9.25-1.5 1.55-1.5H17V4.6c-.3 0-1.3-.1-2.45-.1-2.4 0-4.05 1.47-4.05 4.17v2.32H7.7V14h2.8v8z" /></svg>
       </a>
       <a className="rail-ic" href={SITE.ig} target="_blank" rel="noreferrer" aria-label="Instagram">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9"><rect x="3.2" y="3.2" width="17.6" height="17.6" rx="5" /><circle cx="12" cy="12" r="4" /><circle cx="17.4" cy="6.6" r="1.1" fill="currentColor" stroke="none" /></svg>
+        <svg viewBox="0 0 24 24"><path fillRule="evenodd" clipRule="evenodd" d="M7.5 2h9A5.5 5.5 0 0 1 22 7.5v9a5.5 5.5 0 0 1-5.5 5.5h-9A5.5 5.5 0 0 1 2 16.5v-9A5.5 5.5 0 0 1 7.5 2zm0 2A3.5 3.5 0 0 0 4 7.5v9A3.5 3.5 0 0 0 7.5 20h9a3.5 3.5 0 0 0 3.5-3.5v-9A3.5 3.5 0 0 0 16.5 4h-9zM12 7a5 5 0 1 1 0 10 5 5 0 0 1 0-10zm0 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6zm5.6-.9a1.15 1.15 0 1 1-2.3 0 1.15 1.15 0 0 1 2.3 0z" /></svg>
       </a>
       <a className="rail-ic" href="https://www.youtube.com/watch?v=ZZccVDRoR2M" target="_blank" rel="noreferrer" aria-label="YouTube">
         <svg viewBox="0 0 24 24"><path d="M22 8.2s-.2-1.4-.8-2c-.75-.8-1.6-.8-2-.85C16.35 5.15 12 5.15 12 5.15h0s-4.35 0-7.2.2c-.4.05-1.25.05-2 .85-.6.6-.8 2-.8 2S1.8 9.85 1.8 11.5v.95c0 1.65.2 3.3.2 3.3s.2 1.4.8 2c.76.8 1.75.77 2.2.86 1.6.15 6.8.2 6.8.2s4.35-.01 7.2-.21c.4-.05 1.25-.05 2-.85.6-.6.8-2 .8-2s.2-1.65.2-3.3v-.95c0-1.65-.2-3.3-.2-3.3zM10.15 14.8V9.2l4.7 2.8z" /></svg>

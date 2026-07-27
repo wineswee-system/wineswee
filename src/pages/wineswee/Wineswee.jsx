@@ -29,7 +29,6 @@ export default function Wineswee() {
   return (
     <div className="ws">
       <Intro />
-      <div className="announce">全台十一家門市・線上商城宅配到府　—　滿額免運・當日出貨　—　未滿十八歲禁止飲酒</div>
       <Header home />
       <HeroSlider />
 

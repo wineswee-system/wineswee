@@ -170,6 +170,7 @@ export function Header() {
   return (
     <>
     <header className="header">
+      <div className="header-ann">威士威酒食超市　·　全台 11 家門市　·　線上宅配到府　·　未滿十八歲禁止飲酒</div>
       <div className="wrap header-in">
         <Link className="logo" to="/wineswee" aria-label="Wineswee 威士威酒食超市" onClick={close}><img src={SITE.logo} alt="Wineswee 威士威酒食超市" /></Link>
         <nav className="nav">
@@ -207,10 +208,40 @@ export function Header() {
   )
 }
 
+// 右側懸浮社群列 + 回到頂端
+export function SideRail() {
+  const [showTop, setShowTop] = useState(false)
+  useEffect(() => {
+    const onScroll = () => setShowTop(window.scrollY > 480)
+    onScroll(); window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
+  return (
+    <div className="siderail">
+      <a className="rail-ic" href={SITE.fb} target="_blank" rel="noreferrer" aria-label="Facebook">
+        <svg viewBox="0 0 24 24"><path d="M13.5 22v-8h2.7l.4-3.1h-3.1V8.9c0-.9.25-1.5 1.55-1.5H17V4.6c-.3 0-1.3-.1-2.45-.1-2.4 0-4.05 1.47-4.05 4.17v2.32H7.7V14h2.8v8z" /></svg>
+      </a>
+      <a className="rail-ic" href={SITE.ig} target="_blank" rel="noreferrer" aria-label="Instagram">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9"><rect x="3.2" y="3.2" width="17.6" height="17.6" rx="5" /><circle cx="12" cy="12" r="4" /><circle cx="17.4" cy="6.6" r="1.1" fill="currentColor" stroke="none" /></svg>
+      </a>
+      <a className="rail-ic" href="https://www.youtube.com/watch?v=ZZccVDRoR2M" target="_blank" rel="noreferrer" aria-label="YouTube">
+        <svg viewBox="0 0 24 24"><path d="M22 8.2s-.2-1.4-.8-2c-.75-.8-1.6-.8-2-.85C16.35 5.15 12 5.15 12 5.15h0s-4.35 0-7.2.2c-.4.05-1.25.05-2 .85-.6.6-.8 2-.8 2S1.8 9.85 1.8 11.5v.95c0 1.65.2 3.3.2 3.3s.2 1.4.8 2c.76.8 1.75.77 2.2.86 1.6.15 6.8.2 6.8.2s4.35-.01 7.2-.21c.4-.05 1.25-.05 2-.85.6-.6.8-2 .8-2s.2-1.65.2-3.3v-.95c0-1.65-.2-3.3-.2-3.3zM10.15 14.8V9.2l4.7 2.8z" /></svg>
+      </a>
+      <a className="rail-ic rail-line" href={SITE.line} target="_blank" rel="noreferrer" aria-label="LINE">
+        <svg viewBox="0 0 24 24"><path d="M12 3.2c-5.1 0-9.3 3.35-9.3 7.48 0 3.7 3.32 6.8 7.8 7.38.3.06.72.2.83.46.1.24.06.6.03.85l-.13.8c-.04.24-.19.94.83.51 1.02-.43 5.5-3.24 7.5-5.55 1.38-1.51 2.04-3.05 2.04-4.86 0-4.13-4.2-7.48-9.3-7.48z" /></svg>
+      </a>
+      <button className={'rail-top' + (showTop ? ' on' : '')} onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} aria-label="回到頂端">
+        <span>▲</span>TOP
+      </button>
+    </div>
+  )
+}
+
 export function Footer() {
   const mapUrl = s => `https://www.google.com/maps/search/${encodeURIComponent('威士威酒食超市 ' + s.full + ' ' + s.addr)}`
   return (
     <>
+      <SideRail />
       <footer className="footer">
         <div className="wrap footer-grid">
           {/* 品牌 + 客服 */}

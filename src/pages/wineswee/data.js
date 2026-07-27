@@ -37,7 +37,24 @@ export const FOOD_KEYS = ['cheese', 'ham', 'ware']
 export const CAT_LABEL = Object.fromEntries(CATEGORIES.map(c => [c.key, c.label]))
 export const CAT_EN = Object.fromEntries(CATEGORIES.map(c => [c.key, c.en]))
 
-function classify(name) { for (const c of CATEGORIES) if (c.test(name)) return c.key; return 'other' }
+// 判斷順序:酒器/食材/具體酒種優先於「紅酒/白酒」廣泛關鍵字(避免「紅酒水晶杯」被歸紅酒)
+const CLASSIFY_ORDER = ['ware', 'cheese', 'ham', 'whisky', 'sake', 'spirit', 'sparkling', 'rose', 'white', 'red']
+function classify(name) {
+  for (const k of CLASSIFY_ORDER) { const c = CATEGORIES.find(x => x.key === k); if (c && c.test(name)) return c.key }
+  return 'other'
+}
+
+// 產區(從商品名解析)
+export const REGIONS = ['法國', '義大利', '西班牙', '葡萄牙', '德國', '希臘', '奧地利', '紐西蘭', '澳洲', '美國', '智利', '阿根廷', '南非', '日本', '喬治亞', '亞美尼亞', '摩爾多瓦']
+export function regionOf(name) { for (const r of REGIONS) if (name.includes(r)) return r; return '其他' }
+
+// 單價區間
+export const PRICE_BANDS = [
+  { key: 'a', label: 'NT$ 500 以下', min: 0, max: 500 },
+  { key: 'b', label: 'NT$ 500–1,000', min: 500, max: 1000 },
+  { key: 'c', label: 'NT$ 1,000–2,000', min: 1000, max: 2000 },
+  { key: 'd', label: 'NT$ 2,000 以上', min: 2000, max: Infinity },
+]
 
 export const ALL = RAW
   .filter(p => p.name)

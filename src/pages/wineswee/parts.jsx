@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { CATEGORIES, WINE_KEYS, FOOD_KEYS, BANNERS, SITE } from './data'
+import { CATEGORIES, WINE_KEYS, FOOD_KEYS, BANNERS, SITE, STORES } from './data'
 
 // 開場過場動畫(cinematic intro)— 只在首頁進場播一次
 export function Intro() {
@@ -171,25 +171,43 @@ export function Header() {
 }
 
 export function Footer() {
+  const mapUrl = s => `https://www.google.com/maps/search/${encodeURIComponent('威士威酒食超市 ' + s.full + ' ' + s.addr)}`
   return (
-    <footer className="footer">
-      <div className="wrap footer-top">
-        <div className="footer-brand">
-          <div className="footer-word">WINESWEE<em>威士威酒食超市</em></div>
-          <p>紅白葡萄酒・威士忌・清酒・肉品・乳酪・海鮮・酒器禮盒——一站備齊你的餐桌。</p>
+    <>
+      <footer className="footer">
+        <div className="wrap footer-grid">
+          {/* 品牌 + 客服 */}
+          <div className="footer-brand">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img className="footer-logo" src={SITE.logo} alt="Wineswee 威士威酒食超市" />
+            <a className="footer-mail" href={`mailto:${SITE.email}`}>客服信箱：{SITE.email}</a>
+            <div className="footer-social">
+              <a href={SITE.fb} target="_blank" rel="noreferrer">Facebook</a>
+              <a href={SITE.ig} target="_blank" rel="noreferrer">Instagram</a>
+              <a href={SITE.line} target="_blank" rel="noreferrer">LINE</a>
+            </div>
+          </div>
+          {/* 全台門市名錄 */}
+          <div className="footer-stores">
+            {STORES.map((s, i) => (
+              <a key={i} className="fstore" href={mapUrl(s)} target="_blank" rel="noreferrer">
+                <span className="fs-name">{s.full}</span>
+                <span className="fs-tel">{s.tel}</span>
+                <span className="fs-addr">{s.addr}</span>
+              </a>
+            ))}
+          </div>
+          {/* 導覽 */}
+          <div className="footer-nav">
+            <Link to="/wineswee/about">關於我們</Link>
+            <Link to="/wineswee/news">線下活動</Link>
+            <a href={`mailto:${SITE.email}`}>聯繫我們</a>
+            <a href={SITE.shop} target="_blank" rel="noreferrer">官網商城</a>
+          </div>
         </div>
-        <div className="footer-col"><h4>選購</h4>{CATEGORIES.slice(0, 6).map(c => <Link key={c.key} to={`/wineswee/category/${c.key}`}>{c.label}</Link>)}</div>
-        <div className="footer-col"><h4>Contact</h4>
-          <a href={`mailto:${SITE.email}`}>{SITE.email}</a>
-          <a href={SITE.shop} target="_blank" rel="noreferrer">官網商城</a>
-          <a href={SITE.line} target="_blank" rel="noreferrer">LINE 官方帳號</a>
-        </div>
-        <div className="footer-col"><h4>Follow</h4>
-          <a href={SITE.fb} target="_blank" rel="noreferrer">Facebook</a>
-          <a href={SITE.ig} target="_blank" rel="noreferrer">Instagram</a>
-        </div>
-      </div>
-      <div className="wrap footer-bar"><span>© 2026 Wineswee 威士威酒食超市</span><span>未滿十八歲禁止飲酒・飲酒過量有害健康・禁止酒駕</span></div>
-    </footer>
+        <div className="footer-copy">Copyright © 2026 WINESWEE 威士威酒食超市. All Rights Reserved.</div>
+      </footer>
+      <div className="ws-legalbar">禁止酒駕　　未滿十八歲禁止飲酒</div>
+    </>
   )
 }

@@ -71,7 +71,7 @@ export default function WinesweeAbout() {
 
       <Reveal tag="section" className="cta">
         <div className="wrap cta-in">
-          <div><h2>來門市，<em>讓我們為你選一支酒</em></h2><p>全台 11 家門市，或線上宅配到府。</p></div>
+          <div><h2>來門市，<br /><em>讓我們為你選一支酒</em></h2><p>全台 11 家門市，或線上宅配到府。</p></div>
           <Link className="btn btn-gold" to="/wineswee/stores">查看門市</Link>
         </div>
       </Reveal>

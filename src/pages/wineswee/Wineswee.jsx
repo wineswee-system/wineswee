@@ -142,7 +142,7 @@ export default function Wineswee() {
       {/* cta */}
       <Reveal tag="section" className="cta">
         <div className="wrap cta-in">
-          <div><h2>加入 LINE，<em>讓我們為你選酒</em></h2><p>新品到貨、限時優惠與選酒建議，第一手都在 LINE。</p></div>
+          <div><h2>加入 LINE，<br /><em>讓我們為你選酒</em></h2><p>新品到貨、限時優惠與選酒建議，第一手都在 LINE。</p></div>
           <a className="btn btn-line" href={SITE.line} target="_blank" rel="noreferrer">加入 LINE 官方帳號</a>
         </div>
       </Reveal>

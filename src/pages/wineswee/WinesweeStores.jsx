@@ -47,7 +47,7 @@ export default function WinesweeStores() {
 
       <Reveal tag="section" className="cta">
         <div className="wrap cta-in">
-          <div><h2>找不到附近門市？<em>線上也能買</em></h2><p>全台宅配到府，或加 LINE 由專人為你選酒。</p></div>
+          <div><h2>找不到附近門市？<br /><em>線上也能買</em></h2><p>全台宅配到府，或加 LINE 由專人為你選酒。</p></div>
           <a className="btn btn-line" href={SITE.line} target="_blank" rel="noreferrer">加入 LINE 官方帳號</a>
         </div>
       </Reveal>

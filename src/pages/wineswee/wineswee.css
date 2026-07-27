@@ -789,3 +789,61 @@
 .ws .entry-desc{color:#5a4c41}
 .ws .sec-head h2{color:#6a1d1f}
 .ws .entry-hd h3{color:#6a1d1f}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   精修 v8 — 商品列箭頭移到左右夾住卡片 + 門市列表收縮緊(2欄)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* 商品列:圓形側箭頭浮在卡片左右緣、垂直對齊瓶身 */
+.ws .track-wrap{position:relative}
+.ws .track-side{position:absolute;top:36%;transform:translateY(-50%);z-index:6;width:50px;height:50px;border-radius:50%;
+  border:1px solid var(--gold);background:rgba(250,245,236,.94);backdrop-filter:blur(5px);color:var(--wine);
+  font-size:22px;line-height:1;cursor:pointer;display:grid;place-items:center;
+  transition:.3s cubic-bezier(.19,1,.22,1);box-shadow:0 14px 34px -14px rgba(58,15,17,.5)}
+.ws .track-side:hover{background:var(--wine);color:var(--cream);border-color:var(--wine);transform:translateY(-50%) scale(1.07)}
+.ws .track-side.prev{left:6px}
+.ws .track-side.next{right:6px}
+.ws .sec-dark .track-side,.ws .spot .track-side{background:rgba(35,12,13,.86);color:var(--gold-hi);border-color:rgba(201,170,130,.5)}
+.ws .sec-dark .track-side:hover,.ws .spot .track-side:hover{background:var(--gold);color:var(--wine-deep)}
+@media(max-width:760px){.ws .track-side{display:none}}
+
+/* 門市列表:兩欄 + 群組靠左,不再全寬拉開 */
+.ws .stores-list{display:grid;grid-template-columns:1fr 1fr;column-gap:clamp(34px,4.5vw,76px);border-top:1px solid var(--line)}
+.ws .store{grid-template-columns:auto auto 1fr;gap:clamp(14px,1.4vw,22px);padding:clamp(15px,1.7vw,22px) clamp(8px,1vw,16px)}
+.ws .store .rg,.ws .store .tel{white-space:nowrap}
+.ws .store .tel{justify-self:start;text-align:left}
+.ws .store::before{border-radius:2px}
+@media(max-width:680px){.ws .stores-list{grid-template-columns:1fr}}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   精修 v9 — 手機版重新規劃:分類卡改橫式、區塊間距收斂、去除水印雜訊
+   ═══════════════════════════════════════════════════════════════════════════ */
+@media(max-width:560px){
+  /* 區塊間距收斂,不再過空 */
+  .ws .sec{padding-block:clamp(52px,13vw,78px)}
+  .ws .sec-head{margin-bottom:clamp(28px,7vw,40px);gap:12px}
+  .ws .sec-head h2{font-size:30px;padding-bottom:12px}
+  .ws .numeral{font-size:42px}
+  .ws .sec-light .sec-head::before,.ws .sec-cream .sec-head::before{display:none} /* 手機隱藏大字水印 */
+
+  /* 分類卡:橫式(圖左、資訊右),9 類不再是無限長的巨卡 */
+  .ws .entry-grid{grid-template-columns:1fr;gap:13px}
+  .ws .entry{flex-direction:row;align-items:stretch}
+  .ws .entry-media{flex:0 0 40%;aspect-ratio:auto;min-height:158px}
+  .ws .entry-media img{padding:16px 12px 24px}
+  .ws .entry-media::after{bottom:16px;left:22%;right:22%}
+  .ws .entry-body{flex:1;padding:15px 17px;gap:7px;justify-content:center}
+  .ws .entry-hd h3{font-size:20px}
+  .ws .entry-desc{font-size:12.5px;line-height:1.65}
+  .ws .entry-foot{padding-top:12px;margin-top:0}
+  .ws .entry::before{display:none} /* 橫式卡不需頂部金線 */
+
+  /* 門市:單欄、群組靠左、不換行 */
+  .ws .store{padding:15px 4px;gap:14px}
+
+  /* 英雄:banner 促銷字再往邊緣推 */
+  .ws .hero-slide img{object-position:88% center}
+
+  /* manifesto 內距收斂 */
+  .ws .mani-cell{padding:26px 18px}
+}

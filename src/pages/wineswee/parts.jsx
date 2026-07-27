@@ -94,9 +94,12 @@ export function ProductRow({ no, id, title, en, items, tone = 'light' }) {
         <div className="sec-head">
           <span className="numeral">{no}</span>
           <div className="ht"><span className="kicker">Selection</span><h2>{title} <span className="en">/ {en}</span></h2></div>
-          <div className="arrows"><button onClick={() => scroll(-1)} aria-label="上一批">‹</button><button onClick={() => scroll(1)} aria-label="下一批">›</button></div>
         </div>
-        <div className="track" ref={track}>{items.map((p, i) => <ProductCard key={p.id} p={p} idx={i + 1} />)}</div>
+        <div className="track-wrap">
+          <button className="track-side prev" onClick={() => scroll(-1)} aria-label="上一批">‹</button>
+          <div className="track" ref={track}>{items.map((p, i) => <ProductCard key={p.id} p={p} idx={i + 1} />)}</div>
+          <button className="track-side next" onClick={() => scroll(1)} aria-label="下一批">›</button>
+        </div>
         <div className="rowmore"><Link to={`/wineswee/category/${id.replace('cat-', '')}`}>看全部 {title}</Link></div>
       </div>
     </section>

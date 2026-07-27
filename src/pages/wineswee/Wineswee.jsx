@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import './wineswee.css'
-import { CATEGORIES, byCategory, ALL, NEWS, STORES, SITE } from './data'
+import { CATEGORIES, byCategory, ALL, NEWS, STORES, SITE, CAT_META, catPriceFrom, catHeroImage } from './data'
 import { Header, HeroSlider, ProductRow, Reveal, Footer, useBodyScroll, Intro } from './parts'
 
 const MANIFESTO = [
@@ -22,7 +22,6 @@ export default function Wineswee() {
   useBodyScroll()
   const cats = byCategory()
   const spot = spotlight()
-  const catImg = k => (cats[k] || []).find(p => p.image)?.image
   useEffect(() => {
     if (window.location.hash) { const el = document.querySelector(window.location.hash); if (el) setTimeout(() => el.scrollIntoView(), 60) }
   }, [])
@@ -49,17 +48,31 @@ export default function Wineswee() {
             <div className="ht"><span className="kicker">Shop by Category</span><h2>選購專區 <span className="en">/ Explore</span></h2></div>
           </div>
           <div className="entry-grid">
-            {CATEGORIES.filter(c => (cats[c.key] || []).length).map(c => (
-              <Link key={c.key} className={'entry' + (['ham'].includes(c.key) ? ' cover' : '')} to={`/wineswee/category/${c.key}`}>
-                {catImg(c.key) && <img src={catImg(c.key)} alt={c.label} loading="lazy" />}
-                <div className="entry-veil" />
-                <div className="entry-cap">
-                  <span className="en">{c.en}</span>
-                  <h3>{c.label}<i>{(cats[c.key] || []).length}</i></h3>
-                  <span className="arw">→</span>
-                </div>
-              </Link>
-            ))}
+            {CATEGORIES.filter(c => (cats[c.key] || []).length).map(c => {
+              const n = (cats[c.key] || []).length
+              const from = catPriceFrom(c.key)
+              const cover = ['ham'].includes(c.key)
+              const img = catHeroImage(c.key)
+              return (
+                <Link key={c.key} className={'entry' + (cover ? ' cover' : '')} to={`/wineswee/category/${c.key}`}>
+                  <div className="entry-media">
+                    {img && <img src={img} alt={c.label} loading="lazy" />}
+                    <span className="entry-tag">{c.en}</span>
+                  </div>
+                  <div className="entry-body">
+                    <div className="entry-hd">
+                      <h3>{c.label}</h3>
+                      <span className="entry-count">{n} 款</span>
+                    </div>
+                    <p className="entry-desc">{CAT_META[c.key]}</p>
+                    <div className="entry-foot">
+                      <span className="entry-from">{from ? <><em>NT$</em> {from.toLocaleString()} 起</> : '嚴選推薦'}</span>
+                      <span className="entry-go">探索<i>→</i></span>
+                    </div>
+                  </div>
+                </Link>
+              )
+            })}
           </div>
         </div>
       </Reveal>

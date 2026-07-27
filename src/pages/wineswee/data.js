@@ -32,7 +32,7 @@ export const CATEGORIES = [
   { key: 'spirit', label: '烈酒', en: 'Spirits', test: n => /龍舌蘭|白蘭地|蘭姆|grappa|琴酒|伏特加|威迪|利口|橘子酒|梅酒|水果酒|芒果酒/i.test(n) },
   { key: 'cheese', label: '乳酪', en: 'Cheese', test: n => /乳酪|起司|高達|cheese/i.test(n) },
   { key: 'ham', label: '肉品・火腿', en: 'Charcuterie', test: n => /火腿|伊比利|黑豬|臘腸|香腸/.test(n) },
-  { key: 'ware', label: '酒器・禮盒', en: 'Wares & Gifts', test: n => /酒器|酒杯|水晶杯|杯具|禮盒|開瓶|醒酒/.test(n) },
+  { key: 'ware', label: '酒器・禮盒', en: 'Wares & Gifts', test: n => /酒器|酒杯|水晶杯|杯具|[通用香檳白紅對]杯|載杯|杯\/|品飲杯|禮盒|開瓶|醒酒/.test(n) },
 ]
 export const WINE_KEYS = ['red', 'white', 'sparkling', 'rose', 'whisky', 'sake', 'spirit']
 export const FOOD_KEYS = ['cheese', 'ham', 'ware']
@@ -68,6 +68,29 @@ export function byCategory() {
   const m = {}
   for (const p of ALL) (m[p.cat] ||= []).push(p)
   return m
+}
+
+// 選購專區每類文案 + 起價(讓卡片資訊完整)
+export const CAT_META = {
+  red: '波爾多列級到里奧哈，單寧細緻、餘韻悠長',
+  white: '清爽果香與俐落酸度，佐海鮮與前菜最相宜',
+  sparkling: '細緻氣泡躍動杯中，慶祝與開胃的第一杯',
+  rose: '介於紅白之間，冰鎮後果香清新迷人',
+  whisky: '從煙燻到花果，值得靜靜品味的一杯',
+  sake: '純米的細膩甘美，冷飲、溫熱各有風味',
+  spirit: '龍舌蘭到梅酒，純飲或調製皆見層次',
+  cheese: '歐陸陳年乳酪，鹹香濃郁、佐酒入菜',
+  ham: '慢工熟成的頂級火腿，油脂如絲、佐酒經典',
+  ware: '酒杯、醒酒器與禮盒，品飲致贈更顯講究',
+}
+export function catPriceFrom(key) {
+  const ps = ALL.filter(p => p.cat === key && p.price).map(p => p.price)
+  return ps.length ? Math.min(...ps) : null
+}
+// 每類最佳代表圖:優先挑「有圖、未售完、有價」的實體商品(避開通用/贈品)
+export function catHeroImage(key) {
+  const items = (byCategory()[key] || []).filter(p => p.image)
+  return (items.find(p => !p.sold_out && p.price) || items[0])?.image
 }
 export const getProduct = (id) => ALL[id]?.id === id ? ALL[id] : ALL.find(p => p.id === id)
 export const related = (p, n = 12) => ALL.filter(x => x.cat === p.cat && x.id !== p.id).slice(0, n)

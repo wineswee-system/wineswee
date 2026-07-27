@@ -2,6 +2,18 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { CATEGORIES, WINE_KEYS, FOOD_KEYS, BANNERS, SITE, STORES } from './data'
 
+// CJK 斷行控制 — 詞句只在標點/分隔處換行,永不腰斬（避免「門/市」被拆兩行）
+// 用法:<Balance>把餐桌上的美好，一次備齊</Balance>;可含 <br/> 與 <em>,字串節點自動分段
+const SEP = /(?<=[，。、；：！？·・／·]|——|—| )/
+function wrapCJK(node, key) {
+  if (typeof node !== 'string') return node
+  return node.split(SEP).filter(Boolean).map((s, i) => <span className="cw" key={key + '-' + i}>{s}</span>)
+}
+export function Balance({ children, tag: Tag = 'span', className = '', ...rest }) {
+  const kids = Array.isArray(children) ? children : [children]
+  return <Tag className={'ws-balance ' + className} {...rest}>{kids.map((c, i) => wrapCJK(c, i))}</Tag>
+}
+
 // 開場過場動畫(cinematic intro)— 只在首頁進場播一次
 export function Intro() {
   const [phase, setPhase] = useState('in')
@@ -14,9 +26,9 @@ export function Intro() {
   return (
     <div className={'ws-intro' + (phase === 'out' ? ' out' : '')}>
       <div className="ws-intro-in">
-        <span className="ws-intro-word">WINESWEE</span>
+        <img className="ws-intro-logo" src={SITE.logo} alt="WINESWEE" />
         <span className="ws-intro-line" />
-        <span className="ws-intro-sub">威士威酒食超市</span>
+        <span className="ws-intro-sub">威 士 威 酒 食 超 市</span>
       </div>
     </div>
   )
@@ -119,7 +131,7 @@ export function HeroSlider() {
           <p className="hero-sub">嚴選世界餐酒與佐餐美食——從波爾多列級到里奧哈、伊比利火腿到歐陸乳酪，一站備齊你的餐桌。</p>
           <div className="hero-cta">
             <a className="btn btn-gold" href="#cat-red">開始選酒</a>
-            <a className="btn btn-outline" href={SITE.shop} target="_blank" rel="noreferrer">官網商城</a>
+            <a className="btn btn-outline" href="#shop">探索選品</a>
           </div>
         </div>
       </div>
@@ -160,9 +172,8 @@ export function Header() {
           <Link className="nav-top" to="/wineswee/news">主題活動</Link>
           <Link className="nav-top" to="/wineswee/news">酒品知識</Link>
           <Link className="nav-top" to="/wineswee/stores">門市資訊</Link>
-          <a className="nav-top" href={SITE.shop} target="_blank" rel="noreferrer">加入會員</a>
-          <a className="nav-top" href={SITE.shop} target="_blank" rel="noreferrer">訂單查詢</a>
-          <a className="nav-top" href={SITE.shop} target="_blank" rel="noreferrer">加盟專區</a>
+          <a className="nav-top" href={SITE.line} target="_blank" rel="noreferrer">加入會員</a>
+          <a className="nav-top" href={`mailto:${SITE.email}`}>加盟專區</a>
         </nav>
         <div className="header-cta"><a className="chip chip-line" href={SITE.line} target="_blank" rel="noreferrer">LINE 訂購</a></div>
       </div>
@@ -200,9 +211,9 @@ export function Footer() {
           {/* 導覽 */}
           <div className="footer-nav">
             <Link to="/wineswee/about">關於我們</Link>
-            <Link to="/wineswee/news">線下活動</Link>
+            <Link to="/wineswee/news">最新消息</Link>
+            <Link to="/wineswee/stores">門市據點</Link>
             <a href={`mailto:${SITE.email}`}>聯繫我們</a>
-            <a href={SITE.shop} target="_blank" rel="noreferrer">官網商城</a>
           </div>
         </div>
         <div className="footer-copy">Copyright © 2026 WINESWEE 威士威酒食超市. All Rights Reserved.</div>

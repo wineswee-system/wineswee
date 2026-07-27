@@ -2,9 +2,9 @@
 import RAW from '../../data/wineswee-products.json'
 import NEWS from '../../data/news.json'
 import STORES from '../../data/stores.json'
+import DETAILS from '../../data/wineswee-details.json'
 
 export const SITE = {
-  shop: 'https://www.wineswee.com/',
   logo: 'https://www.wineswee.com/resources/_img/layout/logo.svg',
   line: 'https://page.line.me/?accountId=wineswee01',
   fb: 'https://www.facebook.com/wineswee90370708/',
@@ -69,3 +69,17 @@ export function byCategory() {
 }
 export const getProduct = (id) => ALL[id]?.id === id ? ALL[id] : ALL.find(p => p.id === id)
 export const related = (p, n = 12) => ALL.filter(x => x.cat === p.cat && x.id !== p.id).slice(0, n)
+
+// 商品詳情(規格/成本透明/酒莊介紹段落) — 依商品名對應官網爬回的深度資料
+export const getDetail = (name) => DETAILS[name] || null
+// 規格顯示順序 + 空值過濾
+const SPEC_ORDER = ['年份', '產區', '葡萄品種', '酒精濃度', 'ml數', '建議試飲溫度', '容量']
+export function specRows(detail, product) {
+  if (!detail?.spec) return []
+  const s = { ...detail.spec }
+  // 從商品名補產區(官網規格常缺)
+  if (!s['產區'] && product) { const r = regionOf(product.name); if (r !== '其他') s['產區'] = r }
+  const keys = [...SPEC_ORDER.filter(k => k in s), ...Object.keys(s).filter(k => !SPEC_ORDER.includes(k))]
+  const unit = { 酒精濃度: '% vol', ml數: ' ml', 建議試飲溫度: ' °C' }
+  return keys.map(k => [k.replace('ml數', '容量'), s[k] ? `${s[k]}${unit[k] || ''}` : '—']).filter(r => r[1] !== '—')
+}

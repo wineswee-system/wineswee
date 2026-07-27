@@ -384,3 +384,107 @@
   .ws .catnav{position:static;flex-direction:row;flex-wrap:wrap;gap:16px}
   .ws .catnav-grp{flex:1 1 180px}
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   設計精修 v2 — 字體層次 / CJK 斷行 / 放大 LOGO / 深度層次 / 商品詳情頁
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── CJK 斷行:詞句不腰斬 ─────────────────────────────────────────────────── */
+.ws .ws-balance{text-wrap:balance}
+.ws .ws-balance .cw{display:inline-block;white-space:nowrap}
+
+/* ── 字體層次精修:CJK 標題不用負字距(避免擠),優化行高與字重 ──────────────── */
+.ws :is(h1,h2,h3,h4){font-feature-settings:"palt" 1}
+.ws .masthead-in h1,.ws .pdp-info h1,.ws .story h2,.ws .spot-txt h2,.ws .cta h2,
+.ws .sec-head h2,.ws .video-txt h2,.ws .hero h1{letter-spacing:.005em;word-break:normal;line-break:strict}
+.ws .masthead-in h1{font-weight:500;letter-spacing:.02em;line-height:1.16}
+.ws .kicker{font-size:12px;letter-spacing:.46em}
+/* 拉丁 display 標題(en)保留緊排美感 */
+.ws .sec-head .en,.ws .numeral,.ws .hero-est,.ws .card-idx{letter-spacing:0}
+
+/* ── 放大 LOGO(header/intro/footer) ──────────────────────────────────────── */
+.ws .header-in{height:88px}
+.ws .logo img{height:56px}
+.ws .header{border-bottom:1px solid rgba(112,31,33,.12)}
+@media(max-width:560px){.ws .header-in{height:70px}.ws .logo img{height:46px}}
+.ws .footer-logo{height:64px}
+
+/* ── 深度層次:區塊金線收邊 + 卡片投影 + masthead 更立體 ─────────────────── */
+.ws .sec-light,.ws .sec-cream{position:relative}
+.ws .card-frame{box-shadow:0 20px 40px -34px rgba(58,15,17,.5);transition:box-shadow .5s,transform .5s cubic-bezier(.19,1,.22,1)}
+.ws .card:hover .card-frame{box-shadow:0 34px 60px -34px rgba(58,15,17,.55);transform:translateY(-5px)}
+.ws .card-body h3{letter-spacing:.01em}
+.ws .masthead-in{gap:18px}
+.ws .masthead::after{content:"";position:absolute;left:0;right:0;bottom:0;height:1px;
+  background:linear-gradient(90deg,transparent,var(--gold),transparent);opacity:.5}
+.ws .entry{box-shadow:0 24px 50px -40px rgba(0,0,0,.8)}
+.ws .entry:hover{box-shadow:0 40px 70px -34px rgba(58,15,17,.7)}
+
+/* ── 開場過場:改用真 LOGO,更大器 ────────────────────────────────────────── */
+.ws-intro-logo{height:clamp(58px,9vw,104px);width:auto;opacity:0;animation:introUp 1.05s .1s forwards;
+  filter:brightness(0) saturate(100%) invert(78%) sepia(18%) saturate(560%) hue-rotate(340deg) brightness(94%) contrast(88%)}
+@keyframes introLine{from{width:0}to{width:240px}}
+
+/* ═══ 商品詳情頁(層次對齊官網:左導覽 + 圖 + 資訊 + 成本透明 + 產品詳情段落) ═══ */
+.ws .pdp2{display:grid;grid-template-columns:200px 1fr;gap:clamp(24px,3.4vw,60px);align-items:start;
+  padding-block:clamp(20px,3vw,40px) clamp(50px,7vw,96px)}
+.ws .pdp-mainwrap{min-width:0}
+.ws .pdp-main{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);gap:clamp(28px,4vw,60px);align-items:start;margin-bottom:clamp(30px,4vw,52px)}
+@media(max-width:1000px){.ws .pdp2{grid-template-columns:1fr}.ws .pdp-nav{display:none}}
+@media(max-width:760px){.ws .pdp-main{grid-template-columns:1fr}}
+
+/* 左導覽 */
+.ws .pdp-nav{position:sticky;top:104px;display:flex;flex-direction:column;gap:22px}
+.ws .pdp-nav .lead{font-family:var(--display);font-style:italic;font-size:14px;color:var(--gold-d)}
+.ws .pdp-nav .lead b{display:block;font-style:normal;font-family:var(--tc);font-size:26px;color:var(--wine);letter-spacing:.04em;margin-top:2px}
+
+/* 商品圖(黏性) */
+.ws .pdp-figure{position:sticky;top:104px}
+.ws .pdp-figure .pdp-media{aspect-ratio:3/4}
+.ws .pdp-en{margin-top:14px;font-family:var(--display);font-style:italic;color:var(--gold-dim);font-size:15px;text-align:center;letter-spacing:.02em}
+
+/* 資訊面板 */
+.ws .pdp-info h1{margin-bottom:6px}
+.ws .pdp-sub{font-family:var(--display);font-style:italic;color:var(--gold-dim);font-size:16px;margin-bottom:22px;letter-spacing:.01em}
+
+/* 成本透明表 */
+.ws .costcard{border:1px solid var(--line);background:linear-gradient(170deg,#fff,var(--paper));margin-bottom:24px}
+.ws .costcard-h{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--line);background:var(--paper-2)}
+.ws .costcard-h b{font-family:var(--tc);font-size:15px;color:var(--wine);font-weight:600;letter-spacing:.04em}
+.ws .costcard-h span{font-family:var(--display);font-style:italic;font-size:12.5px;color:var(--gold-dim);margin-left:auto}
+.ws .costrow{display:flex;align-items:baseline;justify-content:space-between;gap:16px;padding:10px 20px;font-size:13.5px;border-bottom:1px dashed var(--line)}
+.ws .costrow .k{color:var(--ink-soft);line-height:1.5}
+.ws .costrow .v{font-family:var(--display);color:var(--muted-d);flex:0 0 auto;letter-spacing:.02em}
+.ws .costrow.sum{background:var(--paper-2);border-bottom:1px solid var(--line)}
+.ws .costrow.sum .k{color:var(--ink);font-weight:600}
+.ws .costrow.sum .v{color:var(--wine);font-family:var(--display);font-size:16px}
+.ws .costrow.sell{background:var(--wine);border:0}
+.ws .costrow.sell .k{color:var(--gold-hi);font-weight:600;font-size:15px}
+.ws .costrow.sell .v{color:#fff;font-size:20px;font-family:var(--display)}
+.ws .costcard-note{padding:10px 20px;font-size:11.5px;color:var(--muted);line-height:1.6;background:var(--paper)}
+
+/* 規格表(2欄) */
+.ws .specgrid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border:1px solid var(--line);margin-bottom:26px}
+.ws .specgrid.one{grid-template-columns:1fr}
+.ws .speccell{background:var(--paper);display:flex;gap:12px;padding:12px 16px;font-size:13.5px}
+.ws .speccell dt{color:var(--muted-d);flex:0 0 auto;min-width:58px}
+.ws .speccell dd{color:var(--ink);font-weight:500;font-family:var(--display)}
+
+.ws .pdp-cta2{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:20px}
+.ws .pdp-hint{font-size:12.5px;color:var(--muted);display:flex;gap:8px;align-items:center;margin-bottom:8px}
+
+/* 產品詳情段落(全寬) */
+.ws .pdp-detail{border-top:1px solid var(--line);margin-top:clamp(8px,2vw,28px)}
+.ws .pdp-detail-h{display:flex;align-items:flex-end;gap:20px;padding-top:clamp(34px,4vw,54px);margin-bottom:clamp(24px,3vw,40px)}
+.ws .pdp-detail-h .numeral{font-size:clamp(34px,5vw,68px)}
+.ws .pdp-detail-h h2{font-family:var(--tc);font-size:clamp(24px,3vw,38px);color:var(--wine);font-weight:400;letter-spacing:.02em}
+.ws .pdp-detail-h .en{font-family:var(--display);font-style:italic;color:var(--gold-dim);font-size:14px;margin-left:auto;align-self:center}
+.ws .pdp-lede{font-family:var(--tc);font-size:clamp(16px,1.5vw,19px);color:var(--ink-soft);line-height:1.9;max-width:70ch;
+  font-weight:300;margin-bottom:clamp(30px,4vw,48px);padding-left:clamp(0px,2vw,24px);border-left:2px solid var(--gold)}
+.ws .sects{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:clamp(24px,3vw,40px) clamp(30px,4vw,56px)}
+.ws .sect{}
+.ws .sect-h{display:flex;align-items:baseline;gap:10px;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--line)}
+.ws .sect-h b{font-family:var(--tc);font-size:17px;color:var(--wine);font-weight:600;letter-spacing:.03em}
+.ws .sect-h em{font-family:var(--display);font-style:italic;font-size:12.5px;color:var(--gold-dim)}
+.ws .sect p{font-size:14.5px;color:var(--ink-soft);line-height:1.85;font-weight:300;white-space:pre-line}
+.ws .pdp-related{border-top:1px solid var(--line);padding-top:clamp(40px,5vw,64px);margin-top:clamp(40px,5vw,64px)}

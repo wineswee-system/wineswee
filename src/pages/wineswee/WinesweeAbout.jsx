@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import './wineswee.css'
 import { ALL, SITE } from './data'
-import { Header, Footer, Reveal, useBodyScroll } from './parts'
+import { Header, Footer, Reveal, useBodyScroll, Balance } from './parts'
 
 const VALUES = [
   ['01', '全球直選', '法國波爾多、西班牙里奧哈、義大利、南非到紐西蘭——世界各地的餐酒，我們一站為你備齊。'],
@@ -20,7 +20,7 @@ export default function WinesweeAbout() {
       <section className="masthead">
         <div className="wrap masthead-in">
           <span className="kicker on-dark">About Wineswee</span>
-          <h1>把餐桌上的美好，一次備齊</h1>
+          <Balance tag="h1">把餐桌上的美好，一次備齊</Balance>
           <p className="page-lead">威士威酒食超市——不只是賣酒，而是幫你把每一次相聚、每一頓講究的餐桌，準備到剛剛好。</p>
         </div>
       </section>

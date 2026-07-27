@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, Trash2, Workflow, CheckSquare, GripVertical, GitBranch, ArrowDown, Shield, FileText } from 'lucide-react'
+import { Plus, Trash2, Workflow, CheckSquare, GitBranch, ArrowDown, Shield, FileText } from 'lucide-react'
 import Modal, { Field } from '../../../components/Modal'
 import FormBindingsPicker from '../../../components/FormBindingsPicker'
 
@@ -72,6 +72,25 @@ export default function ProjectTemplateModal({ tpl, onClose, onSubmit, saving = 
   const setTask    = (wi, ti, k, v) => setForm(f => ({
     ...f, workflows: f.workflows.map((w, i) => i === wi
       ? { ...w, tasks: w.tasks.map((t, j) => j === ti ? { ...t, [k]: v } : t) } : w),
+  }))
+
+  // ── 換順序:流程/任務上下移(避免前面插東西要重做)──
+  const moveWorkflow = (wi, dir) => setForm(f => {
+    const j = wi + dir
+    if (j < 0 || j >= f.workflows.length) return f
+    const wfs = [...f.workflows]
+    ;[wfs[wi], wfs[j]] = [wfs[j], wfs[wi]]
+    return { ...f, workflows: wfs }
+  })
+  const moveTask = (wi, ti, dir) => setForm(f => ({
+    ...f, workflows: f.workflows.map((w, i) => {
+      if (i !== wi) return w
+      const j = ti + dir
+      if (j < 0 || j >= w.tasks.length) return w
+      const ts = [...w.tasks]
+      ;[ts[ti], ts[j]] = [ts[j], ts[ti]]
+      return { ...w, tasks: ts }
+    }),
   }))
 
   const handleSubmit = () => {
@@ -214,7 +233,12 @@ export default function ProjectTemplateModal({ tpl, onClose, onSubmit, saving = 
             }}>
               {/* workflow header row */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                <GripVertical size={13} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 1, flexShrink: 0 }}>
+                  <button type="button" onClick={() => moveWorkflow(wi, -1)} disabled={wi === 0}
+                    title="流程上移" style={{ background: 'none', border: 'none', padding: 0, fontSize: 9, lineHeight: 1, cursor: wi === 0 ? 'default' : 'pointer', color: wi === 0 ? 'var(--border-subtle)' : 'var(--text-muted)' }}>▲</button>
+                  <button type="button" onClick={() => moveWorkflow(wi, 1)} disabled={wi === form.workflows.length - 1}
+                    title="流程下移" style={{ background: 'none', border: 'none', padding: 0, fontSize: 9, lineHeight: 1, cursor: wi === form.workflows.length - 1 ? 'default' : 'pointer', color: wi === form.workflows.length - 1 ? 'var(--border-subtle)' : 'var(--text-muted)' }}>▼</button>
+                </div>
                 <input className="form-input" style={{ flex: 1, fontSize: 13, fontWeight: 600 }}
                   value={wf.name}
                   onChange={e => setWf(wi, 'name', e.target.value)}
@@ -254,15 +278,21 @@ export default function ProjectTemplateModal({ tpl, onClose, onSubmit, saving = 
                           onChange={e => setTask(wi, ti, 'priority', e.target.value)}>
                           {PRIORITY_OPTIONS.map(p => <option key={p}>{p}</option>)}
                         </select>
-                        <button type="button" onClick={() => removeTask(wi, ti)}
-                          disabled={wf.tasks.length === 1}
-                          style={{
-                            background: 'none', border: 'none', padding: 4,
-                            cursor: wf.tasks.length === 1 ? 'not-allowed' : 'pointer',
-                            color: wf.tasks.length === 1 ? 'var(--text-muted)' : 'var(--accent-red)',
-                          }}>
-                          <Trash2 size={12} />
-                        </button>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <button type="button" onClick={() => moveTask(wi, ti, -1)} disabled={ti === 0}
+                            title="上移" style={{ background: 'none', border: 'none', padding: 2, fontSize: 10, lineHeight: 1, cursor: ti === 0 ? 'default' : 'pointer', color: ti === 0 ? 'var(--border-subtle)' : 'var(--text-muted)' }}>▲</button>
+                          <button type="button" onClick={() => moveTask(wi, ti, 1)} disabled={ti === wf.tasks.length - 1}
+                            title="下移" style={{ background: 'none', border: 'none', padding: 2, fontSize: 10, lineHeight: 1, cursor: ti === wf.tasks.length - 1 ? 'default' : 'pointer', color: ti === wf.tasks.length - 1 ? 'var(--border-subtle)' : 'var(--text-muted)' }}>▼</button>
+                          <button type="button" onClick={() => removeTask(wi, ti)}
+                            disabled={wf.tasks.length === 1}
+                            style={{
+                              background: 'none', border: 'none', padding: 4,
+                              cursor: wf.tasks.length === 1 ? 'not-allowed' : 'pointer',
+                              color: wf.tasks.length === 1 ? 'var(--text-muted)' : 'var(--accent-red)',
+                            }}>
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
                       </div>
 
                       {/* trigger row — only for tasks after the first */}

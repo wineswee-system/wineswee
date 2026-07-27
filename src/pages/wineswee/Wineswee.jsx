@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import './wineswee.css'
-import { CATEGORIES, byCategory, ALL, NEWS, STORES, SITE, CAT_META, catPriceFrom, catHeroImage } from './data'
+import { CATEGORIES, byCategory, getAll, getNewsList, getStores, SITE, getCatMeta, catPriceFrom, catHeroImage } from './data'
 import { Header, HeroSlider, ProductRow, Reveal, Footer, useBodyScroll, Intro } from './parts'
 
 const MANIFESTO = [
@@ -14,7 +14,7 @@ function spotlight() {
   const cats = byCategory()
   const out = []
   for (const k of ['red', 'whisky', 'cheese', 'sparkling']) { const h = (cats[k] || []).find(p => p.image && !p.sold_out); if (h) out.push(h) }
-  while (out.length < 4) { const e = ALL.find(p => p.image && !p.sold_out && !out.includes(p)); if (!e) break; out.push(e) }
+  while (out.length < 4) { const e = getAll().find(p => p.image && !p.sold_out && !out.includes(p)); if (!e) break; out.push(e) }
   return out.slice(0, 4)
 }
 
@@ -62,7 +62,7 @@ export default function Wineswee() {
                       <h3>{c.label}</h3>
                       <span className="entry-count">{n} 款</span>
                     </div>
-                    <p className="entry-desc">{CAT_META[c.key]}</p>
+                    <p className="entry-desc">{getCatMeta(c.key)}</p>
                     <div className="entry-foot">
                       <span className="entry-from">{from ? <><em>NT$</em> {from.toLocaleString()} 起</> : '嚴選推薦'}</span>
                       <span className="entry-go">探索<i>→</i></span>
@@ -105,7 +105,7 @@ export default function Wineswee() {
           <h2>把餐桌上的美好，<br /><em>一次備齊</em></h2>
           <p>從法國波爾多、西班牙里奧哈到南非與紐西蘭，我們嚴選世界各地的紅白葡萄酒、威士忌與清酒，再備上伊比利火腿與歐陸乳酪——佐酒的一切，都在同一個超市。</p>
           <div className="story-stats">
-            <div><b>{ALL.length}</b><span>嚴選品項</span></div>
+            <div><b>{getAll().length}</b><span>嚴選品項</span></div>
             <div><b>11</b><span>全台門市</span></div>
             <div><b>NT$79</b><span>入手價起</span></div>
           </div>
@@ -122,7 +122,7 @@ export default function Wineswee() {
             <Link className="rowmore-link" to="/wineswee/news">看全部消息</Link>
           </div>
           <div className="news-grid">
-            {NEWS.slice(0, 4).map(n => (
+            {getNewsList().slice(0, 4).map(n => (
               <Link key={n.id} className="news-card" to={`/wineswee/news/${n.id}`}>
                 <div className="news-img">{n.image && <img src={n.image} alt={n.title} loading="lazy" />}<span className="news-go">閱讀更多</span></div>
                 <div className="news-body"><span className="news-tag">Journal</span><h3>{n.title}</h3></div>
@@ -141,7 +141,7 @@ export default function Wineswee() {
             <Link className="rowmore-link" to="/wineswee/stores">門市詳情</Link>
           </div>
           <div className="stores-list">
-            {STORES.map((s, i) => (
+            {getStores().map((s, i) => (
               <Link key={i} className="store" to="/wineswee/stores">
                 <span className="no">{String(i + 1).padStart(2, '0')}</span><span className="rg">{s.region}</span><span className="tel">{s.name}</span>
               </Link>

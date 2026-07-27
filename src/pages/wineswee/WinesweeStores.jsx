@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import './wineswee.css'
-import { STORES, SITE } from './data'
+import { getStores, SITE } from './data'
 import { Header, Footer, Reveal, useBodyScroll } from './parts'
 
 const REGIONS = ['台北', '新北', '台中', '高雄']
@@ -21,7 +21,7 @@ export default function WinesweeStores() {
       </section>
 
       {REGIONS.map(rg => {
-        const list = STORES.filter(s => s.region === rg)
+        const list = getStores().filter(s => s.region === rg)
         if (!list.length) return null
         return (
           <Reveal key={rg} tag="section" className="sec sec-light">

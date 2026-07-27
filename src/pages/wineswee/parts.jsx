@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { FaFacebookF, FaInstagram, FaYoutube, FaLine } from 'react-icons/fa'
-import { CATEGORIES, WINE_KEYS, FOOD_KEYS, BANNERS, SITE, STORES } from './data'
+import { CATEGORIES, WINE_KEYS, FOOD_KEYS, getBanners, SITE, getStores } from './data'
+import { loadContent, subscribe } from './content'
 
 // CJK 斷行控制 — 詞句只在標點/分隔處換行,永不腰斬（避免「門/市」被拆兩行）
 // 用法:<Balance>把餐桌上的美好，一次備齊</Balance>;可含 <br/> 與 <em>,字串節點自動分段
@@ -38,7 +39,11 @@ export function Intro() {
 // ERP body 是 overflow:hidden(儀表板外殼),wine 頁掛載時放開原生捲動,離開還原
 // wine 頁全螢幕接管:把 ERP #root 的 zoom 設回 1(避免縮放破壞滾動)+ 放開 body 原生捲動。離開還原。
 export function useBodyScroll() {
+  const [, setTick] = useState(0)
   useEffect(() => {
+    // 載入後臺內容(讀不到用靜態墊底),到貨後重繪整頁
+    loadContent()
+    const unsub = subscribe(() => setTick(t => t + 1))
     const root = document.getElementById('root'), b = document.body, h = document.documentElement
     const prev = { z: root?.style.zoom, bo: b.style.overflow, ho: h.style.overflow }
     if (root) root.style.zoom = '1'
@@ -46,6 +51,7 @@ export function useBodyScroll() {
     b.style.overflowX = 'hidden'
     h.style.overflow = 'auto'
     return () => {
+      unsub()
       if (root) root.style.zoom = prev.z || ''
       b.style.overflow = prev.bo; b.style.overflowX = ''; h.style.overflow = prev.ho
     }
@@ -122,7 +128,8 @@ function useRevealRef() {
 
 export function HeroSlider() {
   const [i, setI] = useState(0)
-  const n = BANNERS.length
+  const banners = getBanners()
+  const n = banners.length
   const go = d => setI(v => (v + d + n) % n)
   useEffect(() => { const t = setInterval(() => setI(v => (v + 1) % n), 6000); return () => clearInterval(t) }, [n])
   return (
@@ -140,7 +147,7 @@ export function HeroSlider() {
         </div>
       </div>
       <div className="hero-right">
-        {BANNERS.map((b, idx) => (
+        {banners.map((b, idx) => (
           <div key={b} className={'hero-slide' + (idx === i ? ' on' : '')} aria-hidden={idx !== i}><img src={b} alt="" /></div>
         ))}
         <div className="hero-rt-veil" />
@@ -250,7 +257,7 @@ export function Footer() {
           </div>
           {/* 全台門市名錄 */}
           <div className="footer-stores">
-            {STORES.map((s, i) => (
+            {getStores().map((s, i) => (
               <a key={i} className="fstore" href={mapUrl(s)} target="_blank" rel="noreferrer">
                 <span className="fs-name">{s.full}</span>
                 <span className="fs-tel">{s.tel}</span>

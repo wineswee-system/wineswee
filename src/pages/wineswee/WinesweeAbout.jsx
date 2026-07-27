@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import './wineswee.css'
-import { ALL, SITE } from './data'
+import { getAll, SITE } from './data'
 import { Header, Footer, Reveal, useBodyScroll, Balance } from './parts'
 
 const VALUES = [
@@ -31,7 +31,7 @@ export default function WinesweeAbout() {
           <h2>從一杯酒，<br />到<em>一整桌的講究</em></h2>
           <p>我們相信，好的相聚值得一支對味的酒，也值得佐它的那塊乳酪、那片火腿。於是威士威把世界各地的紅白葡萄酒、威士忌與清酒，連同歐陸的乳酪火腿、新鮮的肉品海鮮，都收進同一個超市——讓你不必東奔西跑，一站就能備齊整桌的美好。</p>
           <div className="story-stats">
-            <div><b>{ALL.length}</b><span>嚴選品項</span></div>
+            <div><b>{getAll().length}</b><span>嚴選品項</span></div>
             <div><b>11</b><span>全台門市</span></div>
             <div><b>NT$79</b><span>入手價起</span></div>
           </div>

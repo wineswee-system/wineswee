@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import './wineswee.css'
-import { NEWS, SITE } from './data'
+import { getNewsList, SITE } from './data'
 import { Header, Footer, Reveal, useBodyScroll } from './parts'
 
 export default function WinesweeNews() {
@@ -20,7 +20,7 @@ export default function WinesweeNews() {
       <Reveal tag="section" className="sec sec-light">
         <div className="wrap">
           <div className="news-grid">
-            {NEWS.map(n => (
+            {getNewsList().map(n => (
               <Link key={n.id} className="news-card" to={`/wineswee/news/${n.id}`}>
                 <div className="news-img">{n.image && <img src={n.image} alt={n.title} loading="lazy" />}<span className="news-go">閱讀更多</span></div>
                 <div className="news-body"><span className="news-tag">Journal</span><h3>{n.title}</h3></div>

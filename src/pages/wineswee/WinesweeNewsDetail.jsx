@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import './wineswee.css'
-import { getNews, NEWS_DETAILS, SITE } from './data'
+import { getNews, getNewsDetails, SITE } from './data'
 import { Header, Footer, Reveal, useBodyScroll } from './parts'
 
 export default function WinesweeNewsDetail() {
@@ -10,7 +10,7 @@ export default function WinesweeNewsDetail() {
   useEffect(() => { window.scrollTo(0, 0) }, [id])
   const n = getNews(id)
   if (!n) return <div className="ws"><Header /><section className="masthead"><div className="wrap masthead-in"><h1>找不到消息</h1></div></section><Footer /></div>
-  const more = NEWS_DETAILS.filter(x => String(x.id) !== String(id)).slice(0, 6)
+  const more = getNewsDetails().filter(x => String(x.id) !== String(id)).slice(0, 6)
 
   return (
     <div className="ws">

@@ -24,6 +24,7 @@ const WinesweeCategory = lazy(() => import('./pages/wineswee/WinesweeCategory'))
 const WinesweeAbout    = lazy(() => import('./pages/wineswee/WinesweeAbout'))
 const WinesweeNews     = lazy(() => import('./pages/wineswee/WinesweeNews'))
 const WinesweeNewsDetail = lazy(() => import('./pages/wineswee/WinesweeNewsDetail'))
+const WinesweeAdmin    = lazy(() => import('./pages/wineswee/WinesweeAdmin'))
 const WinesweeStores   = lazy(() => import('./pages/wineswee/WinesweeStores'))
 const Dashboard   = lazy(() => import('./pages/Dashboard'))
 const GuestMenu   = lazy(() => import('./pages/pos/GuestMenu'))
@@ -282,6 +283,7 @@ export default function App() {
           <Route path="/wineswee/stores" element={<Suspense fallback={<LoadingSpinner />}><WinesweeStores /></Suspense>} />
           <Route path="/wineswee/category/:key" element={<Suspense fallback={<LoadingSpinner />}><WinesweeCategory /></Suspense>} />
           <Route path="/wineswee/product/:id" element={<Suspense fallback={<LoadingSpinner />}><WinesweeProduct /></Suspense>} />
+          <Route path="/wineswee/admin" element={<Suspense fallback={<LoadingSpinner />}><WinesweeAdmin /></Suspense>} />
           <Route path="/login" element={<Suspense fallback={<LoadingSpinner />}><Login /></Suspense>} />
           {/* Guest QR self-order menu — public, no auth required */}
           <Route path="/menu/:storeId/:tableId" element={<Suspense fallback={<LoadingSpinner />}><GuestMenu /></Suspense>} />

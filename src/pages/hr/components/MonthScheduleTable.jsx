@@ -33,6 +33,10 @@ export default function MonthScheduleTable({
   weekSepDates = new Set(),  // Set<'YYYY-MM-DD'> — 四週變形每週第一天，畫週分隔線
   pendingLeaveMap = {},  // empName → Set<dateStr>（待審核/審核中請假）
   partialLeaveMap = {},  // empName → { dateStr → {code, time} }（已核准部分假，如半天特休）
+  dailyHours = {},       // dateStr → 當日總工時
+  dailyRevenue = {},     // dateStr → 預估業績
+  onSaveRevenue = null,  // (date, value) => void；有值才顯示每日彙總列
+  avgHourly = 350,       // 均薪(時薪)—人事成本 = 工時 × 此值
   violationsByEmp = {},   // empName → { errors: N, warnings: N }
   onClickEmployeeBadge,   // 點 badge 開合規 modal
   lockedDates = new Set(),  // Set<'YYYY-MM-DD'> — 鎖定（已發布）的日期，cell 不可編輯
@@ -250,6 +254,43 @@ export default function MonthScheduleTable({
                 <tr><td colSpan={monthDates.length + 2} style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)' }}>無員工資料</td></tr>
               )}
             </tbody>
+            {/* 每日彙總:總工時 / 預估業績 / 人事成本比（單店檢視才顯示）*/}
+            {onSaveRevenue && filtered.length > 0 && (() => {
+              const totHours = monthDates.reduce((s, d) => s + (dailyHours[d] || 0), 0)
+              const totRev = monthDates.reduce((s, d) => s + (Number(dailyRevenue[d]) || 0), 0)
+              const totPct = totRev > 0 ? (totHours * avgHourly / totRev * 100) : null
+              const pctColor = (p) => p == null ? 'var(--text-muted)' : p > 40 ? 'var(--accent-red)' : p > 30 ? 'var(--accent-orange)' : 'var(--accent-green)'
+              const stickyL = { position: 'sticky', left: 0, zIndex: 5, background: 'var(--bg-card)', padding: '4px 10px', textAlign: 'left', fontWeight: 700, fontSize: 11, borderTop: '2px solid var(--border-medium)', whiteSpace: 'nowrap' }
+              const stickyR = { position: 'sticky', right: 0, zIndex: 5, background: 'var(--bg-card)', padding: '4px 6px', textAlign: 'center', fontWeight: 700, fontSize: 10, borderTop: '2px solid var(--border-medium)' }
+              const cell = { textAlign: 'center', padding: '3px 1px', fontSize: 9, borderTop: '2px solid var(--border-medium)', borderLeft: '1px solid var(--border-subtle)' }
+              return (
+                <tfoot>
+                  <tr style={{ background: 'var(--bg-secondary)' }}>
+                    <td style={stickyL}>⏱ 總工時</td>
+                    {monthDates.map(d => <td key={d} style={cell}>{(dailyHours[d] || 0) > 0 ? dailyHours[d].toFixed(1) : '·'}</td>)}
+                    <td style={stickyR}>{totHours.toFixed(0)}h</td>
+                  </tr>
+                  <tr>
+                    <td style={stickyL}>💰 預估業績</td>
+                    {monthDates.map(d => (
+                      <td key={d} style={{ ...cell, padding: 1 }}>
+                        <RevenueInput value={dailyRevenue[d]} disabled={!canEditSchedule} onSave={v => onSaveRevenue(d, v)} />
+                      </td>
+                    ))}
+                    <td style={stickyR}>{totRev > 0 ? Math.round(totRev / 1000) + 'k' : '—'}</td>
+                  </tr>
+                  <tr style={{ background: 'var(--bg-secondary)' }}>
+                    <td style={stickyL} title="人事成本 = 總工時 × 均薪350；比 = 成本 ÷ 預估業績">人事成本比</td>
+                    {monthDates.map(d => {
+                      const h = dailyHours[d] || 0, rev = Number(dailyRevenue[d]) || 0
+                      const pct = rev > 0 ? (h * avgHourly / rev * 100) : null
+                      return <td key={d} style={{ ...cell, color: pctColor(pct), fontWeight: 700 }}>{pct != null ? pct.toFixed(0) + '%' : '—'}</td>
+                    })}
+                    <td style={{ ...stickyR, color: pctColor(totPct) }}>{totPct != null ? totPct.toFixed(0) + '%' : '—'}</td>
+                  </tr>
+                </tfoot>
+              )
+            })()}
           </table>
         </div>
       </div>
@@ -553,3 +594,22 @@ function EmployeeRow({
   )
 }
 
+
+// 每日預估業績輸入格：本地編輯、失焦才存（避免每個鍵盤事件都寫 DB）
+function RevenueInput({ value, onSave, disabled }) {
+  const [v, setV] = useState(value == null ? '' : String(value))
+  useEffect(() => { setV(value == null ? '' : String(value)) }, [value])
+  return (
+    <input
+      type="number" inputMode="numeric" value={v} disabled={disabled}
+      onChange={e => setV(e.target.value)}
+      onBlur={() => { if (String(value ?? '') !== v) onSave(v) }}
+      placeholder="—"
+      style={{
+        width: '100%', border: 'none', background: 'transparent', textAlign: 'center',
+        fontSize: 9, color: 'var(--text-primary)', padding: '2px 0', outline: 'none',
+        MozAppearance: 'textfield',
+      }}
+    />
+  )
+}

@@ -102,6 +102,7 @@ export default function Schedule() {
   const [publishStatus, setPublishStatus] = useState(null) // { status: 'draft'|'published', published_at } — 發布狀態（cycle）
   const [publishStatusRows, setPublishStatusRows] = useState([]) // 多筆 cycle 級別發布狀態
   const [monthLocks, setMonthLocks] = useState([]) // schedule_month_locks: [{store_id, month, locked_at, locked_by}] — 月鎖（對齊薪資）
+  const [dailyRevenue, setDailyRevenue] = useState({}) // date → 預估業績（人事成本比試算用）
   const [storeSettings, setStoreSettings] = useState(null)
   const [staffing, setStaffing] = useState([])
   const [operatingHours, setOperatingHours] = useState({})
@@ -320,9 +321,18 @@ export default function Schedule() {
       // 月鎖（對齊薪資）
       supabase.from('schedule_month_locks').select('*').eq('store_id', store.id)
         .then(({ data }) => { if (!signal.aborted) setMonthLocks(data || []) })
+      // 每日預估業績（人事成本比試算）
+      supabase.from('store_daily_revenue').select('date, estimated_revenue')
+        .eq('store_id', store.id).gte('date', activeStart).lte('date', activeEnd)
+        .then(({ data }) => {
+          if (signal.aborted) return
+          const m = {}; for (const r of (data || [])) m[r.date] = r.estimated_revenue
+          setDailyRevenue(m)
+        })
     } else {
       setPublishStatusRows([])
       setMonthLocks([])
+      setDailyRevenue({})
     }
 
     return () => controller.abort()
@@ -333,6 +343,46 @@ export default function Schedule() {
   const lockedMonths = new Set(
     currentStore ? monthLocks.filter(r => r.store_id === currentStore.id).map(r => r.month) : []
   )
+
+  // ── 每日彙總:總工時 / 預估業績 / 人事成本比 ──────────────────────────────
+  const AVG_HOURLY_WAGE = 350  // 均薪(時薪)—人事成本 = 工時 × 此值
+  const cellNetHours = (s) => {
+    if (!s || !s.shift || isAbsence(s.shift)) return 0
+    const seg = (st, en) => {
+      if (!st || !en) return 0
+      const a = parseTime(st), b = parseTime(en)
+      return b > a ? b - a : (24 - a + b)   // 跨午夜
+    }
+    let gross = seg(s.actual_start, s.actual_end)
+    if (s.shift_2) gross += seg(s.actual_start_2, s.actual_end_2)
+    const rest = (s.rest_minutes != null) ? Number(s.rest_minutes) : (gross < 5 ? 0 : gross < 9 ? 30 : 60)
+    return Math.max(0, gross - rest / 60)
+  }
+  const dailyHours = useMemo(() => {
+    const m = {}
+    for (const date of activeDates) {
+      let sum = 0
+      for (const emp of filtered) {
+        const s = schedules.find(x => x.employee === emp.name && x.date === date)
+        sum += cellNetHours(s)
+      }
+      m[date] = sum
+    }
+    return m
+  }, [activeDates, filtered, schedules]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const saveRevenue = async (date, value) => {
+    if (!currentStore) return
+    const num = (value === '' || value == null) ? null : Number(value)
+    if (num != null && Number.isNaN(num)) return
+    setDailyRevenue(prev => ({ ...prev, [date]: num }))
+    const { error } = await supabase.from('store_daily_revenue').upsert({
+      organization_id: authProfile?.organization_id,
+      store_id: currentStore.id, date, estimated_revenue: num,
+      updated_by: authProfile?.id ?? null, updated_at: new Date().toISOString(),
+    }, { onConflict: 'store_id,date' })
+    if (error) toast.error('預估業績儲存失敗：' + error.message)
+  }
   const lockedDates = new Set((activeDates || []).filter(d => lockedMonths.has(d.slice(0, 7))))
   // 當前畫面（cycle 可能跨月）碰到的月份，給狀態列「逐月鎖定/解鎖」用
   const viewMonths = [...new Set((activeDates || []).map(d => d.slice(0, 7)))].sort()
@@ -1821,6 +1871,10 @@ export default function Schedule() {
           weekSepDates={weekSepDates}
           pendingLeaveMap={pendingLeaveMap}
           partialLeaveMap={partialLeaveMap}
+          dailyHours={dailyHours}
+          dailyRevenue={dailyRevenue}
+          onSaveRevenue={saveRevenue}
+          avgHourly={AVG_HOURLY_WAGE}
           violationsByEmp={(() => {
             const map = {}
             for (const e of (compliance.errors || [])) {

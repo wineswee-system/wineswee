@@ -1363,6 +1363,17 @@ export default function Recruitment() {
                               {r}
                             </button>
                           ))}
+                          <button className="btn btn-sm btn-secondary" style={{ color: 'var(--accent-red)' }} title="刪除面試"
+                            onClick={async () => {
+                              const ok = await confirm('確定刪除這場面試？此動作無法復原。')
+                              if (!ok) return
+                              const { error } = await supabase.from('interviews').delete().eq('id', iv.id)
+                              if (error) { toast.error('刪除失敗：' + error.message); return }
+                              refreshInterviews()
+                              toast.success('已刪除面試')
+                            }}>
+                            <Trash2 size={12} />
+                          </button>
                         </div>
                       </td>
                     </tr>

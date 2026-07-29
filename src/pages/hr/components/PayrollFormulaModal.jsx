@@ -268,6 +268,7 @@ export default function PayrollFormulaModal({ payroll, month, onClose }) {
     + (p.night_allowance||0) + (p.cross_store_allowance||0) + (p.other_custom_total||0) + (p.attendance_bonus||0)
   const otSum = (p.regular_overtime_pay||0) + (p.extra_overtime_pay||0)
   const grossCheck = (p.base_salary||0) + allowancesSum + otSum + (p.policyBonus||0)
+    + (p.unused_leave_payout||0) + (p.severance_total||0)
 
   const leaveDeduction = (p.unpaidDeduction||0) + (p.halfPayDeduction||0)
   const totalDedCheck = (p.laborInsurance||0) + (p.healthInsurance||0) + (p.pension||0)
@@ -313,7 +314,7 @@ export default function PayrollFormulaModal({ payroll, month, onClose }) {
               value={p.base_salary}
               formula={isHourly
                 ? `時薪 × 當月實際打卡工時${isProrated ? '（已含在職比例）' : ''}`
-                : `月薪設定值 × 在職曆日 ÷ 當月曆日數${isProrated ? '' : '（足月 = 1）'}`}
+                : `月薪設定值 × 在職天數 ÷ 30${isProrated ? '' : '（足月 = 1）'}`}
               vars={isHourly
                 ? [{ k: '時薪', v: hr }, { k: '當月工時', v: p.workHours }]
                 : isProrated
@@ -397,17 +398,32 @@ export default function PayrollFormulaModal({ payroll, month, onClose }) {
               <FormulaRow label="政策獎金" value={p.policyBonus}
                 formula="依業績/出勤獎金規則計算（業績與出勤率目前帶 0 / 1 stub）" />
             )}
+            {p.unused_leave_payout > 0 && (
+              <FormulaRow label="特休折現" value={p.unused_leave_payout} color="var(--accent-green)"
+                formula="離職當月未休完特休 × 平均日薪"
+                vars={[{ k: '未休天數', v: p.unused_leave_days || 0 }]} />
+            )}
+            {p.severance_total > 0 && (
+              <FormulaRow label="資遣費" value={p.severance_total} color="var(--accent-green)"
+                formula={`資遣費${p.severance_notice_wage > 0 ? ' + 預告工資' : ''}（離職當月一次給付）`}
+                vars={[
+                  { k: '資遣費', v: p.severance_amount || 0 },
+                  ...(p.severance_notice_wage > 0 ? [{ k: '預告工資', v: p.severance_notice_wage }] : []),
+                ]} />
+            )}
 
             <FormulaRow
               label="應領合計"
               value={p.gross}
               color="var(--accent-green)"
-              formula="本薪 + 所有津貼 + 加班費 + 政策獎金"
+              formula="本薪 + 所有津貼 + 加班費 + 政策獎金 + 特休折現 + 資遣費"
               vars={[
                 { k: '本薪', v: p.base_salary },
                 { k: '津貼小計', v: allowancesSum },
                 { k: '加班費', v: otSum },
                 { k: '獎金', v: p.policyBonus || 0 },
+                ...(p.unused_leave_payout > 0 ? [{ k: '特休折現', v: p.unused_leave_payout }] : []),
+                ...(p.severance_total > 0 ? [{ k: '資遣費', v: p.severance_total }] : []),
                 { k: '驗算', v: grossCheck },
               ]}
             />

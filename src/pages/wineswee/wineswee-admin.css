@@ -263,13 +263,14 @@ select.wa-input { cursor: pointer; }
 .cv-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
 .cv-h { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-secondary); }
 .cv-selbar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.cv { position: relative; width: 100%; max-width: 620px; background: #efe9df; border: 1px dashed var(--border-primary); border-radius: 6px; overflow: hidden; }
+.cv { position: relative; width: 100%; max-width: 620px; background: #faf5ec; border: 1px dashed var(--border-primary); border-radius: 6px; overflow: hidden; }
 .cv-inner { position: absolute; inset: 0; }
 .cv-item { position: absolute; cursor: move; border: 1px solid transparent; box-sizing: border-box; }
 .cv-item.sel { border-color: var(--accent-cyan); box-shadow: 0 0 0 2px var(--accent-cyan-dim); z-index: 2; }
 .cv-item img { width: 100%; height: auto; display: block; pointer-events: none; }
 .cv-empty { display: grid; place-items: center; aspect-ratio: 3/2; background: #fff; border: 1px dashed var(--border-primary); font-size: 11px; color: var(--text-muted); text-align: center; padding: 6px; }
-.cv-resize { position: absolute; right: -7px; bottom: -7px; width: 16px; height: 16px; background: var(--accent-cyan); border: 2px solid #fff; border-radius: 3px; cursor: nwse-resize; z-index: 3; }
+.cv-resize { display: none; position: absolute; right: -7px; bottom: -7px; width: 16px; height: 16px; background: var(--accent-cyan); border: 2px solid #fff; border-radius: 3px; cursor: nwse-resize; z-index: 3; }
+.cv-item.sel .cv-resize { display: block; }
 
 /* 圖文編輯器(Quill) */
 .wa-rich { background: #fff; border-radius: 8px; }

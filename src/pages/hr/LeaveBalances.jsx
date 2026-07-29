@@ -348,7 +348,22 @@ export default function LeaveBalances() {
   }
 
   const handleEditSubmit = async () => {
-    if (editTotalDays === '') { toast.warning('請輸入總天數'); return }
+    if (editTotalDays === '') { toast.warning(editRow?.type === '補休' ? '請輸入天數' : '請輸入總天數'); return }
+    // 補休:手動加給(comp_time_ledger),天數×8→小時,今天起一年到期,過期折現
+    if (editRow.type === '補休') {
+      const hours = Number(editTotalDays) * 8
+      if (hours <= 0) { toast.warning('補休只能加正數天'); return }
+      try {
+        setEditSaving(true)
+        const { error } = await supabase.rpc('add_manual_comp_time', { p_emp_ids: [selectedEmpId], p_hours: hours })
+        if (error) throw error
+        toast.success(`已加 ${editTotalDays} 天（${hours} 小時）補休`)
+        setEditRow(null)
+        const id = selectedEmpId; setSelectedEmpId(null); setTimeout(() => setSelectedEmpId(id), 0)
+      } catch (err) { toast.error('加補休失敗：' + (err.message || '未知錯誤')) }
+      finally { setEditSaving(false) }
+      return
+    }
     try {
       setEditSaving(true)
       const payload = {
@@ -383,6 +398,21 @@ export default function LeaveBalances() {
     // 小時模式存 total_days 時除以 8
     const days = bulkUnit === 'hour' ? Number(bulkDays) / 8 : Number(bulkDays)
     const orgId = profile?.organization_id
+    // 補休走 comp_time_ledger(手動加給,過期折現),不寫 leave_balances
+    if (bulkLeaveType === '補休') {
+      const hours = bulkUnit === 'hour' ? Number(bulkDays) : Number(bulkDays) * 8
+      if (hours <= 0) { toast.warning('補休只能加正數'); return }
+      try {
+        setBulkSaving(true)
+        const { data, error } = await supabase.rpc('add_manual_comp_time', { p_emp_ids: bulkSelectedIds, p_hours: hours })
+        if (error) throw error
+        toast.success(`已加 ${bulkSelectedIds.length} 人補休 ${hours} 小時（從今天起一年到期）`)
+        setShowBulkModal(false)
+        const id = selectedEmpId; setSelectedEmpId(null); setTimeout(() => setSelectedEmpId(id), 0)
+      } catch (err) { toast.error('加補休失敗：' + (err.message || '未知錯誤')) }
+      finally { setBulkSaving(false) }
+      return
+    }
     try {
       setBulkSaving(true)
       const { data: existing } = await supabase.from('leave_balances')
@@ -684,23 +714,37 @@ export default function LeaveBalances() {
           onClose={() => setEditRow(null)} onSubmit={handleEditSubmit}
           submitLabel={editSaving ? '儲存中...' : '儲存'} submitDisabled={editSaving}>
           <div style={{ padding: '8px 12px', marginBottom: 12, background: 'var(--bg-secondary)', borderRadius: 8, fontSize: 13, color: 'var(--text-muted)' }}>
-            目前法定：{editRow.totalHours} 小時（{editRow.totalHours / 8} 天）· 已休：{editRow.usedHours} 小時
+            目前：{editRow.totalHours} 小時（{editRow.totalHours / 8} 天）· 已休：{editRow.usedHours} 小時
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="總天數（手動覆蓋）" required>
-              <input className="form-input" type="number" min="0" step="0.5" style={{ width: '100%' }}
-                placeholder={String(editRow.totalHours / 8)}
-                value={editTotalDays} onChange={e => setEditTotalDays(e.target.value)} />
-            </Field>
-            <Field label="遞延天數">
-              <input className="form-input" type="number" min="0" step="0.5" style={{ width: '100%' }} placeholder="0"
-                value={editCarryOver} onChange={e => setEditCarryOver(e.target.value)} />
-            </Field>
-          </div>
-          <Field label="到期日">
-            <input className="form-input" type="date" style={{ width: '100%' }}
-              value={editExpiresAt} onChange={e => setEditExpiresAt(e.target.value)} />
-          </Field>
+          {editRow.type === '補休' ? (
+            <>
+              <Field label="加補休（天數）" required>
+                <input className="form-input" type="number" min="0" step="0.5" style={{ width: '100%' }} placeholder="例：1 = 8 小時"
+                  value={editTotalDays} onChange={e => setEditTotalDays(e.target.value)} />
+              </Field>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>
+                手動加補休：天數 × 8 小時 · 從今天起一年到期 · 過期未用折現（原時薪）。此為「加給」，會累加到現有補休。
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <Field label="總天數（手動覆蓋）" required>
+                  <input className="form-input" type="number" min="0" step="0.5" style={{ width: '100%' }}
+                    placeholder={String(editRow.totalHours / 8)}
+                    value={editTotalDays} onChange={e => setEditTotalDays(e.target.value)} />
+                </Field>
+                <Field label="遞延天數">
+                  <input className="form-input" type="number" min="0" step="0.5" style={{ width: '100%' }} placeholder="0"
+                    value={editCarryOver} onChange={e => setEditCarryOver(e.target.value)} />
+                </Field>
+              </div>
+              <Field label="到期日">
+                <input className="form-input" type="date" style={{ width: '100%' }}
+                  value={editExpiresAt} onChange={e => setEditExpiresAt(e.target.value)} />
+              </Field>
+            </>
+          )}
         </Modal>
       )}
 

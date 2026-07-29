@@ -192,7 +192,7 @@ export default function BatchPayrollModal({ month, batchPreview, batchSaving, on
                   {/* 第 1 列：分組標題 */}
                   <tr style={{ background: 'var(--bg-card)' }}>
                     <th colSpan={4} style={{ position: 'sticky', left: 0, background: 'var(--bg-card)', borderRight: '2px solid var(--border-medium)' }}>員工</th>
-                    <th colSpan={11} style={{ textAlign: 'center', color: 'var(--accent-cyan)' }}>薪資項目（加項）</th>
+                    <th colSpan={12} style={{ textAlign: 'center', color: 'var(--accent-cyan)' }}>薪資項目（加項）</th>
                     <th style={{ textAlign: 'center', background: 'var(--bg-secondary)' }}>應領</th>
                     <th colSpan={6} style={{ textAlign: 'center', color: 'var(--accent-orange)' }}>扣款項目</th>
                     <th style={{ textAlign: 'center', color: 'var(--accent-red)' }}>減項</th>
@@ -217,6 +217,7 @@ export default function BatchPayrollModal({ month, batchPreview, batchSaving, on
                     <th>額外加班</th>
                     <th>獎金</th>
                     <th title="離職當月未休完特休折現（已計入應領）">特休折現</th>
+                    <th title="資遣費 + 預告工資（離職當月，已計入應領）">資遣費</th>
                     {/* 應領 */}
                     <th style={{ background: 'var(--bg-secondary)', fontWeight: 700 }}>應領合計</th>
                     {/* 扣項 6 欄 */}
@@ -290,6 +291,10 @@ export default function BatchPayrollModal({ month, batchPreview, batchSaving, on
                             title={p.unused_leave_payout > 0 ? `離職未休特休 ${p.unused_leave_days || 0} 天折現` : ''}>
                           {p.unused_leave_payout > 0 ? p.unused_leave_payout.toLocaleString() : '-'}
                         </td>{/* 請假折現（離職未休特休折現，已含在應領） */}
+                        <td style={{ color: p.severance_total > 0 ? 'var(--accent-green)' : 'var(--text-muted)' }}
+                            title={p.severance_total > 0 ? `資遣費 ${(p.severance_amount || 0).toLocaleString()}${p.severance_notice_wage > 0 ? ' + 預告工資 ' + p.severance_notice_wage.toLocaleString() : ''}` : ''}>
+                          {p.severance_total > 0 ? p.severance_total.toLocaleString() : '-'}
+                        </td>{/* 資遣費（離職當月，已含在應領） */}
                         {/* 應領 */}
                         <td style={{ background: 'var(--bg-secondary)', fontWeight: 700 }}>{fmt(p.gross)}</td>
                         {/* 扣項 */}
@@ -335,6 +340,7 @@ export default function BatchPayrollModal({ month, batchPreview, batchSaving, on
                     <td>{batchPreview.reduce((s, p) => s + (p.extra_overtime_pay || 0), 0).toLocaleString()}</td>
                     <td>{batchPreview.reduce((s, p) => s + (p.policyBonus || 0), 0).toLocaleString()}</td>
                     <td style={{ color: 'var(--accent-green)' }}>{batchPreview.reduce((s, p) => s + (p.unused_leave_payout || 0), 0).toLocaleString()}</td>
+                    <td style={{ color: 'var(--accent-green)' }}>{batchPreview.reduce((s, p) => s + (p.severance_total || 0), 0).toLocaleString()}</td>
                     <td style={{ background: 'var(--bg-secondary)' }}>{fmt(batchPreview.reduce((s, p) => s + (p.gross || 0), 0))}</td>
                     <td style={{ color: 'var(--text-muted)' }}>—</td>
                     <td style={{ color: 'var(--accent-orange)' }}>-{batchPreview.reduce((s, p) => s + (p.laborInsurance || 0), 0).toLocaleString()}</td>

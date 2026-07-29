@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { X, Upload, CheckCircle2, AlertTriangle, Eye, EyeOff } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
 import { toast } from '../../../lib/toast'
+import { useAuth } from '../../../contexts/AuthContext'
 
 // 匯入 + 核對員工銀行帳號（admin 專用）
 // CSV 欄位：員工編號, 姓名, 銀行代號, 分行代號, 帳號（第一列若是標題自動跳過）
@@ -19,6 +20,7 @@ function parseLine(line) {
 }
 
 export default function BankImportModal({ onClose }) {
+  const { profile } = useAuth()
   const [fileName, setFileName] = useState('')
   const [rows, setRows] = useState([])
   const [busy, setBusy] = useState(false)
@@ -31,15 +33,16 @@ export default function BankImportModal({ onClose }) {
   // 撈在職員工 + 各自帳號（admin 才讀得到帳號;RLS 把關）
   const loadRoster = useCallback(async () => {
     setLoadingRoster(true)
-    const { data, error } = await supabase
+    let q = supabase
       .from('employees')
       .select('id, name, employee_number, status, employee_bank_accounts(bank_code, bank_branch, bank_account)')
       .eq('status', '在職')
-      .order('name')
+    if (profile?.organization_id) q = q.eq('organization_id', profile.organization_id)  // 只看本租戶（不混到 Demo org）
+    const { data, error } = await q.order('name')
     if (error) { toast.error('讀取清單失敗：' + error.message); setRoster([]) }
     else setRoster(data || [])
     setLoadingRoster(false)
-  }, [])
+  }, [profile?.organization_id])
 
   useEffect(() => { loadRoster() }, [loadRoster])
 

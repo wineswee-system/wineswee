@@ -6,10 +6,18 @@ import { Header, Footer, Reveal, useBodyScroll } from './parts'
 
 export default function WinesweeNewsDetail() {
   useBodyScroll()
-  const { id } = useParams()
-  useEffect(() => { window.scrollTo(0, 0) }, [id])
+  const { id, sub } = useParams()
+  useEffect(() => { window.scrollTo(0, 0) }, [id, sub])
   const n = getNews(id)
   if (!n) return <div className="ws"><Header /><section className="masthead"><div className="wrap masthead-in"><h1>找不到消息</h1></div></section><Footer /></div>
+
+  const subs = n.subs || []
+  const subIdx = sub != null ? Number(sub) : null
+  const article = subIdx != null ? subs[subIdx] : (subs.length === 1 ? subs[0] : null)
+  const isCategory = subIdx == null && subs.length >= 2   // 多篇 → 列出讓人選
+  const images = article?.images || n.images || []
+  const heading = subIdx != null ? (article?.title || n.title) : n.title
+  const headDate = subIdx != null ? article?.date : n.date
   const more = getNewsDetails().filter(x => String(x.id) !== String(id)).slice(0, 6)
 
   return (
@@ -18,19 +26,33 @@ export default function WinesweeNewsDetail() {
       <nav className="crumb wrap">
         <Link to="/wineswee">首頁</Link><span>/</span>
         <Link to="/wineswee/news">最新消息</Link><span>/</span>
-        <em>{n.title}</em>
+        {subIdx != null
+          ? <><Link to={`/wineswee/news/${id}`}>{n.title}</Link><span>/</span><em>{article?.title}</em></>
+          : <em>{n.title}</em>}
       </nav>
 
       <section className="newspage wrap">
         <header className="newspage-head">
           <span className="kicker">Journal</span>
-          <h1>{n.title}</h1>
-          {n.date && <time>{n.date}</time>}
+          <h1>{heading}</h1>
+          {headDate && <time>{headDate}</time>}
+          {isCategory && <p className="newspage-sub">共 {subs.length} 篇，點選閱讀</p>}
         </header>
 
-        <Reveal tag="article" className="newspage-body">
-          {n.images.map((src, i) => <img key={i} src={src} alt={`${n.title} ${i + 1}`} loading={i < 2 ? 'eager' : 'lazy'} />)}
-        </Reveal>
+        {isCategory ? (
+          <div className="news-grid">
+            {subs.map((s, i) => (
+              <Link key={i} className="news-card" to={`/wineswee/news/${id}/${i}`}>
+                <div className="news-img">{s.cover && <img src={s.cover} alt={s.title} loading="lazy" />}<span className="news-go">閱讀更多</span></div>
+                <div className="news-body"><span className="news-tag">{s.date || 'Journal'}</span><h3>{s.title}</h3></div>
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <Reveal tag="article" className="newspage-body">
+            {images.map((src, i) => <img key={i} src={src} alt={`${heading} ${i + 1}`} loading={i < 2 ? 'eager' : 'lazy'} />)}
+          </Reveal>
+        )}
 
         <div className="newspage-cta">
           <p>想收到第一手活動與新品消息？</p>
@@ -38,7 +60,7 @@ export default function WinesweeNewsDetail() {
         </div>
       </section>
 
-      {more.length > 0 && (
+      {subIdx == null && more.length > 0 && (
         <section className="sec sec-cream">
           <div className="wrap">
             <div className="sec-head">

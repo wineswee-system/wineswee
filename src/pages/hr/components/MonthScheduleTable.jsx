@@ -199,6 +199,7 @@ export default function MonthScheduleTable({
                       storeSettings={storeSettings}
                       weekSepDates={weekSepDates}
                       pendingLeaveMap={pendingLeaveMap}
+                      partialLeaveMap={partialLeaveMap}
                       schedules={schedules}
                       violationsByEmp={violationsByEmp}
                       onClickEmployeeBadge={onClickEmployeeBadge}
@@ -236,6 +237,7 @@ export default function MonthScheduleTable({
                     storeSettings={storeSettings}
                     weekSepDates={weekSepDates}
                     pendingLeaveMap={pendingLeaveMap}
+                    partialLeaveMap={partialLeaveMap}
                     schedules={schedules}
                     violationsByEmp={violationsByEmp}
                     onClickEmployeeBadge={onClickEmployeeBadge}
@@ -283,7 +285,7 @@ function EmployeeRow({
   handleSetShift, handleDeleteShift,
   canEditSchedule, SHIFT_TYPES, getStoreShifts, storeFilter, holidaySet, storeSettings,
   weekSepDates = new Set(),
-  pendingLeaveMap = {}, schedules = [],
+  pendingLeaveMap = {}, partialLeaveMap = {}, schedules = [],
   violationsByEmp = {}, onClickEmployeeBadge,
   lockedDates = new Set(),
   onReorder,

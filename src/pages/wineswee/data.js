@@ -27,7 +27,7 @@ export const SITE_DEFAULTS = {
     { drop: 'wine', label: '酒類專區' },
     { drop: 'food', label: '美食／酒器' },
     { label: '主題活動', to: '/wineswee/news' },
-    { label: '酒品知識', to: '/wineswee/news' },
+    { label: '酒品知識', to: '/wineswee/news/6' },
     { label: '門市資訊', to: '/wineswee/stores' },
     { label: '加入會員', to: '@line' },
     { label: '訂單查詢', to: '@line' },

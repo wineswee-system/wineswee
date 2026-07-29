@@ -18,6 +18,8 @@ export default function Wineswee() {
   const spot = spotlight()
   const site = getSite()
   const H = site.home
+  const OC = site.occasions
+  const CC = site.concierge
   useEffect(() => {
     if (window.location.hash) { const el = document.querySelector(window.location.hash); if (el) setTimeout(() => el.scrollIntoView(), 60) }
   }, [])
@@ -71,6 +73,34 @@ export default function Wineswee() {
         </div>
       </Reveal>
 
+      {/* 情境選酒 */}
+      <Reveal tag="section" className="occ">
+        <div className="wrap occ-in">
+          <div className="sec-head">
+            <span className="numeral">＊</span>
+            <div className="ht"><span className="kicker on-dark">{OC.kicker}</span><h2><Em>{OC.title}</Em></h2></div>
+          </div>
+          <p className="occ-lead">{OC.lead}</p>
+          <div className="occ-grid">
+            {OC.items.map((o, i) => {
+              const catKey = (o.to || '').split('/').pop()
+              const img = o.image || catHeroImage(catKey)
+              return (
+                <Link key={i} className="occ-card" to={o.to}>
+                  <div className="occ-media">{img && <img src={img} alt={o.title} loading="lazy" />}<span className="occ-idx">{String(i + 1).padStart(2, '0')}</span></div>
+                  <div className="occ-body">
+                    <span className="occ-en">{o.en}</span>
+                    <h3>{o.title}</h3>
+                    <p>{o.desc}</p>
+                    <span className="occ-go">為這場合選酒<i>→</i></span>
+                  </div>
+                </Link>
+              )
+            })}
+          </div>
+        </div>
+      </Reveal>
+
       {/* 一味精選 */}
       <ProductRow no="02" id="cat-red" title={H.rowTitle} en={H.rowEn} items={(cats.red || []).slice(0, 12)} tone="cream" />
 
@@ -90,6 +120,25 @@ export default function Wineswee() {
                 <figcaption>Selection<b>{p.name}</b></figcaption>
               </Link>
             ))}
+          </div>
+        </div>
+      </Reveal>
+
+      {/* 專人選酒服務 */}
+      <Reveal tag="section" className="concierge">
+        <div className="wrap conc-in">
+          <div className="conc-txt">
+            <span className="kicker">{CC.kicker}</span>
+            <h2><Em>{CC.title}</Em></h2>
+            <p>{CC.desc}</p>
+            <div className="conc-cta">
+              <a className="btn btn-line" href={site.contact.line} target="_blank" rel="noreferrer">{CC.btn}</a>
+              <Link className="btn btn-outline-ink" to="/wineswee/stores">找門市試味</Link>
+            </div>
+            <span className="conc-perk">{CC.perk}</span>
+          </div>
+          <div className="conc-fig" aria-hidden="true">
+            <svg viewBox="0 0 120 120" className="conc-glass"><path fill="none" stroke="currentColor" strokeWidth="1.4" d="M32 20h56l-6 34a22 22 0 0 1-44 0zM60 76v20M44 96h32" /><circle cx="60" cy="44" r="12" fill="currentColor" opacity=".12" /></svg>
           </div>
         </div>
       </Reveal>

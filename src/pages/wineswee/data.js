@@ -70,6 +70,24 @@ export const SITE_DEFAULTS = {
     ctaTitle: '來門市，*讓我們為你選一支酒*', ctaBody: '全台 11 家門市，或線上宅配到府。', ctaBtn: '查看門市',
   },
   newsCta: { title: '不錯過任何一檔活動', desc: '加入 LINE，新品與優惠第一時間通知你。', btn: '加入 LINE 官方帳號' },
+  // 情境選酒(整合 City9 情境磚概念,Wineswee 版)
+  occasions: {
+    kicker: 'By Occasion', title: '今晚，為哪個場合*斟一杯*',
+    lead: '不用懂酒，先想場合——我們幫你把對味的那一支挑出來。',
+    items: [
+      { title: '宴客佐餐', en: 'With the Meal', desc: '波爾多紅酒配伊比利火腿與歐陸乳酪，備齊整桌的講究。', to: '/wineswee/category/red', image: '' },
+      { title: '三五小酌', en: 'For Gatherings', desc: '氣泡與清爽白酒，為每一次相聚添一分雀躍。', to: '/wineswee/category/sparkling', image: '' },
+      { title: '一人獨酌', en: 'A Quiet Night', desc: '單一麥芽威士忌與純米清酒，靜靜品味的一杯。', to: '/wineswee/category/whisky', image: '' },
+      { title: '送禮體面', en: 'For Gifting', desc: '酒器水晶杯與禮盒組，逢年過節、宴客致贈都拿得出手。', to: '/wineswee/category/ware', image: '' },
+    ],
+  },
+  // 專人選酒服務(整合 Plus9 侍酒師服務 + 會員鉤子,Wineswee 版)
+  concierge: {
+    kicker: 'Personal Sommelier', title: '不知道挑什麼？*交給我們*',
+    desc: '11 家門市現場試味、專人推薦；或加 LINE，由選酒顧問依你的餐桌、預算與場合，配一支剛剛好的酒。',
+    perk: '新朋友加入 LINE，即享一對一選酒建議與新品搶先報。',
+    btn: '加 LINE 專人選酒',
+  },
 }
 
 function isObj(v) { return v && typeof v === 'object' && !Array.isArray(v) }

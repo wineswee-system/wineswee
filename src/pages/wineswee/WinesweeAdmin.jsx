@@ -304,6 +304,25 @@ export default function WinesweeAdmin() {
               ))}
             </div>
 
+            <h3 className="wa-h3">首頁・情境選酒（4 格）</h3>
+            <div className="wa-list">
+              {(merged.occasions?.items || []).map((o, i) => {
+                const setOcc = (k, v) => setSite('occasions.items', merged.occasions.items.map((x, j) => j === i ? { ...x, [k]: v } : x))
+                return (
+                  <div className="wa-card" key={i}>
+                    <div className="wa-card-head">
+                      <label className="wa-f"><span>中文標題</span><input className="wa-input" value={o.title || ''} onChange={e => setOcc('title', e.target.value)} /></label>
+                      <label className="wa-f"><span>英文</span><input className="wa-input" value={o.en || ''} onChange={e => setOcc('en', e.target.value)} /></label>
+                      <label className="wa-f wa-f-grow"><span>連結</span><input className="wa-input" value={o.to || ''} onChange={e => setOcc('to', e.target.value)} placeholder="/wineswee/category/red" /></label>
+                    </div>
+                    <label className="wa-f wa-f-grow" style={{ marginTop: 8 }}><span>說明</span><input className="wa-input" value={o.desc || ''} onChange={e => setOcc('desc', e.target.value)} /></label>
+                    <div className="wa-sub">情境圖（留空＝自動用該分類代表商品圖）</div>
+                    <Img value={o.image} onChange={v => setOcc('image', v)} upload={upload} />
+                  </div>
+                )
+              })}
+            </div>
+
             <h3 className="wa-h3">首頁 Banner 輪播</h3>
             <div className="wa-imgs">
               {banners.map((im, i) => (
@@ -374,6 +393,13 @@ const SITE_GROUPS = [
     { label: '故事標題(可用*字*)', path: 'about.storyTitle' }, { label: '故事內文', path: 'about.storyBody', ta: 1 },
     { label: '影片區 標題', path: 'about.filmTitle' }, { label: '影片區 說明', path: 'about.filmBody', ta: 1 }, { label: '影片區 按鈕', path: 'about.filmCta' },
     { label: '結尾 標題(可用*字*)', path: 'about.ctaTitle' }, { label: '結尾 說明', path: 'about.ctaBody' }, { label: '結尾 按鈕', path: 'about.ctaBtn' },
+  ] },
+  { title: '首頁・情境選酒（區塊標題）', fields: [
+    { label: '小標(英)', path: 'occasions.kicker' }, { label: '標題(可用*字*)', path: 'occasions.title' }, { label: '前言', path: 'occasions.lead', ta: 1 },
+  ] },
+  { title: '首頁・專人選酒服務', fields: [
+    { label: '小標(英)', path: 'concierge.kicker' }, { label: '標題(可用*字*)', path: 'concierge.title' }, { label: '說明', path: 'concierge.desc', ta: 1 },
+    { label: '按鈕', path: 'concierge.btn' }, { label: '入會誘因小字', path: 'concierge.perk', ta: 1 },
   ] },
   { title: '最新消息頁・LINE 區', fields: [
     { label: '標題', path: 'newsCta.title' }, { label: '說明', path: 'newsCta.desc' }, { label: '按鈕', path: 'newsCta.btn' },

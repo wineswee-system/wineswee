@@ -42,6 +42,9 @@ export default function WinesweeProduct() {
   const costRows = opIdx > 0 ? cost.slice(0, opIdx) : cost
   const opRows = opIdx > 0 ? cost.slice(opIdx) : []
   const costPrice = costRows.reduce((a, [, v]) => a + num(v), 0)
+  // 會員價 = 進貨成本 + 服務費/稅/金流(全堆疊);售價 = 非會員零售價(較高)
+  const memberPrice = Math.round(cost.reduce((a, [, v]) => a + num(v), 0))
+  const hasMember = memberPrice > 0 && (!p.price || memberPrice < p.price)
 
   return (
     <div className="ws">
@@ -90,6 +93,7 @@ export default function WinesweeProduct() {
                   {costRows.map(([k, v], i) => <div className="costrow" key={i}><span className="k">{k}</span><span className="v">{v}</span></div>)}
                   {costRows.length > 0 && <div className="costrow sum"><span className="k">進貨成本價</span><span className="v">{nt(costPrice)}</span></div>}
                   {opRows.map(([k, v], i) => <div className="costrow" key={'o' + i}><span className="k">{k}</span><span className="v">{v}</span></div>)}
+                  {hasMember && <div className="costrow member"><span className="k">會員價</span><span className="v">{nt(memberPrice)}</span></div>}
                   <div className="costrow sell"><span className="k">售價</span><span className="v">{p.price ? nt(p.price) : '洽詢'}</span></div>
                   <div className="costcard-note">＊價格已反映到岸成本、稅費、恆溫倉儲與金流成本；實際售價與庫存以門市現場為準。</div>
                 </div>

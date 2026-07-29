@@ -458,6 +458,9 @@
 .ws .costrow.sum{background:var(--paper-2);border-bottom:1px solid var(--line)}
 .ws .costrow.sum .k{color:var(--ink);font-weight:600}
 .ws .costrow.sum .v{color:var(--wine);font-family:var(--display);font-size:16px}
+.ws .costrow.member{background:var(--paper-2);border-bottom:1px solid var(--line)}
+.ws .costrow.member .k{color:var(--wine);font-weight:600}
+.ws .costrow.member .v{color:var(--gold-d);font-family:var(--display);font-size:17px;font-weight:600}
 .ws .costrow.sell{background:var(--wine);border:0}
 .ws .costrow.sell .k{color:var(--gold-hi);font-weight:600;font-size:15px}
 .ws .costrow.sell .v{color:#fff;font-size:20px;font-family:var(--display)}

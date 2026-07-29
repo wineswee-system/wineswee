@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef, useMemo } from 'react'
+﻿import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Sparkles, Shield, Save, Code, Wand2, ChevronDown } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
@@ -1330,8 +1330,8 @@ export default function Schedule() {
     (a.schedule_sort ?? 9999) - (b.schedule_sort ?? 9999) || (a.name || '').localeCompare(b.name || '')
   )
 
-  // 每日總工時（在 filtered 宣告之後才算，避免 TDZ）
-  const dailyHours = useMemo(() => {
+  // 每日總工時（純計算，不用 hook — 避免 hooks 順序/TDZ 問題）
+  const dailyHours = (() => {
     const m = {}
     for (const date of activeDates) {
       let sum = 0
@@ -1342,7 +1342,7 @@ export default function Schedule() {
       m[date] = sum
     }
     return m
-  }, [activeDates, filtered, schedules]) // eslint-disable-line react-hooks/exhaustive-deps
+  })()
 
   // 拖拉調整同店員工顯示順序 → 寫回 schedule_sort（store/課管理者才可）
   const reorderEmployees = async (draggedId, targetId) => {

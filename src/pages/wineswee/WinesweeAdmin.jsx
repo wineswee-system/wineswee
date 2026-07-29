@@ -99,6 +99,60 @@ function GalleryEditor({ images, onChange, upload }) {
   )
 }
 
+// 自由畫布:圖片絕對定位,可拖曳移動、拖右下角縮放
+function CanvasEditor({ board, onChange, upload }) {
+  const ref = useRef(null)
+  const [sel, setSel] = useState(null)
+  const ah = board?.ah || 1.3
+  const items = board?.items || []
+  const setItems = its => onChange({ ah, items: its })
+  const setAt = (i, patch) => setItems(items.map((x, j) => j === i ? { ...x, ...patch } : x))
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v))
+  const drag = (i, e, mode) => {
+    e.preventDefault(); e.stopPropagation(); setSel(i)
+    const rect = ref.current.getBoundingClientRect()
+    const s = { mx: e.clientX, my: e.clientY, x: items[i].x, y: items[i].y, w: items[i].w }
+    const onMove = ev => {
+      const dxp = (ev.clientX - s.mx) / rect.width * 100, dyp = (ev.clientY - s.my) / rect.height * 100
+      if (mode === 'move') setAt(i, { x: clamp(s.x + dxp, 0, 99), y: clamp(s.y + dyp, 0, 99) })
+      else setAt(i, { w: clamp(s.w + dxp, 5, 100) })
+    }
+    const up = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', up) }
+    window.addEventListener('mousemove', onMove); window.addEventListener('mouseup', up)
+  }
+  return (
+    <div className="cv-wrap">
+      <div className="cv-toolbar">
+        <button className="wa-btn wa-btn-ghost" onClick={() => { setItems([...items, { src: '', x: 4, y: 4, w: 40 }]); setSel(items.length) }}>＋ 加圖</button>
+        <label className="cv-h">畫布高度<input type="range" min="60" max="260" value={Math.round(ah * 100)} onChange={e => onChange({ ah: +e.target.value / 100, items })} /></label>
+        {sel != null && items[sel] && (
+          <span className="cv-selbar">
+            <label className="wa-btn wa-btn-ghost">換圖<input type="file" accept="image/*" hidden onChange={async e => { const f = e.target.files?.[0]; if (!f) return; const u = await upload(f); if (u) setAt(sel, { src: u }); e.target.value = '' }} /></label>
+            <input className="wa-input" style={{ maxWidth: 200 }} placeholder="或貼網址" value={items[sel].src} onChange={e => setAt(sel, { src: e.target.value })} />
+            <button className="wa-del sm" onClick={() => { setItems(items.filter((_, j) => j !== sel)); setSel(null) }}>刪除選取</button>
+          </span>
+        )}
+      </div>
+      <div className="cv" ref={ref} style={{ aspectRatio: '1 / ' + ah }} onMouseDown={() => setSel(null)}>
+        <div className="cv-inner">
+          {items.map((im, i) => (
+            <div className={'cv-item' + (sel === i ? ' sel' : '')} style={{ left: im.x + '%', top: im.y + '%', width: im.w + '%' }} key={i} onMouseDown={e => drag(i, e, 'move')}>
+              {im.src ? <img src={im.src} alt="" draggable="false" /> : <div className="cv-empty">空框（選取後按上方「換圖」）</div>}
+              <span className="cv-resize" onMouseDown={e => drag(i, e, 'resize')} title="拖曳縮放" />
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="wa-hint">拖圖移動、拖右下角 ◢ 縮放；點空白處取消選取。滑桿調整整體畫布高低。手機會等比例縮放顯示。</div>
+    </div>
+  )
+}
+
+const toBoard = imgs => {
+  const its = (imgs || []).map((im, i) => ({ src: typeof im === 'string' ? im : im?.src || '', x: (i % 2) * 49 + 1, y: Math.floor(i / 2) * 32 + 1, w: 47 }))
+  return { ah: Math.max(0.9, Math.ceil((its.length || 1) / 2) * 0.5), items: its }
+}
+
 export default function WinesweeAdmin() {
   const { user, profile, role } = useAuth()
   const isAdmin = ['admin', 'super_admin'].includes(profile?.role) || ['admin', 'super_admin'].includes(role?.name)
@@ -357,8 +411,15 @@ export default function WinesweeAdmin() {
                           </div>
                           <div className="wa-sub">封面</div>
                           <Img value={s.cover} onChange={v => setSub(si, 'cover', v)} upload={upload} small />
-                          <div className="wa-sub">版面（拖每張圖右邊 ⠿ 調寬度、即時預覽）</div>
-                          <GalleryEditor images={s.images} onChange={imgs => setSub(si, 'images', imgs)} upload={upload} />
+                          <div className="wa-sub">版面模式：
+                            <span className="wa-modebtns">
+                              <button className={!s.board ? 'on' : ''} onClick={() => setSub(si, 'board', null)}>流式（上下／並排）</button>
+                              <button className={s.board ? 'on' : ''} onClick={() => setSub(si, 'board', s.board || toBoard(s.images))}>自由畫布（拖拉擺放）</button>
+                            </span>
+                          </div>
+                          {s.board
+                            ? <CanvasEditor board={s.board} onChange={b => setSub(si, 'board', b)} upload={upload} />
+                            : <GalleryEditor images={s.images} onChange={imgs => setSub(si, 'images', imgs)} upload={upload} />}
                         </div>
                       ))}
                       <button className="wa-btn wa-btn-ghost" onClick={() => set('subs', [...subs, { title: '新的一篇', date: nw.date || '', cover: '', images: [] }])}>＋ 新增一篇子文章</button>

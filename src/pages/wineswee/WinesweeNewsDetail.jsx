@@ -48,6 +48,12 @@ export default function WinesweeNewsDetail() {
               </Link>
             ))}
           </div>
+        ) : article?.board?.items?.length ? (
+          <Reveal tag="article" className="newspage-board" style={{ '--ah': article.board.ah || 1.3 }}>
+            <div className="newspage-board-in">
+              {article.board.items.map((im, i) => im.src ? <img key={i} src={im.src} alt={`${heading} ${i + 1}`} loading={i < 3 ? 'eager' : 'lazy'} style={{ left: `${im.x}%`, top: `${im.y}%`, width: `${im.w}%` }} /> : null)}
+            </div>
+          </Reveal>
         ) : (
           <Reveal tag="article" className="newspage-gallery">
             {images.map((im, i) => {

@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState, useRef } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { STATIC, applyLocal } from './content'
-import { CATEGORIES, CAT_META_KEYS, getCatMeta, mergeSite, SECTION_LABELS } from './data'
+import { CATEGORIES, CAT_LABEL, CAT_META_KEYS, getCatMeta, mergeSite, SECTION_LABELS, classifyName } from './data'
 import './wineswee-admin.css'
 
 const getIn = (obj, path) => path.split('.').reduce((o, k) => (o == null ? o : o[k]), obj)
@@ -18,15 +18,20 @@ function setIn(obj, path, val) {
   cur[keys[keys.length - 1]] = val
   return out
 }
+const clone = o => (typeof structuredClone === 'function' ? structuredClone(o) : JSON.parse(JSON.stringify(o)))
 
-const TABS = [
-  { key: 'products', label: '商品' },
-  { key: 'news', label: '最新消息' },
-  { key: 'stores', label: '門市' },
-  { key: 'site', label: '網站文案 / Banner' },
-  { key: 'layout', label: '版面設計' },
+const NAV = [
+  { key: 'dashboard', label: '儀表板' },
+  { key: 'products', label: '商品', sec: ['products', 'details'] },
+  { key: 'news', label: '最新消息', sec: ['news'] },
+  { key: 'stores', label: '門市', sec: ['stores'] },
+  { key: 'appearance', label: '外觀文案', sec: ['site'] },
+  { key: 'layout', label: '版面設計', sec: ['site'] },
+  { key: 'media', label: '媒體庫' },
+  { key: 'settings', label: '設定', sec: ['site'] },
 ]
 const REGIONS = ['台北', '新北', '台中', '高雄', '桃園', '台南', '其他']
+const bucket = () => supabase.storage.from('wineswee-media')
 
 // 圖片欄位:上傳到 Storage 或貼網址
 function Img({ value, onChange, upload, small }) {
@@ -48,7 +53,7 @@ function Img({ value, onChange, upload, small }) {
   )
 }
 
-// 版面編輯:每張圖是一個框,拖右邊調寬度、即時預覽版面(兩張並排/一張全寬…),可上傳/排序/刪
+// 版面編輯:每張圖是一個框,拖右邊調寬度、即時預覽版面,可上傳/排序/刪
 function GalleryEditor({ images, onChange, upload }) {
   const gridRef = useRef(null)
   const list = (images || []).map(x => typeof x === 'string' ? { src: x, w: 100 } : { src: x?.src || '', w: x?.w || 100 })
@@ -96,16 +101,17 @@ function GalleryEditor({ images, onChange, upload }) {
 export default function WinesweeAdmin() {
   const { user, profile, role } = useAuth()
   const isAdmin = ['admin', 'super_admin'].includes(profile?.role) || ['admin', 'super_admin'].includes(role?.name)
-  const [tab, setTab] = useState('products')
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState('')
   const [msg, setMsg] = useState(null)
-  const [q, setQ] = useState('')
-  const [openIdx, setOpenIdx] = useState(null)
-  const [page, setPage] = useState(0)
+  const [dirty, setDirty] = useState(() => new Set())
+  const [publishing, setPublishing] = useState(false)
+  const [view, setView] = useState('dashboard')
+  const saved = useRef(null)
+  // 商品檢視狀態
+  const [q, setQ] = useState(''); const [catF, setCatF] = useState('全部'); const [statF, setStatF] = useState('全部')
+  const [page, setPage] = useState(0); const [sel, setSel] = useState(() => new Set()); const [editIdx, setEditIdx] = useState(null)
 
-  // ERP 外殼 #root 有 zoom + body overflow:hidden,後臺要放開才能捲動
   useEffect(() => {
     const root = document.getElementById('root'), b = document.body, h = document.documentElement
     const prev = { z: root?.style.zoom, bo: b.style.overflow, ho: h.style.overflow }
@@ -117,37 +123,39 @@ export default function WinesweeAdmin() {
     (async () => {
       let db = null
       try { const r = await supabase.rpc('get_wineswee_content'); db = r?.data || null } catch { db = null }
-      setData({
+      const d = {
         products: db?.products?.length ? db.products : STATIC.products,
         details: db?.details && Object.keys(db.details).length ? db.details : STATIC.details,
         news: db?.news?.length ? db.news : STATIC.news,
         stores: db?.stores?.length ? db.stores : STATIC.stores,
         site: db?.site || {},
-      })
-      setLoading(false)
+      }
+      setData(d); saved.current = clone(d); setLoading(false)
     })()
   }, [])
 
   const flash = (type, text) => { setMsg({ type, text }); setTimeout(() => setMsg(null), 3500) }
-  const patch = (section, value) => setData(d => ({ ...d, [section]: value }))
+  const patch = (section, value) => { setData(d => ({ ...d, [section]: value })); setDirty(s => new Set(s).add(section)) }
 
-  async function save(...sections) {
-    setSaving(sections[0])
-    for (const section of sections) {
+  async function publish() {
+    if (!dirty.size) return
+    setPublishing(true)
+    for (const section of dirty) {
       const { error } = await supabase.rpc('save_wineswee_content', { _section: section, _data: data[section] })
-      if (error) { setSaving(''); return flash('err', '儲存失敗：' + error.message) }
+      if (error) { setPublishing(false); return flash('err', '發布失敗：' + error.message) }
       applyLocal(section, data[section])
     }
-    setSaving('')
-    flash('ok', '已儲存並上線 ✓')
+    saved.current = clone(data); setDirty(new Set()); setPublishing(false)
+    flash('ok', '已發布上線 ✓')
   }
+  function discard() { setData(clone(saved.current)); setDirty(new Set()); setEditIdx(null); flash('ok', '已還原未發布的變更') }
 
   async function upload(file) {
     const ext = (file.name.split('.').pop() || 'jpg').toLowerCase()
     const path = `${new Date().toISOString().slice(0, 10)}/${Math.random().toString(36).slice(2, 10)}.${ext}`
-    const { error } = await supabase.storage.from('wineswee-media').upload(path, file, { cacheControl: '31536000', upsert: false })
+    const { error } = await bucket().upload(path, file, { cacheControl: '31536000', upsert: false })
     if (error) { flash('err', '上傳失敗：' + error.message); return null }
-    return supabase.storage.from('wineswee-media').getPublicUrl(path).data.publicUrl
+    return bucket().getPublicUrl(path).data.publicUrl
   }
 
   if (!user) return <Gate title="請先登入" body={<>後臺需登入公司系統帳號。<Link to="/" className="wa-link">前往登入 →</Link></>} />
@@ -155,300 +163,410 @@ export default function WinesweeAdmin() {
   if (loading || !data) return <Gate title="載入中…" body="正在讀取官網內容" />
 
   const products = data.products
-  const filtered = q.trim() ? products.filter(p => (p.name || '').toLowerCase().includes(q.trim().toLowerCase())) : products
-  const PER = 24
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PER))
-  const pg = Math.min(page, totalPages - 1)
-  const shown = filtered.slice(pg * PER, pg * PER + PER)
+  const topCount = products.filter(p => p.top).length
+  const navTitle = NAV.find(n => n.key === view)?.label || ''
 
   return (
-    <div className="wa">
-      <header className="wa-top">
-        <div>
-          <span className="wa-kicker">WINESWEE 官網後臺</span>
-          <h1>內容管理</h1>
-        </div>
-        <div className="wa-top-r">
+    <div className="wa2">
+      <aside className="wa2-side">
+        <div className="wa2-brand"><b>WINESWEE</b><span>官網後臺</span></div>
+        <nav className="wa2-nav">
+          {NAV.map(n => (
+            <button key={n.key} className={view === n.key ? 'on' : ''} onClick={() => setView(n.key)}>
+              {n.label}
+              {n.sec && n.sec.some(s => dirty.has(s)) && <i className="wa2-dot" />}
+            </button>
+          ))}
+        </nav>
+        <div className="wa2-side-foot">
           <a className="wa-link" href="/wineswee" target="_blank" rel="noreferrer">預覽官網 ↗</a>
           <span className="wa-user">{profile?.name}</span>
         </div>
-      </header>
+      </aside>
 
-      <nav className="wa-tabs">
-        {TABS.map(t => <button key={t.key} className={tab === t.key ? 'on' : ''} onClick={() => { setTab(t.key); setQ(''); setPage(0) }}>{t.label}</button>)}
-      </nav>
-
-      {msg && <div className={'wa-flash ' + msg.type}>{msg.text}</div>}
-
-      {/* ── 商品 ── */}
-      {tab === 'products' && (
-        <section className="wa-panel">
-          <div className="wa-panelhead">
-            <input className="wa-input wa-search" placeholder={`搜尋商品（共 ${products.length} 項）`} value={q} onChange={e => { setQ(e.target.value); setPage(0) }} />
-            <div className="wa-actions">
-              <button className="wa-btn wa-btn-ghost" onClick={() => patch('products', [{ name: '新商品', price: null, member: null, image: '', sold_out: false }, ...products])}>＋ 新增商品</button>
-              <button className="wa-btn wa-btn-primary" disabled={saving === 'products'} onClick={() => save('products', 'details')}>{saving === 'products' ? '儲存中…' : '儲存並上線'}</button>
-            </div>
+      <div className="wa2-main">
+        <header className="wa2-top">
+          <h1>{navTitle}</h1>
+          <div className="wa2-pub">
+            {dirty.size > 0
+              ? <><span className="wa2-dirty">{dirty.size} 項未發布</span>
+                <button className="wa-btn wa-btn-ghost" onClick={discard}>捨棄</button>
+                <button className="wa-btn wa-btn-primary" disabled={publishing} onClick={publish}>{publishing ? '發布中…' : '發布上線'}</button></>
+              : <span className="wa2-clean">已是最新</span>}
           </div>
-          <div className="wa-hint">分類依商品名稱自動判斷。「詳情」可改英文名/規格/成本表/會員價/介紹。共 {filtered.length} 項，第 {pg + 1}/{totalPages} 頁。</div>
-          <div className="wa-list">
-            {shown.map((p) => {
-              const idx = products.indexOf(p)
-              const set = (k, v) => { const n = [...products]; n[idx] = { ...n[idx], [k]: v }; patch('products', n) }
-              const det = data.details[p.name] || {}
-              const setDet = (v) => patch('details', { ...data.details, [p.name]: v })
-              const open = openIdx === idx
-              return (
-                <div className={'wa-item wa-item-col' + (open ? ' open' : '')} key={idx}>
-                  <div className="wa-item-main">
-                    <Img value={p.image} onChange={v => set('image', v)} upload={upload} small />
-                    <div className="wa-item-fields">
-                      <label className="wa-f wa-f-grow"><span>名稱</span><input className="wa-input" value={p.name || ''} onChange={e => set('name', e.target.value)} /></label>
-                      <label className="wa-f"><span>售價 NT$</span><input className="wa-input" type="number" value={p.price ?? ''} onChange={e => set('price', e.target.value === '' ? null : Number(e.target.value))} /></label>
-                      <label className="wa-f"><span>會員價 NT$</span><input className="wa-input" type="number" placeholder="選填" value={p.member ?? ''} onChange={e => set('member', e.target.value === '' ? null : Number(e.target.value))} /></label>
-                      <label className="wa-f wa-f-chk"><input type="checkbox" checked={!!p.top} onChange={e => set('top', e.target.checked)} /><span>置頂</span></label>
-                      <label className="wa-f wa-f-chk"><input type="checkbox" checked={!!p.sold_out} onChange={e => set('sold_out', e.target.checked)} /><span>售完</span></label>
-                    </div>
-                    <button className={'wa-btn wa-btn-ghost wa-toggle' + (open ? ' on' : '')} onClick={() => setOpenIdx(open ? null : idx)}>詳情 {open ? '▲' : '▾'}</button>
-                    <button className="wa-del" title="刪除" onClick={() => patch('products', products.filter((_, i) => i !== idx))}>✕</button>
-                  </div>
-                  {open && <DetailEditor detail={det} onChange={setDet} upload={upload} />}
-                </div>
-              )
-            })}
-          </div>
-          {totalPages > 1 && (
-            <div className="wa-pager">
-              <button className="wa-btn wa-btn-ghost" disabled={pg === 0} onClick={() => { setPage(pg - 1); setOpenIdx(null); window.scrollTo(0, 0) }}>← 上一頁</button>
-              <span className="wa-pager-info">{pg + 1} / {totalPages}</span>
-              <button className="wa-btn wa-btn-ghost" disabled={pg >= totalPages - 1} onClick={() => { setPage(pg + 1); setOpenIdx(null); window.scrollTo(0, 0) }}>下一頁 →</button>
+        </header>
+        {msg && <div className={'wa-flash ' + msg.type}>{msg.text}</div>}
+        <div className="wa2-body">
+
+          {/* ── 儀表板 ── */}
+          {view === 'dashboard' && (
+            <div>
+              <div className="wa2-stats">
+                <button className="wa2-stat" onClick={() => setView('products')}><b>{products.length}</b><span>商品</span></button>
+                <button className="wa2-stat" onClick={() => setView('products')}><b>{topCount}</b><span>置頂商品</span></button>
+                <button className="wa2-stat" onClick={() => setView('news')}><b>{data.news.length}</b><span>消息分類</span></button>
+                <button className="wa2-stat" onClick={() => setView('stores')}><b>{data.stores.length}</b><span>門市</span></button>
+              </div>
+              <h3 className="wa-h3">快捷</h3>
+              <div className="wa2-quick">
+                <button className="wa-btn wa-btn-ghost" onClick={() => { setView('products'); patch('products', [{ name: '新商品', price: null, member: null, image: '', sold_out: false }, ...products]); setEditIdx(0) }}>＋ 新增商品</button>
+                <button className="wa-btn wa-btn-ghost" onClick={() => setView('news')}>發布消息</button>
+                <button className="wa-btn wa-btn-ghost" onClick={() => setView('appearance')}>改首頁文案</button>
+                <button className="wa-btn wa-btn-ghost" onClick={() => setView('layout')}>調整版面</button>
+                <button className="wa-btn wa-btn-ghost" onClick={() => setView('media')}>媒體庫</button>
+              </div>
+              <div className="wa-hint" style={{ marginTop: 20 }}>提醒：改動不會立刻上線，改好後按右上角「發布上線」才會更新官網。需先在 Supabase Studio 跑過 migration。</div>
             </div>
           )}
-        </section>
-      )}
 
-      {/* ── 最新消息 ── */}
-      {tab === 'news' && (
-        <section className="wa-panel">
-          <div className="wa-panelhead">
-            <span className="wa-count">共 {data.news.length} 則消息</span>
-            <div className="wa-actions">
-              <button className="wa-btn wa-btn-ghost" onClick={() => patch('news', [{ id: Date.now(), title: '新消息', date: new Date().toISOString().slice(0, 10).replace(/-/g, '/'), cover: '', images: [] }, ...data.news])}>＋ 新增消息</button>
-              <button className="wa-btn wa-btn-primary" disabled={saving === 'news'} onClick={() => save('news')}>{saving === 'news' ? '儲存中…' : '儲存並上線'}</button>
-            </div>
-          </div>
-          <div className="wa-hint">每則消息可含多篇「子文章」（像 MENU 菜單有信義店/門市兩份、酒品知識有多篇）。每篇的圖可上傳、↑↓ 排序、刪除。</div>
-          <div className="wa-list">
-            {data.news.map((nw, idx) => {
-              const set = (k, v) => { const n = [...data.news]; n[idx] = { ...n[idx], [k]: v }; patch('news', n) }
-              const subs = nw.subs && nw.subs.length ? nw.subs : [{ title: nw.title, date: nw.date, cover: nw.cover, images: nw.images || [] }]
-              const setSub = (si, k, v) => set('subs', subs.map((s, j) => j === si ? { ...s, [k]: v } : s))
-              return (
-                <div className="wa-card" key={nw.id ?? idx}>
-                  <div className="wa-card-head">
-                    <label className="wa-f wa-f-grow"><span>分類名稱</span><input className="wa-input" value={nw.title || ''} onChange={e => set('title', e.target.value)} /></label>
-                    <label className="wa-f"><span>日期</span><input className="wa-input" value={nw.date || ''} onChange={e => set('date', e.target.value)} placeholder="2026/05/21" /></label>
-                    <button className="wa-del" onClick={() => patch('news', data.news.filter((_, i) => i !== idx))}>✕</button>
+          {/* ── 商品(表格/篩選/批次/獨立編輯) ── */}
+          {view === 'products' && (() => {
+            const match = p => {
+              if (q.trim() && !(p.name || '').toLowerCase().includes(q.trim().toLowerCase())) return false
+              if (catF !== '全部' && classifyName(p.name) !== catF) return false
+              if (statF === '上架' && p.sold_out) return false
+              if (statF === '售完' && !p.sold_out) return false
+              if (statF === '置頂' && !p.top) return false
+              return true
+            }
+            const idxs = products.map((p, i) => i).filter(i => match(products[i]))
+            const PER = 30, totalPages = Math.max(1, Math.ceil(idxs.length / PER)), pg = Math.min(page, totalPages - 1)
+            const shownIdx = idxs.slice(pg * PER, pg * PER + PER)
+            const setP = (i, k, v) => patch('products', products.map((p, j) => j === i ? { ...p, [k]: v } : p))
+            const bulk = fn => { patch('products', products.map((p, i) => sel.has(i) ? fn(p) : p)); setSel(new Set()) }
+            const allSel = shownIdx.length > 0 && shownIdx.every(i => sel.has(i))
+            return (
+              <div>
+                <div className="wa2-toolbar">
+                  <input className="wa-input wa-search" placeholder={`搜尋（共 ${products.length}）`} value={q} onChange={e => { setQ(e.target.value); setPage(0) }} />
+                  <select className="wa-input" value={catF} onChange={e => { setCatF(e.target.value); setPage(0) }}>
+                    <option>全部</option>{CATEGORIES.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
+                  </select>
+                  <select className="wa-input" value={statF} onChange={e => { setStatF(e.target.value); setPage(0) }}>
+                    <option>全部</option><option>上架</option><option>售完</option><option>置頂</option>
+                  </select>
+                  <button className="wa-btn wa-btn-ghost" onClick={() => { patch('products', [{ name: '新商品', price: null, member: null, image: '', sold_out: false }, ...products]); setEditIdx(0); setPage(0) }}>＋ 新增商品</button>
+                </div>
+
+                {sel.size > 0 && (
+                  <div className="wa2-bulk">
+                    <span>已選 {sel.size} 筆</span>
+                    <button className="wa-btn wa-btn-ghost" onClick={() => bulk(p => ({ ...p, sold_out: true }))}>標售完</button>
+                    <button className="wa-btn wa-btn-ghost" onClick={() => bulk(p => ({ ...p, sold_out: false }))}>取消售完</button>
+                    <button className="wa-btn wa-btn-ghost" onClick={() => bulk(p => ({ ...p, top: true }))}>設置頂</button>
+                    <button className="wa-btn wa-btn-ghost" onClick={() => bulk(p => ({ ...p, top: false }))}>取消置頂</button>
+                    <button className="wa-btn wa-btn-ghost wa2-danger" onClick={() => { if (confirm(`確定刪除 ${sel.size} 筆商品？`)) { patch('products', products.filter((_, i) => !sel.has(i))); setSel(new Set()) } }}>刪除</button>
+                    <button className="wa-btn wa-btn-ghost" onClick={() => setSel(new Set())}>取消選取</button>
                   </div>
-                  <div className="wa-sub">分類封面（列表卡顯示）</div>
-                  <Img value={nw.cover} onChange={v => set('cover', v)} upload={upload} />
+                )}
 
-                  <div className="wa-sub"><b>子文章</b>（{subs.length} 篇）— 一則消息可放多篇</div>
-                  {subs.map((s, si) => (
-                    <div className="wa-secedit" key={si}>
-                      <div className="wa-secedit-h">
-                        <input className="wa-input" placeholder="子文章標題（如 信義安和門市菜單）" value={s.title || ''} onChange={e => setSub(si, 'title', e.target.value)} />
-                        <input className="wa-input" placeholder="日期" value={s.date || ''} onChange={e => setSub(si, 'date', e.target.value)} style={{ flex: '0 0 130px' }} />
-                        <button className="wa-del sm" onClick={() => set('subs', subs.filter((_, j) => j !== si))}>移除此篇</button>
+                <div className="wa-hint">共 {idxs.length} 項，第 {pg + 1}/{totalPages} 頁。點「編輯」改詳情/會員價/介紹。</div>
+                <div className="wa2-tablewrap">
+                  <table className="wa2-table">
+                    <thead><tr>
+                      <th><input type="checkbox" checked={allSel} onChange={e => { const s = new Set(sel); shownIdx.forEach(i => e.target.checked ? s.add(i) : s.delete(i)); setSel(s) }} /></th>
+                      <th>圖</th><th>名稱</th><th>分類</th><th>售價</th><th>會員價</th><th>狀態</th><th></th>
+                    </tr></thead>
+                    <tbody>
+                      {shownIdx.map(i => { const p = products[i]; return (
+                        <tr key={i} className={sel.has(i) ? 'sel' : ''}>
+                          <td><input type="checkbox" checked={sel.has(i)} onChange={e => { const s = new Set(sel); e.target.checked ? s.add(i) : s.delete(i); setSel(s) }} /></td>
+                          <td><div className="wa2-th">{p.image ? <img src={p.image} alt="" /> : <span>—</span>}</div></td>
+                          <td className="wa2-name" onClick={() => setEditIdx(i)}>{p.name || <em>未命名</em>}</td>
+                          <td>{CAT_LABEL[classifyName(p.name)] || '其他'}</td>
+                          <td>{p.price != null ? 'NT$ ' + Number(p.price).toLocaleString() : '—'}</td>
+                          <td>{p.member != null ? 'NT$ ' + Number(p.member).toLocaleString() : '—'}</td>
+                          <td>{p.top && <span className="wa2-badge top">置頂</span>}{p.sold_out ? <span className="wa2-badge out">售完</span> : <span className="wa2-badge on">上架</span>}</td>
+                          <td><button className="wa-btn wa-btn-ghost" onClick={() => setEditIdx(i)}>編輯</button></td>
+                        </tr>
+                      ) })}
+                    </tbody>
+                  </table>
+                </div>
+                {totalPages > 1 && (
+                  <div className="wa-pager">
+                    <button className="wa-btn wa-btn-ghost" disabled={pg === 0} onClick={() => { setPage(pg - 1); window.scrollTo(0, 0) }}>← 上一頁</button>
+                    <span className="wa-pager-info">{pg + 1} / {totalPages}</span>
+                    <button className="wa-btn wa-btn-ghost" disabled={pg >= totalPages - 1} onClick={() => { setPage(pg + 1); window.scrollTo(0, 0) }}>下一頁 →</button>
+                  </div>
+                )}
+
+                {editIdx != null && products[editIdx] && (() => {
+                  const p = products[editIdx]
+                  const set = (k, v) => setP(editIdx, k, v)
+                  const det = data.details[p.name] || {}
+                  return (
+                    <div className="wa2-drawer" onClick={() => setEditIdx(null)}>
+                      <div className="wa2-drawer-in" onClick={e => e.stopPropagation()}>
+                        <div className="wa2-drawer-top"><h3>編輯商品</h3><button className="wa-del" onClick={() => setEditIdx(null)}>✕</button></div>
+                        <div className="wa2-drawer-body">
+                          <div className="wa-sub">主圖</div>
+                          <Img value={p.image} onChange={v => set('image', v)} upload={upload} />
+                          <div className="wa-fgrid" style={{ marginTop: 12 }}>
+                            <label className="wa-f wa-f-grow wa-f-full"><span>名稱</span><input className="wa-input" value={p.name || ''} onChange={e => set('name', e.target.value)} /></label>
+                            <label className="wa-f"><span>售價 NT$</span><input className="wa-input" type="number" value={p.price ?? ''} onChange={e => set('price', e.target.value === '' ? null : Number(e.target.value))} /></label>
+                            <label className="wa-f"><span>會員價 NT$（選填）</span><input className="wa-input" type="number" value={p.member ?? ''} onChange={e => set('member', e.target.value === '' ? null : Number(e.target.value))} /></label>
+                          </div>
+                          <div className="wa2-chks">
+                            <label><input type="checkbox" checked={!!p.top} onChange={e => set('top', e.target.checked)} /> 置頂（排最前）</label>
+                            <label><input type="checkbox" checked={!!p.sold_out} onChange={e => set('sold_out', e.target.checked)} /> 售完</label>
+                            <span className="wa2-hintinline">分類：{CAT_LABEL[classifyName(p.name)] || '其他'}（依名稱自動）</span>
+                          </div>
+                          <div className="wa-sub" style={{ marginTop: 8 }}><b>產品詳情</b></div>
+                          <DetailEditor detail={det} onChange={v => patch('details', { ...data.details, [p.name]: v })} upload={upload} />
+                        </div>
+                        <div className="wa2-drawer-foot"><button className="wa-btn wa-btn-primary" onClick={() => setEditIdx(null)}>完成</button></div>
                       </div>
-                      <div className="wa-sub">封面（子文章卡）</div>
-                      <Img value={s.cover} onChange={v => setSub(si, 'cover', v)} upload={upload} small />
-                      <div className="wa-sub">版面（拖每張圖右邊 ⠿ 調寬度／全寬½⅓快速鈕，即時預覽如何排）</div>
-                      <GalleryEditor images={s.images} onChange={imgs => setSub(si, 'images', imgs)} upload={upload} />
+                    </div>
+                  )
+                })()}
+              </div>
+            )
+          })()}
+
+          {/* ── 最新消息 ── */}
+          {view === 'news' && (
+            <section>
+              <div className="wa2-toolbar">
+                <span className="wa-count">共 {data.news.length} 則消息</span>
+                <button className="wa-btn wa-btn-ghost" onClick={() => patch('news', [{ id: Date.now(), title: '新消息', date: new Date().toISOString().slice(0, 10).replace(/-/g, '/'), cover: '', images: [], subs: [] }, ...data.news])}>＋ 新增消息</button>
+              </div>
+              <div className="wa-hint">每則消息可含多篇「子文章」（像 MENU 菜單有兩份、酒品知識有多篇）。每篇的圖可拖曳調寬度/排序/刪。</div>
+              <div className="wa-list">
+                {data.news.map((nw, idx) => {
+                  const set = (k, v) => patch('news', data.news.map((x, j) => j === idx ? { ...x, [k]: v } : x))
+                  const subs = nw.subs && nw.subs.length ? nw.subs : [{ title: nw.title, date: nw.date, cover: nw.cover, images: nw.images || [] }]
+                  const setSub = (si, k, v) => set('subs', subs.map((s, j) => j === si ? { ...s, [k]: v } : s))
+                  return (
+                    <div className="wa-card" key={nw.id ?? idx}>
+                      <div className="wa-card-head">
+                        <label className="wa-f wa-f-grow"><span>分類名稱</span><input className="wa-input" value={nw.title || ''} onChange={e => set('title', e.target.value)} /></label>
+                        <label className="wa-f"><span>日期</span><input className="wa-input" value={nw.date || ''} onChange={e => set('date', e.target.value)} placeholder="2026/05/21" /></label>
+                        <button className="wa-del" onClick={() => patch('news', data.news.filter((_, i) => i !== idx))}>✕</button>
+                      </div>
+                      <div className="wa-sub">分類封面</div>
+                      <Img value={nw.cover} onChange={v => set('cover', v)} upload={upload} />
+                      <div className="wa-sub"><b>子文章</b>（{subs.length} 篇）</div>
+                      {subs.map((s, si) => (
+                        <div className="wa-secedit" key={si}>
+                          <div className="wa-secedit-h">
+                            <input className="wa-input" placeholder="子文章標題" value={s.title || ''} onChange={e => setSub(si, 'title', e.target.value)} />
+                            <input className="wa-input" placeholder="日期" value={s.date || ''} onChange={e => setSub(si, 'date', e.target.value)} style={{ flex: '0 0 130px' }} />
+                            <button className="wa-del sm" onClick={() => set('subs', subs.filter((_, j) => j !== si))}>移除此篇</button>
+                          </div>
+                          <div className="wa-sub">封面</div>
+                          <Img value={s.cover} onChange={v => setSub(si, 'cover', v)} upload={upload} small />
+                          <div className="wa-sub">版面（拖每張圖右邊 ⠿ 調寬度、即時預覽）</div>
+                          <GalleryEditor images={s.images} onChange={imgs => setSub(si, 'images', imgs)} upload={upload} />
+                        </div>
+                      ))}
+                      <button className="wa-btn wa-btn-ghost" onClick={() => set('subs', [...subs, { title: '新的一篇', date: nw.date || '', cover: '', images: [] }])}>＋ 新增一篇子文章</button>
+                    </div>
+                  )
+                })}
+              </div>
+            </section>
+          )}
+
+          {/* ── 門市 ── */}
+          {view === 'stores' && (
+            <section>
+              <div className="wa2-toolbar">
+                <span className="wa-count">共 {data.stores.length} 家門市</span>
+                <button className="wa-btn wa-btn-ghost" onClick={() => patch('stores', [...data.stores, { name: '新門市', full: '', region: '台北', tel: '', addr: '' }])}>＋ 新增門市</button>
+              </div>
+              <div className="wa-list">
+                {data.stores.map((s, idx) => {
+                  const set = (k, v) => patch('stores', data.stores.map((x, j) => j === idx ? { ...x, [k]: v } : x))
+                  return (
+                    <div className="wa-item wa-item-store" key={idx}>
+                      <label className="wa-f"><span>地區</span><select className="wa-input" value={s.region || '台北'} onChange={e => set('region', e.target.value)}>{REGIONS.map(r => <option key={r}>{r}</option>)}</select></label>
+                      <label className="wa-f"><span>店名</span><input className="wa-input" value={s.name || ''} onChange={e => set('name', e.target.value)} /></label>
+                      <label className="wa-f"><span>完整名</span><input className="wa-input" value={s.full || ''} onChange={e => set('full', e.target.value)} placeholder="台北中山國小店" /></label>
+                      <label className="wa-f"><span>電話</span><input className="wa-input" value={s.tel || ''} onChange={e => set('tel', e.target.value)} /></label>
+                      <label className="wa-f wa-f-grow"><span>地址</span><input className="wa-input" value={s.addr || ''} onChange={e => set('addr', e.target.value)} /></label>
+                      <button className="wa-del" onClick={() => patch('stores', data.stores.filter((_, i) => i !== idx))}>✕</button>
+                    </div>
+                  )
+                })}
+              </div>
+            </section>
+          )}
+
+          {/* ── 外觀文案 ── */}
+          {view === 'appearance' && <AppearanceView data={data} patch={patch} upload={upload} />}
+
+          {/* ── 版面設計 ── */}
+          {view === 'layout' && (() => {
+            const merged = mergeSite(data.site)
+            const setSite = (path, val) => patch('site', setIn(data.site || {}, path, val))
+            const layout = merged.layout || []
+            const move = (i, dir) => { const L = [...layout]; const j = i + dir; if (j < 0 || j >= L.length) return;[L[i], L[j]] = [L[j], L[i]]; setSite('layout', L) }
+            const toggle = i => setSite('layout', layout.map((s, j) => j === i ? { ...s, on: s.on === false } : s))
+            return (
+              <section>
+                <div className="wa-hint">↑↓ 排序、開關首頁各區塊（英雄大圖固定最上、頁尾固定最下）。關掉就不顯示。</div>
+                <div className="wa-list">
+                  {layout.map((s, i) => (
+                    <div className={'wa-lay' + (s.on === false ? ' off' : '')} key={s.key}>
+                      <span className="wa-lay-n">{i + 1}</span>
+                      <span className="wa-lay-name">{SECTION_LABELS[s.key] || s.key}</span>
+                      <label className="wa-switch"><input type="checkbox" checked={s.on !== false} onChange={() => toggle(i)} /><span>{s.on === false ? '隱藏中' : '顯示中'}</span></label>
+                      <div className="wa-lay-move"><button className="wa-btn wa-btn-ghost" disabled={i === 0} onClick={() => move(i, -1)}>↑</button><button className="wa-btn wa-btn-ghost" disabled={i === layout.length - 1} onClick={() => move(i, 1)}>↓</button></div>
                     </div>
                   ))}
-                  <button className="wa-btn wa-btn-ghost" onClick={() => set('subs', [...subs, { title: '新的一篇', date: nw.date || '', cover: '', images: [] }])}>＋ 新增一篇子文章</button>
                 </div>
-              )
-            })}
-          </div>
-        </section>
-      )}
+              </section>
+            )
+          })()}
 
-      {/* ── 門市 ── */}
-      {tab === 'stores' && (
-        <section className="wa-panel">
-          <div className="wa-panelhead">
-            <span className="wa-count">共 {data.stores.length} 家門市</span>
-            <div className="wa-actions">
-              <button className="wa-btn wa-btn-ghost" onClick={() => patch('stores', [...data.stores, { name: '新門市', full: '', region: '台北', tel: '', addr: '' }])}>＋ 新增門市</button>
-              <button className="wa-btn wa-btn-primary" disabled={saving === 'stores'} onClick={() => save('stores')}>{saving === 'stores' ? '儲存中…' : '儲存並上線'}</button>
-            </div>
-          </div>
-          <div className="wa-list">
-            {data.stores.map((s, idx) => {
-              const set = (k, v) => { const n = [...data.stores]; n[idx] = { ...n[idx], [k]: v }; patch('stores', n) }
-              return (
-                <div className="wa-item wa-item-store" key={idx}>
-                  <label className="wa-f"><span>地區</span>
-                    <select className="wa-input" value={s.region || '台北'} onChange={e => set('region', e.target.value)}>{REGIONS.map(r => <option key={r}>{r}</option>)}</select>
-                  </label>
-                  <label className="wa-f"><span>店名</span><input className="wa-input" value={s.name || ''} onChange={e => set('name', e.target.value)} /></label>
-                  <label className="wa-f"><span>完整名</span><input className="wa-input" value={s.full || ''} onChange={e => set('full', e.target.value)} placeholder="台北中山國小店" /></label>
-                  <label className="wa-f"><span>電話</span><input className="wa-input" value={s.tel || ''} onChange={e => set('tel', e.target.value)} /></label>
-                  <label className="wa-f wa-f-grow"><span>地址</span><input className="wa-input" value={s.addr || ''} onChange={e => set('addr', e.target.value)} /></label>
-                  <button className="wa-del" onClick={() => patch('stores', data.stores.filter((_, i) => i !== idx))}>✕</button>
-                </div>
-              )
-            })}
-          </div>
-        </section>
-      )}
+          {/* ── 媒體庫 ── */}
+          {view === 'media' && <MediaLibrary upload={upload} flash={flash} />}
 
-      {/* ── 網站文案 / Banner ── */}
-      {tab === 'site' && (() => {
-        const merged = mergeSite(data.site)
-        const setSite = (path, val) => patch('site', setIn(data.site || {}, path, val))
-        const mani = merged.manifesto
-        const vals = merged.about.values
-        const banners = data.site.banners || []
-        return (
-          <section className="wa-panel">
-            <div className="wa-panelhead">
-              <span className="wa-count">整站文案・社群・圖片　（用 *文字* 讓字變金色斜體）</span>
-              <button className="wa-btn wa-btn-primary" disabled={saving === 'site'} onClick={() => save('site')}>{saving === 'site' ? '儲存中…' : '儲存並上線'}</button>
-            </div>
-
-            <h3 className="wa-h3">品牌 Logo</h3>
-            <Img value={merged.logo} onChange={v => setSite('logo', v)} upload={upload} />
-
-            <h3 className="wa-h3">導覽選單</h3>
-            <div className="wa-hint">連結可填：站內路徑（如 /wineswee/about）、@line、@email、或完整網址。「分類下拉」為酒類/美食專區，僅能改名稱。</div>
-            <div className="wa-list">
-              {(merged.nav || []).map((it, i) => {
-                const setNav = (k, v) => setSite('nav', merged.nav.map((x, j) => j === i ? { ...x, [k]: v } : x))
-                return (
-                  <div className="wa-item wa-item-store" key={i}>
-                    <label className="wa-f wa-f-grow"><span>名稱</span><input className="wa-input" value={it.label || ''} onChange={e => setNav('label', e.target.value)} /></label>
-                    {it.drop
-                      ? <span className="wa-navbadge">分類下拉（{it.drop === 'wine' ? '酒類' : '美食'}）</span>
-                      : <label className="wa-f wa-f-grow"><span>連結</span><input className="wa-input" value={it.to || ''} onChange={e => setNav('to', e.target.value)} placeholder="/wineswee/… 或 @line / @email" /></label>}
-                    <button className="wa-del" onClick={() => setSite('nav', merged.nav.filter((_, j) => j !== i))}>✕</button>
-                  </div>
-                )
-              })}
-              <button className="wa-btn wa-btn-ghost" onClick={() => setSite('nav', [...(merged.nav || []), { label: '新項目', to: '/wineswee' }])}>＋ 新增選單項目</button>
-            </div>
-
-            {SITE_GROUPS.map(g => (
-              <div key={g.title}>
-                <h3 className="wa-h3">{g.title}</h3>
-                <div className="wa-fgrid">
-                  {g.fields.map(f => <SiteField key={f.path} label={f.label} value={getIn(merged, f.path) ?? ''} onChange={v => setSite(f.path, v)} ta={f.ta} />)}
-                </div>
-              </div>
-            ))}
-
-            <h3 className="wa-h3">首頁・四大特點</h3>
-            <div className="wa-list">
-              {mani.map((m, i) => (
-                <div className="wa-item wa-item-store" key={i}>
-                  <label className="wa-f"><span>編號</span><input className="wa-input" value={m.n} onChange={e => setSite('manifesto', mani.map((x, j) => j === i ? { ...x, n: e.target.value } : x))} /></label>
-                  <label className="wa-f wa-f-grow"><span>標題</span><input className="wa-input" value={m.title} onChange={e => setSite('manifesto', mani.map((x, j) => j === i ? { ...x, title: e.target.value } : x))} /></label>
-                  <label className="wa-f wa-f-grow"><span>說明</span><input className="wa-input" value={m.sub} onChange={e => setSite('manifesto', mani.map((x, j) => j === i ? { ...x, sub: e.target.value } : x))} /></label>
-                </div>
-              ))}
-            </div>
-
-            <h3 className="wa-h3">關於我們・四個堅持</h3>
-            <div className="wa-list">
-              {vals.map((v, i) => (
-                <div className="wa-item wa-item-store" key={i}>
-                  <label className="wa-f"><span>編號</span><input className="wa-input" value={v[0]} onChange={e => setSite('about.values', vals.map((r, j) => j === i ? [e.target.value, r[1], r[2]] : r))} /></label>
-                  <label className="wa-f wa-f-grow"><span>標題</span><input className="wa-input" value={v[1]} onChange={e => setSite('about.values', vals.map((r, j) => j === i ? [r[0], e.target.value, r[2]] : r))} /></label>
-                  <label className="wa-f wa-f-grow"><span>說明</span><input className="wa-input" value={v[2]} onChange={e => setSite('about.values', vals.map((r, j) => j === i ? [r[0], r[1], e.target.value] : r))} /></label>
-                </div>
-              ))}
-            </div>
-
-            <h3 className="wa-h3">首頁・情境選酒（4 格）</h3>
-            <div className="wa-list">
-              {(merged.occasions?.items || []).map((o, i) => {
-                const setOcc = (k, v) => setSite('occasions.items', merged.occasions.items.map((x, j) => j === i ? { ...x, [k]: v } : x))
-                return (
-                  <div className="wa-card" key={i}>
-                    <div className="wa-card-head">
-                      <label className="wa-f"><span>中文標題</span><input className="wa-input" value={o.title || ''} onChange={e => setOcc('title', e.target.value)} /></label>
-                      <label className="wa-f"><span>英文</span><input className="wa-input" value={o.en || ''} onChange={e => setOcc('en', e.target.value)} /></label>
-                      <label className="wa-f wa-f-grow"><span>連結</span><input className="wa-input" value={o.to || ''} onChange={e => setOcc('to', e.target.value)} placeholder="/wineswee/category/red" /></label>
-                    </div>
-                    <label className="wa-f wa-f-grow" style={{ marginTop: 8 }}><span>說明</span><input className="wa-input" value={o.desc || ''} onChange={e => setOcc('desc', e.target.value)} /></label>
-                    <div className="wa-sub">情境圖（留空＝自動用該分類代表商品圖）</div>
-                    <Img value={o.image} onChange={v => setOcc('image', v)} upload={upload} />
-                  </div>
-                )
-              })}
-            </div>
-
-            <h3 className="wa-h3">首頁 Banner 輪播</h3>
-            <div className="wa-imgs">
-              {banners.map((im, i) => (
-                <div className="wa-imgs-item" key={i}>
-                  <Img value={im} onChange={v => setSite('banners', banners.map((x, j) => j === i ? v : x))} upload={upload} />
-                  <button className="wa-del sm" onClick={() => setSite('banners', banners.filter((_, j) => j !== i))}>移除</button>
-                </div>
-              ))}
-              <button className="wa-btn wa-btn-ghost" onClick={() => setSite('banners', [...banners, ''])}>＋ 加一張 Banner</button>
-            </div>
-            <div className="wa-hint">留空則使用預設 4 張。</div>
-
-            <h3 className="wa-h3">選購專區・分類說明</h3>
-            <div className="wa-list">
-              {CAT_META_KEYS.map(key => {
-                const cat = CATEGORIES.find(c => c.key === key)
-                return (
-                  <label className="wa-f wa-f-grow wa-meta" key={key}>
-                    <span>{cat?.label}</span>
-                    <input className="wa-input" value={getIn(merged, `catMeta.${key}`) ?? getCatMeta(key)} onChange={e => setSite(`catMeta.${key}`, e.target.value)} />
-                  </label>
-                )
-              })}
-            </div>
-          </section>
-        )
-      })()}
-
-      {/* ── 版面設計:排序/開關首頁區塊 ── */}
-      {tab === 'layout' && (() => {
-        const merged = mergeSite(data.site)
-        const setSite = (path, val) => patch('site', setIn(data.site || {}, path, val))
-        const layout = merged.layout || []
-        const move = (i, dir) => { const L = [...layout]; const j = i + dir; if (j < 0 || j >= L.length) return;[L[i], L[j]] = [L[j], L[i]]; setSite('layout', L) }
-        const toggle = (i) => setSite('layout', layout.map((s, j) => j === i ? { ...s, on: s.on === false } : s))
-        return (
-          <section className="wa-panel">
-            <div className="wa-panelhead">
-              <span className="wa-count">↑↓ 排序、開關首頁各區塊（英雄大圖固定最上、頁尾固定最下）</span>
-              <button className="wa-btn wa-btn-primary" disabled={saving === 'site'} onClick={() => save('site')}>{saving === 'site' ? '儲存中…' : '儲存並上線'}</button>
-            </div>
-            <div className="wa-hint">關掉的區塊首頁就不顯示；順序由上到下對應首頁由上到下。</div>
-            <div className="wa-list">
-              {layout.map((s, i) => (
-                <div className={'wa-lay' + (s.on === false ? ' off' : '')} key={s.key}>
-                  <span className="wa-lay-n">{i + 1}</span>
-                  <span className="wa-lay-name">{SECTION_LABELS[s.key] || s.key}</span>
-                  <label className="wa-switch"><input type="checkbox" checked={s.on !== false} onChange={() => toggle(i)} /><span>{s.on === false ? '隱藏中' : '顯示中'}</span></label>
-                  <div className="wa-lay-move">
-                    <button className="wa-btn wa-btn-ghost" disabled={i === 0} onClick={() => move(i, -1)}>↑</button>
-                    <button className="wa-btn wa-btn-ghost" disabled={i === layout.length - 1} onClick={() => move(i, 1)}>↓</button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        )
-      })()}
+          {/* ── 設定 ── */}
+          {view === 'settings' && <SettingsView data={data} patch={patch} upload={upload} />}
+        </div>
+      </div>
     </div>
+  )
+}
+
+// ── 外觀文案(首頁/關於/情境/專人/banner/分類說明) ──
+function AppearanceView({ data, patch, upload }) {
+  const merged = mergeSite(data.site)
+  const setSite = (path, val) => patch('site', setIn(data.site || {}, path, val))
+  const mani = merged.manifesto, vals = merged.about.values, banners = data.site.banners || []
+  const groups = SITE_GROUPS.filter(g => g.title !== '品牌・社群・公告')
+  return (
+    <section>
+      {groups.map(g => (
+        <div key={g.title}><h3 className="wa-h3">{g.title}</h3>
+          <div className="wa-fgrid">{g.fields.map(f => <SiteField key={f.path} label={f.label} value={getIn(merged, f.path) ?? ''} onChange={v => setSite(f.path, v)} ta={f.ta} />)}</div>
+        </div>
+      ))}
+      <h3 className="wa-h3">首頁・四大特點</h3>
+      <div className="wa-list">{mani.map((m, i) => (
+        <div className="wa-item wa-item-store" key={i}>
+          <label className="wa-f"><span>編號</span><input className="wa-input" value={m.n} onChange={e => setSite('manifesto', mani.map((x, j) => j === i ? { ...x, n: e.target.value } : x))} /></label>
+          <label className="wa-f wa-f-grow"><span>標題</span><input className="wa-input" value={m.title} onChange={e => setSite('manifesto', mani.map((x, j) => j === i ? { ...x, title: e.target.value } : x))} /></label>
+          <label className="wa-f wa-f-grow"><span>說明</span><input className="wa-input" value={m.sub} onChange={e => setSite('manifesto', mani.map((x, j) => j === i ? { ...x, sub: e.target.value } : x))} /></label>
+        </div>
+      ))}</div>
+      <h3 className="wa-h3">首頁・情境選酒（4 格）</h3>
+      <div className="wa-list">{(merged.occasions?.items || []).map((o, i) => {
+        const setOcc = (k, v) => setSite('occasions.items', merged.occasions.items.map((x, j) => j === i ? { ...x, [k]: v } : x))
+        return (
+          <div className="wa-card" key={i}>
+            <div className="wa-card-head">
+              <label className="wa-f"><span>標題</span><input className="wa-input" value={o.title || ''} onChange={e => setOcc('title', e.target.value)} /></label>
+              <label className="wa-f"><span>英文</span><input className="wa-input" value={o.en || ''} onChange={e => setOcc('en', e.target.value)} /></label>
+              <label className="wa-f wa-f-grow"><span>連結</span><input className="wa-input" value={o.to || ''} onChange={e => setOcc('to', e.target.value)} /></label>
+            </div>
+            <label className="wa-f wa-f-grow" style={{ marginTop: 8 }}><span>說明</span><input className="wa-input" value={o.desc || ''} onChange={e => setOcc('desc', e.target.value)} /></label>
+            <div className="wa-sub">情境圖（留空＝自動用分類代表圖）</div><Img value={o.image} onChange={v => setOcc('image', v)} upload={upload} />
+          </div>
+        )
+      })}</div>
+      <h3 className="wa-h3">關於我們・四個堅持</h3>
+      <div className="wa-list">{vals.map((v, i) => (
+        <div className="wa-item wa-item-store" key={i}>
+          <label className="wa-f"><span>編號</span><input className="wa-input" value={v[0]} onChange={e => setSite('about.values', vals.map((r, j) => j === i ? [e.target.value, r[1], r[2]] : r))} /></label>
+          <label className="wa-f wa-f-grow"><span>標題</span><input className="wa-input" value={v[1]} onChange={e => setSite('about.values', vals.map((r, j) => j === i ? [r[0], e.target.value, r[2]] : r))} /></label>
+          <label className="wa-f wa-f-grow"><span>說明</span><input className="wa-input" value={v[2]} onChange={e => setSite('about.values', vals.map((r, j) => j === i ? [r[0], r[1], e.target.value] : r))} /></label>
+        </div>
+      ))}</div>
+      <h3 className="wa-h3">首頁 Banner 輪播</h3>
+      <div className="wa-imgs">
+        {banners.map((im, i) => (<div className="wa-imgs-item" key={i}><Img value={im} onChange={v => setSite('banners', banners.map((x, j) => j === i ? v : x))} upload={upload} /><button className="wa-del sm" onClick={() => setSite('banners', banners.filter((_, j) => j !== i))}>移除</button></div>))}
+        <button className="wa-btn wa-btn-ghost" onClick={() => setSite('banners', [...banners, ''])}>＋ 加一張 Banner</button>
+      </div>
+      <div className="wa-hint">留空則用預設 4 張。</div>
+      <h3 className="wa-h3">選購專區・分類說明</h3>
+      <div className="wa-list">{CAT_META_KEYS.map(key => {
+        const cat = CATEGORIES.find(c => c.key === key)
+        return <label className="wa-f wa-f-grow wa-meta" key={key}><span>{cat?.label}</span><input className="wa-input" value={getIn(merged, `catMeta.${key}`) ?? getCatMeta(key)} onChange={e => setSite(`catMeta.${key}`, e.target.value)} /></label>
+      })}</div>
+    </section>
+  )
+}
+
+// ── 設定(logo/社群/公告/法規/導覽) ──
+function SettingsView({ data, patch, upload }) {
+  const merged = mergeSite(data.site)
+  const setSite = (path, val) => patch('site', setIn(data.site || {}, path, val))
+  const g0 = SITE_GROUPS.find(g => g.title === '品牌・社群・公告')
+  return (
+    <section>
+      <h3 className="wa-h3">品牌 Logo</h3>
+      <Img value={merged.logo} onChange={v => setSite('logo', v)} upload={upload} />
+      <h3 className="wa-h3">{g0.title}</h3>
+      <div className="wa-fgrid">{g0.fields.map(f => <SiteField key={f.path} label={f.label} value={getIn(merged, f.path) ?? ''} onChange={v => setSite(f.path, v)} ta={f.ta} />)}</div>
+      <h3 className="wa-h3">導覽選單</h3>
+      <div className="wa-hint">連結可填：站內路徑、@line、@email、或完整網址。分類下拉僅能改名稱。</div>
+      <div className="wa-list">
+        {(merged.nav || []).map((it, i) => {
+          const setNav = (k, v) => setSite('nav', merged.nav.map((x, j) => j === i ? { ...x, [k]: v } : x))
+          return (
+            <div className="wa-item wa-item-store" key={i}>
+              <label className="wa-f wa-f-grow"><span>名稱</span><input className="wa-input" value={it.label || ''} onChange={e => setNav('label', e.target.value)} /></label>
+              {it.drop ? <span className="wa-navbadge">分類下拉（{it.drop === 'wine' ? '酒類' : '美食'}）</span>
+                : <label className="wa-f wa-f-grow"><span>連結</span><input className="wa-input" value={it.to || ''} onChange={e => setNav('to', e.target.value)} placeholder="/wineswee/… 或 @line" /></label>}
+              <button className="wa-del" onClick={() => setSite('nav', merged.nav.filter((_, j) => j !== i))}>✕</button>
+            </div>
+          )
+        })}
+        <button className="wa-btn wa-btn-ghost" onClick={() => setSite('nav', [...(merged.nav || []), { label: '新項目', to: '/wineswee' }])}>＋ 新增選單項目</button>
+      </div>
+    </section>
+  )
+}
+
+// ── 媒體庫 ──
+function MediaLibrary({ upload, flash }) {
+  const [items, setItems] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const pub = p => bucket().getPublicUrl(p).data.publicUrl
+  const load = async () => {
+    setBusy(true)
+    try {
+      const acc = []
+      const { data: root } = await bucket().list('', { limit: 200, sortBy: { column: 'name', order: 'desc' } })
+      const folders = (root || []).filter(x => !x.metadata)
+      for (const f of (root || []).filter(x => x.metadata)) acc.push({ path: f.name, url: pub(f.name) })
+      for (const fo of folders.slice(0, 20)) {
+        const { data: sub } = await bucket().list(fo.name, { limit: 200, sortBy: { column: 'name', order: 'desc' } })
+        for (const f of (sub || [])) if (f.metadata) acc.push({ path: fo.name + '/' + f.name, url: pub(fo.name + '/' + f.name) })
+      }
+      setItems(acc)
+    } catch { setItems([]) }
+    setBusy(false)
+  }
+  useEffect(() => { load() }, [])
+  return (
+    <section>
+      <div className="wa2-toolbar">
+        <span className="wa-count">{items ? `${items.length} 張圖` : '載入中…'}</span>
+        <label className="wa-btn wa-btn-primary">＋ 上傳圖片<input type="file" accept="image/*" multiple hidden onChange={async e => {
+          const fs = [...(e.target.files || [])]; if (!fs.length) return; setBusy(true)
+          for (const f of fs) await upload(f); e.target.value = ''; await load()
+        }} /></label>
+        <button className="wa-btn wa-btn-ghost" onClick={load}>重新整理</button>
+      </div>
+      <div className="wa-hint">上傳的圖都在這；點「複製網址」到各編輯欄位貼上即可重複使用。</div>
+      {items && items.length === 0 && <div className="wa-hint">還沒有圖，先上傳或到各處上傳後會出現在這。</div>}
+      <div className="wa2-media">
+        {(items || []).map((it, i) => (
+          <div className="wa2-media-item" key={i}>
+            <div className="wa2-media-thumb"><img src={it.url} alt="" loading="lazy" /></div>
+            <div className="wa2-media-btns">
+              <button className="wa-btn wa-btn-ghost" onClick={() => { navigator.clipboard?.writeText(it.url); flash('ok', '已複製網址') }}>複製網址</button>
+              <button className="wa-del sm" onClick={async () => { if (confirm('刪除這張圖？')) { await bucket().remove([it.path]); load() } }}>刪</button>
+            </div>
+          </div>
+        ))}
+      </div>
+      {busy && <div className="wa-hint">處理中…</div>}
+    </section>
   )
 }
 
@@ -507,7 +625,7 @@ const SITE_GROUPS = [
 const SPEC_FIELDS = ['年份', '產區', '葡萄品種', '酒精濃度', 'ml數', '建議試飲溫度']
 const numv = v => parseFloat(String(v).replace(/[^0-9.]/g, '')) || 0
 
-// 單一商品的詳情編輯:英文名 / 規格 / 定價成本表(→會員價) / 摘要 / 段落
+// 單一商品的詳情編輯
 function DetailEditor({ detail, onChange, upload }) {
   const d = detail || {}
   const set = (k, v) => onChange({ ...d, [k]: v })
@@ -520,15 +638,9 @@ function DetailEditor({ detail, onChange, upload }) {
   return (
     <div className="wa-detail">
       <label className="wa-f wa-f-grow"><span>英文名</span><input className="wa-input" value={d.en || ''} onChange={e => set('en', e.target.value)} placeholder="Château …" /></label>
-
       <div className="wa-sub">規格</div>
-      <div className="wa-grid5">
-        {SPEC_FIELDS.map(k => (
-          <label className="wa-f" key={k}><span>{k}</span><input className="wa-input" value={d.spec?.[k] || ''} onChange={e => setSpec(k, e.target.value)} /></label>
-        ))}
-      </div>
-
-      <div className="wa-sub">定價成本表 ·　<b>會員價 = 各列加總 = NT$ {memberPreview.toLocaleString()}</b>（也可在上方直接填「會員價」欄覆寫）</div>
+      <div className="wa-grid5">{SPEC_FIELDS.map(k => <label className="wa-f" key={k}><span>{k}</span><input className="wa-input" value={d.spec?.[k] || ''} onChange={e => setSpec(k, e.target.value)} /></label>)}</div>
+      <div className="wa-sub">定價成本表 ·　<b>會員價 = 各列加總 = NT$ {memberPreview.toLocaleString()}</b>（也可在上方填「會員價」覆寫）</div>
       <div className="wa-cost">
         {cost.map((r, i) => (
           <div className="wa-cost-row" key={i}>
@@ -539,10 +651,8 @@ function DetailEditor({ detail, onChange, upload }) {
         ))}
         <button className="wa-btn wa-btn-ghost" onClick={() => set('cost', [...cost, ['', '']])}>＋ 加一列成本</button>
       </div>
-
       <div className="wa-sub">摘要（商品頁最上方一段）</div>
       <textarea className="wa-input wa-ta" rows={2} value={d.summary || ''} onChange={e => set('summary', e.target.value)} />
-
       <div className="wa-sub">產品段落（酒莊介紹 / 釀造 / 風味 / 餐酒搭配…）</div>
       {sections.map((s, i) => (
         <div className="wa-secedit" key={i}>

@@ -146,6 +146,7 @@ function classify(name) {
   for (const k of CLASSIFY_ORDER) { const c = CATEGORIES.find(x => x.key === k); if (c && c.test(name)) return c.key }
   return 'other'
 }
+export const classifyName = classify
 
 export const REGIONS = ['法國', '義大利', '西班牙', '葡萄牙', '德國', '希臘', '奧地利', '紐西蘭', '澳洲', '美國', '智利', '阿根廷', '南非', '日本', '喬治亞', '亞美尼亞', '摩爾多瓦']
 export function regionOf(name) { for (const r of REGIONS) if (name.includes(r)) return r; return '其他' }

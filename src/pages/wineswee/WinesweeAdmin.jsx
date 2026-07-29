@@ -72,24 +72,25 @@ function GalleryEditor({ images, onChange, upload }) {
     <div className="ge">
       <div className="ge-grid" ref={gridRef}>
         {list.map((im, i) => (
-          <div className="ge-item" style={{ width: im.w + '%' }} key={i}>
+          <div className="ge-item" style={{ width: `calc(${im.w}% - ${im.w < 100 ? 6 : 0}px)` }} key={i}>
             <div className="ge-frame">
               {im.src ? <img src={im.src} alt="" /> : <span className="ge-empty">未設圖</span>}
-              <span className="ge-badge">{im.w}%</span>
-              <div className="ge-quick">
-                <button type="button" title="全寬" onClick={() => setAt(i, { w: 100 })}>全寬</button>
-                <button type="button" title="半寬" onClick={() => setAt(i, { w: 50 })}>½</button>
-                <button type="button" title="三分一" onClick={() => setAt(i, { w: 33 })}>⅓</button>
-              </div>
               <span className="ge-handle" onMouseDown={e => startResize(i, e)} title="拖曳調整寬度" />
-              <div className="ge-tools">
-                <label className="ge-up" title="上傳">⬆<input type="file" accept="image/*" hidden onChange={async e => { const f = e.target.files?.[0]; if (!f) return; const url = await upload(f); if (url) setAt(i, { src: url }); e.target.value = '' }} /></label>
-                <button type="button" title="左移" onClick={() => move(i, -1)} disabled={i === 0}>←</button>
-                <button type="button" title="右移" onClick={() => move(i, 1)} disabled={i === list.length - 1}>→</button>
-                <button type="button" className="ge-del" title="刪除" onClick={() => commit(list.filter((_, j) => j !== i))}>✕</button>
-              </div>
             </div>
-            <input className="wa-input ge-url" placeholder="圖片網址（或用框內 ⬆ 上傳）" value={im.src} onChange={e => setAt(i, { src: e.target.value })} />
+            <div className="ge-bar">
+              <span className="ge-badge">{im.w}%</span>
+              <div className="ge-wbtns">
+                <button type="button" className={im.w >= 100 ? 'on' : ''} onClick={() => setAt(i, { w: 100 })}>全寬</button>
+                <button type="button" className={im.w === 50 ? 'on' : ''} title="兩張並排" onClick={() => setAt(i, { w: 50 })}>½ 並排</button>
+                <button type="button" className={im.w === 33 ? 'on' : ''} title="三張一排" onClick={() => setAt(i, { w: 33 })}>⅓</button>
+              </div>
+              <span className="ge-sp" />
+              <label className="ge-mini" title="上傳">⬆<input type="file" accept="image/*" hidden onChange={async e => { const f = e.target.files?.[0]; if (!f) return; const url = await upload(f); if (url) setAt(i, { src: url }); e.target.value = '' }} /></label>
+              <button type="button" className="ge-mini" title="左移" onClick={() => move(i, -1)} disabled={i === 0}>←</button>
+              <button type="button" className="ge-mini" title="右移" onClick={() => move(i, 1)} disabled={i === list.length - 1}>→</button>
+              <button type="button" className="ge-mini ge-del" title="刪除" onClick={() => commit(list.filter((_, j) => j !== i))}>✕</button>
+            </div>
+            <input className="wa-input ge-url" placeholder="圖片網址" value={im.src} onChange={e => setAt(i, { src: e.target.value })} />
           </div>
         ))}
       </div>

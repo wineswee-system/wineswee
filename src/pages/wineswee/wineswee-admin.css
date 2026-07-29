@@ -240,3 +240,17 @@ select.wa-input { cursor: pointer; }
   .wa2-side-foot { flex-direction: row; border: none; padding: 0; margin-left: auto; }
   .wa2-toolbar .wa-btn:last-child, .wa2-toolbar label.wa-btn { margin-left: 0; }
 }
+
+/* 版面編輯器:控制列常駐、寬度鈕清楚 */
+.ge-item { display: flex; flex-direction: column; gap: 5px; }
+.ge-badge { position: static !important; background: var(--bg-secondary) !important; color: var(--text-secondary) !important; }
+.ge-bar { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.ge-wbtns { display: flex; gap: 3px; }
+.ge-wbtns button { background: var(--bg-secondary); border: 1px solid var(--border-primary); color: var(--text-secondary); border-radius: 5px; font-size: 11px; padding: 4px 8px; cursor: pointer; white-space: nowrap; font-weight: 600; }
+.ge-wbtns button:hover { border-color: var(--accent-cyan); color: var(--accent-cyan); }
+.ge-wbtns button.on { background: var(--accent-cyan); color: #fff; border-color: var(--accent-cyan); }
+.ge-sp { flex: 1; min-width: 4px; }
+.ge-mini { background: var(--bg-secondary); border: 1px solid var(--border-primary); color: var(--text-secondary); border-radius: 5px; font-size: 12px; padding: 4px 7px; cursor: pointer; display: inline-flex; align-items: center; }
+.ge-mini:hover { border-color: var(--accent-cyan); color: var(--accent-cyan); }
+.ge-mini:disabled { opacity: .4; cursor: default; }
+.ge-mini.ge-del:hover { border-color: var(--accent-red); color: var(--accent-red); }

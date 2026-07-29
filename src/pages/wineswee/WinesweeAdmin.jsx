@@ -48,6 +48,33 @@ function Img({ value, onChange, upload, small }) {
   )
 }
 
+// 一組圖片:每張可上傳/貼網址/↑↓排序/刪除
+function ImageList({ images, onChange, upload }) {
+  const list = images || []
+  const setAt = (i, v) => onChange(list.map((x, j) => j === i ? v : x))
+  const move = (i, d) => { const L = [...list]; const j = i + d; if (j < 0 || j >= L.length) return;[L[i], L[j]] = [L[j], L[i]]; onChange(L) }
+  return (
+    <div className="wa-imglist">
+      {list.map((im, i) => (
+        <div className="wa-imglist-item" key={i}>
+          <span className="wa-imglist-n">{i + 1}</span>
+          <div className="wa-imglist-thumb">{im ? <img src={im} alt="" /> : <span>空</span>}</div>
+          <div className="wa-imglist-ctl">
+            <input className="wa-input" placeholder="貼圖片網址，或用右邊上傳" value={im || ''} onChange={e => setAt(i, e.target.value)} />
+            <div className="wa-imglist-btns">
+              <label className="wa-btn wa-btn-ghost">上傳<input type="file" accept="image/*" hidden onChange={async e => { const f = e.target.files?.[0]; if (!f) return; const url = await upload(f); if (url) setAt(i, url); e.target.value = '' }} /></label>
+              <button className="wa-btn wa-btn-ghost" disabled={i === 0} onClick={() => move(i, -1)}>↑</button>
+              <button className="wa-btn wa-btn-ghost" disabled={i === list.length - 1} onClick={() => move(i, 1)}>↓</button>
+              <button className="wa-del sm" onClick={() => onChange(list.filter((_, j) => j !== i))}>刪</button>
+            </div>
+          </div>
+        </div>
+      ))}
+      <button className="wa-btn wa-btn-ghost" onClick={() => onChange([...list, ''])}>＋ 加一張圖</button>
+    </div>
+  )
+}
+
 export default function WinesweeAdmin() {
   const { user, profile, role } = useAuth()
   const isAdmin = ['admin', 'super_admin'].includes(profile?.role) || ['admin', 'super_admin'].includes(role?.name)
@@ -180,29 +207,37 @@ export default function WinesweeAdmin() {
               <button className="wa-btn wa-btn-primary" disabled={saving === 'news'} onClick={() => save('news')}>{saving === 'news' ? '儲存中…' : '儲存並上線'}</button>
             </div>
           </div>
+          <div className="wa-hint">每則消息可含多篇「子文章」（像 MENU 菜單有信義店/門市兩份、酒品知識有多篇）。每篇的圖可上傳、↑↓ 排序、刪除。</div>
           <div className="wa-list">
             {data.news.map((nw, idx) => {
               const set = (k, v) => { const n = [...data.news]; n[idx] = { ...n[idx], [k]: v }; patch('news', n) }
-              const setImg = (i, v) => { const imgs = [...(nw.images || [])]; imgs[i] = v; set('images', imgs) }
+              const subs = nw.subs && nw.subs.length ? nw.subs : [{ title: nw.title, date: nw.date, cover: nw.cover, images: nw.images || [] }]
+              const setSub = (si, k, v) => set('subs', subs.map((s, j) => j === si ? { ...s, [k]: v } : s))
               return (
                 <div className="wa-card" key={nw.id ?? idx}>
                   <div className="wa-card-head">
-                    <label className="wa-f wa-f-grow"><span>標題</span><input className="wa-input" value={nw.title || ''} onChange={e => set('title', e.target.value)} /></label>
+                    <label className="wa-f wa-f-grow"><span>分類名稱</span><input className="wa-input" value={nw.title || ''} onChange={e => set('title', e.target.value)} /></label>
                     <label className="wa-f"><span>日期</span><input className="wa-input" value={nw.date || ''} onChange={e => set('date', e.target.value)} placeholder="2026/05/21" /></label>
                     <button className="wa-del" onClick={() => patch('news', data.news.filter((_, i) => i !== idx))}>✕</button>
                   </div>
-                  <div className="wa-sub">封面圖</div>
+                  <div className="wa-sub">分類封面（列表卡顯示）</div>
                   <Img value={nw.cover} onChange={v => set('cover', v)} upload={upload} />
-                  <div className="wa-sub">內文圖（依序顯示）</div>
-                  <div className="wa-imgs">
-                    {(nw.images || []).map((im, i) => (
-                      <div className="wa-imgs-item" key={i}>
-                        <Img value={im} onChange={v => setImg(i, v)} upload={upload} small />
-                        <button className="wa-del sm" onClick={() => set('images', nw.images.filter((_, j) => j !== i))}>移除</button>
+
+                  <div className="wa-sub"><b>子文章</b>（{subs.length} 篇）— 一則消息可放多篇</div>
+                  {subs.map((s, si) => (
+                    <div className="wa-secedit" key={si}>
+                      <div className="wa-secedit-h">
+                        <input className="wa-input" placeholder="子文章標題（如 信義安和門市菜單）" value={s.title || ''} onChange={e => setSub(si, 'title', e.target.value)} />
+                        <input className="wa-input" placeholder="日期" value={s.date || ''} onChange={e => setSub(si, 'date', e.target.value)} style={{ flex: '0 0 130px' }} />
+                        <button className="wa-del sm" onClick={() => set('subs', subs.filter((_, j) => j !== si))}>移除此篇</button>
                       </div>
-                    ))}
-                    <button className="wa-btn wa-btn-ghost" onClick={() => set('images', [...(nw.images || []), ''])}>＋ 加一張內文圖</button>
-                  </div>
+                      <div className="wa-sub">封面（子文章卡）</div>
+                      <Img value={s.cover} onChange={v => setSub(si, 'cover', v)} upload={upload} small />
+                      <div className="wa-sub">圖片（依序顯示，可上傳／排序／刪）</div>
+                      <ImageList images={s.images} onChange={imgs => setSub(si, 'images', imgs)} upload={upload} />
+                    </div>
+                  ))}
+                  <button className="wa-btn wa-btn-ghost" onClick={() => set('subs', [...subs, { title: '新的一篇', date: nw.date || '', cover: '', images: [] }])}>＋ 新增一篇子文章</button>
                 </div>
               )
             })}

@@ -134,7 +134,7 @@ export default function LeaveBalances() {
         // 補休：改讀 comp_time_ledger（與補休管理 tab / 104 同源，不用 leave_balances 那套髒的）
         // 可休/已休要算「賺過的全部」(active 未用完 + exhausted 已用完),不能只算 active,
         // 否則已用完的 11 筆被排除→可休/已休失真(只剩餘正確)。排除 settled(已折現非休)。
-        supabase.from('comp_time_ledger').select('hours,hours_used,status')
+        supabase.from('comp_time_ledger').select('hours,hours_used,status,ot_date,expires_at')
           .eq('employee_id', selectedEmpId).in('status', ['active', 'exhausted']),
       ])
       const bals    = balRes.data  || []
@@ -235,6 +235,15 @@ export default function LeaveBalances() {
       // annual period
       let rangeStr = `${yearFilter}/01/01 ～ ${yearFilter}/12/31`
       let periodLabel = `${yearFilter} 年`
+
+      // 補休：可休區間 = comp_time_ledger 實際起迄(反映加班日/手動加給日 ～ 到期日),不用預設年度
+      if (type === '補休' && comp.length) {
+        const starts = comp.map(c => c.ot_date).filter(Boolean).sort()
+        const ends   = comp.map(c => c.expires_at).filter(Boolean).sort()
+        if (starts.length && ends.length) {
+          rangeStr = `${starts[0].replace(/-/g, '/')} ～ ${ends[ends.length - 1].replace(/-/g, '/')}`
+        }
+      }
 
       let annualStartStr = null, annualEndStr = null
       if (type === 'annual') {

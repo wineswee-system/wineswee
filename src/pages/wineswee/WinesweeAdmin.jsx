@@ -43,6 +43,7 @@ export default function WinesweeAdmin() {
   const [saving, setSaving] = useState('')
   const [msg, setMsg] = useState(null)
   const [q, setQ] = useState('')
+  const [openIdx, setOpenIdx] = useState(null)
 
   // ERP 外殼 #root 有 zoom + body overflow:hidden,後臺要放開才能捲動
   useEffect(() => {
@@ -70,12 +71,14 @@ export default function WinesweeAdmin() {
   const flash = (type, text) => { setMsg({ type, text }); setTimeout(() => setMsg(null), 3500) }
   const patch = (section, value) => setData(d => ({ ...d, [section]: value }))
 
-  async function save(section) {
-    setSaving(section)
-    const { error } = await supabase.rpc('save_wineswee_content', { _section: section, _data: data[section] })
+  async function save(...sections) {
+    setSaving(sections[0])
+    for (const section of sections) {
+      const { error } = await supabase.rpc('save_wineswee_content', { _section: section, _data: data[section] })
+      if (error) { setSaving(''); return flash('err', '儲存失敗：' + error.message) }
+      applyLocal(section, data[section])
+    }
     setSaving('')
-    if (error) return flash('err', '儲存失敗：' + error.message)
-    applyLocal(section, data[section])
     flash('ok', '已儲存並上線 ✓')
   }
 
@@ -119,24 +122,32 @@ export default function WinesweeAdmin() {
           <div className="wa-panelhead">
             <input className="wa-input wa-search" placeholder={`搜尋商品（共 ${products.length} 項）`} value={q} onChange={e => setQ(e.target.value)} />
             <div className="wa-actions">
-              <button className="wa-btn wa-btn-ghost" onClick={() => patch('products', [{ name: '新商品', price: null, image: '', sold_out: false }, ...products])}>＋ 新增商品</button>
-              <button className="wa-btn wa-btn-primary" disabled={saving === 'products'} onClick={() => save('products')}>{saving === 'products' ? '儲存中…' : '儲存並上線'}</button>
+              <button className="wa-btn wa-btn-ghost" onClick={() => patch('products', [{ name: '新商品', price: null, member: null, image: '', sold_out: false }, ...products])}>＋ 新增商品</button>
+              <button className="wa-btn wa-btn-primary" disabled={saving === 'products'} onClick={() => save('products', 'details')}>{saving === 'products' ? '儲存中…' : '儲存並上線'}</button>
             </div>
           </div>
-          <div className="wa-hint">分類會依商品名稱自動判斷（例如含「紅酒」歸紅酒）。顯示 {filtered.length} 項。</div>
+          <div className="wa-hint">分類依商品名稱自動判斷。「詳情」可改英文名/規格/成本表/會員價/介紹。顯示 {filtered.length} 項。</div>
           <div className="wa-list">
             {filtered.map((p) => {
               const idx = products.indexOf(p)
               const set = (k, v) => { const n = [...products]; n[idx] = { ...n[idx], [k]: v }; patch('products', n) }
+              const det = data.details[p.name] || {}
+              const setDet = (v) => patch('details', { ...data.details, [p.name]: v })
+              const open = openIdx === idx
               return (
-                <div className="wa-item" key={idx}>
-                  <Img value={p.image} onChange={v => set('image', v)} upload={upload} small />
-                  <div className="wa-item-fields">
-                    <label className="wa-f wa-f-grow"><span>名稱</span><input className="wa-input" value={p.name || ''} onChange={e => set('name', e.target.value)} /></label>
-                    <label className="wa-f"><span>售價 NT$</span><input className="wa-input" type="number" value={p.price ?? ''} onChange={e => set('price', e.target.value === '' ? null : Number(e.target.value))} /></label>
-                    <label className="wa-f wa-f-chk"><input type="checkbox" checked={!!p.sold_out} onChange={e => set('sold_out', e.target.checked)} /><span>售完</span></label>
+                <div className={'wa-item wa-item-col' + (open ? ' open' : '')} key={idx}>
+                  <div className="wa-item-main">
+                    <Img value={p.image} onChange={v => set('image', v)} upload={upload} small />
+                    <div className="wa-item-fields">
+                      <label className="wa-f wa-f-grow"><span>名稱</span><input className="wa-input" value={p.name || ''} onChange={e => set('name', e.target.value)} /></label>
+                      <label className="wa-f"><span>售價 NT$</span><input className="wa-input" type="number" value={p.price ?? ''} onChange={e => set('price', e.target.value === '' ? null : Number(e.target.value))} /></label>
+                      <label className="wa-f"><span>會員價 NT$</span><input className="wa-input" type="number" placeholder="選填" value={p.member ?? ''} onChange={e => set('member', e.target.value === '' ? null : Number(e.target.value))} /></label>
+                      <label className="wa-f wa-f-chk"><input type="checkbox" checked={!!p.sold_out} onChange={e => set('sold_out', e.target.checked)} /><span>售完</span></label>
+                    </div>
+                    <button className={'wa-btn wa-btn-ghost wa-toggle' + (open ? ' on' : '')} onClick={() => setOpenIdx(open ? null : idx)}>詳情 {open ? '▲' : '▾'}</button>
+                    <button className="wa-del" title="刪除" onClick={() => patch('products', products.filter((_, i) => i !== idx))}>✕</button>
                   </div>
-                  <button className="wa-del" title="刪除" onClick={() => patch('products', products.filter((_, i) => i !== idx))}>✕</button>
+                  {open && <DetailEditor detail={det} onChange={setDet} upload={upload} />}
                 </div>
               )
             })}
@@ -255,4 +266,59 @@ export default function WinesweeAdmin() {
 
 function Gate({ title, body }) {
   return <div className="wa"><div className="wa-gate"><h2>{title}</h2><p>{body}</p></div></div>
+}
+
+const SPEC_FIELDS = ['年份', '產區', '葡萄品種', '酒精濃度', 'ml數', '建議試飲溫度']
+const numv = v => parseFloat(String(v).replace(/[^0-9.]/g, '')) || 0
+
+// 單一商品的詳情編輯:英文名 / 規格 / 定價成本表(→會員價) / 摘要 / 段落
+function DetailEditor({ detail, onChange, upload }) {
+  const d = detail || {}
+  const set = (k, v) => onChange({ ...d, [k]: v })
+  const setSpec = (k, v) => set('spec', { ...(d.spec || {}), [k]: v })
+  const cost = d.cost || []
+  const setCost = (i, j, v) => { const c = cost.map(r => [...r]); c[i][j] = v; set('cost', c) }
+  const memberPreview = Math.round(cost.reduce((a, [, v]) => a + numv(v), 0))
+  const sections = d.sections || []
+  const setSec = (i, k, v) => { const s = sections.map(x => ({ ...x })); s[i][k] = v; set('sections', s) }
+  return (
+    <div className="wa-detail">
+      <label className="wa-f wa-f-grow"><span>英文名</span><input className="wa-input" value={d.en || ''} onChange={e => set('en', e.target.value)} placeholder="Château …" /></label>
+
+      <div className="wa-sub">規格</div>
+      <div className="wa-grid5">
+        {SPEC_FIELDS.map(k => (
+          <label className="wa-f" key={k}><span>{k}</span><input className="wa-input" value={d.spec?.[k] || ''} onChange={e => setSpec(k, e.target.value)} /></label>
+        ))}
+      </div>
+
+      <div className="wa-sub">定價成本表 ·　<b>會員價 = 各列加總 = NT$ {memberPreview.toLocaleString()}</b>（也可在上方直接填「會員價」欄覆寫）</div>
+      <div className="wa-cost">
+        {cost.map((r, i) => (
+          <div className="wa-cost-row" key={i}>
+            <input className="wa-input" placeholder="項目（如 到岸成本）" value={r[0] || ''} onChange={e => setCost(i, 0, e.target.value)} />
+            <input className="wa-input wa-cost-v" placeholder="$金額" value={r[1] || ''} onChange={e => setCost(i, 1, e.target.value)} />
+            <button className="wa-del sm" onClick={() => set('cost', cost.filter((_, j) => j !== i))}>移除</button>
+          </div>
+        ))}
+        <button className="wa-btn wa-btn-ghost" onClick={() => set('cost', [...cost, ['', '']])}>＋ 加一列成本</button>
+      </div>
+
+      <div className="wa-sub">摘要（商品頁最上方一段）</div>
+      <textarea className="wa-input wa-ta" rows={2} value={d.summary || ''} onChange={e => set('summary', e.target.value)} />
+
+      <div className="wa-sub">產品段落（酒莊介紹 / 釀造 / 風味 / 餐酒搭配…）</div>
+      {sections.map((s, i) => (
+        <div className="wa-secedit" key={i}>
+          <div className="wa-secedit-h">
+            <input className="wa-input" placeholder="標題（如 釀造）" value={s.title || ''} onChange={e => setSec(i, 'title', e.target.value)} />
+            <input className="wa-input" placeholder="英文（選填）" value={s.en || ''} onChange={e => setSec(i, 'en', e.target.value)} />
+            <button className="wa-del sm" onClick={() => set('sections', sections.filter((_, j) => j !== i))}>移除</button>
+          </div>
+          <textarea className="wa-input wa-ta" rows={2} value={s.body || ''} onChange={e => setSec(i, 'body', e.target.value)} />
+        </div>
+      ))}
+      <button className="wa-btn wa-btn-ghost" onClick={() => set('sections', [...sections, { title: '', en: '', body: '' }])}>＋ 加一段介紹</button>
+    </div>
+  )
 }

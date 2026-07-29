@@ -42,8 +42,10 @@ export default function WinesweeProduct() {
   const costRows = opIdx > 0 ? cost.slice(0, opIdx) : cost
   const opRows = opIdx > 0 ? cost.slice(opIdx) : []
   const costPrice = costRows.reduce((a, [, v]) => a + num(v), 0)
-  // 會員價 = 進貨成本 + 服務費/稅/金流(全堆疊);售價 = 非會員零售價(較高)
-  const memberPrice = Math.round(cost.reduce((a, [, v]) => a + num(v), 0))
+  // 會員價:①後台明確欄位 ②成本表堆疊 ③售價 9 折(讓每支都有,後台可覆寫);售價=非會員零售價
+  const memberPrice = p.member ? Math.round(p.member)
+    : cost.length ? Math.round(cost.reduce((a, [, v]) => a + num(v), 0))
+      : p.price ? Math.round(p.price * 0.9) : 0
   const hasMember = memberPrice > 0 && (!p.price || memberPrice < p.price)
 
   return (

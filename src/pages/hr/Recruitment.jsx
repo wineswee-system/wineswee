@@ -634,6 +634,12 @@ export default function Recruitment() {
     if (data) setJobs(prev => prev.map(j => j.id === id ? data : j))
   }
 
+  // 已關閉職缺重新開啟(狀態設回招募中)
+  const handleReopenJob = async (id) => {
+    const { data } = await updateRecruitmentJob(id, { status: '招募中' })
+    if (data) setJobs(prev => prev.map(j => j.id === id ? data : j))
+  }
+
   // 刪除職缺（硬刪，無 deleted_at）— 有候選人先擋，避免孤兒
   const handleDeleteJob = async (j) => {
     const { count } = await supabase.from('candidates').select('*', { count: 'exact', head: true }).eq('job_id', j.id)
@@ -1209,6 +1215,9 @@ export default function Recruitment() {
                           </button>
                           {j.status === '招募中' && (
                             <button className="btn btn-sm btn-secondary" onClick={() => handleCloseJob(j.id)}>關閉</button>
+                          )}
+                          {j.status === '已關閉' && (
+                            <button className="btn btn-sm btn-secondary" style={{ color: 'var(--accent-green)' }} onClick={() => handleReopenJob(j.id)}>開啟</button>
                           )}
                           <button className="btn btn-sm btn-secondary" style={{ color: 'var(--accent-red)' }} onClick={() => handleDeleteJob(j)} title="刪除職缺">
                             <Trash2 size={12} />

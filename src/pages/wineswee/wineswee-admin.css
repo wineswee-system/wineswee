@@ -129,11 +129,11 @@ select.wa-input { cursor: pointer; }
 @media (max-width: 640px) { .wa-imglist-item { flex-wrap: wrap; } .wa-imglist-ctl { flex-wrap: wrap; } }
 /* 版面編輯器(拖曳調寬度、即時預覽) */
 .ge { border: 1px solid var(--border-primary); border-radius: 8px; padding: 12px; background: var(--bg-primary); }
-.ge-grid { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start; margin-bottom: 10px; }
+.ge-grid { display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-start; margin-bottom: 10px; max-width: 560px; }
 .ge-item { min-width: 60px; }
-.ge-frame { position: relative; border: 1px solid var(--border-primary); border-radius: 6px; overflow: hidden; background: #fff; min-height: 60px; user-select: none; }
-.ge-frame img { width: 100%; height: auto; display: block; }
-.ge-empty { display: grid; place-items: center; height: 80px; color: var(--text-muted); font-size: 12px; }
+.ge-frame { position: relative; border: 1px solid var(--border-primary); border-radius: 6px; overflow: hidden; background: #f0ece4; height: 96px; user-select: none; }
+.ge-frame img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.ge-empty { display: grid; place-items: center; height: 100%; color: var(--text-muted); font-size: 11px; }
 .ge-badge { position: absolute; top: 6px; left: 6px; background: rgba(0,0,0,.62); color: #fff; font-size: 11px; padding: 2px 8px; border-radius: 20px; pointer-events: none; }
 .ge-quick { position: absolute; top: 6px; right: 14px; display: flex; gap: 4px; opacity: 0; transition: .2s; }
 .ge-frame:hover .ge-quick { opacity: 1; }
@@ -149,3 +149,6 @@ select.wa-input { cursor: pointer; }
 .ge-tools button:disabled { opacity: .4; cursor: default; }
 .ge-del:hover { background: var(--accent-red) !important; }
 .ge-url { margin-top: 5px; font-size: 12px; }
+/* 分頁 */
+.wa-pager { display: flex; align-items: center; justify-content: center; gap: 18px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border-primary); }
+.wa-pager-info { font-size: 14px; font-weight: 700; color: var(--text-primary); min-width: 60px; text-align: center; }

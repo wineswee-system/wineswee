@@ -103,6 +103,7 @@ export default function WinesweeAdmin() {
   const [msg, setMsg] = useState(null)
   const [q, setQ] = useState('')
   const [openIdx, setOpenIdx] = useState(null)
+  const [page, setPage] = useState(0)
 
   // ERP 外殼 #root 有 zoom + body overflow:hidden,後臺要放開才能捲動
   useEffect(() => {
@@ -155,6 +156,10 @@ export default function WinesweeAdmin() {
 
   const products = data.products
   const filtered = q.trim() ? products.filter(p => (p.name || '').toLowerCase().includes(q.trim().toLowerCase())) : products
+  const PER = 24
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PER))
+  const pg = Math.min(page, totalPages - 1)
+  const shown = filtered.slice(pg * PER, pg * PER + PER)
 
   return (
     <div className="wa">
@@ -170,7 +175,7 @@ export default function WinesweeAdmin() {
       </header>
 
       <nav className="wa-tabs">
-        {TABS.map(t => <button key={t.key} className={tab === t.key ? 'on' : ''} onClick={() => { setTab(t.key); setQ('') }}>{t.label}</button>)}
+        {TABS.map(t => <button key={t.key} className={tab === t.key ? 'on' : ''} onClick={() => { setTab(t.key); setQ(''); setPage(0) }}>{t.label}</button>)}
       </nav>
 
       {msg && <div className={'wa-flash ' + msg.type}>{msg.text}</div>}
@@ -179,15 +184,15 @@ export default function WinesweeAdmin() {
       {tab === 'products' && (
         <section className="wa-panel">
           <div className="wa-panelhead">
-            <input className="wa-input wa-search" placeholder={`搜尋商品（共 ${products.length} 項）`} value={q} onChange={e => setQ(e.target.value)} />
+            <input className="wa-input wa-search" placeholder={`搜尋商品（共 ${products.length} 項）`} value={q} onChange={e => { setQ(e.target.value); setPage(0) }} />
             <div className="wa-actions">
               <button className="wa-btn wa-btn-ghost" onClick={() => patch('products', [{ name: '新商品', price: null, member: null, image: '', sold_out: false }, ...products])}>＋ 新增商品</button>
               <button className="wa-btn wa-btn-primary" disabled={saving === 'products'} onClick={() => save('products', 'details')}>{saving === 'products' ? '儲存中…' : '儲存並上線'}</button>
             </div>
           </div>
-          <div className="wa-hint">分類依商品名稱自動判斷。「詳情」可改英文名/規格/成本表/會員價/介紹。顯示 {filtered.length} 項。</div>
+          <div className="wa-hint">分類依商品名稱自動判斷。「詳情」可改英文名/規格/成本表/會員價/介紹。共 {filtered.length} 項，第 {pg + 1}/{totalPages} 頁。</div>
           <div className="wa-list">
-            {filtered.map((p) => {
+            {shown.map((p) => {
               const idx = products.indexOf(p)
               const set = (k, v) => { const n = [...products]; n[idx] = { ...n[idx], [k]: v }; patch('products', n) }
               const det = data.details[p.name] || {}
@@ -212,6 +217,13 @@ export default function WinesweeAdmin() {
               )
             })}
           </div>
+          {totalPages > 1 && (
+            <div className="wa-pager">
+              <button className="wa-btn wa-btn-ghost" disabled={pg === 0} onClick={() => { setPage(pg - 1); setOpenIdx(null); window.scrollTo(0, 0) }}>← 上一頁</button>
+              <span className="wa-pager-info">{pg + 1} / {totalPages}</span>
+              <button className="wa-btn wa-btn-ghost" disabled={pg >= totalPages - 1} onClick={() => { setPage(pg + 1); setOpenIdx(null); window.scrollTo(0, 0) }}>下一頁 →</button>
+            </div>
+          )}
         </section>
       )}
 

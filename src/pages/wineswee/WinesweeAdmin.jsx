@@ -252,6 +252,27 @@ export default function WinesweeAdmin() {
               <button className="wa-btn wa-btn-primary" disabled={saving === 'site'} onClick={() => save('site')}>{saving === 'site' ? '儲存中…' : '儲存並上線'}</button>
             </div>
 
+            <h3 className="wa-h3">品牌 Logo</h3>
+            <Img value={merged.logo} onChange={v => setSite('logo', v)} upload={upload} />
+
+            <h3 className="wa-h3">導覽選單</h3>
+            <div className="wa-hint">連結可填：站內路徑（如 /wineswee/about）、@line、@email、或完整網址。「分類下拉」為酒類/美食專區，僅能改名稱。</div>
+            <div className="wa-list">
+              {(merged.nav || []).map((it, i) => {
+                const setNav = (k, v) => setSite('nav', merged.nav.map((x, j) => j === i ? { ...x, [k]: v } : x))
+                return (
+                  <div className="wa-item wa-item-store" key={i}>
+                    <label className="wa-f wa-f-grow"><span>名稱</span><input className="wa-input" value={it.label || ''} onChange={e => setNav('label', e.target.value)} /></label>
+                    {it.drop
+                      ? <span className="wa-navbadge">分類下拉（{it.drop === 'wine' ? '酒類' : '美食'}）</span>
+                      : <label className="wa-f wa-f-grow"><span>連結</span><input className="wa-input" value={it.to || ''} onChange={e => setNav('to', e.target.value)} placeholder="/wineswee/… 或 @line / @email" /></label>}
+                    <button className="wa-del" onClick={() => setSite('nav', merged.nav.filter((_, j) => j !== i))}>✕</button>
+                  </div>
+                )
+              })}
+              <button className="wa-btn wa-btn-ghost" onClick={() => setSite('nav', [...(merged.nav || []), { label: '新項目', to: '/wineswee' }])}>＋ 新增選單項目</button>
+            </div>
+
             {SITE_GROUPS.map(g => (
               <div key={g.title}>
                 <h3 className="wa-h3">{g.title}</h3>

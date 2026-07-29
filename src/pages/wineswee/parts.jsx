@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { FaFacebookF, FaInstagram, FaYoutube, FaLine } from 'react-icons/fa'
-import { CATEGORIES, WINE_KEYS, FOOD_KEYS, getBanners, SITE, getStores, getSite } from './data'
+import { CATEGORIES, WINE_KEYS, FOOD_KEYS, getBanners, getStores, getSite } from './data'
 import { loadContent, subscribe } from './content'
 
 // 把 *文字* 轉成金色斜體 <em>(讓後台可用純文字標重點)
@@ -34,7 +34,7 @@ export function Intro() {
   return (
     <div className={'ws-intro' + (phase === 'out' ? ' out' : '')}>
       <div className="ws-intro-in">
-        <img className="ws-intro-logo" src={SITE.logo} alt="WINESWEE" />
+        <img className="ws-intro-logo" src={getSite().logo} alt="WINESWEE" />
         <span className="ws-intro-line" />
         <span className="ws-intro-sub">威 士 威 酒 食 超 市</span>
       </div>
@@ -170,10 +170,17 @@ export function HeroSlider() {
 
 export function Header() {
   const [open, setOpen] = useState(false)
-  const C = getSite().contact
+  const site = getSite()
+  const C = site.contact
+  const nav = site.nav || []
   const wine = CATEGORIES.filter(c => WINE_KEYS.includes(c.key))
   const food = CATEGORIES.filter(c => FOOD_KEYS.includes(c.key))
   useEffect(() => { document.body.style.overflow = open ? 'hidden' : ''; return () => { document.body.style.overflow = '' } }, [open])
+  const close = () => setOpen(false)
+  // 解析 nav 連結:@line / @email / http / 站內路徑
+  const ext = to => to === '@line' ? { href: C.line, target: '_blank', rel: 'noreferrer' }
+    : to === '@email' ? { href: `mailto:${C.email}` }
+      : /^https?:/.test(to) ? { href: to, target: '_blank', rel: 'noreferrer' } : null
   const Drop = ({ label, items }) => (
     <div className="nav-drop">
       <span className="nav-top">{label}<i className="caret" /></span>
@@ -182,23 +189,19 @@ export function Header() {
       </div></div>
     </div>
   )
-  const close = () => setOpen(false)
   return (
     <>
     <header className="header">
-      <div className="header-ann">{getSite().announce}</div>
+      <div className="header-ann">{site.announce}</div>
       <div className="wrap header-in">
-        <Link className="logo" to="/wineswee" aria-label="Wineswee 威士威酒食超市" onClick={close}><img src={SITE.logo} alt="Wineswee 威士威酒食超市" /></Link>
+        <Link className="logo" to="/wineswee" aria-label="Wineswee 威士威酒食超市" onClick={close}><img src={site.logo} alt="Wineswee 威士威酒食超市" /></Link>
         <nav className="nav">
-          <Link className="nav-top" to="/wineswee/about">關於我們</Link>
-          <Drop label="酒類專區" items={wine} />
-          <Drop label="美食／酒器" items={food} />
-          <Link className="nav-top" to="/wineswee/news">主題活動</Link>
-          <Link className="nav-top" to="/wineswee/news">酒品知識</Link>
-          <Link className="nav-top" to="/wineswee/stores">門市資訊</Link>
-          <a className="nav-top" href={C.line} target="_blank" rel="noreferrer">加入會員</a>
-          <a className="nav-top" href={C.line} target="_blank" rel="noreferrer">訂單查詢</a>
-          <a className="nav-top" href={`mailto:${C.email}`}>加盟專區</a>
+          {nav.map((it, i) => {
+            if (it.drop) return <Drop key={i} label={it.label} items={it.drop === 'wine' ? wine : food} />
+            const e = ext(it.to)
+            return e ? <a key={i} className="nav-top" {...e}>{it.label}</a>
+              : <Link key={i} className="nav-top" to={it.to || '/wineswee'}>{it.label}</Link>
+          })}
         </nav>
         <div className="header-cta">
           <a className="chip chip-line" href={C.line} target="_blank" rel="noreferrer">LINE 訂購</a>
@@ -210,13 +213,12 @@ export function Header() {
       {/* 手機/平板選單(置於 header 外,避免 backdrop-filter 造成 fixed containing block) */}
       <div className={'navmob' + (open ? ' open' : '')} onClick={close}>
         <div className="navmob-in" onClick={e => e.stopPropagation()}>
-          <Link className="nm-lead" to="/wineswee/about" onClick={close}>關於我們</Link>
-          <div className="nm-grp"><h5>酒類專區</h5><div className="nm-cats">{wine.map(c => <Link key={c.key} to={`/wineswee/category/${c.key}`} onClick={close}>{c.label}<em>{c.en}</em></Link>)}</div></div>
-          <div className="nm-grp"><h5>美食・酒器</h5><div className="nm-cats">{food.map(c => <Link key={c.key} to={`/wineswee/category/${c.key}`} onClick={close}>{c.label}<em>{c.en}</em></Link>)}</div></div>
-          <Link className="nm-lead" to="/wineswee/news" onClick={close}>主題活動・酒品知識</Link>
-          <Link className="nm-lead" to="/wineswee/stores" onClick={close}>門市資訊</Link>
-          <a className="nm-lead" href={C.line} target="_blank" rel="noreferrer">加入會員・訂單查詢</a>
-          <a className="nm-lead" href={`mailto:${C.email}`}>加盟專區</a>
+          {nav.map((it, i) => {
+            if (it.drop) return <div className="nm-grp" key={i}><h5>{it.label}</h5><div className="nm-cats">{(it.drop === 'wine' ? wine : food).map(c => <Link key={c.key} to={`/wineswee/category/${c.key}`} onClick={close}>{c.label}<em>{c.en}</em></Link>)}</div></div>
+            const e = ext(it.to)
+            return e ? <a key={i} className="nm-lead" {...e} onClick={close}>{it.label}</a>
+              : <Link key={i} className="nm-lead" to={it.to || '/wineswee'} onClick={close}>{it.label}</Link>
+          })}
           <a className="btn btn-line nm-line" href={C.line} target="_blank" rel="noreferrer">加入 LINE 訂購</a>
         </div>
       </div>

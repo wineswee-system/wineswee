@@ -1,7 +1,7 @@
-import { useEffect } from 'react'
+import { useEffect, Fragment } from 'react'
 import { Link } from 'react-router-dom'
 import './wineswee.css'
-import { CATEGORIES, byCategory, getAll, getNewsList, getStores, getSite, getCatMeta, catPriceFrom, catHeroImage } from './data'
+import { CATEGORIES, byCategory, getAll, getNewsList, getStores, getSite, getCatMeta, catPriceFrom, catHeroImage, DEFAULT_LAYOUT } from './data'
 import { Header, HeroSlider, ProductRow, Reveal, Footer, useBodyScroll, Intro, Em } from './parts'
 
 function spotlight() {
@@ -24,20 +24,16 @@ export default function Wineswee() {
     if (window.location.hash) { const el = document.querySelector(window.location.hash); if (el) setTimeout(() => el.scrollIntoView(), 60) }
   }, [])
 
-  return (
-    <div className="ws">
-      <Intro />
-      <Header home />
-      <HeroSlider />
-
-      {/* manifesto */}
+  // 各首頁區塊(後台可排序/開關) — key 對應 site.layout
+  const blocks = {
+    manifesto: (
       <section className="mani">
         <div className="wrap mani-in">
           {site.manifesto.map((m, i) => <div className="mani-cell" key={i}><div className="n">{m.n}</div><h4>{m.title}</h4><p>{m.sub}</p></div>)}
         </div>
       </section>
-
-      {/* 分類入口 */}
+    ),
+    category: (
       <Reveal tag="section" className="sec sec-light">
         <div className="wrap" id="shop">
           <div className="sec-head">
@@ -56,10 +52,7 @@ export default function Wineswee() {
                     <span className="entry-tag">{c.en}</span>
                   </div>
                   <div className="entry-body">
-                    <div className="entry-hd">
-                      <h3>{c.label}</h3>
-                      <span className="entry-count">{n} 款</span>
-                    </div>
+                    <div className="entry-hd"><h3>{c.label}</h3><span className="entry-count">{n} 款</span></div>
                     <p className="entry-desc">{getCatMeta(c.key)}</p>
                     <div className="entry-foot">
                       <span className="entry-from">{from ? <><em>NT$</em> {from.toLocaleString()} 起</> : '嚴選推薦'}</span>
@@ -72,8 +65,8 @@ export default function Wineswee() {
           </div>
         </div>
       </Reveal>
-
-      {/* 情境選酒 */}
+    ),
+    occasions: (
       <Reveal tag="section" className="occ">
         <div className="wrap occ-in">
           <div className="sec-head">
@@ -100,11 +93,9 @@ export default function Wineswee() {
           </div>
         </div>
       </Reveal>
-
-      {/* 一味精選 */}
-      <ProductRow no="02" id="cat-red" title={H.rowTitle} en={H.rowEn} items={(cats.red || []).slice(0, 12)} tone="cream" />
-
-      {/* spotlight */}
+    ),
+    row: <ProductRow no="02" id="cat-red" title={H.rowTitle} en={H.rowEn} items={(cats.red || []).slice(0, 12)} tone="cream" />,
+    spotlight: (
       <Reveal tag="section" className="spot">
         <div className="wrap spot-in">
           <div className="spot-txt">
@@ -123,8 +114,8 @@ export default function Wineswee() {
           </div>
         </div>
       </Reveal>
-
-      {/* 專人選酒服務 */}
+    ),
+    concierge: (
       <Reveal tag="section" className="concierge">
         <div className="wrap conc-in">
           <div className="conc-txt">
@@ -142,8 +133,8 @@ export default function Wineswee() {
           </div>
         </div>
       </Reveal>
-
-      {/* 故事預告 → 關於我們 */}
+    ),
+    story: (
       <Reveal tag="section" className="story">
         <div className="wrap story-in" id="story">
           <span className="kicker on-dark">{H.storyKicker}</span>
@@ -157,8 +148,8 @@ export default function Wineswee() {
           <div className="teaser-more"><Link to="/wineswee/about">{H.storyLink} →</Link></div>
         </div>
       </Reveal>
-
-      {/* 消息預告 → 最新消息 */}
+    ),
+    news: (
       <Reveal tag="section" className="sec sec-light">
         <div className="wrap">
           <div className="sec-head">
@@ -176,13 +167,13 @@ export default function Wineswee() {
           </div>
         </div>
       </Reveal>
-
-      {/* 門市預告 → 門市頁 */}
+    ),
+    stores: (
       <Reveal tag="section" className="sec sec-cream">
         <div className="wrap" id="store">
           <div className="sec-head">
-            <span className="numeral">11</span>
-            <div className="ht"><span className="kicker">Our Stores</span><h2>全台 11 家門市 <span className="en">/ Visit us</span></h2></div>
+            <span className="numeral">{getStores().length}</span>
+            <div className="ht"><span className="kicker">Our Stores</span><h2>全台 {getStores().length} 家門市 <span className="en">/ Visit us</span></h2></div>
             <Link className="rowmore-link" to="/wineswee/stores">門市詳情</Link>
           </div>
           <div className="stores-list">
@@ -194,15 +185,25 @@ export default function Wineswee() {
           </div>
         </div>
       </Reveal>
-
-      {/* cta */}
+    ),
+    cta: (
       <Reveal tag="section" className="cta">
         <div className="wrap cta-in">
           <div><h2><Em>{H.ctaTitle}</Em></h2><p>{H.ctaDesc}</p></div>
           <a className="btn btn-line" href={site.contact.line} target="_blank" rel="noreferrer">{H.ctaBtn}</a>
         </div>
       </Reveal>
+    ),
+  }
 
+  const layout = (site.layout && site.layout.length ? site.layout : DEFAULT_LAYOUT)
+
+  return (
+    <div className="ws">
+      <Intro />
+      <Header home />
+      <HeroSlider />
+      {layout.filter(s => s.on !== false && blocks[s.key]).map(s => <Fragment key={s.key}>{blocks[s.key]}</Fragment>)}
       <Footer />
     </div>
   )

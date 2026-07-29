@@ -8,8 +8,20 @@ const BANNERS_DEFAULT = [
   'https://www.wineswee.com/storage/upload/banner/image/2025-01-17/76YcWU0PLnHZUp8FsZlMaXN7sEbMqHXojnA0md8C.jpg',
 ]
 
+// ── 首頁版面(區塊順序 + 開關,後台可調) ──────────────────────────────────────
+export const DEFAULT_LAYOUT = [
+  { key: 'manifesto', on: true }, { key: 'category', on: true }, { key: 'occasions', on: true },
+  { key: 'row', on: true }, { key: 'spotlight', on: true }, { key: 'concierge', on: true },
+  { key: 'story', on: true }, { key: 'news', on: true }, { key: 'stores', on: true }, { key: 'cta', on: true },
+]
+export const SECTION_LABELS = {
+  manifesto: '四大特點', category: '選購專區', occasions: '情境選酒', row: '本季紅酒精選',
+  spotlight: '本季精選', concierge: '專人選酒服務', story: '品牌故事', news: '最新消息', stores: '門市', cta: 'LINE 行動呼籲',
+}
+
 // ── 全站文案預設(後台可覆寫;*字*→金色斜體) ─────────────────────────────────
 export const SITE_DEFAULTS = {
+  layout: DEFAULT_LAYOUT,
   logo: '/wineswee-logo.svg',
   contact: {
     line: 'https://page.line.me/?accountId=wineswee01',
@@ -152,7 +164,8 @@ export function getAll() {
   _allSrc = store.products
   _allCache = (store.products || []).filter(p => p.name)
     .map(p => ({ ...p, cat: classify(p.name) }))
-    .sort((a, b) => (b.image ? 1 : 0) - (a.image ? 1 : 0) || (a.sold_out ? 1 : 0) - (b.sold_out ? 1 : 0))
+    // 置頂(top)優先 → 有圖 → 未售完
+    .sort((a, b) => (b.top ? 1 : 0) - (a.top ? 1 : 0) || (b.image ? 1 : 0) - (a.image ? 1 : 0) || (a.sold_out ? 1 : 0) - (b.sold_out ? 1 : 0))
     .map((p, i) => ({ ...p, id: i }))
   return _allCache
 }

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { STATIC, applyLocal } from './content'
-import { CATEGORIES, CAT_META_KEYS, getCatMeta, mergeSite } from './data'
+import { CATEGORIES, CAT_META_KEYS, getCatMeta, mergeSite, SECTION_LABELS } from './data'
 import './wineswee-admin.css'
 
 const getIn = (obj, path) => path.split('.').reduce((o, k) => (o == null ? o : o[k]), obj)
@@ -24,6 +24,7 @@ const TABS = [
   { key: 'news', label: '最新消息' },
   { key: 'stores', label: '門市' },
   { key: 'site', label: '網站文案 / Banner' },
+  { key: 'layout', label: '版面設計' },
 ]
 const REGIONS = ['台北', '新北', '台中', '高雄', '桃園', '台南', '其他']
 
@@ -155,6 +156,7 @@ export default function WinesweeAdmin() {
                       <label className="wa-f wa-f-grow"><span>名稱</span><input className="wa-input" value={p.name || ''} onChange={e => set('name', e.target.value)} /></label>
                       <label className="wa-f"><span>售價 NT$</span><input className="wa-input" type="number" value={p.price ?? ''} onChange={e => set('price', e.target.value === '' ? null : Number(e.target.value))} /></label>
                       <label className="wa-f"><span>會員價 NT$</span><input className="wa-input" type="number" placeholder="選填" value={p.member ?? ''} onChange={e => set('member', e.target.value === '' ? null : Number(e.target.value))} /></label>
+                      <label className="wa-f wa-f-chk"><input type="checkbox" checked={!!p.top} onChange={e => set('top', e.target.checked)} /><span>置頂</span></label>
                       <label className="wa-f wa-f-chk"><input type="checkbox" checked={!!p.sold_out} onChange={e => set('sold_out', e.target.checked)} /><span>售完</span></label>
                     </div>
                     <button className={'wa-btn wa-btn-ghost wa-toggle' + (open ? ' on' : '')} onClick={() => setOpenIdx(open ? null : idx)}>詳情 {open ? '▲' : '▾'}</button>
@@ -346,6 +348,37 @@ export default function WinesweeAdmin() {
                   </label>
                 )
               })}
+            </div>
+          </section>
+        )
+      })()}
+
+      {/* ── 版面設計:排序/開關首頁區塊 ── */}
+      {tab === 'layout' && (() => {
+        const merged = mergeSite(data.site)
+        const setSite = (path, val) => patch('site', setIn(data.site || {}, path, val))
+        const layout = merged.layout || []
+        const move = (i, dir) => { const L = [...layout]; const j = i + dir; if (j < 0 || j >= L.length) return;[L[i], L[j]] = [L[j], L[i]]; setSite('layout', L) }
+        const toggle = (i) => setSite('layout', layout.map((s, j) => j === i ? { ...s, on: s.on === false } : s))
+        return (
+          <section className="wa-panel">
+            <div className="wa-panelhead">
+              <span className="wa-count">↑↓ 排序、開關首頁各區塊（英雄大圖固定最上、頁尾固定最下）</span>
+              <button className="wa-btn wa-btn-primary" disabled={saving === 'site'} onClick={() => save('site')}>{saving === 'site' ? '儲存中…' : '儲存並上線'}</button>
+            </div>
+            <div className="wa-hint">關掉的區塊首頁就不顯示；順序由上到下對應首頁由上到下。</div>
+            <div className="wa-list">
+              {layout.map((s, i) => (
+                <div className={'wa-lay' + (s.on === false ? ' off' : '')} key={s.key}>
+                  <span className="wa-lay-n">{i + 1}</span>
+                  <span className="wa-lay-name">{SECTION_LABELS[s.key] || s.key}</span>
+                  <label className="wa-switch"><input type="checkbox" checked={s.on !== false} onChange={() => toggle(i)} /><span>{s.on === false ? '隱藏中' : '顯示中'}</span></label>
+                  <div className="wa-lay-move">
+                    <button className="wa-btn wa-btn-ghost" disabled={i === 0} onClick={() => move(i, -1)}>↑</button>
+                    <button className="wa-btn wa-btn-ghost" disabled={i === layout.length - 1} onClick={() => move(i, 1)}>↓</button>
+                  </div>
+                </div>
+              ))}
             </div>
           </section>
         )

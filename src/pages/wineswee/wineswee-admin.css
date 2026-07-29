@@ -107,3 +107,11 @@ select.wa-input { cursor: pointer; }
   .wa-item-main { flex-wrap: wrap; }
   .wa-img-thumb { width: 60px; height: 60px; }
 }
+/* 版面設計 */
+.wa-lay { display: flex; align-items: center; gap: 14px; background: var(--bg-primary); border: 1px solid var(--border-primary); border-radius: 10px; padding: 12px 16px; }
+.wa-lay.off { opacity: .5; }
+.wa-lay-n { width: 26px; height: 26px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 50%; background: var(--accent-cyan); color: #fff; font-size: 12px; font-weight: 700; }
+.wa-lay-name { flex: 1; font-size: 15px; font-weight: 600; }
+.wa-switch { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--text-secondary); cursor: pointer; }
+.wa-lay-move { display: flex; gap: 6px; }
+.wa-lay-move .wa-btn { padding: 6px 12px; }

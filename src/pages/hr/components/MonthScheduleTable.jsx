@@ -32,6 +32,7 @@ export default function MonthScheduleTable({
   storeSettings,
   weekSepDates = new Set(),  // Set<'YYYY-MM-DD'> — 四週變形每週第一天，畫週分隔線
   pendingLeaveMap = {},  // empName → Set<dateStr>（待審核/審核中請假）
+  partialLeaveMap = {},  // empName → { dateStr → {code, time} }（已核准部分假，如半天特休）
   violationsByEmp = {},   // empName → { errors: N, warnings: N }
   onClickEmployeeBadge,   // 點 badge 開合規 modal
   lockedDates = new Set(),  // Set<'YYYY-MM-DD'> — 鎖定（已發布）的日期，cell 不可編輯
@@ -376,6 +377,7 @@ function EmployeeRow({
         const isRest = isAbsence(shift)
         const absenceCfg = isRest ? getAbsenceConfig(shift) : null
         const hasPendingLeave = pendingLeaveMap[emp.name]?.has(date)
+        const partialLeave = partialLeaveMap[emp.name]?.[date]  // 已核准部分假（半天特休等）
         // 跨店：該天 source_store 若不是員工主店 → 顯示淡紫色背景
         const daySchedule = schedules.find(s => s.employee === emp.name && s.date === date)
         const isCrossStore = daySchedule?.source_store && emp.store && daySchedule.source_store !== emp.store
@@ -493,6 +495,19 @@ function EmployeeRow({
                 fontSize: 7, lineHeight: 1, pointerEvents: 'none',
                 color: 'var(--accent-orange)',
               }} title="有待審核請假">●</span>
+            )}
+
+            {/* 已核准「部分假」（半天特休等）— 底部彩條標記；班別照常顯示，兩個都看得到 */}
+            {partialLeave && !isRest && (
+              <div style={{
+                position: 'absolute', bottom: 0, left: 0, right: 0,
+                fontSize: 7, lineHeight: '9px', fontWeight: 700, textAlign: 'center',
+                pointerEvents: 'none',
+                color: getAbsenceConfig(partialLeave.code)?.color || 'var(--accent-purple)',
+                background: (getAbsenceConfig(partialLeave.code)?.color || '#a855f7') + '22',
+              }} title={`部分請假：${partialLeave.code}${partialLeave.time ? ' ' + partialLeave.time : ''}`}>
+                {partialLeave.code}
+              </div>
             )}
 
             {/* 跨店：左上角小標 — 顯示去支援的店第一個字 */}

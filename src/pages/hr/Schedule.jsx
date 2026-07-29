@@ -80,6 +80,7 @@ export default function Schedule() {
   const [schedClipboard, setSchedClipboard] = useState(null) // 複製/貼上：{ rows, cols, cells: [[{shift,actual_start,actual_end,source_store}]] }
   const [offRequests, setOffRequests] = useState([])
   const [pendingLeaves, setPendingLeaves] = useState([]) // 待審核/審核中請假（橘點提示用）
+  const [partialLeaves, setPartialLeaves] = useState([]) // 已核准「部分假」(days<1，如半天特休)—格子疊標記用
   const [holidays, setHolidays] = useState([]) // ['2026-04-04', ...]
   const [storeEvents, setStoreEvents] = useState([]) // [{ id, store_id, date, title, color, category, pay_class }]
   const [disasters, setDisasters] = useState([]) // 天災宣告(該門市、本月區間) → 顯示在行事曆
@@ -283,11 +284,21 @@ export default function Schedule() {
         .gte('end_date', activeStart)
         .eq('unit', 'day')
         .abortSignal(signal),
-    ]).then(([s, o, pl]) => {
+      // 已核准「部分假」(days<1，如半天特休)：格子保留班別 + 疊請假標記
+      supabase.from('leave_requests').select('employee, start_date, end_date, type, days, start_time, end_time')
+        .eq('status', '已核准')
+        .is('deleted_at', null)
+        .lte('start_date', activeEnd)
+        .gte('end_date', activeStart)
+        .eq('unit', 'day')
+        .lt('days', 1)
+        .abortSignal(signal),
+    ]).then(([s, o, pl, apl]) => {
       if (signal.aborted) return
       setSchedules(s.data || [])
       setOffRequests(o.data || [])
       setPendingLeaves(pl.data || [])
+      setPartialLeaves(apl.data || [])
     }).catch(err => {
       if (!signal.aborted) console.error('Failed to load schedule data:', err)
     }).finally(() => {
@@ -751,6 +762,28 @@ export default function Schedule() {
         if (!isSpilloverTail) map[lr.employee].add(cur)
         d.setUTCDate(d.getUTCDate() + 1)
       }
+    }
+    return map
+  })()
+
+  // 已核准「部分假」→ empName → { dateStr → {code, time} }（格子疊標記；班別保留不覆蓋）
+  const partialLeaveMap = (() => {
+    const _iso = (d) => d.toISOString().slice(0, 10)
+    const CODE = {
+      annual: '特休', 特休: '特休', sick: '病', 病假: '病', personal: '事', 事假: '事',
+      official: '公', 公假: '公', maternity: '產', 產假: '產', paternity: '陪產', 陪產假: '陪產',
+      menstrual: '生', 生理假: '生', marriage: '婚', 婚假: '婚', bereavement: '喪', 喪假: '喪',
+    }
+    const map = {}
+    for (const lr of partialLeaves) {
+      if (!lr.employee || !lr.start_date || !lr.end_date) continue
+      const code = CODE[lr.type] || lr.type || '假'
+      const time = (lr.start_time && lr.end_time)
+        ? `${String(lr.start_time).slice(0, 5)}~${String(lr.end_time).slice(0, 5)}` : ''
+      if (!map[lr.employee]) map[lr.employee] = {}
+      let d = new Date(lr.start_date + 'T00:00:00Z')
+      const end = new Date(lr.end_date + 'T00:00:00Z')
+      while (d <= end) { map[lr.employee][_iso(d)] = { code, time }; d.setUTCDate(d.getUTCDate() + 1) }
     }
     return map
   })()
@@ -1787,6 +1820,7 @@ export default function Schedule() {
           storeSettings={storeSettings}
           weekSepDates={weekSepDates}
           pendingLeaveMap={pendingLeaveMap}
+          partialLeaveMap={partialLeaveMap}
           violationsByEmp={(() => {
             const map = {}
             for (const e of (compliance.errors || [])) {

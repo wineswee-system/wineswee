@@ -358,18 +358,7 @@ export default function Schedule() {
     const rest = (s.rest_minutes != null) ? Number(s.rest_minutes) : (gross < 5 ? 0 : gross < 9 ? 30 : 60)
     return Math.max(0, gross - rest / 60)
   }
-  const dailyHours = useMemo(() => {
-    const m = {}
-    for (const date of activeDates) {
-      let sum = 0
-      for (const emp of filtered) {
-        const s = schedules.find(x => x.employee === emp.name && x.date === date)
-        sum += cellNetHours(s)
-      }
-      m[date] = sum
-    }
-    return m
-  }, [activeDates, filtered, schedules]) // eslint-disable-line react-hooks/exhaustive-deps
+  // dailyHours 定義在 filtered 宣告之後（見下方）— 這裡只留 cellNetHours / saveRevenue
 
   const saveRevenue = async (date, value) => {
     if (!currentStore) return
@@ -1340,6 +1329,20 @@ export default function Schedule() {
   ).sort((a, b) =>   // 顯示順序：schedule_sort（可拖拉調整）→ 沒設的排後面 → 再按姓名
     (a.schedule_sort ?? 9999) - (b.schedule_sort ?? 9999) || (a.name || '').localeCompare(b.name || '')
   )
+
+  // 每日總工時（在 filtered 宣告之後才算，避免 TDZ）
+  const dailyHours = useMemo(() => {
+    const m = {}
+    for (const date of activeDates) {
+      let sum = 0
+      for (const emp of filtered) {
+        const s = schedules.find(x => x.employee === emp.name && x.date === date)
+        sum += cellNetHours(s)
+      }
+      m[date] = sum
+    }
+    return m
+  }, [activeDates, filtered, schedules]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // 拖拉調整同店員工顯示順序 → 寫回 schedule_sort（store/課管理者才可）
   const reorderEmployees = async (draggedId, targetId) => {

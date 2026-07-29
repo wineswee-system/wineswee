@@ -54,7 +54,8 @@ export default function WinesweeAdmin() {
 
   useEffect(() => {
     (async () => {
-      const { data: db } = await supabase.rpc('get_wineswee_content').catch(() => ({ data: null }))
+      let db = null
+      try { const r = await supabase.rpc('get_wineswee_content'); db = r?.data || null } catch { db = null }
       setData({
         products: db?.products?.length ? db.products : STATIC.products,
         details: db?.details && Object.keys(db.details).length ? db.details : STATIC.details,

@@ -125,14 +125,22 @@ function CanvasEditor({ board, onChange, upload }) {
     <div className="cv-wrap">
       <div className="cv-toolbar">
         <button className="wa-btn wa-btn-ghost" onClick={() => { setItems([...items, { src: '', x: 4, y: 4, w: 40 }]); setSel(items.length) }}>＋ 加圖</button>
-        <label className="cv-h">畫布高度<input type="range" min="60" max="260" value={Math.round(ah * 100)} onChange={e => onChange({ ah: +e.target.value / 100, items })} /></label>
-        {sel != null && items[sel] && (
-          <span className="cv-selbar">
-            <label className="wa-btn wa-btn-ghost">換圖<input type="file" accept="image/*" hidden onChange={async e => { const f = e.target.files?.[0]; if (!f) return; const u = await upload(f); if (u) setAt(sel, { src: u }); e.target.value = '' }} /></label>
-            <input className="wa-input" style={{ maxWidth: 200 }} placeholder="或貼網址" value={items[sel].src} onChange={e => setAt(sel, { src: e.target.value })} />
-            <button className="wa-del sm" onClick={() => { setItems(items.filter((_, j) => j !== sel)); setSel(null) }}>刪除選取</button>
-          </span>
-        )}
+        <label className="cv-h">畫布高（寬的<input type="number" step="0.1" min="0.3" max="12" value={ah} onChange={e => onChange({ ah: Math.max(0.3, +e.target.value || 1), items })} style={{ width: 58 }} />倍）</label>
+        {sel != null && items[sel] && (() => {
+          const it = items[sel]
+          const setN = (k, v) => setAt(sel, { [k]: clamp(+v || 0, k === 'w' ? 5 : 0, 100) })
+          return (
+            <span className="cv-selbar">
+              <b>選取的圖：</b>
+              <label className="cv-num">X<input type="number" value={Math.round(it.x)} onChange={e => setN('x', e.target.value)} />%</label>
+              <label className="cv-num">Y<input type="number" value={Math.round(it.y)} onChange={e => setN('y', e.target.value)} />%</label>
+              <label className="cv-num">寬<input type="number" value={Math.round(it.w)} onChange={e => setN('w', e.target.value)} />%</label>
+              <label className="wa-btn wa-btn-ghost">換圖<input type="file" accept="image/*" hidden onChange={async e => { const f = e.target.files?.[0]; if (!f) return; const u = await upload(f); if (u) setAt(sel, { src: u }); e.target.value = '' }} /></label>
+              <input className="wa-input" style={{ maxWidth: 160 }} placeholder="或貼網址" value={it.src} onChange={e => setAt(sel, { src: e.target.value })} />
+              <button className="wa-del sm" onClick={() => { setItems(items.filter((_, j) => j !== sel)); setSel(null) }}>刪除</button>
+            </span>
+          )
+        })()}
       </div>
       <div className="cv" ref={ref} style={{ aspectRatio: '1 / ' + ah }} onMouseDown={() => setSel(null)}>
         <div className="cv-inner">
@@ -150,8 +158,15 @@ function CanvasEditor({ board, onChange, upload }) {
 }
 
 const toBoard = imgs => {
-  const its = (imgs || []).map((im, i) => ({ src: typeof im === 'string' ? im : im?.src || '', x: (i % 2) * 49 + 1, y: Math.floor(i / 2) * 32 + 1, w: 47 }))
-  return { ah: Math.max(0.9, Math.ceil((its.length || 1) / 2) * 0.5), items: its }
+  const arr = imgs || []
+  const n = arr.length || 1
+  const rows = Math.ceil(n / 2)
+  const ah = Math.max(0.9, rows * 0.62)          // 依列數估畫布高,避免溢出
+  const items = arr.map((im, i) => ({
+    src: typeof im === 'string' ? im : im?.src || '',
+    x: (i % 2) * 49 + 1, y: Math.round((Math.floor(i / 2) / rows) * 100) + 1, w: 47,
+  }))
+  return { ah, items }
 }
 
 export default function WinesweeAdmin() {

@@ -4,6 +4,14 @@ import './wineswee.css'
 import { getNews, getNewsDetails, getSite } from './data'
 import { Header, Footer, Reveal, useBodyScroll } from './parts'
 
+// 後台圖文編輯的 HTML(僅 admin 可寫)—上線前輕量清掉 script / 事件屬性
+function cleanHtml(html) {
+  return String(html || '')
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+    .replace(/javascript:/gi, '')
+}
+
 export default function WinesweeNewsDetail() {
   useBodyScroll()
   const { id, sub } = useParams()
@@ -48,6 +56,8 @@ export default function WinesweeNewsDetail() {
               </Link>
             ))}
           </div>
+        ) : article?.html ? (
+          <Reveal tag="article" className="newspage-rich" dangerouslySetInnerHTML={{ __html: cleanHtml(article.html) }} />
         ) : article?.board?.items?.length ? (
           <Reveal tag="article" className="newspage-board" style={{ '--ah': article.board.ah || 1.3 }}>
             <div className="newspage-board-in">

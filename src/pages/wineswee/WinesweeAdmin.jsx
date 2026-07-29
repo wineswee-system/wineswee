@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { STATIC, applyLocal } from './content'
 import { CATEGORIES, CAT_LABEL, CAT_META_KEYS, getCatMeta, mergeSite, SECTION_LABELS, classifyName } from './data'
+import RichEditor from './RichEditor'
 import './wineswee-admin.css'
 
 const getIn = (obj, path) => path.split('.').reduce((o, k) => (o == null ? o : o[k]), obj)
@@ -411,15 +412,26 @@ export default function WinesweeAdmin() {
                           </div>
                           <div className="wa-sub">封面</div>
                           <Img value={s.cover} onChange={v => setSub(si, 'cover', v)} upload={upload} small />
-                          <div className="wa-sub">版面模式：
-                            <span className="wa-modebtns">
-                              <button className={!s.board ? 'on' : ''} onClick={() => setSub(si, 'board', null)}>流式（上下／並排）</button>
-                              <button className={s.board ? 'on' : ''} onClick={() => setSub(si, 'board', s.board || toBoard(s.images))}>自由畫布（拖拉擺放）</button>
-                            </span>
-                          </div>
-                          {s.board
-                            ? <CanvasEditor board={s.board} onChange={b => setSub(si, 'board', b)} upload={upload} />
-                            : <GalleryEditor images={s.images} onChange={imgs => setSub(si, 'images', imgs)} upload={upload} />}
+                          {(() => {
+                            const setSubAll = patch => set('subs', subs.map((x, j) => j === si ? { ...x, ...patch } : x))
+                            const mode = s.html != null ? 'rich' : s.board ? 'canvas' : 'flow'
+                            return (
+                              <>
+                                <div className="wa-sub">版面模式：
+                                  <span className="wa-modebtns">
+                                    <button className={mode === 'rich' ? 'on' : ''} onClick={() => setSubAll({ html: s.html || '' })}>圖文編輯（打字＋插圖）</button>
+                                    <button className={mode === 'flow' ? 'on' : ''} onClick={() => setSubAll({ html: null, board: null })}>流式（上下／並排）</button>
+                                    <button className={mode === 'canvas' ? 'on' : ''} onClick={() => setSubAll({ html: null, board: s.board || toBoard(s.images) })}>自由畫布（拖拉擺放）</button>
+                                  </span>
+                                </div>
+                                {mode === 'rich'
+                                  ? <RichEditor value={s.html} onChange={v => setSub(si, 'html', v)} upload={upload} />
+                                  : mode === 'canvas'
+                                    ? <CanvasEditor board={s.board} onChange={b => setSub(si, 'board', b)} upload={upload} />
+                                    : <GalleryEditor images={s.images} onChange={imgs => setSub(si, 'images', imgs)} upload={upload} />}
+                              </>
+                            )
+                          })()}
                         </div>
                       ))}
                       <button className="wa-btn wa-btn-ghost" onClick={() => set('subs', [...subs, { title: '新的一篇', date: nw.date || '', cover: '', images: [] }])}>＋ 新增一篇子文章</button>

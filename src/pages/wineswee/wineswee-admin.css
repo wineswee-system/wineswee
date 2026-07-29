@@ -270,3 +270,10 @@ select.wa-input { cursor: pointer; }
 .cv-item img { width: 100%; height: auto; display: block; pointer-events: none; }
 .cv-empty { display: grid; place-items: center; aspect-ratio: 3/2; background: #fff; border: 1px dashed var(--border-primary); font-size: 11px; color: var(--text-muted); text-align: center; padding: 6px; }
 .cv-resize { position: absolute; right: -7px; bottom: -7px; width: 16px; height: 16px; background: var(--accent-cyan); border: 2px solid #fff; border-radius: 3px; cursor: nwse-resize; z-index: 3; }
+
+/* 圖文編輯器(Quill) */
+.wa-rich { background: #fff; border-radius: 8px; }
+.wa-rich .ql-toolbar { border-radius: 8px 8px 0 0; border-color: var(--border-primary) !important; background: #f6f6f8; }
+.wa-rich .ql-container { min-height: 340px; border-radius: 0 0 8px 8px; border-color: var(--border-primary) !important; font-size: 15px; font-family: "Noto Sans TC", system-ui, sans-serif; }
+.wa-rich .ql-editor { min-height: 340px; color: #222; }
+.wa-rich .ql-editor img { max-width: 100%; }

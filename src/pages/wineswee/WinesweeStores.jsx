@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import './wineswee.css'
-import { getStores, SITE } from './data'
+import { getStores, getSite } from './data'
 import { Header, Footer, Reveal, useBodyScroll } from './parts'
 
 const REGIONS = ['台北', '新北', '台中', '高雄']
@@ -48,7 +48,7 @@ export default function WinesweeStores() {
       <Reveal tag="section" className="cta">
         <div className="wrap cta-in">
           <div><h2>找不到附近門市？<br /><em>線上也能買</em></h2><p>全台宅配到府，或加 LINE 由專人為你選酒。</p></div>
-          <a className="btn btn-line" href={SITE.line} target="_blank" rel="noreferrer">加入 LINE 官方帳號</a>
+          <a className="btn btn-line" href={getSite().contact.line} target="_blank" rel="noreferrer">加入 LINE 官方帳號</a>
         </div>
       </Reveal>
       <Footer />

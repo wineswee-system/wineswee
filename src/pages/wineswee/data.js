@@ -1,21 +1,84 @@
 // Wineswee 官網資料層 — 全部改讀 content.js 的 store(後臺可改;讀不到用靜態墊底)
 import { store } from './content'
 
-// ── 品牌固定資訊(logo/社群;Phase 1 不開放後臺改) ────────────────────────────
-export const SITE = {
-  logo: '/wineswee-logo.svg',
-  line: 'https://page.line.me/?accountId=wineswee01',
-  fb: 'https://www.facebook.com/wineswee90370708/',
-  ig: 'https://www.instagram.com/wineswee/',
-  ytEmbed: 'https://www.youtube.com/embed/ZZccVDRoR2M?rel=0&loop=1&playlist=ZZccVDRoR2M&showinfo=0&controls=1',
-  email: 'cs@wineswee.com',
-}
 const BANNERS_DEFAULT = [
   'https://www.wineswee.com/storage/upload/banner/image/2026-05-22/PnahdFdR82dbWjODiQmGdfEVeUbNe0xrGkYUlSZ4.jpg',
   'https://www.wineswee.com/storage/upload/banner/image/2026-05-08/JB0jvHwOiD3VqgHu37dhNflzkjEjcwqgx8MBGsa9.jpg',
   'https://www.wineswee.com/storage/upload/banner/image/2026-04-16/cmx82g7NBRrsOxFo0WZjFHd069ku19MWl48Ubu5A.jpg',
   'https://www.wineswee.com/storage/upload/banner/image/2025-01-17/76YcWU0PLnHZUp8FsZlMaXN7sEbMqHXojnA0md8C.jpg',
 ]
+
+// ── 全站文案預設(後台可覆寫;*字*→金色斜體) ─────────────────────────────────
+export const SITE_DEFAULTS = {
+  logo: '/wineswee-logo.svg',
+  contact: {
+    line: 'https://page.line.me/?accountId=wineswee01',
+    fb: 'https://www.facebook.com/wineswee90370708/',
+    ig: 'https://www.instagram.com/wineswee/',
+    yt: 'https://m.youtube.com/@wineswee241',
+    email: 'cs@wineswee.com',
+    ytEmbed: 'https://www.youtube.com/embed/ZZccVDRoR2M?rel=0&loop=1&playlist=ZZccVDRoR2M&showinfo=0&controls=1',
+  },
+  announce: '威士威酒食超市　·　全台 11 家門市　·　線上宅配到府　·　未滿十八歲禁止飲酒',
+  legal: '禁止酒駕　　未滿十八歲禁止飲酒',
+  hero: {
+    kicker: 'Wine · Whisky · Gourmet',
+    title1: '為每一次相聚，', title2: '斟一杯剛剛好的*講究*。',
+    sub: '嚴選世界餐酒與佐餐美食——從波爾多列級到里奧哈、伊比利火腿到歐陸乳酪，一站備齊你的餐桌。',
+    cta1: '開始選酒', cta2: '探索選品',
+  },
+  manifesto: [
+    { n: '01', title: '全球嚴選', sub: '法國・西班牙・義大利・南非・紐西蘭' },
+    { n: '02', title: '酒食一次備齊', sub: '火腿・乳酪・肉品・海鮮' },
+    { n: '03', title: '宅配到府', sub: '線上下單・全台配送' },
+    { n: '04', title: '十一家門市', sub: '現場試味・專人選酒' },
+  ],
+  home: {
+    shopKicker: 'Shop by Category', shopTitle: '選購專區',
+    rowTitle: '本季紅酒精選', rowEn: 'Red Wine',
+    spotKicker: 'Curated Nº 01', spotTitle: '本季精選，值得為它*開一瓶*',
+    spotDesc: '從波爾多列級酒莊到單一麥芽威士忌、荷蘭陳年高達乳酪——這幾支是我們最想與你分享的味道。', spotCta: '看全部選品',
+    storyKicker: 'The House of Wineswee', storyTitle: '把餐桌上的美好，*一次備齊*',
+    storyBody: '從法國波爾多、西班牙里奧哈到南非與紐西蘭，我們嚴選世界各地的紅白葡萄酒、威士忌與清酒，再備上伊比利火腿與歐陸乳酪——佐酒的一切，都在同一個超市。',
+    statPrice: 'NT$79', statPriceLabel: '入手價起', storyLink: '認識威士威',
+    ctaTitle: '加入 LINE，*讓我們為你選酒*', ctaDesc: '新品到貨、限時優惠與選酒建議，第一手都在 LINE。', ctaBtn: '加入 LINE 官方帳號',
+  },
+  about: {
+    kicker: 'About Wineswee', title: '把餐桌上的美好，一次備齊',
+    lead: '威士威酒食超市——不只是賣酒，而是幫你把每一次相聚、每一頓講究的餐桌，準備到剛剛好。',
+    storyTitle: '從一杯酒，到*一整桌的講究*',
+    storyBody: '我們相信，好的相聚值得一支對味的酒，也值得佐它的那塊乳酪、那片火腿。於是威士威把世界各地的紅白葡萄酒、威士忌與清酒，連同歐陸的乳酪火腿、新鮮的肉品海鮮，都收進同一個超市——讓你不必東奔西跑，一站就能備齊整桌的美好。',
+    values: [
+      ['01', '全球直選', '法國波爾多、西班牙里奧哈、義大利、南非到紐西蘭——世界各地的餐酒，我們一站為你備齊。'],
+      ['02', '酒食一次到位', '伊比利火腿、荷蘭高達乳酪、新鮮肉品與海鮮——佐酒的一切，都在同一個超市。'],
+      ['03', '專人選酒', '11 家門市現場試味、專人推薦；不知道配什麼，交給我們就對了。'],
+      ['04', '送禮體面', '酒器水晶杯與禮盒組，逢年過節、宴客送禮，都拿得出手。'],
+    ],
+    filmTitle: '看見威士威的酒食日常', filmBody: '一支酒、一塊乳酪、一段相聚——這就是我們想帶給你的生活風景。', filmCta: '開始選酒',
+    ctaTitle: '來門市，*讓我們為你選一支酒*', ctaBody: '全台 11 家門市，或線上宅配到府。', ctaBtn: '查看門市',
+  },
+  newsCta: { title: '不錯過任何一檔活動', desc: '加入 LINE，新品與優惠第一時間通知你。', btn: '加入 LINE 官方帳號' },
+}
+
+function isObj(v) { return v && typeof v === 'object' && !Array.isArray(v) }
+function deepMerge(def, over) {
+  if (!isObj(def)) return over === undefined ? def : over
+  const out = Array.isArray(def) ? [...def] : { ...def }
+  for (const k of Object.keys(over || {})) {
+    if (Array.isArray(over[k])) out[k] = over[k]
+    else if (isObj(over[k]) && isObj(def[k])) out[k] = deepMerge(def[k], over[k])
+    else if (over[k] !== undefined && over[k] !== '') out[k] = over[k]
+  }
+  return out
+}
+
+// 合併預設 + 覆寫(後台預覽用)
+export function mergeSite(over) { return deepMerge(SITE_DEFAULTS, over || {}) }
+// 合併後的整站文案(store.site 覆寫預設)
+export function getSite() { return mergeSite(store.site) }
+// 相容:多數元件仍引用 SITE(logo/social 靜態預設);社群改用 getSite().contact
+export const SITE = { logo: SITE_DEFAULTS.logo, ...SITE_DEFAULTS.contact }
+
 export function getBanners() { return store.site?.banners?.length ? store.site.banners : BANNERS_DEFAULT }
 
 // ── 分類定義(固定) ─────────────────────────────────────────────────────────

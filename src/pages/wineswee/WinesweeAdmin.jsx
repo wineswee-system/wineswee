@@ -3,8 +3,21 @@ import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { STATIC, applyLocal } from './content'
-import { CATEGORIES, CAT_META_KEYS, getCatMeta } from './data'
+import { CATEGORIES, CAT_META_KEYS, getCatMeta, mergeSite } from './data'
 import './wineswee-admin.css'
+
+const getIn = (obj, path) => path.split('.').reduce((o, k) => (o == null ? o : o[k]), obj)
+function setIn(obj, path, val) {
+  const keys = path.split('.'); const out = Array.isArray(obj) ? [...obj] : { ...(obj || {}) }
+  let cur = out
+  for (let i = 0; i < keys.length - 1; i++) {
+    const k = keys[i]
+    cur[k] = (cur[k] && typeof cur[k] === 'object') ? (Array.isArray(cur[k]) ? [...cur[k]] : { ...cur[k] }) : {}
+    cur = cur[k]
+  }
+  cur[keys[keys.length - 1]] = val
+  return out
+}
 
 const TABS = [
   { key: 'products', label: '商品' },
@@ -226,40 +239,77 @@ export default function WinesweeAdmin() {
       )}
 
       {/* ── 網站文案 / Banner ── */}
-      {tab === 'site' && (
-        <section className="wa-panel">
-          <div className="wa-panelhead">
-            <span className="wa-count">首頁輪播圖 + 選購專區分類說明</span>
-            <button className="wa-btn wa-btn-primary" disabled={saving === 'site'} onClick={() => save('site')}>{saving === 'site' ? '儲存中…' : '儲存並上線'}</button>
-          </div>
+      {tab === 'site' && (() => {
+        const merged = mergeSite(data.site)
+        const setSite = (path, val) => patch('site', setIn(data.site || {}, path, val))
+        const mani = merged.manifesto
+        const vals = merged.about.values
+        const banners = data.site.banners || []
+        return (
+          <section className="wa-panel">
+            <div className="wa-panelhead">
+              <span className="wa-count">整站文案・社群・圖片　（用 *文字* 讓字變金色斜體）</span>
+              <button className="wa-btn wa-btn-primary" disabled={saving === 'site'} onClick={() => save('site')}>{saving === 'site' ? '儲存中…' : '儲存並上線'}</button>
+            </div>
 
-          <h3 className="wa-h3">首頁 Banner 輪播</h3>
-          <div className="wa-imgs">
-            {(data.site.banners || []).map((im, i) => (
-              <div className="wa-imgs-item" key={i}>
-                <Img value={im} onChange={v => { const b = [...data.site.banners]; b[i] = v; patch('site', { ...data.site, banners: b }) }} upload={upload} />
-                <button className="wa-del sm" onClick={() => patch('site', { ...data.site, banners: data.site.banners.filter((_, j) => j !== i) })}>移除</button>
+            {SITE_GROUPS.map(g => (
+              <div key={g.title}>
+                <h3 className="wa-h3">{g.title}</h3>
+                <div className="wa-fgrid">
+                  {g.fields.map(f => <SiteField key={f.path} label={f.label} value={getIn(merged, f.path) ?? ''} onChange={v => setSite(f.path, v)} ta={f.ta} />)}
+                </div>
               </div>
             ))}
-            <button className="wa-btn wa-btn-ghost" onClick={() => patch('site', { ...data.site, banners: [...(data.site.banners || []), ''] })}>＋ 加一張 Banner</button>
-          </div>
-          <div className="wa-hint">留空則使用預設 4 張。</div>
 
-          <h3 className="wa-h3">選購專區・分類說明</h3>
-          <div className="wa-list">
-            {CAT_META_KEYS.map(key => {
-              const cat = CATEGORIES.find(c => c.key === key)
-              const val = data.site.catMeta?.[key] ?? getCatMeta(key)
-              return (
-                <label className="wa-f wa-f-grow wa-meta" key={key}>
-                  <span>{cat?.label}</span>
-                  <input className="wa-input" value={val} onChange={e => patch('site', { ...data.site, catMeta: { ...(data.site.catMeta || {}), [key]: e.target.value } })} />
-                </label>
-              )
-            })}
-          </div>
-        </section>
-      )}
+            <h3 className="wa-h3">首頁・四大特點</h3>
+            <div className="wa-list">
+              {mani.map((m, i) => (
+                <div className="wa-item wa-item-store" key={i}>
+                  <label className="wa-f"><span>編號</span><input className="wa-input" value={m.n} onChange={e => setSite('manifesto', mani.map((x, j) => j === i ? { ...x, n: e.target.value } : x))} /></label>
+                  <label className="wa-f wa-f-grow"><span>標題</span><input className="wa-input" value={m.title} onChange={e => setSite('manifesto', mani.map((x, j) => j === i ? { ...x, title: e.target.value } : x))} /></label>
+                  <label className="wa-f wa-f-grow"><span>說明</span><input className="wa-input" value={m.sub} onChange={e => setSite('manifesto', mani.map((x, j) => j === i ? { ...x, sub: e.target.value } : x))} /></label>
+                </div>
+              ))}
+            </div>
+
+            <h3 className="wa-h3">關於我們・四個堅持</h3>
+            <div className="wa-list">
+              {vals.map((v, i) => (
+                <div className="wa-item wa-item-store" key={i}>
+                  <label className="wa-f"><span>編號</span><input className="wa-input" value={v[0]} onChange={e => setSite('about.values', vals.map((r, j) => j === i ? [e.target.value, r[1], r[2]] : r))} /></label>
+                  <label className="wa-f wa-f-grow"><span>標題</span><input className="wa-input" value={v[1]} onChange={e => setSite('about.values', vals.map((r, j) => j === i ? [r[0], e.target.value, r[2]] : r))} /></label>
+                  <label className="wa-f wa-f-grow"><span>說明</span><input className="wa-input" value={v[2]} onChange={e => setSite('about.values', vals.map((r, j) => j === i ? [r[0], r[1], e.target.value] : r))} /></label>
+                </div>
+              ))}
+            </div>
+
+            <h3 className="wa-h3">首頁 Banner 輪播</h3>
+            <div className="wa-imgs">
+              {banners.map((im, i) => (
+                <div className="wa-imgs-item" key={i}>
+                  <Img value={im} onChange={v => setSite('banners', banners.map((x, j) => j === i ? v : x))} upload={upload} />
+                  <button className="wa-del sm" onClick={() => setSite('banners', banners.filter((_, j) => j !== i))}>移除</button>
+                </div>
+              ))}
+              <button className="wa-btn wa-btn-ghost" onClick={() => setSite('banners', [...banners, ''])}>＋ 加一張 Banner</button>
+            </div>
+            <div className="wa-hint">留空則使用預設 4 張。</div>
+
+            <h3 className="wa-h3">選購專區・分類說明</h3>
+            <div className="wa-list">
+              {CAT_META_KEYS.map(key => {
+                const cat = CATEGORIES.find(c => c.key === key)
+                return (
+                  <label className="wa-f wa-f-grow wa-meta" key={key}>
+                    <span>{cat?.label}</span>
+                    <input className="wa-input" value={getIn(merged, `catMeta.${key}`) ?? getCatMeta(key)} onChange={e => setSite(`catMeta.${key}`, e.target.value)} />
+                  </label>
+                )
+              })}
+            </div>
+          </section>
+        )
+      })()}
     </div>
   )
 }
@@ -267,6 +317,47 @@ export default function WinesweeAdmin() {
 function Gate({ title, body }) {
   return <div className="wa"><div className="wa-gate"><h2>{title}</h2><p>{body}</p></div></div>
 }
+
+// 穩定的文案欄位(定義在元件外,避免每次 render 重建造成輸入失焦)
+function SiteField({ label, value, onChange, ta }) {
+  return (
+    <label className={'wa-f wa-f-grow' + (ta ? ' wa-f-full' : '')}>
+      <span>{label}</span>
+      {ta
+        ? <textarea className="wa-input wa-ta" rows={2} value={value} onChange={e => onChange(e.target.value)} />
+        : <input className="wa-input" value={value} onChange={e => onChange(e.target.value)} />}
+    </label>
+  )
+}
+
+const SITE_GROUPS = [
+  { title: '品牌・社群・公告', fields: [
+    { label: 'LINE 連結', path: 'contact.line' }, { label: 'Facebook', path: 'contact.fb' }, { label: 'Instagram', path: 'contact.ig' },
+    { label: 'YouTube 頻道', path: 'contact.yt' }, { label: '客服信箱', path: 'contact.email' }, { label: '關於頁影片 embed 網址', path: 'contact.ytEmbed' },
+    { label: '頂部跑馬燈', path: 'announce', ta: 1 }, { label: '底部法規列', path: 'legal' },
+  ] },
+  { title: '首頁・英雄大圖', fields: [
+    { label: '小標(英文)', path: 'hero.kicker' }, { label: '大標第一行', path: 'hero.title1' }, { label: '大標第二行(可用*字*)', path: 'hero.title2' },
+    { label: '副標', path: 'hero.sub', ta: 1 }, { label: '按鈕一', path: 'hero.cta1' }, { label: '按鈕二', path: 'hero.cta2' },
+  ] },
+  { title: '首頁・各區塊文案', fields: [
+    { label: '選購專區 小標', path: 'home.shopKicker' }, { label: '選購專區 標題', path: 'home.shopTitle' },
+    { label: '精選列 標題', path: 'home.rowTitle' }, { label: '精選列 英文', path: 'home.rowEn' },
+    { label: '本季精選 小標', path: 'home.spotKicker' }, { label: '本季精選 標題(可用*字*)', path: 'home.spotTitle' }, { label: '本季精選 說明', path: 'home.spotDesc', ta: 1 }, { label: '本季精選 按鈕', path: 'home.spotCta' },
+    { label: '故事 小標', path: 'home.storyKicker' }, { label: '故事 標題(可用*字*)', path: 'home.storyTitle' }, { label: '故事 內文', path: 'home.storyBody', ta: 1 },
+    { label: '入手價(數字)', path: 'home.statPrice' }, { label: '入手價 標籤', path: 'home.statPriceLabel' }, { label: '故事 連結字', path: 'home.storyLink' },
+    { label: 'LINE區 標題(可用*字*)', path: 'home.ctaTitle' }, { label: 'LINE區 說明', path: 'home.ctaDesc', ta: 1 }, { label: 'LINE區 按鈕', path: 'home.ctaBtn' },
+  ] },
+  { title: '關於我們', fields: [
+    { label: '小標', path: 'about.kicker' }, { label: '主標題', path: 'about.title' }, { label: '導言', path: 'about.lead', ta: 1 },
+    { label: '故事標題(可用*字*)', path: 'about.storyTitle' }, { label: '故事內文', path: 'about.storyBody', ta: 1 },
+    { label: '影片區 標題', path: 'about.filmTitle' }, { label: '影片區 說明', path: 'about.filmBody', ta: 1 }, { label: '影片區 按鈕', path: 'about.filmCta' },
+    { label: '結尾 標題(可用*字*)', path: 'about.ctaTitle' }, { label: '結尾 說明', path: 'about.ctaBody' }, { label: '結尾 按鈕', path: 'about.ctaBtn' },
+  ] },
+  { title: '最新消息頁・LINE 區', fields: [
+    { label: '標題', path: 'newsCta.title' }, { label: '說明', path: 'newsCta.desc' }, { label: '按鈕', path: 'newsCta.btn' },
+  ] },
+]
 
 const SPEC_FIELDS = ['年份', '產區', '葡萄品種', '酒精濃度', 'ml數', '建議試飲溫度']
 const numv = v => parseFloat(String(v).replace(/[^0-9.]/g, '')) || 0

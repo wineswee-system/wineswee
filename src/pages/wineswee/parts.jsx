@@ -1,8 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { FaFacebookF, FaInstagram, FaYoutube, FaLine } from 'react-icons/fa'
-import { CATEGORIES, WINE_KEYS, FOOD_KEYS, getBanners, SITE, getStores } from './data'
+import { CATEGORIES, WINE_KEYS, FOOD_KEYS, getBanners, SITE, getStores, getSite } from './data'
 import { loadContent, subscribe } from './content'
+
+// 把 *文字* 轉成金色斜體 <em>(讓後台可用純文字標重點)
+export function Em({ children }) {
+  const parts = String(children ?? '').split(/(\*[^*]+\*)/g)
+  return <>{parts.map((p, i) => (p.startsWith('*') && p.endsWith('*') && p.length > 2) ? <em key={i}>{p.slice(1, -1)}</em> : p)}</>
+}
 
 // CJK 斷行控制 — 詞句只在標點/分隔處換行,永不腰斬（避免「門/市」被拆兩行）
 // 用法:<Balance>把餐桌上的美好，一次備齊</Balance>;可含 <br/> 與 <em>,字串節點自動分段
@@ -132,17 +138,18 @@ export function HeroSlider() {
   const n = banners.length
   const go = d => setI(v => (v + d + n) % n)
   useEffect(() => { const t = setInterval(() => setI(v => (v + 1) % n), 6000); return () => clearInterval(t) }, [n])
+  const h = getSite().hero
   return (
     <section className="hero" id="top">
       <div className="hero-left">
         <span className="hero-est">EST. — 威士威酒食超市</span>
         <div className="hero-copy">
-          <span className="kicker on-dark">Wine · Whisky · Gourmet</span>
-          <h1><span className="r1">為每一次相聚，</span><span className="r2">斟一杯剛剛好的<em>講究</em>。</span></h1>
-          <p className="hero-sub">嚴選世界餐酒與佐餐美食——從波爾多列級到里奧哈、伊比利火腿到歐陸乳酪，一站備齊你的餐桌。</p>
+          <span className="kicker on-dark">{h.kicker}</span>
+          <h1><span className="r1">{h.title1}</span><span className="r2"><Em>{h.title2}</Em></span></h1>
+          <p className="hero-sub">{h.sub}</p>
           <div className="hero-cta">
-            <a className="btn btn-gold" href="#cat-red">開始選酒</a>
-            <a className="btn btn-outline" href="#shop">探索選品</a>
+            <a className="btn btn-gold" href="#cat-red">{h.cta1}</a>
+            <a className="btn btn-outline" href="#shop">{h.cta2}</a>
           </div>
         </div>
       </div>
@@ -163,6 +170,7 @@ export function HeroSlider() {
 
 export function Header() {
   const [open, setOpen] = useState(false)
+  const C = getSite().contact
   const wine = CATEGORIES.filter(c => WINE_KEYS.includes(c.key))
   const food = CATEGORIES.filter(c => FOOD_KEYS.includes(c.key))
   useEffect(() => { document.body.style.overflow = open ? 'hidden' : ''; return () => { document.body.style.overflow = '' } }, [open])
@@ -178,7 +186,7 @@ export function Header() {
   return (
     <>
     <header className="header">
-      <div className="header-ann">威士威酒食超市　·　全台 11 家門市　·　線上宅配到府　·　未滿十八歲禁止飲酒</div>
+      <div className="header-ann">{getSite().announce}</div>
       <div className="wrap header-in">
         <Link className="logo" to="/wineswee" aria-label="Wineswee 威士威酒食超市" onClick={close}><img src={SITE.logo} alt="Wineswee 威士威酒食超市" /></Link>
         <nav className="nav">
@@ -188,12 +196,12 @@ export function Header() {
           <Link className="nav-top" to="/wineswee/news">主題活動</Link>
           <Link className="nav-top" to="/wineswee/news">酒品知識</Link>
           <Link className="nav-top" to="/wineswee/stores">門市資訊</Link>
-          <a className="nav-top" href={SITE.line} target="_blank" rel="noreferrer">加入會員</a>
-          <a className="nav-top" href={SITE.line} target="_blank" rel="noreferrer">訂單查詢</a>
-          <a className="nav-top" href={`mailto:${SITE.email}`}>加盟專區</a>
+          <a className="nav-top" href={C.line} target="_blank" rel="noreferrer">加入會員</a>
+          <a className="nav-top" href={C.line} target="_blank" rel="noreferrer">訂單查詢</a>
+          <a className="nav-top" href={`mailto:${C.email}`}>加盟專區</a>
         </nav>
         <div className="header-cta">
-          <a className="chip chip-line" href={SITE.line} target="_blank" rel="noreferrer">LINE 訂購</a>
+          <a className="chip chip-line" href={C.line} target="_blank" rel="noreferrer">LINE 訂購</a>
           <button className={'burger' + (open ? ' on' : '')} onClick={() => setOpen(o => !o)} aria-label="選單" aria-expanded={open}><span /><span /><span /></button>
         </div>
       </div>
@@ -207,9 +215,9 @@ export function Header() {
           <div className="nm-grp"><h5>美食・酒器</h5><div className="nm-cats">{food.map(c => <Link key={c.key} to={`/wineswee/category/${c.key}`} onClick={close}>{c.label}<em>{c.en}</em></Link>)}</div></div>
           <Link className="nm-lead" to="/wineswee/news" onClick={close}>主題活動・酒品知識</Link>
           <Link className="nm-lead" to="/wineswee/stores" onClick={close}>門市資訊</Link>
-          <a className="nm-lead" href={SITE.line} target="_blank" rel="noreferrer">加入會員・訂單查詢</a>
-          <a className="nm-lead" href={`mailto:${SITE.email}`}>加盟專區</a>
-          <a className="btn btn-line nm-line" href={SITE.line} target="_blank" rel="noreferrer">加入 LINE 訂購</a>
+          <a className="nm-lead" href={C.line} target="_blank" rel="noreferrer">加入會員・訂單查詢</a>
+          <a className="nm-lead" href={`mailto:${C.email}`}>加盟專區</a>
+          <a className="btn btn-line nm-line" href={C.line} target="_blank" rel="noreferrer">加入 LINE 訂購</a>
         </div>
       </div>
     </>
@@ -224,12 +232,13 @@ export function SideRail() {
     onScroll(); window.addEventListener('scroll', onScroll, { passive: true })
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
+  const C = getSite().contact
   return (
     <div className="siderail">
-      <a className="rail-ic" href={SITE.fb} target="_blank" rel="noreferrer" aria-label="Facebook"><FaFacebookF /></a>
-      <a className="rail-ic" href={SITE.ig} target="_blank" rel="noreferrer" aria-label="Instagram"><FaInstagram /></a>
-      <a className="rail-ic" href="https://m.youtube.com/@wineswee241" target="_blank" rel="noreferrer" aria-label="YouTube"><FaYoutube /></a>
-      <a className="rail-ic rail-line" href={SITE.line} target="_blank" rel="noreferrer" aria-label="LINE"><FaLine /></a>
+      <a className="rail-ic" href={C.fb} target="_blank" rel="noreferrer" aria-label="Facebook"><FaFacebookF /></a>
+      <a className="rail-ic" href={C.ig} target="_blank" rel="noreferrer" aria-label="Instagram"><FaInstagram /></a>
+      <a className="rail-ic" href={C.yt} target="_blank" rel="noreferrer" aria-label="YouTube"><FaYoutube /></a>
+      <a className="rail-ic rail-line" href={C.line} target="_blank" rel="noreferrer" aria-label="LINE"><FaLine /></a>
       <button className={'rail-top' + (showTop ? ' on' : '')} onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} aria-label="回到頂端">
         <span>▲</span>TOP
       </button>
@@ -238,6 +247,8 @@ export function SideRail() {
 }
 
 export function Footer() {
+  const site = getSite()
+  const C = site.contact
   const mapUrl = s => `https://www.google.com/maps/search/${encodeURIComponent('威士威酒食超市 ' + s.full + ' ' + s.addr)}`
   return (
     <>
@@ -246,13 +257,12 @@ export function Footer() {
         <div className="wrap footer-grid">
           {/* 品牌 + 客服 */}
           <div className="footer-brand">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img className="footer-logo" src={SITE.logo} alt="Wineswee 威士威酒食超市" />
-            <a className="footer-mail" href={`mailto:${SITE.email}`}>客服信箱：{SITE.email}</a>
+            <img className="footer-logo" src={site.logo} alt="Wineswee 威士威酒食超市" />
+            <a className="footer-mail" href={`mailto:${C.email}`}>客服信箱：{C.email}</a>
             <div className="footer-social">
-              <a href={SITE.fb} target="_blank" rel="noreferrer">Facebook</a>
-              <a href={SITE.ig} target="_blank" rel="noreferrer">Instagram</a>
-              <a href={SITE.line} target="_blank" rel="noreferrer">LINE</a>
+              <a href={C.fb} target="_blank" rel="noreferrer">Facebook</a>
+              <a href={C.ig} target="_blank" rel="noreferrer">Instagram</a>
+              <a href={C.line} target="_blank" rel="noreferrer">LINE</a>
             </div>
           </div>
           {/* 全台門市名錄 */}
@@ -270,12 +280,12 @@ export function Footer() {
             <Link to="/wineswee/about">關於我們</Link>
             <Link to="/wineswee/news">最新消息</Link>
             <Link to="/wineswee/stores">門市據點</Link>
-            <a href={`mailto:${SITE.email}`}>聯繫我們</a>
+            <a href={`mailto:${C.email}`}>聯繫我們</a>
           </div>
         </div>
         <div className="footer-copy">Copyright © 2026 WINESWEE 威士威酒食超市. All Rights Reserved.</div>
       </footer>
-      <div className="ws-legalbar">禁止酒駕　　未滿十八歲禁止飲酒</div>
+      <div className="ws-legalbar">{site.legal}</div>
     </>
   )
 }

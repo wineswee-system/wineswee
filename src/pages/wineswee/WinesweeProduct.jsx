@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import './wineswee.css'
-import { getProduct, related, getDetail, specRows, byCategory, CATEGORIES, WINE_KEYS, FOOD_KEYS, CAT_LABEL, CAT_EN, SITE } from './data'
+import { getProduct, related, getDetail, specRows, byCategory, CATEGORIES, WINE_KEYS, FOOD_KEYS, CAT_LABEL, CAT_EN, getSite } from './data'
 import { Header, ProductCard, Footer, useBodyScroll, Balance, Reveal } from './parts'
 
 const BLURB = {
@@ -113,7 +113,7 @@ export default function WinesweeProduct() {
               <div className="pdp-hint"><span>🍷</span>{p.sold_out ? '此品項暫時售完，可加 LINE 詢問到貨' : '現貨供應・全台宅配到府或門市自取'}</div>
               <div className="pdp-cta2">
                 <Link className="btn btn-ink" to="/wineswee/stores">門市選購</Link>
-                <a className="btn btn-line" href={SITE.line} target="_blank" rel="noreferrer">加 LINE 詢價</a>
+                <a className="btn btn-line" href={getSite().contact.line} target="_blank" rel="noreferrer">加 LINE 詢價</a>
               </div>
             </div>
           </div>

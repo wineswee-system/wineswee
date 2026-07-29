@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import './wineswee.css'
-import { getNews, getNewsDetails, SITE } from './data'
+import { getNews, getNewsDetails, getSite } from './data'
 import { Header, Footer, Reveal, useBodyScroll } from './parts'
 
 export default function WinesweeNewsDetail() {
@@ -34,7 +34,7 @@ export default function WinesweeNewsDetail() {
 
         <div className="newspage-cta">
           <p>想收到第一手活動與新品消息？</p>
-          <a className="btn btn-line" href={SITE.line} target="_blank" rel="noreferrer">加入 LINE 官方帳號</a>
+          <a className="btn btn-line" href={getSite().contact.line} target="_blank" rel="noreferrer">加入 LINE 官方帳號</a>
         </div>
       </section>
 

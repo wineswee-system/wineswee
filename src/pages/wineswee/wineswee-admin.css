@@ -98,6 +98,8 @@ select.wa-input { cursor: pointer; }
 .wa-secedit-h { display: flex; gap: 8px; align-items: center; }
 .wa-secedit-h .wa-input:first-child { flex: 0 0 40%; }
 .wa-sub b { color: var(--accent-cyan); }
+.wa-fgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; margin-bottom: 6px; }
+.wa-f-full { grid-column: 1 / -1; }
 
 @media (max-width: 640px) {
   .wa-item-main { flex-wrap: wrap; }

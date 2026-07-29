@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import './wineswee.css'
-import { getNewsList, SITE } from './data'
+import { getNewsList, getSite } from './data'
 import { Header, Footer, Reveal, useBodyScroll } from './parts'
 
 export default function WinesweeNews() {
@@ -31,8 +31,8 @@ export default function WinesweeNews() {
       </Reveal>
       <Reveal tag="section" className="cta">
         <div className="wrap cta-in">
-          <div><h2>不錯過任何一檔活動</h2><p>加入 LINE，新品與優惠第一時間通知你。</p></div>
-          <a className="btn btn-line" href={SITE.line} target="_blank" rel="noreferrer">加入 LINE 官方帳號</a>
+          <div><h2>{getSite().newsCta.title}</h2><p>{getSite().newsCta.desc}</p></div>
+          <a className="btn btn-line" href={getSite().contact.line} target="_blank" rel="noreferrer">{getSite().newsCta.btn}</a>
         </div>
       </Reveal>
       <Footer />

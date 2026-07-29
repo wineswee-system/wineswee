@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef } from 'react'
+﻿import { useState, useEffect, useRef, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Sparkles, Shield, Save, Code, Wand2, ChevronDown } from 'lucide-react'
 import { supabase } from '../../lib/supabase'

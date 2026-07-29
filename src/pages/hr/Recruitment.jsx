@@ -634,6 +634,21 @@ export default function Recruitment() {
     if (data) setJobs(prev => prev.map(j => j.id === id ? data : j))
   }
 
+  // 刪除職缺（硬刪，無 deleted_at）— 有候選人先擋，避免孤兒
+  const handleDeleteJob = async (j) => {
+    const { count } = await supabase.from('candidates').select('*', { count: 'exact', head: true }).eq('job_id', j.id)
+    if (count > 0) {
+      toast.error(`此職缺有 ${count} 位候選人，不能刪除。請先處理候選人，或改用「關閉」。`)
+      return
+    }
+    const ok = await confirm(`確定刪除職缺「${j.title}」？此動作無法復原。`)
+    if (!ok) return
+    const { error } = await supabase.from('recruitment_jobs').delete().eq('id', j.id)
+    if (error) { toast.error('刪除失敗：' + error.message); return }
+    setJobs(prev => prev.filter(x => x.id !== j.id))
+    toast.success('已刪除職缺')
+  }
+
   // ── Candidate handlers ──
   const handleAddCandidate = async () => {
     if (!candForm.name.trim()) { toast('請填寫姓名'); return }
@@ -1195,6 +1210,9 @@ export default function Recruitment() {
                           {j.status === '招募中' && (
                             <button className="btn btn-sm btn-secondary" onClick={() => handleCloseJob(j.id)}>關閉</button>
                           )}
+                          <button className="btn btn-sm btn-secondary" style={{ color: 'var(--accent-red)' }} onClick={() => handleDeleteJob(j)} title="刪除職缺">
+                            <Trash2 size={12} />
+                          </button>
                         </div>
                       </td>
                     </tr>

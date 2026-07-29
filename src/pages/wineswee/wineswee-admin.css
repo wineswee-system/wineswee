@@ -127,3 +127,25 @@ select.wa-input { cursor: pointer; }
 .wa-imglist-btns { display: flex; gap: 5px; flex: 0 0 auto; }
 .wa-imglist-btns .wa-btn { padding: 6px 10px; }
 @media (max-width: 640px) { .wa-imglist-item { flex-wrap: wrap; } .wa-imglist-ctl { flex-wrap: wrap; } }
+/* 版面編輯器(拖曳調寬度、即時預覽) */
+.ge { border: 1px solid var(--border-primary); border-radius: 8px; padding: 12px; background: var(--bg-primary); }
+.ge-grid { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start; margin-bottom: 10px; }
+.ge-item { min-width: 60px; }
+.ge-frame { position: relative; border: 1px solid var(--border-primary); border-radius: 6px; overflow: hidden; background: #fff; min-height: 60px; user-select: none; }
+.ge-frame img { width: 100%; height: auto; display: block; }
+.ge-empty { display: grid; place-items: center; height: 80px; color: var(--text-muted); font-size: 12px; }
+.ge-badge { position: absolute; top: 6px; left: 6px; background: rgba(0,0,0,.62); color: #fff; font-size: 11px; padding: 2px 8px; border-radius: 20px; pointer-events: none; }
+.ge-quick { position: absolute; top: 6px; right: 14px; display: flex; gap: 4px; opacity: 0; transition: .2s; }
+.ge-frame:hover .ge-quick { opacity: 1; }
+.ge-quick button { background: rgba(0,0,0,.62); color: #fff; border: none; border-radius: 5px; font-size: 11px; padding: 3px 7px; cursor: pointer; }
+.ge-quick button:hover { background: var(--accent-cyan); }
+.ge-handle { position: absolute; top: 0; right: 0; width: 14px; height: 100%; cursor: ew-resize; background: linear-gradient(90deg, transparent, rgba(0,0,0,.18)); }
+.ge-handle::after { content: "⠿"; position: absolute; top: 50%; right: 1px; transform: translateY(-50%); color: #fff; font-size: 12px; text-shadow: 0 0 3px rgba(0,0,0,.5); }
+.ge-handle:hover, .ge-handle:active { background: var(--accent-cyan); }
+.ge-tools { position: absolute; bottom: 6px; left: 6px; display: flex; gap: 4px; opacity: 0; transition: .2s; }
+.ge-frame:hover .ge-tools { opacity: 1; }
+.ge-tools button, .ge-up { background: rgba(0,0,0,.62); color: #fff; border: none; border-radius: 5px; font-size: 12px; padding: 3px 8px; cursor: pointer; display: inline-flex; align-items: center; }
+.ge-tools button:hover, .ge-up:hover { background: var(--accent-cyan); }
+.ge-tools button:disabled { opacity: .4; cursor: default; }
+.ge-del:hover { background: var(--accent-red) !important; }
+.ge-url { margin-top: 5px; font-size: 12px; }

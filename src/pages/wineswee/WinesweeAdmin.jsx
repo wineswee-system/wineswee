@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -48,29 +48,47 @@ function Img({ value, onChange, upload, small }) {
   )
 }
 
-// 一組圖片:每張可上傳/貼網址/↑↓排序/刪除
-function ImageList({ images, onChange, upload }) {
-  const list = images || []
-  const setAt = (i, v) => onChange(list.map((x, j) => j === i ? v : x))
-  const move = (i, d) => { const L = [...list]; const j = i + d; if (j < 0 || j >= L.length) return;[L[i], L[j]] = [L[j], L[i]]; onChange(L) }
+// 版面編輯:每張圖是一個框,拖右邊調寬度、即時預覽版面(兩張並排/一張全寬…),可上傳/排序/刪
+function GalleryEditor({ images, onChange, upload }) {
+  const gridRef = useRef(null)
+  const list = (images || []).map(x => typeof x === 'string' ? { src: x, w: 100 } : { src: x?.src || '', w: x?.w || 100 })
+  const commit = arr => onChange(arr.map(x => (x.w >= 100 ? x.src : { src: x.src, w: x.w })))
+  const setAt = (i, patch) => commit(list.map((x, j) => j === i ? { ...x, ...patch } : x))
+  const move = (i, d) => { const L = [...list]; const j = i + d; if (j < 0 || j >= L.length) return;[L[i], L[j]] = [L[j], L[i]]; commit(L) }
+  const startResize = (i, e) => {
+    e.preventDefault()
+    const gw = gridRef.current?.offsetWidth || 800
+    const startX = e.clientX, startW = list[i].w
+    const onMove = ev => { let w = Math.round((startW + (ev.clientX - startX) / gw * 100) / 5) * 5; w = Math.max(20, Math.min(100, w)); setAt(i, { w }) }
+    const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp) }
+    window.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onUp)
+  }
   return (
-    <div className="wa-imglist">
-      {list.map((im, i) => (
-        <div className="wa-imglist-item" key={i}>
-          <span className="wa-imglist-n">{i + 1}</span>
-          <div className="wa-imglist-thumb">{im ? <img src={im} alt="" /> : <span>空</span>}</div>
-          <div className="wa-imglist-ctl">
-            <input className="wa-input" placeholder="貼圖片網址，或用右邊上傳" value={im || ''} onChange={e => setAt(i, e.target.value)} />
-            <div className="wa-imglist-btns">
-              <label className="wa-btn wa-btn-ghost">上傳<input type="file" accept="image/*" hidden onChange={async e => { const f = e.target.files?.[0]; if (!f) return; const url = await upload(f); if (url) setAt(i, url); e.target.value = '' }} /></label>
-              <button className="wa-btn wa-btn-ghost" disabled={i === 0} onClick={() => move(i, -1)}>↑</button>
-              <button className="wa-btn wa-btn-ghost" disabled={i === list.length - 1} onClick={() => move(i, 1)}>↓</button>
-              <button className="wa-del sm" onClick={() => onChange(list.filter((_, j) => j !== i))}>刪</button>
+    <div className="ge">
+      <div className="ge-grid" ref={gridRef}>
+        {list.map((im, i) => (
+          <div className="ge-item" style={{ width: im.w + '%' }} key={i}>
+            <div className="ge-frame">
+              {im.src ? <img src={im.src} alt="" /> : <span className="ge-empty">未設圖</span>}
+              <span className="ge-badge">{im.w}%</span>
+              <div className="ge-quick">
+                <button type="button" title="全寬" onClick={() => setAt(i, { w: 100 })}>全寬</button>
+                <button type="button" title="半寬" onClick={() => setAt(i, { w: 50 })}>½</button>
+                <button type="button" title="三分一" onClick={() => setAt(i, { w: 33 })}>⅓</button>
+              </div>
+              <span className="ge-handle" onMouseDown={e => startResize(i, e)} title="拖曳調整寬度" />
+              <div className="ge-tools">
+                <label className="ge-up" title="上傳">⬆<input type="file" accept="image/*" hidden onChange={async e => { const f = e.target.files?.[0]; if (!f) return; const url = await upload(f); if (url) setAt(i, { src: url }); e.target.value = '' }} /></label>
+                <button type="button" title="左移" onClick={() => move(i, -1)} disabled={i === 0}>←</button>
+                <button type="button" title="右移" onClick={() => move(i, 1)} disabled={i === list.length - 1}>→</button>
+                <button type="button" className="ge-del" title="刪除" onClick={() => commit(list.filter((_, j) => j !== i))}>✕</button>
+              </div>
             </div>
+            <input className="wa-input ge-url" placeholder="圖片網址（或用框內 ⬆ 上傳）" value={im.src} onChange={e => setAt(i, { src: e.target.value })} />
           </div>
-        </div>
-      ))}
-      <button className="wa-btn wa-btn-ghost" onClick={() => onChange([...list, ''])}>＋ 加一張圖</button>
+        ))}
+      </div>
+      <button className="wa-btn wa-btn-ghost" onClick={() => commit([...list, { src: '', w: 100 }])}>＋ 加一張圖</button>
     </div>
   )
 }
@@ -233,8 +251,8 @@ export default function WinesweeAdmin() {
                       </div>
                       <div className="wa-sub">封面（子文章卡）</div>
                       <Img value={s.cover} onChange={v => setSub(si, 'cover', v)} upload={upload} small />
-                      <div className="wa-sub">圖片（依序顯示，可上傳／排序／刪）</div>
-                      <ImageList images={s.images} onChange={imgs => setSub(si, 'images', imgs)} upload={upload} />
+                      <div className="wa-sub">版面（拖每張圖右邊 ⠿ 調寬度／全寬½⅓快速鈕，即時預覽如何排）</div>
+                      <GalleryEditor images={s.images} onChange={imgs => setSub(si, 'images', imgs)} upload={upload} />
                     </div>
                   ))}
                   <button className="wa-btn wa-btn-ghost" onClick={() => set('subs', [...subs, { title: '新的一篇', date: nw.date || '', cover: '', images: [] }])}>＋ 新增一篇子文章</button>

@@ -49,8 +49,12 @@ export default function WinesweeNewsDetail() {
             ))}
           </div>
         ) : (
-          <Reveal tag="article" className="newspage-body">
-            {images.map((src, i) => <img key={i} src={src} alt={`${heading} ${i + 1}`} loading={i < 2 ? 'eager' : 'lazy'} />)}
+          <Reveal tag="article" className="newspage-gallery">
+            {images.map((im, i) => {
+              const src = typeof im === 'string' ? im : im?.src
+              const w = (typeof im === 'object' && im?.w) ? im.w : 100
+              return src ? <img key={i} src={src} alt={`${heading} ${i + 1}`} loading={i < 2 ? 'eager' : 'lazy'} style={{ width: `calc(${w}% - ${w < 100 ? 6 : 0}px)` }} /> : null
+            })}
           </Reveal>
         )}
 

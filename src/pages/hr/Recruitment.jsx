@@ -640,6 +640,20 @@ export default function Recruitment() {
     if (data) setJobs(prev => prev.map(j => j.id === id ? data : j))
   }
 
+  // 上下移動職缺顯示順序(交換 sort_order)— 表格 + 新增候選人下拉共用此順序
+  const moveJob = async (job, dir) => {
+    const idx = filteredJobs.findIndex(j => j.id === job.id)
+    const j2 = filteredJobs[idx + dir]
+    if (!j2) return
+    const a = job.sort_order ?? idx
+    const b = j2.sort_order ?? (idx + dir)
+    setJobs(prev => prev.map(j => j.id === job.id ? { ...j, sort_order: b } : (j.id === j2.id ? { ...j, sort_order: a } : j)))
+    await Promise.all([
+      updateRecruitmentJob(job.id, { sort_order: b }),
+      updateRecruitmentJob(j2.id, { sort_order: a }),
+    ])
+  }
+
   // 刪除職缺（硬刪，無 deleted_at）— 有候選人先擋，避免孤兒
   const handleDeleteJob = async (j) => {
     const { count } = await supabase.from('candidates').select('*', { count: 'exact', head: true }).eq('job_id', j.id)
@@ -988,7 +1002,13 @@ export default function Recruitment() {
   }
 
   // ── derived ──
-  const filteredJobs  = jobs.filter(j => deptFilter === '' || j.dept === deptFilter)
+  // 依 sort_order 排（沒設的排後面 → 再依刊登日新→舊）；下拉、表格共用此順序
+  const byJobOrder = (a, b) =>
+    (a.sort_order ?? 99999) - (b.sort_order ?? 99999) ||
+    (new Date(b.posted || 0) - new Date(a.posted || 0)) ||
+    (b.id - a.id)
+  const sortedJobs    = [...jobs].sort(byJobOrder)
+  const filteredJobs  = sortedJobs.filter(j => deptFilter === '' || j.dept === deptFilter)
   const filteredCands = candidates.filter(c => {
     const q = searchQuery.toLowerCase()
     const matchSearch = !q || c.name.toLowerCase().includes(q) || (c.email || '').toLowerCase().includes(q)
@@ -1209,7 +1229,13 @@ export default function Recruitment() {
                         </span>
                       </td>
                       <td>
-                        <div style={{ display: 'flex', gap: 6 }}>
+                        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                            <button className="btn btn-sm btn-secondary" style={{ padding: '0 5px', fontSize: 9, lineHeight: 1.1 }} title="上移"
+                              disabled={filteredJobs[0]?.id === j.id} onClick={() => moveJob(j, -1)}>▲</button>
+                            <button className="btn btn-sm btn-secondary" style={{ padding: '0 5px', fontSize: 9, lineHeight: 1.1 }} title="下移"
+                              disabled={filteredJobs[filteredJobs.length - 1]?.id === j.id} onClick={() => moveJob(j, 1)}>▼</button>
+                          </div>
                           <button className="btn btn-sm btn-secondary" onClick={() => openEditJob(j)}>
                             <Edit3 size={12} />
                           </button>
@@ -1244,7 +1270,7 @@ export default function Recruitment() {
             </div>
             <select className="form-input" style={{ fontSize: 13, minWidth: 160 }} value={jobFilter} onChange={e => setJobFilter(e.target.value)}>
               <option value="">全部職缺</option>
-              {jobs.map(j => <option key={j.id} value={String(j.id)}>{j.title}</option>)}
+              {sortedJobs.map(j => <option key={j.id} value={String(j.id)}>{j.title}</option>)}
             </select>
             <select className="form-input" style={{ fontSize: 13, minWidth: 120 }} value={stageFilter} onChange={e => setStageFilter(e.target.value)}>
               <option value="">全部階段</option>
@@ -1313,7 +1339,7 @@ export default function Recruitment() {
             </div>
             <select className="form-input" style={{ fontSize: 13, minWidth: 160 }} value={intJobFilter} onChange={e => setIntJobFilter(e.target.value)}>
               <option value="">全部職缺</option>
-              {jobs.map(j => <option key={j.id} value={String(j.id)}>{j.title}</option>)}
+              {sortedJobs.map(j => <option key={j.id} value={String(j.id)}>{j.title}</option>)}
             </select>
             <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>共 {filteredInterviews.length} 場</span>
             <button className="btn btn-primary" style={{ marginLeft: 'auto' }} onClick={() => {
@@ -1832,7 +1858,7 @@ export default function Recruitment() {
               <select className="form-input" style={{ width: '100%' }} value={candForm.job_id}
                 onChange={e => setCandForm(f => ({ ...f, job_id: e.target.value }))}>
                 <option value="">請選擇</option>
-                {jobs.filter(j => j.status === '招募中').map(j => <option key={j.id} value={j.id}>{j.title}</option>)}
+                {sortedJobs.filter(j => j.status === '招募中').map(j => <option key={j.id} value={j.id}>{j.title}</option>)}
               </select>
             </Field>
             <Field label="來源">

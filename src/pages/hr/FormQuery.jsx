@@ -5,6 +5,13 @@ import { useAuth } from '../../contexts/AuthContext'
 import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
 import ApprovalDetailModal from '../../components/ApprovalDetailModal'
+import { buildFormChainSteps, mergeStepSignTimes } from '../../lib/buildChainSteps'
+
+// form_type → 凍結快照 request_type(leave/overtime 尾綴 _request,其餘同名)
+const SNAP_RT = {
+  leave: 'leave_request', overtime: 'overtime_request', trip: 'trip', correction: 'correction',
+  resignation: 'resignation', loa: 'loa', transfer: 'transfer', headcount: 'headcount',
+}
 
 // form_type → 實表名（抽單 soft_delete_request 用）
 const TYPE_TABLE = {
@@ -78,11 +85,35 @@ export default function FormQuery() {
     if (!table) { toast.error('此表單類型暫不支援詳細檢視'); return }
     const { data: rec, error } = await supabase.from(table).select('*').eq('id', r.id).maybeSingle()
     if (error || !rec) { toast.error('讀取表單失敗：' + (error?.message || '找不到')); return }
-    const q = supabase.from('employees').select('name, name_en, position, status, employee_no, avatar_url')
+    // ★ employees 沒有 employee_no 欄(是 employee_number);select 到不存在欄位整包回 null → 職稱/部門全空
+    const empCols = 'id, name, name_en, position, dept, status, employee_number, avatar_url'
+    const empName = rec.employee || rec.employee_name || r.applicant
     const { data: emp } = rec.employee_id
-      ? await q.eq('id', rec.employee_id).maybeSingle()
-      : await q.eq('name', rec.employee || r.applicant).maybeSingle()
-    setDetail({ type: r.form_type, row: rec, emp, r })
+      ? await supabase.from('employees').select(empCols).eq('id', rec.employee_id).maybeSingle()
+      : await supabase.from('employees').select(empCols).eq('name', empName).maybeSingle()
+    // 先把框開起來(chain 之後補),避免點擊到出現有延遲
+    setDetail({ type: r.form_type, row: rec, emp, r, chainSteps: null })
+    // ★ 跟 HR 各頁/PDF 同源:buildFormChainSteps 讀 form_chain_configs + 凍結快照,mergeStepSignTimes 補每關簽核時間
+    try {
+      let steps = await buildFormChainSteps({
+        formType: r.form_type,
+        organizationId: profile?.organization_id,
+        applicantName: emp?.name || empName,
+        applicantId: emp?.id || rec.employee_id,
+        applicantCreatedAt: rec.created_at,
+        recordStatus: rec.status,
+        approverName: rec.approver,
+        approvedAt: rec.approved_at,
+        rejectReason: rec.reject_reason,
+        requestType: SNAP_RT[r.form_type] || r.form_type,
+        requestId: rec.id,
+        currentStep: rec.current_step,
+      })
+      steps = await mergeStepSignTimes(r.form_type, rec.id, steps)
+      setDetail(d => (d && d.type === r.form_type && d.row?.id === rec.id) ? { ...d, chainSteps: steps } : d)
+    } catch (e) {
+      setDetail(d => (d && d.type === r.form_type && d.row?.id === rec.id) ? { ...d, chainSteps: [] } : d)
+    }
   }
   const toggleSel = (r) => setSelected(prev => { const n = new Set(prev); const k = rowKey(r); n.has(k) ? n.delete(k) : n.add(k); return n })
   const selectedRows = () => data.rows.filter(r => selected.has(rowKey(r)))
@@ -278,13 +309,15 @@ export default function FormQuery() {
             name: detail.emp?.name || detail.row.employee || detail.r?.applicant,
             name_en: detail.emp?.name_en,
             position: detail.emp?.position,
+            dept: detail.emp?.dept,
             status: detail.emp?.status,
-            employee_no: detail.emp?.employee_no || (detail.row.employee_id ? `ID ${detail.row.employee_id}` : undefined),
+            employee_no: detail.emp?.employee_number || (detail.row.employee_id ? `ID ${detail.row.employee_id}` : undefined),
             avatar_url: detail.emp?.avatar_url,
           }}
           fields={buildDetailFields(detail.row, detail.r)}
           attachments={(detail.row.attachments || []).map(url => ({ url, name: decodeURIComponent(String(url).split('?')[0].split('/').pop() || '附件') }))}
           createdAt={detail.row.created_at}
+          chainSteps={detail.chainSteps == null ? [{ label: '載入中…', name: '', status: 'pending' }] : detail.chainSteps}
           requestType={detail.type}
           requestId={detail.row.id}
         />

@@ -84,6 +84,7 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
   const detailRowIdRef = useRef(null)
   const [form, setForm] = useState(emptyForm)
   const [settleForm, setSettleForm] = useState({ actual_amount: '', notes: '' })
+  const [settleEditMode, setSettleEditMode] = useState(false)  // true=編輯已送出的待核銷單(還沒人簽);false=首次/重新送驗收
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
   const [tab, setTab] = useState('all')
@@ -481,6 +482,7 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
   // Open settle modal
   const openSettle = (req) => {
     setShowDetail(req)
+    setSettleEditMode(false)
     // 重新核銷：保留原本填的金額；首次核銷：以申請金額為預設值
     setSettleForm({
       actual_amount: req.actual_amount ?? req.estimated_amount,
@@ -488,6 +490,56 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
     })
     setSettleFiles([])
     setShowSettleModal(true)
+  }
+
+  // 編輯「已送出、還沒人簽」的待核銷單（不重送、不動鏈；走 update_pending_settle）
+  const openSettleEdit = (req) => {
+    setShowDetail(req)
+    setSettleEditMode(true)
+    setSettleForm({
+      actual_amount: req.actual_amount ?? req.estimated_amount,
+      notes: req.notes || '',
+    })
+    setSettleFiles([])
+    setShowSettleModal(true)
+  }
+
+  // 儲存待核銷編輯：只改金額/備註 + 補收據，不改狀態、不推鏈
+  const handleSaveSettleEdit = async () => {
+    if (!validateRequired(settleForm, ['actual_amount'], setErrors)) {
+      toast.error('請先填寫實際金額')
+      return
+    }
+    setSaving(true)
+    const req = showDetail
+    const { data: res, error: upErr } = await supabase.rpc('update_pending_settle', {
+      p_id: req.id,
+      p_actual_amount: Number(settleForm.actual_amount),
+      p_notes: settleForm.notes || null,
+    })
+    if (upErr) { toast.error('儲存失敗：' + upErr.message); setSaving(false); return }
+    if (!res?.ok) {
+      const map = {
+        ALREADY_SIGNED: '已有人簽核，無法再編輯（請等簽核人退回後重送）',
+        NOT_PENDING_SETTLE: `此單狀態（${res?.status || ''}）無法編輯驗收`,
+        NOT_SETTLE_OWNER: '只有驗收/核銷負責人才能編輯此單',
+        NOT_FOUND: '找不到此單', AMOUNT_REQUIRED: '請填寫實際金額', NOT_AUTHENTICATED: '尚未登入',
+      }
+      toast.error('儲存失敗：' + (map[res?.error] || res?.error || '未知錯誤'))
+      setSaving(false)
+      return
+    }
+    // 補上新增的收據附件（沿用既有 settlement stage 上傳）
+    if (settleFiles.length > 0) {
+      await uploadFiles(req.id, settleFiles, 'settlement')
+    }
+    setSaving(false)
+    setShowSettleModal(false)
+    setSettleEditMode(false)
+    setShowDetail(null)
+    setDetailChainSteps([])
+    toast.success('驗收單已更新')
+    load()
   }
 
   // Open detail modal: load attachments + build 2-stage chain steps
@@ -986,6 +1038,12 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
                           ✏️ {verb('重新驗收', DOC)}
                         </button>
                       )}
+                      {/* 待核銷 + 還沒人簽(settle_current_step=0)→ 本人可就地編輯金額/備註/收據 */}
+                      {r.status === '待核銷' && (r.settle_current_step ?? 0) === 0 && (r.settle_assignee_id === profile?.id || (!r.settle_assignee_id && r.employee_id === profile?.id)) && (
+                        <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: 11 }} onClick={() => openSettleEdit(r)}>
+                          ✏️ {verb('編輯驗收', DOC)}
+                        </button>
+                      )}
                       {['申請中','待審','已駁回','已退回'].includes(r.status) && r.employee === profile?.name && (
                         <button className="btn btn-primary" style={{ padding: '4px 8px', fontSize: 11, background: 'var(--accent-orange)' }} onClick={() => openEditResubmit(r)}>
                           ✏️ {(r.status === '已駁回' || r.status === '已退回') ? '編輯重送' : '編輯'}
@@ -1042,17 +1100,18 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
       {/* Settlement Modal */}
       <SettleModal
         open={showSettleModal && !!showDetail}
-        onClose={() => { setShowSettleModal(false); setErrors({}); setSettleFiles([]) }}
+        onClose={() => { setShowSettleModal(false); setSettleEditMode(false); setErrors({}); setSettleFiles([]) }}
         request={showDetail}
         settleForm={settleForm}
         setSettleForm={setSettleForm}
         settleFiles={settleFiles}
         setSettleFiles={setSettleFiles}
-        onSubmit={handleSettle}
+        onSubmit={settleEditMode ? handleSaveSettleEdit : handleSettle}
         saving={saving}
         errors={errors}
         setErrors={setErrors}
         settleVerb={DOC.settleVerb}
+        editMode={settleEditMode}
       />
 
       {/* Detail Modal — split layout 與其他簽核表單一致 */}
@@ -1218,6 +1277,18 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
             createdAt={showDetail.created_at}
             chainSteps={loadingChain ? [{ label: '載入中…', name: '', status: 'pending' }] : detailChainSteps}
             onPrint={handlePrintSignOff}
+            headerExtra={
+              // 待核銷 + 還沒人簽(settle_current_step=0)+ 本人 → 明細內也能直接編輯驗收
+              showDetail.status === '待核銷'
+              && (showDetail.settle_current_step ?? 0) === 0
+              && (showDetail.settle_assignee_id === profile?.id || (!showDetail.settle_assignee_id && showDetail.employee_id === profile?.id))
+                ? (
+                  <button className="btn btn-secondary" style={{ fontSize: 14, padding: '8px 14px' }} onClick={() => openSettleEdit(showDetail)}>
+                    ✏️ {verb('編輯驗收', DOC)}
+                  </button>
+                )
+                : null
+            }
             actions={(() => {
               // 申請中：走 expense_request_step_advance（支援加簽）
               // 加簽 / 核准 / 退回 後重抓 row 跟 chainSteps，不關 modal

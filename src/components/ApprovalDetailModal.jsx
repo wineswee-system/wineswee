@@ -69,6 +69,7 @@ export default function ApprovalDetailModal({
   createdAt,
   chainSteps = [],
   onPrint,
+  headerExtra,   // 可選:額外塞在 header 動作區(下載簽呈左側)的節點,如「編輯驗收」按鈕。預設無→不影響其他表單。
   // 廠商 #7：簽核時間軸 — 傳 requestType + requestId 自動 fetch get_approval_timeline
   //   requestType: 'leave' | 'overtime' | 'trip' | 'correction' | 'expense' | 'expense_request'
   requestType,
@@ -207,6 +208,7 @@ export default function ApprovalDetailModal({
             <h3 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>{docTitle}</h3>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {headerExtra}
             {onPrint && (
               <button className="btn btn-secondary" style={{ fontSize: 14, padding: '8px 14px' }} onClick={onPrint}>
                 <Printer size={14} /> 下載簽呈

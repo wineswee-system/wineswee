@@ -34,11 +34,14 @@ export default function SettleModal({
   settleFiles, setSettleFiles,
   onSubmit, saving, errors, setErrors,
   settleVerb = '驗收',
+  editMode = false,   // true=編輯已送出、還沒人簽的驗收單(改金額/備註/補收據,不重送)
 }) {
+  const settleFileRef = useRef(null)
   if (!open || !request) return null
 
-  const settleFileRef = useRef(null)
   const vb = '驗收'
+  const titleText = editMode ? `編輯${vb}` : vb
+  const submitText = editMode ? '儲存修改' : `提交${vb}`
 
   return (
     <ModalOverlay onClose={onClose}>
@@ -48,7 +51,7 @@ export default function SettleModal({
       >
         {/* Header */}
         <div className="modal-shell-header">
-          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>{vb}：{request.title}</h3>
+          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>{titleText}：{request.title}</h3>
           <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', flexShrink: 0 }} onClick={onClose}><X size={20} /></button>
         </div>
 
@@ -119,7 +122,7 @@ export default function SettleModal({
         {/* Footer */}
         <div className="modal-shell-footer">
           <button className="btn btn-secondary" onClick={onClose}>取消</button>
-          <button className="btn btn-primary" onClick={onSubmit} disabled={saving}>{saving ? '提交中...' : `提交${vb}`}</button>
+          <button className="btn btn-primary" onClick={onSubmit} disabled={saving}>{saving ? '處理中...' : submitText}</button>
         </div>
       </div>
     </ModalOverlay>

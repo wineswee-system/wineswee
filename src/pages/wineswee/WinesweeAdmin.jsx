@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { STATIC, applyLocal, backfillNews, ensureNews, ensureDetails } from './content'
-import { CATEGORIES, CAT_LABEL, CAT_META_KEYS, getCatMeta, mergeSite, SECTION_LABELS, classifyName } from './data'
+import { CATEGORIES, CAT_LABEL, CAT_META_KEYS, getCatMeta, mergeSite, SECTION_LABELS, classifyName, BANNERS_DEFAULT } from './data'
 import RichEditor from './RichEditor'
 import './wineswee-admin.css'
 
@@ -563,7 +563,8 @@ export default function WinesweeAdmin() {
 function AppearanceView({ data, patch, upload }) {
   const merged = mergeSite(data.site)
   const setSite = (path, val) => patch('site', setIn(data.site || {}, path, val))
-  const mani = merged.manifesto, vals = merged.about.values, banners = data.site.banners || []
+  const mani = merged.manifesto, vals = merged.about.values
+  const banners = data.site.banners?.length ? data.site.banners : BANNERS_DEFAULT   // 沒存過就帶出預設,避免看起來「沒圖」
   const groups = SITE_GROUPS.filter(g => g.title !== '品牌・社群・公告')
   return (
     <section>

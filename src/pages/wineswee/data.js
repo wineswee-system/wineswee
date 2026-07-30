@@ -1,7 +1,7 @@
 // Wineswee 官網資料層 — 全部改讀 content.js 的 store(後臺可改;讀不到用靜態墊底)
 import { store } from './content'
 
-const BANNERS_DEFAULT = [
+export const BANNERS_DEFAULT = [
   'https://www.wineswee.com/storage/upload/banner/image/2026-05-22/PnahdFdR82dbWjODiQmGdfEVeUbNe0xrGkYUlSZ4.jpg',
   'https://www.wineswee.com/storage/upload/banner/image/2026-05-08/JB0jvHwOiD3VqgHu37dhNflzkjEjcwqgx8MBGsa9.jpg',
   'https://www.wineswee.com/storage/upload/banner/image/2026-04-16/cmx82g7NBRrsOxFo0WZjFHd069ku19MWl48Ubu5A.jpg',

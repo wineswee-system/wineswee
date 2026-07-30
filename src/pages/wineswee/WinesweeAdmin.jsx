@@ -75,7 +75,9 @@ function GalleryEditor({ images, onChange, upload }) {
         {list.map((im, i) => (
           <div className="ge-item" style={{ width: `calc(${im.w}% - ${im.w < 100 ? 6 : 0}px)` }} key={i}>
             <div className="ge-frame">
-              {im.src ? <img src={im.src} alt="" /> : <span className="ge-empty">未設圖</span>}
+              {im.src
+                ? <img src={im.src} alt="" />
+                : <label className="ge-empty ge-up">＋ 點此選圖<input type="file" accept="image/*" hidden onChange={async e => { const f = e.target.files?.[0]; if (!f) return; const url = await upload(f); if (url) setAt(i, { src: url }); e.target.value = '' }} /></label>}
               <span className="ge-handle" onMouseDown={e => startResize(i, e)} title="拖曳調整寬度" />
             </div>
             <div className="ge-bar">
@@ -86,7 +88,7 @@ function GalleryEditor({ images, onChange, upload }) {
                 <button type="button" className={im.w === 33 ? 'on' : ''} title="三張一排" onClick={() => setAt(i, { w: 33 })}>⅓</button>
               </div>
               <span className="ge-sp" />
-              <label className="ge-mini" title="上傳">⬆<input type="file" accept="image/*" hidden onChange={async e => { const f = e.target.files?.[0]; if (!f) return; const url = await upload(f); if (url) setAt(i, { src: url }); e.target.value = '' }} /></label>
+              <label className="ge-mini ge-upbtn" title="上傳/更換圖片">選圖<input type="file" accept="image/*" hidden onChange={async e => { const f = e.target.files?.[0]; if (!f) return; const url = await upload(f); if (url) setAt(i, { src: url }); e.target.value = '' }} /></label>
               <button type="button" className="ge-mini" title="左移" onClick={() => move(i, -1)} disabled={i === 0}>←</button>
               <button type="button" className="ge-mini" title="右移" onClick={() => move(i, 1)} disabled={i === list.length - 1}>→</button>
               <button type="button" className="ge-mini ge-del" title="刪除" onClick={() => commit(list.filter((_, j) => j !== i))}>✕</button>

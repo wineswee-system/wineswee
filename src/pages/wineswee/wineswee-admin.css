@@ -254,6 +254,11 @@ select.wa-input { cursor: pointer; }
 .ge-mini:hover { border-color: var(--accent-cyan); color: var(--accent-cyan); }
 .ge-mini:disabled { opacity: .4; cursor: default; }
 .ge-mini.ge-del:hover { border-color: var(--accent-red); color: var(--accent-red); }
+/* 讓「選圖/上傳」明顯可辨 */
+.ge-empty.ge-up { cursor: pointer; font-weight: 600; color: var(--accent-cyan); }
+.ge-empty.ge-up:hover { background: var(--accent-cyan-dim); }
+.ge-upbtn { background: var(--accent-cyan); border-color: var(--accent-cyan); color: #fff; font-weight: 600; }
+.ge-upbtn:hover { border-color: var(--accent-cyan); color: #fff; filter: brightness(1.08); }
 
 /* 自由畫布編輯器 */
 .wa-modebtns { display: inline-flex; gap: 4px; margin-left: 8px; }

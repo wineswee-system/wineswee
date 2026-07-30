@@ -18,8 +18,8 @@ const TYPE_COLOR = {
   MISSING:     { bg: 'var(--accent-red-dim)',    fg: 'var(--accent-red)' },
   LATE:        { bg: 'var(--accent-orange-dim)', fg: 'var(--accent-orange)' },
   EARLY_LEAVE: { bg: 'var(--accent-orange-dim)', fg: 'var(--accent-orange)' },
-  UNSCHEDULED: { bg: 'var(--accent-green-dim)',  fg: 'var(--accent-green)' },
-  OVERWORK:    { bg: 'var(--accent-green-dim)',  fg: 'var(--accent-green)' },
+  UNSCHEDULED: { bg: 'var(--accent-blue-dim)',   fg: 'var(--accent-blue)' },   // 算差異(藍=待確認),與正向的多上時數區隔
+  OVERWORK:    { bg: 'var(--accent-green-dim)',  fg: 'var(--accent-green)' },   // 綠=正向,不計入差異筆數
   UNDERTIME:   { bg: 'var(--accent-yellow-dim)', fg: 'var(--accent-yellow)' },
 }
 

@@ -83,6 +83,9 @@ export function Reveal({ children, className = '', tag = 'div', ...rest }) {
 }
 
 export function ProductCard({ p, idx }) {
+  // 會員價:優先用後台填的 member,否則以售價 9 折估;卡片外顯會員價,hover 才露原價
+  const member = p.member != null ? Math.round(p.member) : (p.price != null ? Math.round(p.price * 0.9) : null)
+  const hasMember = p.price != null && member != null && member < p.price
   return (
     <Link className={'card' + (p.sold_out ? ' sold' : '')} to={`/wineswee/product/${p.id}`}>
       <div className="card-frame">
@@ -93,8 +96,17 @@ export function ProductCard({ p, idx }) {
       </div>
       <div className="card-body">
         <h3 title={p.name}>{p.name}</h3>
-        {p.price ? <span className="price"><span className="u">NT$</span>{p.price.toLocaleString()}</span>
-          : <span className="price ask">價格洽詢</span>}
+        {p.price ? (
+          hasMember ? (
+            <span className="price price-mem">
+              <span className="u">NT$</span>{member.toLocaleString()}
+              <em className="mem-tag">會員價</em>
+              <span className="mem-orig">原價 <s>NT${p.price.toLocaleString()}</s></span>
+            </span>
+          ) : (
+            <span className="price"><span className="u">NT$</span>{p.price.toLocaleString()}</span>
+          )
+        ) : <span className="price ask">價格洽詢</span>}
       </div>
     </Link>
   )

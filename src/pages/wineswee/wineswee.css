@@ -383,7 +383,7 @@
   .ws .footer-grid{grid-template-columns:1fr}
   .ws .footer-nav{text-align:left;flex-direction:row;flex-wrap:wrap;gap:18px}
   .ws .fstore{grid-template-columns:1fr;gap:2px;padding:12px}
-  .ws-legalbar{font-size:14.4px;letter-spacing:.14em}
+  .ws-legalbar{font-size:17.5px;letter-spacing:.06em}
 }
 
 /* ── 標題防亂換行:CTA 放寬 + CJK 標題儘量斷在標點 ─────────────────────── */
@@ -950,7 +950,7 @@
   .ws .siderail{right:8px;gap:8px}
   .ws .rail-ic,.ws .rail-top{width:38px;height:38px}
   .ws .rail-ic svg{width:16px;height:16px}
-  .ws-legalbar{font-size:15px;letter-spacing:.06em;padding:13px 10px;line-height:1.7}
+  .ws-legalbar{font-size:17.5px;letter-spacing:.05em;padding:14px 10px;line-height:1.65}
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

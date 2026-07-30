@@ -161,9 +161,13 @@ export function HeroSlider() {
           <button className="hero9-arw prev" onClick={() => go(-1)} aria-label="上一張">‹</button>
           <button className="hero9-arw next" onClick={() => go(1)} aria-label="下一張">›</button>
           <div className="hero9-dots">
-            {banners.map((_, idx) => (
-              <button key={idx} className={'hero9-dot' + (idx === i ? ' on' : '')} onClick={() => setI(idx)} aria-label={`第 ${idx + 1} 張`} />
-            ))}
+            {banners.map((_, idx) => {
+              const active = idx === i
+              return (
+                <button key={idx} onClick={() => setI(idx)} aria-label={`第 ${idx + 1} 張`}
+                  style={{ height: 7, width: active ? 18 : 7, minHeight: 0, padding: 0, border: 0, flex: '0 0 auto', alignSelf: 'center', lineHeight: 0, fontSize: 0, boxSizing: 'border-box', borderRadius: active ? 4 : '50%', background: active ? 'var(--wine)' : 'rgba(58,15,17,.3)', cursor: 'pointer', transition: 'width .3s, background .3s' }} />
+              )
+            })}
           </div>
         </>
       )}

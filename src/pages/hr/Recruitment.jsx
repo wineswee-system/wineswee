@@ -1280,7 +1280,8 @@ export default function Recruitment() {
           </div>
 
           <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 8, minHeight: 300 }}>
-            {STAGES.map(stage => {
+            {/* 管線 8 欄 + 有人的終態(淘汰/婉拒/人才庫)才顯示 → 淘汰的候選人看得到、點得進去 */}
+            {[...STAGES, ...TERMINAL_STAGES.filter(t => filteredCands.some(c => c.stage === t))].map(stage => {
               const cols = filteredCands.filter(c => c.stage === stage)
               return (
                 <div key={stage} style={{ minWidth: 200, flex: '0 0 200px' }}>

@@ -97,7 +97,7 @@
 .ws .hero-slide img{width:100%;height:100%;object-fit:cover}
 .ws .hero-slide.on img{animation:kb 7s ease forwards}
 /* city9 風格置中輪播:中間放大、左右鄰張露一角(coverflow)+ 圓點 + 箭頭 */
-.ws .hero9{--w:66vw;--g:16px;position:relative;width:100%;overflow:hidden;margin-top:calc(var(--hh,106px) + 20px);padding-bottom:34px}
+.ws .hero9{--w:66vw;--g:16px;position:relative;width:100%;overflow:hidden;margin-top:calc(var(--hh,106px) + 20px)}
 .ws .hero9-track{display:flex;gap:var(--g);transform:translateX(calc(50vw - var(--w)/2 - var(--i,0) * (var(--w) + var(--g))));transition:transform .55s cubic-bezier(.4,0,.2,1)}
 .ws .hero9-slide{flex:0 0 var(--w);aspect-ratio:16/9;border-radius:12px;overflow:hidden;background:var(--night);opacity:.4;transform:scale(.93);transition:opacity .5s,transform .5s;cursor:pointer}
 .ws .hero9-slide.on{opacity:1;transform:scale(1);cursor:default}
@@ -106,7 +106,7 @@
 .ws .hero9-arw:hover{background:rgba(20,8,9,.68)}
 .ws .hero9-arw.prev{left:calc(50vw - var(--w)/2 - 24px)}
 .ws .hero9-arw.next{right:calc(50vw - var(--w)/2 - 24px)}
-.ws .hero9-dots{position:absolute;left:0;right:0;bottom:9px;z-index:3;display:flex;justify-content:center;gap:9px}
+.ws .hero9-dots{display:flex;justify-content:center;gap:9px;padding:16px 0 4px}
 .ws .hero9-dot{width:9px;height:9px;padding:0;border:0;border-radius:50%;background:rgba(58,15,17,.28);cursor:pointer;transition:width .3s,background .3s}
 .ws .hero9-dot.on{background:var(--wine);width:26px;border-radius:5px}
 @media(max-width:900px){.ws .hero9{--w:82vw;--g:12px}}

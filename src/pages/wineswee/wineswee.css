@@ -995,3 +995,7 @@
 .ws .newspage-rich .ql-indent-1{padding-left:3em}
 .ws .newspage-rich .ql-indent-2{padding-left:6em}
 .ws .newspage-rich .ql-indent-3{padding-left:9em}
+/* 長文比較表格(酒品知識) */
+.ws .newspage-rich table{width:100%;border-collapse:collapse;margin:18px 0;font-size:14px;display:block;overflow-x:auto}
+.ws .newspage-rich th,.ws .newspage-rich td{border:1px solid var(--line);padding:8px 11px;text-align:left;vertical-align:top;min-width:88px}
+.ws .newspage-rich th{background:var(--paper-2);color:var(--wine);font-weight:600}

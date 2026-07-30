@@ -83,32 +83,27 @@ export function Reveal({ children, className = '', tag = 'div', ...rest }) {
 }
 
 export function ProductCard({ p, idx }) {
-  // 會員價:優先用後台填的 member,否則以售價 9 折估;卡片外顯會員價,hover 才露原價
+  // 售價壓在圖片下緣、會員價放大在下方 +「加入詢價」(走 LINE)
   const member = p.member != null ? Math.round(p.member) : (p.price != null ? Math.round(p.price * 0.9) : null)
   const hasMember = p.price != null && member != null && member < p.price
+  const to = `/wineswee/product/${p.id}`
+  const line = getSite().contact?.line || '#'
   return (
-    <Link className={'card' + (p.sold_out ? ' sold' : '')} to={`/wineswee/product/${p.id}`}>
-      <div className="card-frame">
+    <div className={'card' + (p.sold_out ? ' sold' : '')}>
+      <Link className="card-frame" to={to}>
         {p.image ? <img src={p.image} alt={p.name} loading="lazy" /> : <span className="card-ph">Wineswee</span>}
         {idx != null && <span className="card-idx">{String(idx).padStart(2, '0')}</span>}
         {p.sold_out && <span className="card-sold">SOLD OUT</span>}
-        <span className="card-cta">VIEW</span>
-      </div>
+        {p.price
+          ? <span className="card-price-band">售價 <em>NT$</em>{p.price.toLocaleString()}</span>
+          : <span className="card-price-band ask">價格洽詢</span>}
+      </Link>
       <div className="card-body">
-        <h3 title={p.name}>{p.name}</h3>
-        {p.price ? (
-          hasMember ? (
-            <span className="price price-mem">
-              <span className="u">NT$</span>{member.toLocaleString()}
-              <em className="mem-tag">會員價</em>
-              <span className="mem-orig">原價 <s>NT${p.price.toLocaleString()}</s></span>
-            </span>
-          ) : (
-            <span className="price"><span className="u">NT$</span>{p.price.toLocaleString()}</span>
-          )
-        ) : <span className="price ask">價格洽詢</span>}
+        {hasMember && <div className="card-member">會員價 <em>NT$</em>{member.toLocaleString()}</div>}
+        <Link className="card-namelink" to={to}><h3 title={p.name}>{p.name}</h3></Link>
+        <a className="card-inquiry" href={line} target="_blank" rel="noreferrer">加入詢價</a>
       </div>
-    </Link>
+    </div>
   )
 }
 

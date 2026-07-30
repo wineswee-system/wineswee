@@ -106,8 +106,8 @@
 .ws .hero9-arw:hover{background:rgba(20,8,9,.68)}
 .ws .hero9-arw.prev{left:calc(50vw - var(--w)/2 - 24px)}
 .ws .hero9-arw.next{right:calc(50vw - var(--w)/2 - 24px)}
-.ws .hero9-dots{display:flex;justify-content:center;gap:9px;padding:16px 0 4px}
-.ws .hero9-dot{width:9px;height:9px;padding:0;border:0;border-radius:50%;background:rgba(58,15,17,.28);cursor:pointer;transition:width .3s,background .3s}
+.ws .hero9-dots{display:flex;align-items:center;justify-content:center;gap:9px;padding:16px 0 4px}
+.ws .hero9-dot{width:9px;height:9px;min-height:0;flex:0 0 auto;padding:0;border:0;border-radius:50%;background:rgba(58,15,17,.28);cursor:pointer;transition:width .3s,background .3s}
 .ws .hero9-dot.on{background:var(--wine);width:26px;border-radius:5px}
 @media(max-width:900px){.ws .hero9{--w:82vw;--g:12px}}
 @media(max-width:640px){.ws .hero9{--w:88vw;--g:10px;margin-top:calc(var(--hh,96px) + 12px)}.ws .hero9-slide{border-radius:9px}.ws .hero9-arw{width:34px;height:34px;font-size:18px}.ws .hero9-arw.prev{left:6px}.ws .hero9-arw.next{right:6px}.ws .hero9-dots{gap:6px;padding:11px 0 2px}.ws .hero9-dot{width:6px;height:6px}.ws .hero9-dot.on{width:16px;border-radius:4px}}

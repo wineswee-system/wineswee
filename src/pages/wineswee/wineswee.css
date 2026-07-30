@@ -970,3 +970,10 @@
 .ws .newspage-rich .ql-align-center{text-align:center}
 .ws .newspage-rich .ql-align-right{text-align:right}
 .ws .newspage-rich .ql-align-justify{text-align:justify}
+/* Quill 字體大小 / 縮排(公開頁沒載 Quill CSS,需自行對應 class) */
+.ws .newspage-rich .ql-size-small{font-size:.75em}
+.ws .newspage-rich .ql-size-large{font-size:1.5em}
+.ws .newspage-rich .ql-size-huge{font-size:2.5em}
+.ws .newspage-rich .ql-indent-1{padding-left:3em}
+.ws .newspage-rich .ql-indent-2{padding-left:6em}
+.ws .newspage-rich .ql-indent-3{padding-left:9em}

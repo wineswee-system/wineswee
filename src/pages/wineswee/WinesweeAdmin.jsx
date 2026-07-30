@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import { STATIC, applyLocal } from './content'
+import { STATIC, applyLocal, backfillNews } from './content'
 import { CATEGORIES, CAT_LABEL, CAT_META_KEYS, getCatMeta, mergeSite, SECTION_LABELS, classifyName } from './data'
 import RichEditor from './RichEditor'
 import './wineswee-admin.css'
@@ -121,10 +121,35 @@ function CanvasEditor({ board, onChange, upload }) {
     const up = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', up) }
     window.addEventListener('mousemove', onMove); window.addEventListener('mouseup', up)
   }
+  // 緊排:保留每張的 X/寬,把「列」由上而下貼齊(消白縫),並自動把畫布高調到剛好包住內容
+  const pack = () => {
+    const box = ref.current; if (!box) return
+    const rect = box.getBoundingClientRect()
+    const nodes = [...box.querySelectorAll('.cv-item')]
+    if (!nodes.length || nodes.some(n => !n.offsetHeight)) { alert('圖片還在載入,等圖都出來再按一次「緊排」'); return }
+    const order = [...items.keys()].sort((a, b) => (items[a].y - items[b].y) || (items[a].x - items[b].x))
+    const rows = []
+    for (const idx of order) {
+      const last = rows[rows.length - 1]
+      if (!last || items[idx].y - last.y0 > 8) rows.push({ y0: items[idx].y, idxs: [idx] })   // 差 8% 內視為同一列
+      else last.idxs.push(idx)
+    }
+    const GAP = 10, yPx = {}; let top = 0
+    for (const row of rows) {
+      let rowH = 0
+      for (const idx of row.idxs) { yPx[idx] = top; rowH = Math.max(rowH, nodes[idx].offsetHeight) }
+      top += rowH + GAP
+    }
+    const totalH = Math.max(1, top - GAP)
+    const newAh = Math.max(0.3, Math.round(totalH / rect.width * 100) / 100)
+    const newItems = items.map((it, idx) => ({ ...it, y: Math.round(yPx[idx] / totalH * 1000) / 10 }))
+    onChange({ ah: newAh, items: newItems }); setSel(null)
+  }
   return (
     <div className="cv-wrap">
       <div className="cv-toolbar">
         <button className="wa-btn wa-btn-ghost" onClick={() => { setItems([...items, { src: '', x: 4, y: 4, w: 40 }]); setSel(items.length) }}>＋ 加圖</button>
+        <button className="wa-btn wa-btn-ghost" onClick={pack} title="每一列往上貼齊、消掉白縫,並自動調整畫布高">緊排（消白縫）</button>
         <label className="cv-h">畫布高（寬的<input type="number" step="0.1" min="0.3" max="12" value={ah} onChange={e => onChange({ ah: Math.max(0.3, +e.target.value || 1), items })} style={{ width: 58 }} />倍）</label>
         {sel != null && items[sel] && (() => {
           const it = items[sel]
@@ -197,7 +222,7 @@ export default function WinesweeAdmin() {
       const d = {
         products: db?.products?.length ? db.products : STATIC.products,
         details: db?.details && Object.keys(db.details).length ? db.details : STATIC.details,
-        news: db?.news?.length ? db.news : STATIC.news,
+        news: backfillNews(db?.news?.length ? db.news : STATIC.news),
         stores: db?.stores?.length ? db.stores : STATIC.stores,
         site: db?.site || {},
       }
@@ -366,6 +391,15 @@ export default function WinesweeAdmin() {
                   const p = products[editIdx]
                   const set = (k, v) => setP(editIdx, k, v)
                   const det = data.details[p.name] || {}
+                  // 改名時把「產品詳情/成本表」一起搬到新名字下,避免詳情跟商品脫鉤不見
+                  const renameProduct = newName => {
+                    const old = p.name
+                    set('name', newName)
+                    if (old && old !== newName && data.details[old] != null) {
+                      const nd = { ...data.details }; nd[newName] = nd[old]; delete nd[old]
+                      patch('details', nd)
+                    }
+                  }
                   return (
                     <div className="wa2-drawer" onClick={() => setEditIdx(null)}>
                       <div className="wa2-drawer-in" onClick={e => e.stopPropagation()}>
@@ -374,7 +408,7 @@ export default function WinesweeAdmin() {
                           <div className="wa-sub">主圖</div>
                           <Img value={p.image} onChange={v => set('image', v)} upload={upload} />
                           <div className="wa-fgrid" style={{ marginTop: 12 }}>
-                            <label className="wa-f wa-f-grow wa-f-full"><span>名稱</span><input className="wa-input" value={p.name || ''} onChange={e => set('name', e.target.value)} /></label>
+                            <label className="wa-f wa-f-grow wa-f-full"><span>名稱</span><input className="wa-input" value={p.name || ''} onChange={e => renameProduct(e.target.value)} /></label>
                             <label className="wa-f"><span>售價 NT$</span><input className="wa-input" type="number" value={p.price ?? ''} onChange={e => set('price', e.target.value === '' ? null : Number(e.target.value))} /></label>
                             <label className="wa-f"><span>會員價 NT$（選填）</span><input className="wa-input" type="number" value={p.member ?? ''} onChange={e => set('member', e.target.value === '' ? null : Number(e.target.value))} /></label>
                           </div>

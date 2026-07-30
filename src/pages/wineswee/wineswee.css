@@ -293,7 +293,8 @@
 .ws .sec-dark .teaser-more a:hover{background:var(--gold);color:var(--wine-deep);border-color:var(--gold)}
 
 /* ── 門市詳細卡(門市頁) ────────────────────────────────────────────────── */
-.ws .storefull-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:clamp(16px,2vw,26px)}
+.ws .storefull-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:clamp(16px,2vw,26px)}
+@media(max-width:560px){.ws .storefull-grid{grid-template-columns:1fr}}   /* 小手機:單欄,避免 320px 最小欄被夾到 */
 .ws .storefull{background:var(--paper);border:1px solid var(--line);padding:clamp(22px,2.4vw,32px);transition:.3s;display:flex;flex-direction:column;gap:14px}
 .ws .storefull:hover{border-color:var(--gold);transform:translateY(-4px);box-shadow:var(--shadow)}
 .ws .storefull-top{display:flex;align-items:baseline;gap:12px}

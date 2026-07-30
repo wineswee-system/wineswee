@@ -14,6 +14,22 @@ const subs = new Set()
 export function subscribe(fn) { subs.add(fn); return () => subs.delete(fn) }
 function emit() { subs.forEach(f => { try { f() } catch { /* noop */ } }) }
 
+// DB 缺「圖文內文」的子文章,用內建範本(NEWS_JSON)補上——但不覆蓋:
+// (1) 使用者已編輯過的 html(sub.html != null) (2) 菜單自由畫布(sub.board)。
+// 依 分類 id + 子文章 title 對應。
+export function backfillNews(dbNews) {
+  const byId = new Map(NEWS_JSON.map(c => [String(c.id), c]))
+  return dbNews.map(cat => {
+    const sc = byId.get(String(cat.id))
+    if (!sc || !Array.isArray(cat.subs)) return cat
+    return { ...cat, subs: cat.subs.map(sub => {
+      if (sub.html != null || sub.board) return sub                 // 已有內文/畫布 → 不動
+      const ss = (sc.subs || []).find(x => x.title === sub.title)
+      return (ss && ss.html != null) ? { ...sub, html: ss.html } : sub
+    }) }
+  })
+}
+
 export async function loadContent(force = false) {
   if (loaded && !force) return
   loaded = true
@@ -22,7 +38,7 @@ export async function loadContent(force = false) {
     if (error || !data) return
     if (Array.isArray(data.products) && data.products.length) store.products = data.products
     if (data.details && typeof data.details === 'object' && Object.keys(data.details).length) store.details = data.details
-    if (Array.isArray(data.news) && data.news.length) store.news = data.news
+    if (Array.isArray(data.news) && data.news.length) store.news = backfillNews(data.news)
     if (Array.isArray(data.stores) && data.stores.length) store.stores = data.stores
     if (data.site && typeof data.site === 'object') store.site = data.site
     emit()

@@ -43,7 +43,7 @@ export default function WinesweeAbout() {
             {A.values.map(([n, t, d]) => (
               <div key={n} className="storefull" style={{ aspectRatio: 'auto' }}>
                 <div className="storefull-top"><span className="storefull-rg">{n}</span><h3>{t}</h3></div>
-                <p style={{ color: 'var(--ink-soft)', fontSize: 15, fontWeight: 300, lineHeight: 1.7 }}>{d}</p>
+                <p style={{ color: 'var(--ink-soft)', fontSize: 17, fontWeight: 300, lineHeight: 1.7 }}>{d}</p>
               </div>
             ))}
           </div>

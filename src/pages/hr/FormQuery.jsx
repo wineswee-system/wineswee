@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
+import ApprovalDetailModal from '../../components/ApprovalDetailModal'
 
 // form_type → 實表名（抽單 soft_delete_request 用）
 const TYPE_TABLE = {
@@ -52,6 +53,37 @@ export default function FormQuery() {
   const isAdmin = ['admin', 'super_admin'].includes(role?.name)
 
   const rowKey = (r) => r.form_type + '-' + r.id
+
+  // ── 點列開詳細 modal(唯讀,不跳頁)──
+  const [detail, setDetail] = useState(null)  // { type, row, emp, r }
+  const _fmtD = d => d ? String(d).slice(0, 10) : '—'
+  const _period = (a, b) => (!b || a === b) ? _fmtD(a) : `${_fmtD(a)} ~ ${_fmtD(b)}`
+  const buildDetailFields = (row, r) => {
+    const f = []
+    if (row.type) f.push({ label: '類型', value: row.type })
+    if (row.start_date) f.push({ label: '期間', value: _period(row.start_date, row.end_date) })
+    if (row.date) f.push({ label: '日期', value: _fmtD(row.date) })
+    if (row.start_time || row.end_time) f.push({ label: '時段', value: `${String(row.start_time || '').slice(0, 5) || '—'} ~ ${String(row.end_time || '').slice(0, 5) || '—'}` })
+    if (row.days != null) f.push({ label: '天數', value: `${row.days} 天` })
+    if (row.hours != null) f.push({ label: '時數', value: `${row.hours} 小時` })
+    if (row.location) f.push({ label: '地點', value: row.location })
+    if (row.reason) f.push({ label: '事由 / 原因', value: row.reason })
+    if (row.note && !row.reason) f.push({ label: '備註', value: row.note })
+    if (row.reject_reason) f.push({ label: '退回原因', value: row.reject_reason })
+    if (f.length === 0 && r?.summary) f.push({ label: '摘要', value: r.summary })
+    return f
+  }
+  const openDetail = async (r) => {
+    const table = TYPE_TABLE[r.form_type]
+    if (!table) { toast.error('此表單類型暫不支援詳細檢視'); return }
+    const { data: rec, error } = await supabase.from(table).select('*').eq('id', r.id).maybeSingle()
+    if (error || !rec) { toast.error('讀取表單失敗：' + (error?.message || '找不到')); return }
+    const q = supabase.from('employees').select('name, name_en, position, status, employee_no, avatar_url')
+    const { data: emp } = rec.employee_id
+      ? await q.eq('id', rec.employee_id).maybeSingle()
+      : await q.eq('name', rec.employee || r.applicant).maybeSingle()
+    setDetail({ type: r.form_type, row: rec, emp, r })
+  }
   const toggleSel = (r) => setSelected(prev => { const n = new Set(prev); const k = rowKey(r); n.has(k) ? n.delete(k) : n.add(k); return n })
   const selectedRows = () => data.rows.filter(r => selected.has(rowKey(r)))
 
@@ -201,9 +233,10 @@ export default function FormQuery() {
                 ) : data.rows.map(r => {
                   const ss = STATUS_STYLE(r.status)
                   return (
-                    <tr key={r.form_type + '-' + r.id} style={{ borderBottom: '1px solid var(--border-subtle)', background: selected.has(rowKey(r)) ? 'var(--accent-cyan-dim)' : 'transparent' }}>
+                    <tr key={r.form_type + '-' + r.id} onClick={() => openDetail(r)}
+                      style={{ borderBottom: '1px solid var(--border-subtle)', background: selected.has(rowKey(r)) ? 'var(--accent-cyan-dim)' : 'transparent', cursor: 'pointer' }}>
                       {isAdmin && (
-                        <td style={{ padding: '9px 14px' }}>
+                        <td style={{ padding: '9px 14px' }} onClick={e => e.stopPropagation()}>
                           <input type="checkbox" checked={selected.has(rowKey(r))} onChange={() => toggleSel(r)} />
                         </td>
                       )}
@@ -232,6 +265,30 @@ export default function FormQuery() {
           </div>
         </div>
       </div>
+
+      {/* 點列彈出的唯讀詳細(不跳頁)*/}
+      {detail && (
+        <ApprovalDetailModal
+          open={!!detail}
+          onClose={() => setDetail(null)}
+          docTitle={detail.r?.form_label || detail.type}
+          docNo={detail.row.id}
+          status={detail.row.status}
+          applicant={{
+            name: detail.emp?.name || detail.row.employee || detail.r?.applicant,
+            name_en: detail.emp?.name_en,
+            position: detail.emp?.position,
+            status: detail.emp?.status,
+            employee_no: detail.emp?.employee_no || (detail.row.employee_id ? `ID ${detail.row.employee_id}` : undefined),
+            avatar_url: detail.emp?.avatar_url,
+          }}
+          fields={buildDetailFields(detail.row, detail.r)}
+          attachments={(detail.row.attachments || []).map(url => ({ url, name: decodeURIComponent(String(url).split('?')[0].split('/').pop() || '附件') }))}
+          createdAt={detail.row.created_at}
+          requestType={detail.type}
+          requestId={detail.row.id}
+        />
+      )}
     </div>
   )
 }

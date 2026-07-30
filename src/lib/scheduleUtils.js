@@ -757,6 +757,10 @@ export function validateLeisureQuota({ schedules, workHourSystem, anchorDate, st
       // 4 週變形：每 cycle (4 週) 4+4，且每 2 週至少 1 例
       const cycles = listCyclesInRange(startDate, endDate, '4週變形', anchorDate)
       for (const c of cycles) {
+        // ★ 只檢查「資料完整涵蓋」的 cycle：月檢視只載當月,跨月的 cycle(如 06-10~07-07)
+        //   只有 7 月那半有資料 → 例假/休息會被少數成假違規。跨出載入窗的 partial cycle 跳過,
+        //   切到 Cycle 檢視(載整個 cycle)才做完整例休配額檢查。
+        if (c.start < startDate || c.end > endDate) continue
         checkRange(c.start, c.end, `${c.start}~${c.end}`, 4, 4)  // ★ 訊息顯示日期區間(取代「Cycle #N」)
         // 每 2 週子窗口 ≥1 例
         const cs = _toDate(c.start)
@@ -781,6 +785,7 @@ export function validateLeisureQuota({ schedules, workHourSystem, anchorDate, st
       // 2 週變形：每 cycle 2+4
       const cycles = listCyclesInRange(startDate, endDate, '2週變形', anchorDate)
       for (const c of cycles) {
+        if (c.start < startDate || c.end > endDate) continue  // ★ partial cycle(跨出載入窗)跳過,見 4週變形註解
         checkRange(c.start, c.end, `${c.start}~${c.end}`, 2, 4)  // ★ 訊息顯示日期區間(取代「Cycle #N」)
       }
     } else {

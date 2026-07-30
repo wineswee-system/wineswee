@@ -276,8 +276,12 @@ select.wa-input { cursor: pointer; }
 .wa-rich { background: #fff; border-radius: 8px; }
 .wa-rich .ql-toolbar { border-radius: 8px 8px 0 0; border-color: var(--border-primary) !important; background: #f6f6f8; }
 .wa-rich .ql-container { min-height: 340px; border-radius: 0 0 8px 8px; border-color: var(--border-primary) !important; font-size: 15px; font-family: "Noto Sans TC", system-ui, sans-serif; }
-.wa-rich .ql-editor { min-height: 340px; color: #222; }
-.wa-rich .ql-editor img { max-width: 100%; }
+/* 編輯區寬度/字級對齊公開頁(.newspage-rich max-width 820),所見即所得、好抓比例 */
+.wa-rich .ql-editor { min-height: 340px; color: #222; max-width: 820px; margin: 0 auto; padding: 22px 2px; font-size: 16px; line-height: 1.9; }
+.wa-rich .ql-editor img { max-width: 100%; height: auto; margin: 14px 0; }
+.wa-rich .ql-editor h1 { font-size: 30px; }
+.wa-rich .ql-editor h2 { font-size: 25px; }
+.wa-rich .ql-editor h3 { font-size: 20px; }
 
 /* 自由畫布數字座標輸入 */
 .cv-num { display: inline-flex; align-items: center; gap: 3px; font-size: 12px; color: var(--text-secondary); }

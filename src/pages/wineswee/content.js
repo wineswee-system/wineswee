@@ -1,24 +1,33 @@
 // Wineswee 內容來源:優先讀 Supabase(後臺可改),讀不到就用打包的靜態 JSON 墊底。
-// data.js 全部改讀這裡的 store;後臺存檔後 applyLocal() 讓公開站即時反映。
+// 效能:大檔改「動態 import」,不進首屏 render-blocking chunk——
+//   · details(~434KB)只在 DB 沒有 details 時才當墊底載入(正常情況根本不下載)
+//   · news 內文(~251KB)延後到「消息內頁」才載(首頁/列表只需 DB 的標題/封面)
 import { supabase } from '../../lib/supabase'
 import RAW from '../../data/wineswee-products.json'
-import DETAILS_JSON from '../../data/wineswee-details.json'
-import NEWS_JSON from '../../data/news-details.json'
 import STORES_JSON from '../../data/stores.json'
 
-export const STATIC = { products: RAW, details: DETAILS_JSON, news: NEWS_JSON, stores: STORES_JSON, site: {} }
-export const store = { products: RAW, details: DETAILS_JSON, news: NEWS_JSON, stores: STORES_JSON, site: {} }
+export const STATIC = { products: RAW, details: {}, news: [], stores: STORES_JSON, site: {} }
+export const store = { products: RAW, details: {}, news: [], stores: STORES_JSON, site: {} }
+
+// 動態載入大檔墊底(各自只載一次)
+let newsP = null, detailsP = null
+export function ensureNews() {
+  if (!newsP) newsP = import('../../data/news-details.json').then(m => { STATIC.news = m.default; return m.default })
+  return newsP
+}
+export function ensureDetails() {
+  if (!detailsP) detailsP = import('../../data/wineswee-details.json').then(m => { STATIC.details = m.default; return m.default })
+  return detailsP
+}
 
 let loaded = false
 const subs = new Set()
 export function subscribe(fn) { subs.add(fn); return () => subs.delete(fn) }
 function emit() { subs.forEach(f => { try { f() } catch { /* noop */ } }) }
 
-// DB 缺「圖文內文」的子文章,用內建範本(NEWS_JSON)補上——但不覆蓋:
-// (1) 使用者已編輯過的 html(sub.html != null) (2) 菜單自由畫布(sub.board)。
-// 依 分類 id + 子文章 title 對應。
-export function backfillNews(dbNews) {
-  const byId = new Map(NEWS_JSON.map(c => [String(c.id), c]))
+// DB 缺「圖文內文」的子文章,用內建範本(NEWS_JSON)補上——不覆蓋已編輯 html 與菜單畫布。
+export function backfillNews(dbNews, NEWS_JSON) {
+  const byId = new Map((NEWS_JSON || []).map(c => [String(c.id), c]))
   return dbNews.map(cat => {
     const sc = byId.get(String(cat.id))
     if (!sc || !Array.isArray(cat.subs)) return cat
@@ -30,19 +39,31 @@ export function backfillNews(dbNews) {
   })
 }
 
+// 消息內頁專用:載入內文範本並補齊 store.news 的 html(首頁/列表不需呼叫)
+export async function ensureNewsBodies() {
+  const NEWS_JSON = await ensureNews()
+  if (Array.isArray(store.news) && store.news.length) { store.news = backfillNews(store.news, NEWS_JSON); emit() }
+}
+
 export async function loadContent(force = false) {
   if (loaded && !force) return
   loaded = true
   try {
     const { data, error } = await supabase.rpc('get_wineswee_content')
-    if (error || !data) return
+    if (error || !data) { await fallbackBig(); return }
     if (Array.isArray(data.products) && data.products.length) store.products = data.products
-    if (data.details && typeof data.details === 'object' && Object.keys(data.details).length) store.details = data.details
-    if (Array.isArray(data.news) && data.news.length) store.news = backfillNews(data.news)
-    if (Array.isArray(data.stores) && data.stores.length) store.stores = data.stores
     if (data.site && typeof data.site === 'object') store.site = data.site
+    if (Array.isArray(data.stores) && data.stores.length) store.stores = data.stores
+    if (data.details && typeof data.details === 'object' && Object.keys(data.details).length) store.details = data.details
+    else store.details = await ensureDetails()                       // DB 沒 details 才載墊底
+    if (Array.isArray(data.news) && data.news.length) store.news = data.news   // 先用 DB 原始(標題/封面),內文延後補
+    else store.news = await ensureNews()
     emit()
-  } catch { /* 靜態墊底 */ }
+  } catch { await fallbackBig() }
+}
+async function fallbackBig() {
+  const [d, n] = await Promise.all([ensureDetails(), ensureNews()])
+  store.details = d; store.news = n; emit()
 }
 
 // 後臺存檔後即時套用(免重整)

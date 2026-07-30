@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import './wineswee.css'
 import { getNews, getNewsDetails, getSite } from './data'
+import { ensureNewsBodies } from './content'
 import { Header, Footer, Reveal, useBodyScroll } from './parts'
 
 // 後台圖文編輯的 HTML(僅 admin 可寫)—上線前輕量清掉 script / 事件屬性
@@ -15,6 +16,7 @@ function cleanHtml(html) {
 export default function WinesweeNewsDetail() {
   useBodyScroll()
   const { id, sub } = useParams()
+  useEffect(() => { ensureNewsBodies() }, [])          // 內頁才載入內文範本(首頁/列表不載)
   useEffect(() => { window.scrollTo(0, 0) }, [id, sub])
   const n = getNews(id)
   if (!n) return <div className="ws"><Header /><section className="masthead"><div className="wrap masthead-in"><h1>找不到消息</h1></div></section><Footer /></div>

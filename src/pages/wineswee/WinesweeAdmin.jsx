@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import { STATIC, applyLocal, backfillNews } from './content'
+import { STATIC, applyLocal, backfillNews, ensureNews, ensureDetails } from './content'
 import { CATEGORIES, CAT_LABEL, CAT_META_KEYS, getCatMeta, mergeSite, SECTION_LABELS, classifyName } from './data'
 import RichEditor from './RichEditor'
 import './wineswee-admin.css'
@@ -220,11 +220,13 @@ export default function WinesweeAdmin() {
   useEffect(() => {
     (async () => {
       let db = null
+      // 後台需要完整墊底(details/news 範本)—動態載入後再組資料
+      const [, ] = await Promise.all([ensureDetails(), ensureNews()])
       try { const r = await supabase.rpc('get_wineswee_content'); db = r?.data || null } catch { db = null }
       const d = {
         products: db?.products?.length ? db.products : STATIC.products,
         details: db?.details && Object.keys(db.details).length ? db.details : STATIC.details,
-        news: backfillNews(db?.news?.length ? db.news : STATIC.news),
+        news: backfillNews(db?.news?.length ? db.news : STATIC.news, STATIC.news),
         stores: db?.stores?.length ? db.stores : STATIC.stores,
         site: db?.site || {},
       }

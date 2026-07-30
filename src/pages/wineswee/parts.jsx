@@ -195,7 +195,7 @@ export function Header() {
   return (
     <>
     <header className="header">
-      <div className="header-ann">{site.announce}</div>
+      <div className="header-ann"><div className="hann-track"><span>{site.announce}</span><span aria-hidden="true">{site.announce}</span></div></div>
       <div className="wrap header-in">
         <Link className="logo" to="/wineswee" aria-label="Wineswee 威士威酒食超市" onClick={close}><img src={site.logo} alt="Wineswee 威士威酒食超市" /></Link>
         <nav className="nav">

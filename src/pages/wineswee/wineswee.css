@@ -906,7 +906,17 @@
   backdrop-filter:blur(18px) saturate(1.15);border-bottom:1px solid rgba(201,170,130,.32);
   box-shadow:0 14px 44px -26px rgba(58,15,17,.42)}
 .ws .header-ann{background:var(--wine-deep);color:var(--gold-hi);text-align:center;font-family:var(--display);
-  font-style:italic;font-size:18px;letter-spacing:.08em;padding:9px 16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  font-style:italic;font-size:18px;letter-spacing:.08em;padding:9px 16px;overflow:hidden}
+.ws .hann-track{display:inline-block}
+.ws .hann-track>span{white-space:nowrap}
+.ws .hann-track>span:nth-child(2){display:none}
+@media(max-width:768px){        /* 手機:公告改跑馬燈,完整顯示不截斷 */
+  .ws .header-ann{text-align:left;font-size:15.5px}
+  .ws .hann-track{display:flex;width:max-content;animation:hann-marquee 16s linear infinite}
+  .ws .hann-track>span{padding-right:2.6em}
+  .ws .hann-track>span:nth-child(2){display:block}
+}
+@keyframes hann-marquee{from{transform:translateX(0)}to{transform:translateX(-50%)}}
 .ws .header-in{height:98px}
 
 /* 內容讓開固定 header */

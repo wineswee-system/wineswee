@@ -59,6 +59,21 @@ export default function LeaveFormModal({
     return () => { cancelled = true }
   }, [form.employee, selectedPolicy?.code, employees])
 
+  // 時數假即時預覽：抓「扣休息後」的淨時數(對齊送出後 trigger 存進去的值)
+  const [netHours, setNetHours] = useState(null)
+  useEffect(() => {
+    if (form.unit !== 'hour' || !form.start_time || !form.end_time || !form.start_date || !form.employee) {
+      setNetHours(null); return
+    }
+    const emp = employees.find(e => e.name === form.employee)
+    if (!emp?.id) { setNetHours(null); return }
+    let cancelled = false
+    supabase.rpc('preview_leave_net_hours', {
+      p_emp_id: emp.id, p_date: form.start_date, p_start: form.start_time, p_end: form.end_time,
+    }).then(({ data }) => { if (!cancelled) setNetHours(data != null ? Number(data) : null) })
+    return () => { cancelled = true }
+  }, [form.unit, form.start_time, form.end_time, form.start_date, form.employee, employees])
+
   // 計算員工該假別的年度餘額（顯示在 modal 法源 info 下方）
   const balance = useMemo(() => {
     if (!selectedPolicy || !form.employee) return null
@@ -222,7 +237,9 @@ export default function LeaveFormModal({
           else {
             const h = diffHours(form.start_time, form.end_time)
             const snapped = cfg.unit === 'hour' ? snapToStep(h, cfg.step) : h
-            preview = { value: snapped, unit: '小時' }
+            // netHours(扣休息,來自後端)有值就以它為準 = 送出後 trigger 存的值
+            const val = netHours != null ? netHours : snapped
+            preview = { value: val, unit: '小時', hasBreak: netHours != null && netHours < h - 1e-6 }
           }
         } else {
           if (!form.start_date) preview = null
@@ -246,6 +263,11 @@ export default function LeaveFormModal({
             {form.unit === 'day' && preview && (
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
                 已扣除週末 + 國定假日 · 最小單位 {cfg.step} {cfg.unit === 'day' ? '天' : '小時'}
+              </div>
+            )}
+            {form.unit === 'hour' && preview?.hasBreak && (
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                已扣除班中休息時間（休息不計入請假）
               </div>
             )}
           </Field>

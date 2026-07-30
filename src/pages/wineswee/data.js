@@ -32,7 +32,7 @@ export const SITE_DEFAULTS = {
     ytEmbed: 'https://www.youtube.com/embed/ZZccVDRoR2M?rel=0&loop=1&playlist=ZZccVDRoR2M&showinfo=0&controls=1',
   },
   announce: '威士威酒食超市　·　全台 11 家門市　·　線上宅配到府　·　未滿十八歲禁止飲酒',
-  legal: '禁止酒駕　　未滿十八歲禁止飲酒',
+  legal: '禁止酒駕　　飲酒過量，有害健康　　未滿十八歲禁止飲酒',
   // 導覽選單:drop=分類下拉(wine/food);to 可為 站內路徑、@line、@email、或 http 網址
   nav: [
     { label: '關於我們', to: '/wineswee/about' },

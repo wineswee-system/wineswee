@@ -40,6 +40,23 @@ function getRestMinutes(grossHours: number, isAdmin = false): number {
   return 60
 }
 
+/**
+ * 淨工時（小時）：優先走後端 net_work_hours（休息窗 ∩ 打卡；休息落打卡外不扣，
+ *   如 13:15 打卡不扣中午 12-13 午休）。RPC 失敗/未部署 → 退回 getRestMinutes 舊公式，不會壞。
+ */
+async function computeNetHours(
+  supabase: any, empId: number, dateStr: string,
+  clockIn: string, clockOut: string, workedMinutes: number, isAdmin: boolean,
+): Promise<number> {
+  try {
+    const { data, error } = await supabase.rpc('net_work_hours', {
+      p_emp_id: empId, p_date: dateStr, p_clock_in: clockIn, p_clock_out: clockOut,
+    })
+    if (!error && data != null) return parseFloat(Number(data).toFixed(2))
+  } catch (_e) { /* fall through to legacy formula */ }
+  return parseFloat((Math.max(0, workedMinutes - getRestMinutes(workedMinutes / 60, isAdmin)) / 60).toFixed(2))
+}
+
 function haversineMetres(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371000
   const toRad = (d: number) => (d * Math.PI) / 180
@@ -309,12 +326,12 @@ serve(async (req: Request) => {
         //   一早上班就忘了打下班），不自動補下班以免算出離譜工時 —— 跳過、讓它
         //   走下方正常開新上班，昨天孤兒留給人工/報表處理。
         if (yWorked <= 16 * 60) {
-          const yNet = Math.max(0, yWorked - getRestMinutes(yWorked / 60, isAdminEmp))
+          const yNetHours = await computeNetHours(supabase, emp.id, yesterdayStr0, yOpen.clock_in, timeStr, yWorked, isAdminEmp)
           const { data: yData, error: yErr } = await supabase.from('attendance_records')
             .update({
               clock_out:      timeStr,
               clock_out_time: now.toISOString(),
-              total_hours:    parseFloat((yNet / 60).toFixed(2)),
+              total_hours:    yNetHours,
               clock_out_mode: clockMode,
               ...(clockMode === 'outing' ? { status: '外出' } : {}),
             }).eq('id', yOpen.id).select().single()
@@ -378,13 +395,12 @@ serve(async (req: Request) => {
       const [inH, inM] = (clockOutRecord.clock_in as string).split(':').map(Number)
       let workedMinutes = currentMinutes - (inH * 60 + inM)
       if (workedMinutes < 0) workedMinutes += 1440
-      const grossHours = workedMinutes / 60
-      const netMinutes = Math.max(0, workedMinutes - getRestMinutes(grossHours, isAdminEmp))
+      const netHours = await computeNetHours(supabase, emp.id, clockOutRecord.date, clockOutRecord.clock_in as string, timeStr, workedMinutes, isAdminEmp)
 
       const updatePayload: Record<string, unknown> = {
         clock_out:       timeStr,
         clock_out_time:  now.toISOString(),
-        total_hours:     parseFloat((netMinutes / 60).toFixed(2)),
+        total_hours:     netHours,
         clock_out_mode:  clockMode,
         // outing 下班才覆寫 status，normal 不動 clock_in 寫入的 status
         ...(clockMode === 'outing' ? { status: '外出' } : {}),

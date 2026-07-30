@@ -300,10 +300,17 @@ export default function Attendance() {
       payload.total_hours = Math.round(Number(editHours) * 100) / 100
       payload.hours = payload.total_hours
     } else if (editClockIn && editClockOut) {
-      // 行政午休固定 60 分 → 查該員工類別
-      const { data: ssCat } = await supabase.from('salary_structures')
-        .select('employment_category').eq('employee_id', r.employee_id).maybeSingle()
-      const net = computeNet(editClockIn, editClockOut, ssCat?.employment_category === 'admin')
+      // 自動工時走後端 net_work_hours（休息窗 ∩ 打卡;休息落打卡外不扣,如 13:15 打卡不扣午休）
+      // RPC 失敗才退回本地 computeNet（舊固定公式）
+      const { data: nwh } = await supabase.rpc('net_work_hours', {
+        p_emp_id: r.employee_id, p_date: editDate || r.date, p_clock_in: editClockIn, p_clock_out: editClockOut,
+      })
+      let net = nwh != null ? Number(nwh) : null
+      if (net == null) {
+        const { data: ssCat } = await supabase.from('salary_structures')
+          .select('employment_category').eq('employee_id', r.employee_id).maybeSingle()
+        net = computeNet(editClockIn, editClockOut, ssCat?.employment_category === 'admin')
+      }
       if (net > 0) { payload.total_hours = net; payload.hours = net }
     }
     const { error } = await supabase.from('attendance_records').update(payload).eq('id', r.id)

@@ -96,20 +96,21 @@
 .ws .hero-slide.on{opacity:1}
 .ws .hero-slide img{width:100%;height:100%;object-fit:cover}
 .ws .hero-slide.on img{animation:kb 7s ease forwards}
-/* city9 風格 banner 輪播:置中卡片(留邊、避開固定 header 與社群列)+ 圓點 + 箭頭 */
-.ws .hero9{position:relative;max-width:1240px;margin:calc(var(--hh,106px) + 18px) auto 0;padding:0 clamp(14px,2.4vw,34px)}
-.ws .hero9-track{position:relative;width:100%;aspect-ratio:5/2;overflow:hidden;border-radius:12px;background:var(--night)}
-.ws .hero9-slide{position:absolute;inset:0;opacity:0;transition:opacity .8s ease}
-.ws .hero9-slide.on{opacity:1;z-index:1}
+/* city9 風格置中輪播:中間放大、左右鄰張露一角(coverflow)+ 圓點 + 箭頭 */
+.ws .hero9{--w:66vw;--g:16px;position:relative;width:100%;overflow:hidden;margin-top:calc(var(--hh,106px) + 20px);padding-bottom:34px}
+.ws .hero9-track{display:flex;gap:var(--g);transform:translateX(calc(50vw - var(--w)/2 - var(--i,0) * (var(--w) + var(--g))));transition:transform .55s cubic-bezier(.4,0,.2,1)}
+.ws .hero9-slide{flex:0 0 var(--w);aspect-ratio:5/2;border-radius:12px;overflow:hidden;background:var(--night);opacity:.4;transform:scale(.93);transition:opacity .5s,transform .5s;cursor:pointer}
+.ws .hero9-slide.on{opacity:1;transform:scale(1);cursor:default}
 .ws .hero9-slide img{width:100%;height:100%;object-fit:cover;display:block}
-.ws .hero9-arw{position:absolute;top:50%;transform:translateY(-50%);z-index:3;width:44px;height:44px;border-radius:50%;border:0;background:rgba(20,8,9,.36);color:#fff;font-size:23px;line-height:1;cursor:pointer;display:grid;place-items:center;transition:background .25s}
-.ws .hero9-arw:hover{background:rgba(20,8,9,.62)}
-.ws .hero9-arw.prev{left:clamp(24px,3vw,48px)}
-.ws .hero9-arw.next{right:clamp(24px,3vw,48px)}
-.ws .hero9-dots{position:absolute;left:0;right:0;bottom:16px;z-index:3;display:flex;justify-content:center;gap:9px}
-.ws .hero9-dot{width:9px;height:9px;padding:0;border:0;border-radius:50%;background:rgba(255,255,255,.5);cursor:pointer;transition:width .3s,background .3s}
-.ws .hero9-dot.on{background:#fff;width:26px;border-radius:5px}
-@media(max-width:640px){.ws .hero9{margin-top:calc(var(--hh,96px) + 12px);padding:0 12px}.ws .hero9-track{aspect-ratio:16/10;border-radius:9px}.ws .hero9-arw{width:36px;height:36px;font-size:19px}.ws .hero9-arw.prev{left:12px}.ws .hero9-arw.next{right:12px}}
+.ws .hero9-arw{position:absolute;top:calc(50% - 17px);transform:translateY(-50%);z-index:3;width:46px;height:46px;border-radius:50%;border:0;background:rgba(20,8,9,.4);color:#fff;font-size:24px;line-height:1;cursor:pointer;display:grid;place-items:center;transition:background .25s}
+.ws .hero9-arw:hover{background:rgba(20,8,9,.68)}
+.ws .hero9-arw.prev{left:calc(50vw - var(--w)/2 - 24px)}
+.ws .hero9-arw.next{right:calc(50vw - var(--w)/2 - 24px)}
+.ws .hero9-dots{position:absolute;left:0;right:0;bottom:9px;z-index:3;display:flex;justify-content:center;gap:9px}
+.ws .hero9-dot{width:9px;height:9px;padding:0;border:0;border-radius:50%;background:rgba(58,15,17,.28);cursor:pointer;transition:width .3s,background .3s}
+.ws .hero9-dot.on{background:var(--wine);width:26px;border-radius:5px}
+@media(max-width:900px){.ws .hero9{--w:82vw;--g:12px}}
+@media(max-width:640px){.ws .hero9{--w:88vw;--g:10px;margin-top:calc(var(--hh,96px) + 12px)}.ws .hero9-slide{border-radius:9px}.ws .hero9-arw{width:34px;height:34px;font-size:18px}.ws .hero9-arw.prev{left:6px}.ws .hero9-arw.next{right:6px}}
 @keyframes kb{from{transform:scale(1.1)}to{transform:scale(1)}}
 .ws .hero-rt-veil{position:absolute;inset:0;pointer-events:none;background:
   linear-gradient(90deg,var(--night-2),rgba(35,12,13,.15) 16%,transparent 34%),

@@ -151,9 +151,9 @@ export function HeroSlider() {
   useEffect(() => { if (n < 2) return; const t = setInterval(() => setI(v => (v + 1) % n), 5000); return () => clearInterval(t) }, [n])
   return (
     <section className="hero9" id="top">
-      <div className="hero9-track">
+      <div className="hero9-track" style={{ '--i': i }}>
         {banners.map((b, idx) => (
-          <div key={b} className={'hero9-slide' + (idx === i ? ' on' : '')} aria-hidden={idx !== i}><img src={b} alt="" /></div>
+          <div key={b} className={'hero9-slide' + (idx === i ? ' on' : '')} aria-hidden={idx !== i} onClick={() => idx !== i && setI(idx)}><img src={b} alt="" /></div>
         ))}
       </div>
       {n > 1 && (

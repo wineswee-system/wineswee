@@ -163,7 +163,9 @@
 .ws .card:hover .mem-orig{opacity:1}
 .ws .sec-dark .mem-tag{color:var(--gold-hi)}
 /* 商品卡電商版:售價壓圖 + 會員價放大 + 加入詢價 */
-.ws .card-price-band{position:absolute;left:0;right:0;bottom:0;z-index:3;background:rgba(58,15,17,.82);color:#fff;text-align:center;font-family:var(--display);font-weight:500;font-size:14px;letter-spacing:.03em;padding:8px 10px}
+.ws .card-price-band{position:absolute;left:0;right:0;bottom:0;z-index:3;background:rgba(58,15,17,.82);color:#fff;text-align:center;font-family:var(--display);font-weight:500;font-size:14px;letter-spacing:.03em;padding:8px 10px;transform:translateY(100%);transition:transform .35s cubic-bezier(.19,1,.22,1)}
+.ws .card:hover .card-price-band{transform:none}   /* 售價平常收起,滑到卡片才滑上來 */
+@media(hover:none){.ws .card-price-band{transform:none}}   /* 觸控裝置沒 hover:直接顯示 */
 .ws .card-price-band em{font-style:italic;font-size:11px;color:var(--gold-hi);margin-right:3px}
 .ws .card-price-band.ask{font-family:var(--sans);font-size:12.5px;letter-spacing:.06em}
 .ws .card-body{text-align:center}

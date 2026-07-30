@@ -26,7 +26,7 @@ const NAV = [
   { key: 'products', label: '商品', sec: ['products', 'details'] },
   { key: 'news', label: '最新消息', sec: ['news'] },
   { key: 'stores', label: '門市', sec: ['stores'] },
-  { key: 'appearance', label: '外觀文案', sec: ['site'] },
+  { key: 'appearance', label: '首頁・外觀', sec: ['site'] },
   { key: 'layout', label: '版面設計', sec: ['site'] },
   { key: 'media', label: '媒體庫' },
   { key: 'settings', label: '設定', sec: ['site'] },
@@ -567,6 +567,12 @@ function AppearanceView({ data, patch, upload }) {
   const groups = SITE_GROUPS.filter(g => g.title !== '品牌・社群・公告')
   return (
     <section>
+      <h3 className="wa-h3">首頁 Banner 輪播（最上方 Hero 首圖）</h3>
+      <div className="wa-hint" style={{ marginTop: -4, marginBottom: 10 }}>這就是首頁最上方輪播的大圖；可加／換／移除，順序即輪播順序。留空用預設 4 張。</div>
+      <div className="wa-imgs">
+        {banners.map((im, i) => (<div className="wa-imgs-item" key={i}><Img value={im} onChange={v => setSite('banners', banners.map((x, j) => j === i ? v : x))} upload={upload} /><button className="wa-del sm" onClick={() => setSite('banners', banners.filter((_, j) => j !== i))}>移除</button></div>))}
+        <button className="wa-btn wa-btn-ghost" onClick={() => setSite('banners', [...banners, ''])}>＋ 加一張 Banner</button>
+      </div>
       {groups.map(g => (
         <div key={g.title}><h3 className="wa-h3">{g.title}</h3>
           <div className="wa-fgrid">{g.fields.map(f => <SiteField key={f.path} label={f.label} value={getIn(merged, f.path) ?? ''} onChange={v => setSite(f.path, v)} ta={f.ta} />)}</div>
@@ -603,12 +609,6 @@ function AppearanceView({ data, patch, upload }) {
           <label className="wa-f wa-f-grow"><span>說明</span><input className="wa-input" value={v[2]} onChange={e => setSite('about.values', vals.map((r, j) => j === i ? [r[0], r[1], e.target.value] : r))} /></label>
         </div>
       ))}</div>
-      <h3 className="wa-h3">首頁 Banner 輪播</h3>
-      <div className="wa-imgs">
-        {banners.map((im, i) => (<div className="wa-imgs-item" key={i}><Img value={im} onChange={v => setSite('banners', banners.map((x, j) => j === i ? v : x))} upload={upload} /><button className="wa-del sm" onClick={() => setSite('banners', banners.filter((_, j) => j !== i))}>移除</button></div>))}
-        <button className="wa-btn wa-btn-ghost" onClick={() => setSite('banners', [...banners, ''])}>＋ 加一張 Banner</button>
-      </div>
-      <div className="wa-hint">留空則用預設 4 張。</div>
       <h3 className="wa-h3">選購專區・分類說明</h3>
       <div className="wa-list">{CAT_META_KEYS.map(key => {
         const cat = CATEGORIES.find(c => c.key === key)

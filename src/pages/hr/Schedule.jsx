@@ -200,6 +200,20 @@ export default function Schedule() {
   const activeDates = useCycleView ? cycleDates : monthDates
   const activeStart = useCycleView ? cycleInfo.start : monthStart
   const activeEnd = useCycleView ? cycleInfo.end : monthEnd
+
+  // ── 例休配額檢查的「往前補載」：變形工時 cycle 常跨月，月檢視只載當月會把跨月 cycle
+  //    (如 4週變形 06-10~07-07)的例假/休息少數成假違規。這裡算出「本檢視結束前已完成」的
+  //    cycle 需往前補到哪天(只往過去；跨到未來還沒排的 cycle 不檢查、不誤報)。──
+  const quotaBackfillStart = (() => {
+    const ws = storeSettings?.work_hour_system
+    const anchor = storeSettings?.variable_period_start
+    if (!ws || ws === '標準工時' || !anchor) return null
+    const cycles = listCyclesInRange(activeStart, activeEnd, ws, anchor)
+    const past = cycles.filter(c => c.end <= activeEnd)   // 只補「本檢視內已結束」的 cycle
+    if (!past.length) return null
+    const start = past.reduce((m, c) => (c.start < m ? c.start : m), past[0].start)
+    return start < activeStart ? start : null             // 有往前跨月才需補載
+  })()
   // 四週變形（cycle）：每 7 天（對齊 cycle 起算日 = activeDates[0]）一週，
   // 在每週第一天（非第一欄）畫分隔線。月視圖不畫。
   const weekSepDates = useCycleView
@@ -338,6 +352,17 @@ export default function Schedule() {
     return () => controller.abort()
   }, [activeStart, activeEnd, storeFilter, locations])
 
+  // 往前補載跨月 cycle 缺的那半段排班(只給例休配額檢查用，不進 grid/儲存主線)
+  const [quotaBackfill, setQuotaBackfill] = useState(null)  // { start, scheds }
+  useEffect(() => {
+    if (!quotaBackfillStart) { setQuotaBackfill(null); return }
+    let cancelled = false
+    supabase.from('schedules').select('*')
+      .gte('date', quotaBackfillStart).lt('date', activeStart)   // [補載起, 當前檢視起) 前段
+      .then(({ data }) => { if (!cancelled) setQuotaBackfill({ start: quotaBackfillStart, scheds: data || [] }) })
+    return () => { cancelled = true }
+  }, [quotaBackfillStart, activeStart])
+
   // 鎖定狀態（月級，對齊薪資）。lockedMonths = 該店已鎖月份；lockedDates 限定在當前畫面日期
   const currentStore = locations.length > 0 ? locations.find(l => l.name === storeFilter) : null
   const lockedMonths = new Set(
@@ -429,11 +454,16 @@ export default function Schedule() {
     const timer = setTimeout(() => {
       const baseResult = validateSchedule(schedules, weekDates, shiftDefs, employees)
       // 加 cycle-aware 例休 quota 檢查（依當前店設定的工時制）
+      // ★ 跨月 cycle：把往前補載的前段併入 + startDate 往前延，讓「本檢視結束前完成」的 cycle
+      //   拿到完整資料做真檢查(真的錯才報);補載未就緒則 fallback 只驗完整涵蓋的 cycle(不誤報)。
+      const haveBackfill = quotaBackfill && quotaBackfill.start === quotaBackfillStart
+      const quotaScheds = haveBackfill ? [...schedules, ...quotaBackfill.scheds] : schedules
+      const quotaStart = haveBackfill ? quotaBackfillStart : activeStart
       const quotaResult = validateLeisureQuota({
-        schedules,
+        schedules: quotaScheds,
         workHourSystem: storeSettings?.work_hour_system,
         anchorDate: storeSettings?.variable_period_start,
-        startDate: activeStart,
+        startDate: quotaStart,
         endDate: activeEnd,
         shiftDefs,
         employees,   // 兼職跳過例假/休息檢查
@@ -449,7 +479,7 @@ export default function Schedule() {
     }, 250)
     return () => clearTimeout(timer)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [schedules, weekStart, storeSettings, activeStart, activeEnd, employees, holidays, shiftDefs])
+  }, [schedules, weekStart, storeSettings, activeStart, activeEnd, employees, holidays, shiftDefs, quotaBackfill, quotaBackfillStart])
 
   // 套用班別到當前 selection 範圍
   const applyToSelection = async (shift, actualStart = null, actualEnd = null) => {

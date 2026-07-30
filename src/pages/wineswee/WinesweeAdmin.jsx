@@ -463,14 +463,15 @@ export default function WinesweeAdmin() {
                           <Img value={s.cover} onChange={v => setSub(si, 'cover', v)} upload={upload} small />
                           {(() => {
                             const setSubAll = patch => set('subs', subs.map((x, j) => j === si ? { ...x, ...patch } : x))
-                            const mode = s.html != null ? 'rich' : s.board ? 'canvas' : 'flow'
+                            // 用 mode 欄位決定版面,切換時「不刪」其他模式的內容(html/board/images 都留著)
+                            const mode = s.mode || (s.html != null ? 'rich' : s.board ? 'canvas' : 'flow')
                             return (
                               <>
                                 <div className="wa-sub">版面模式：
                                   <span className="wa-modebtns">
-                                    <button className={mode === 'rich' ? 'on' : ''} onClick={() => setSubAll({ html: s.html || '' })}>圖文編輯（打字＋插圖）</button>
-                                    <button className={mode === 'flow' ? 'on' : ''} onClick={() => setSubAll({ html: null, board: null })}>流式（上下／並排）</button>
-                                    <button className={mode === 'canvas' ? 'on' : ''} onClick={() => setSubAll({ html: null, board: s.board || toBoard(s.images) })}>自由畫布（拖拉擺放）</button>
+                                    <button className={mode === 'rich' ? 'on' : ''} onClick={() => setSubAll({ mode: 'rich', html: s.html || '' })}>圖文編輯（打字＋插圖）</button>
+                                    <button className={mode === 'flow' ? 'on' : ''} onClick={() => setSubAll({ mode: 'flow' })}>流式（上下／並排）</button>
+                                    <button className={mode === 'canvas' ? 'on' : ''} onClick={() => setSubAll({ mode: 'canvas', board: s.board || toBoard(s.images) })}>自由畫布（拖拉擺放）</button>
                                   </span>
                                 </div>
                                 {mode === 'rich'

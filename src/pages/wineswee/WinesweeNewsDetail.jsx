@@ -24,6 +24,8 @@ export default function WinesweeNewsDetail() {
   const article = subIdx != null ? subs[subIdx] : (subs.length === 1 ? subs[0] : null)
   const isCategory = subIdx == null && subs.length >= 2   // 多篇 → 列出讓人選
   const images = article?.images || n.images || []
+  // 版面：優先看 mode 欄位,舊資料沒 mode 時用「有什麼推什麼」推導
+  const amode = article?.mode || (article?.html != null ? 'rich' : article?.board ? 'canvas' : 'flow')
   const heading = subIdx != null ? (article?.title || n.title) : n.title
   const headDate = subIdx != null ? article?.date : n.date
   const more = getNewsDetails().filter(x => String(x.id) !== String(id)).slice(0, 6)
@@ -56,9 +58,9 @@ export default function WinesweeNewsDetail() {
               </Link>
             ))}
           </div>
-        ) : article?.html ? (
+        ) : amode === 'rich' && article?.html ? (
           <Reveal tag="article" className="newspage-rich" dangerouslySetInnerHTML={{ __html: cleanHtml(article.html) }} />
-        ) : article?.board?.items?.length ? (
+        ) : amode === 'canvas' && article?.board?.items?.length ? (
           <Reveal tag="article" className="newspage-board" style={{ '--ah': article.board.ah || 1.3 }}>
             <div className="newspage-board-in">
               {article.board.items.map((im, i) => im.src ? <img key={i} src={im.src} alt={`${heading} ${i + 1}`} loading={i < 3 ? 'eager' : 'lazy'} style={{ left: `${im.x}%`, top: `${im.y}%`, width: `${im.w}%` }} /> : null)}

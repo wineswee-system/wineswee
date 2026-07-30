@@ -101,7 +101,7 @@
 .ws .hero9-track{display:flex;gap:var(--g);transform:translateX(calc(50vw - var(--w)/2 - var(--i,0) * (var(--w) + var(--g))));transition:transform .55s cubic-bezier(.4,0,.2,1)}
 .ws .hero9-slide{flex:0 0 var(--w);aspect-ratio:5/2;border-radius:12px;overflow:hidden;background:var(--night);opacity:.4;transform:scale(.93);transition:opacity .5s,transform .5s;cursor:pointer}
 .ws .hero9-slide.on{opacity:1;transform:scale(1);cursor:default}
-.ws .hero9-slide img{width:100%;height:100%;object-fit:cover;display:block}
+.ws .hero9-slide img{width:100%;height:100%;object-fit:contain;display:block}
 .ws .hero9-arw{position:absolute;top:calc(50% - 17px);transform:translateY(-50%);z-index:3;width:46px;height:46px;border-radius:50%;border:0;background:rgba(20,8,9,.4);color:#fff;font-size:24px;line-height:1;cursor:pointer;display:grid;place-items:center;transition:background .25s}
 .ws .hero9-arw:hover{background:rgba(20,8,9,.68)}
 .ws .hero9-arw.prev{left:calc(50vw - var(--w)/2 - 24px)}

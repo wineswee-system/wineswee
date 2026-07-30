@@ -294,7 +294,7 @@ export function Footer() {
         </div>
         <div className="footer-copy">Copyright © 2026 WINESWEE 威士威酒食超市. All Rights Reserved.</div>
       </footer>
-      <div className="ws-legalbar">{site.legal}</div>
+      <div className="ws-legalbar"><div className="lbar-track"><span>{site.legal}</span><span aria-hidden="true">{site.legal}</span></div></div>
     </>
   )
 }

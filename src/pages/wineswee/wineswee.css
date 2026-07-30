@@ -378,6 +378,16 @@
 /* 固定法規列(每頁最底,怎麼滑都在) */
 .ws-legalbar{position:fixed;left:0;right:0;bottom:0;z-index:9990;background:#141010;color:#c9bcae;
   text-align:center;padding:12px 16px;font-size:17.3px;letter-spacing:.28em;border-top:1px solid rgba(201,170,130,.25);font-family:"Noto Serif TC",serif}
+.ws-legalbar .lbar-track{display:inline-block}
+.ws-legalbar .lbar-track>span{white-space:nowrap}
+.ws-legalbar .lbar-track>span:nth-child(2){display:none}
+@media(max-width:768px){        /* 手機:底部警語也改跑馬燈,單行捲動 */
+  .ws-legalbar{text-align:left;overflow:hidden}
+  .ws-legalbar .lbar-track{display:flex;width:max-content;animation:lbar-marquee 20s linear infinite}
+  .ws-legalbar .lbar-track>span{padding-right:3em}
+  .ws-legalbar .lbar-track>span:nth-child(2){display:block}
+}
+@keyframes lbar-marquee{from{transform:translateX(0)}to{transform:translateX(-50%)}}
 
 @media(max-width:820px){
   .ws .footer-grid{grid-template-columns:1fr}

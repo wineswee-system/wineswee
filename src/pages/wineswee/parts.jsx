@@ -148,33 +148,25 @@ export function HeroSlider() {
   const banners = getBanners()
   const n = banners.length
   const go = d => setI(v => (v + d + n) % n)
-  useEffect(() => { const t = setInterval(() => setI(v => (v + 1) % n), 6000); return () => clearInterval(t) }, [n])
-  const h = getSite().hero
+  useEffect(() => { if (n < 2) return; const t = setInterval(() => setI(v => (v + 1) % n), 5000); return () => clearInterval(t) }, [n])
   return (
-    <section className="hero" id="top">
-      <div className="hero-left">
-        <span className="hero-est">EST. — 威士威酒食超市</span>
-        <div className="hero-copy">
-          <span className="kicker on-dark">{h.kicker}</span>
-          <h1><span className="r1">{h.title1}</span><span className="r2"><Em>{h.title2}</Em></span></h1>
-          <p className="hero-sub">{h.sub}</p>
-          <div className="hero-cta">
-            <a className="btn btn-gold" href="#cat-red">{h.cta1}</a>
-            <a className="btn btn-outline" href="#shop">{h.cta2}</a>
-          </div>
-        </div>
-      </div>
-      <div className="hero-right">
+    <section className="hero9" id="top">
+      <div className="hero9-track">
         {banners.map((b, idx) => (
-          <div key={b} className={'hero-slide' + (idx === i ? ' on' : '')} aria-hidden={idx !== i}><img src={b} alt="" /></div>
+          <div key={b} className={'hero9-slide' + (idx === i ? ' on' : '')} aria-hidden={idx !== i}><img src={b} alt="" /></div>
         ))}
-        <div className="hero-rt-veil" />
-        <div className="hero-nav">
-          <span className="hero-count"><b>{String(i + 1).padStart(2, '0')}</b> / {String(n).padStart(2, '0')}</span>
-          <button className="harw" onClick={() => go(-1)} aria-label="上一張">‹</button>
-          <button className="harw" onClick={() => go(1)} aria-label="下一張">›</button>
-        </div>
       </div>
+      {n > 1 && (
+        <>
+          <button className="hero9-arw prev" onClick={() => go(-1)} aria-label="上一張">‹</button>
+          <button className="hero9-arw next" onClick={() => go(1)} aria-label="下一張">›</button>
+          <div className="hero9-dots">
+            {banners.map((_, idx) => (
+              <button key={idx} className={'hero9-dot' + (idx === i ? ' on' : '')} onClick={() => setI(idx)} aria-label={`第 ${idx + 1} 張`} />
+            ))}
+          </div>
+        </>
+      )}
     </section>
   )
 }

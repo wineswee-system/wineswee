@@ -96,6 +96,20 @@
 .ws .hero-slide.on{opacity:1}
 .ws .hero-slide img{width:100%;height:100%;object-fit:cover}
 .ws .hero-slide.on img{animation:kb 7s ease forwards}
+/* city9 風格:滿版 banner 輪播(圓點 + 箭頭 + 自動輪播) */
+.ws .hero9{position:relative;width:100%;background:var(--night)}
+.ws .hero9-track{position:relative;width:100%;aspect-ratio:5/2;overflow:hidden}
+.ws .hero9-slide{position:absolute;inset:0;opacity:0;transition:opacity .8s ease}
+.ws .hero9-slide.on{opacity:1;z-index:1}
+.ws .hero9-slide img{width:100%;height:100%;object-fit:cover;display:block}
+.ws .hero9-arw{position:absolute;top:50%;transform:translateY(-50%);z-index:3;width:46px;height:46px;border-radius:50%;border:0;background:rgba(20,8,9,.34);color:#fff;font-size:24.2px;line-height:1;cursor:pointer;display:grid;place-items:center;transition:background .25s}
+.ws .hero9-arw:hover{background:rgba(20,8,9,.62)}
+.ws .hero9-arw.prev{left:20px}
+.ws .hero9-arw.next{right:20px}
+.ws .hero9-dots{position:absolute;left:0;right:0;bottom:18px;z-index:3;display:flex;justify-content:center;gap:9px}
+.ws .hero9-dot{width:9px;height:9px;padding:0;border:0;border-radius:50%;background:rgba(255,255,255,.5);cursor:pointer;transition:width .3s,background .3s}
+.ws .hero9-dot.on{background:#fff;width:26px;border-radius:5px}
+@media(max-width:640px){.ws .hero9-track{aspect-ratio:16/11}.ws .hero9-arw{width:38px;height:38px;font-size:20.7px}.ws .hero9-arw.prev{left:10px}.ws .hero9-arw.next{right:10px}}
 @keyframes kb{from{transform:scale(1.1)}to{transform:scale(1)}}
 .ws .hero-rt-veil{position:absolute;inset:0;pointer-events:none;background:
   linear-gradient(90deg,var(--night-2),rgba(35,12,13,.15) 16%,transparent 34%),

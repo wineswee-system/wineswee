@@ -757,7 +757,7 @@ export function validateLeisureQuota({ schedules, workHourSystem, anchorDate, st
       // 4 週變形：每 cycle (4 週) 4+4，且每 2 週至少 1 例
       const cycles = listCyclesInRange(startDate, endDate, '4週變形', anchorDate)
       for (const c of cycles) {
-        checkRange(c.start, c.end, c.label, 4, 4)
+        checkRange(c.start, c.end, `${c.start}~${c.end}`, 4, 4)  // ★ 訊息顯示日期區間(取代「Cycle #N」)
         // 每 2 週子窗口 ≥1 例
         const cs = _toDate(c.start)
         for (let w = 0; w < 4; w += 2) {
@@ -781,7 +781,7 @@ export function validateLeisureQuota({ schedules, workHourSystem, anchorDate, st
       // 2 週變形：每 cycle 2+4
       const cycles = listCyclesInRange(startDate, endDate, '2週變形', anchorDate)
       for (const c of cycles) {
-        checkRange(c.start, c.end, c.label, 2, 4)
+        checkRange(c.start, c.end, `${c.start}~${c.end}`, 2, 4)  // ★ 訊息顯示日期區間(取代「Cycle #N」)
       }
     } else {
       // 標準工時 / 8 週變形 / 沒 anchor → 每 7 天 ≥1 例 + ≥1 休

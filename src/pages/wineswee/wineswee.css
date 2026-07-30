@@ -297,7 +297,7 @@
 .ws .pdp-meta dt{width:96px;color:var(--muted-d);font-weight:500;flex:0 0 auto}
 .ws .pdp-meta dd{color:var(--ink)}
 @media(max-width:900px){.ws .nav{display:none}.ws .pdp{grid-template-columns:1fr}.ws .mani-in{grid-template-columns:1fr 1fr}.ws .mani-cell:nth-child(-n+2){border-bottom:1px solid var(--line-dk)}.ws .mani-cell:nth-child(odd){border-left:0}.ws .spot-in,.ws .video-in{grid-template-columns:1fr}.ws .footer-top{grid-template-columns:1fr 1fr}}
-@media(max-width:560px){.ws .header-in{height:64px}.ws .logo img{height:40px}.ws .store{grid-template-columns:auto 1fr;gap:14px}.ws .store .tel{grid-column:2;justify-self:start;font-size:18.4px}.ws .hero-sub{display:none}}
+@media(max-width:560px){.ws .header-in{height:80px}.ws .logo img{height:52px}.ws .store{grid-template-columns:auto 1fr;gap:14px}.ws .store .tel{grid-column:2;justify-self:start;font-size:18.4px}.ws .hero-sub{display:none}}
 /* ── 圖片比例修正:酒瓶類用 contain 顯示完整、不裁切 ─────────────────────── */
 .ws .card-frame{background:#fff}
 .ws .card-frame img,.ws .pdp-media img,.ws .spot-fig img{object-fit:contain;padding:10px}
@@ -439,10 +439,10 @@
 .ws .sec-head .en,.ws .numeral,.ws .hero-est,.ws .card-idx{letter-spacing:0}
 
 /* ── 放大 LOGO(header/intro/footer) ──────────────────────────────────────── */
-.ws .header-in{height:88px}
-.ws .logo img{height:56px}
+.ws .header-in{height:98px}
+.ws .logo img{height:74px}
 .ws .header{border-bottom:1px solid rgba(112,31,33,.12)}
-@media(max-width:560px){.ws .header-in{height:70px}.ws .logo img{height:46px}}
+@media(max-width:560px){.ws .header-in{height:80px}.ws .logo img{height:58px}}
 .ws .footer-logo{height:64px}
 
 /* ── 深度層次:區塊金線收邊 + 卡片投影 + masthead 更立體 ─────────────────── */
@@ -901,13 +901,13 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /* 固定懸浮 header(玻璃質感,浮在內容之上) */
-.ws{--hh:106px}
+.ws{--hh:138px}
 .ws .header{position:fixed;top:0;left:0;right:0;z-index:60;background:rgba(250,245,236,.82);
   backdrop-filter:blur(18px) saturate(1.15);border-bottom:1px solid rgba(201,170,130,.32);
   box-shadow:0 14px 44px -26px rgba(58,15,17,.42)}
 .ws .header-ann{background:var(--wine-deep);color:var(--gold-hi);text-align:center;font-family:var(--display);
-  font-style:italic;font-size:14.4px;letter-spacing:.08em;padding:7px 16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.ws .header-in{height:72px}
+  font-style:italic;font-size:18px;letter-spacing:.08em;padding:9px 16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ws .header-in{height:98px}
 
 /* 內容讓開固定 header */
 .ws .hero{min-height:100svh}
@@ -935,8 +935,8 @@
 .ws .rail-top.on{opacity:1;visibility:visible;transform:none}
 .ws .rail-top:hover{background:var(--wine-2)}
 @media(max-width:768px){
-  .ws{--hh:96px}
-  .ws .header-in{height:60px}
+  .ws{--hh:118px}
+  .ws .header-in{height:80px}
   .ws .siderail{right:8px;gap:8px}
   .ws .rail-ic,.ws .rail-top{width:38px;height:38px}
   .ws .rail-ic svg{width:16px;height:16px}

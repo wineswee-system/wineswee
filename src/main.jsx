@@ -30,6 +30,24 @@ log.info('Event bus initialized with all domain handlers')
 installGlobalErrorHandler()
 log.info('Global error handler installed')
 
+// ── 部署後舊 chunk 消失自動復原 ──
+// Vite 動態 import 失敗（常見於新部署後，瀏覽器仍持舊 index.html/chunk 檔名，
+// 抓到的是 text/html 而非 JS）→ 清 SW/快取後自動重載一次抓新版，避免卡「系統發生錯誤」。
+window.addEventListener('vite:preloadError', async (e) => {
+  const KEY = 'app.preloadReloadAt', last = +sessionStorage.getItem(KEY) || 0
+  if (Date.now() - last < 15000) return          // 15s 內只自動復原一次，防重載迴圈
+  sessionStorage.setItem(KEY, String(Date.now()))
+  e.preventDefault?.()
+  log.warn('Dynamic import failed — clearing SW/cache and reloading')
+  try {
+    const regs = (await navigator.serviceWorker?.getRegistrations?.()) || []
+    await Promise.all(regs.map(r => r.unregister()))
+    const keys = (await caches?.keys?.()) || []
+    await Promise.all(keys.map(k => caches.delete(k)))
+  } catch { /* best effort */ }
+  window.location.reload()
+})
+
 // ⚠️ DLQ monitor 已移除 client 端啟動（2026-06-14 效能修補）
 //    原本每個瀏覽器每 60s 跑 COUNT(*) on business_events + dead_letter_queue，
 //    吃連線、隨資料變慢、人越多越慘，且沒有任何頁面消費它的資料（alert 只進 log）。

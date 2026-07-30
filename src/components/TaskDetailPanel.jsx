@@ -112,7 +112,7 @@ export default function TaskDetailPanel({
       due_time: task.due_time || '',
       reminder_at: task.reminder_at || '',
       confirmation_mode: task.confirmation_mode || 'parallel',
-      notes: task.notes || '',
+      notes: task.notes || task.description || '',   // ★ 新增任務填的「說明」寫進 description,合併顯示(對齊 TaskModal)
       workflow_instance_id: task.workflow_instance_id || '',
       project_id: task.project_id || '',
     })
@@ -274,6 +274,7 @@ export default function TaskDetailPanel({
       completed_at: form.status === '已完成' ? (task.completed_at || new Date().toISOString()) : null,
       workflow_instance_id: form.workflow_instance_id || null,
       project_id: form.project_id || null,
+      description: form.notes || null,   // ★ 備註/說明 同步寫回 description(與 notes 一致,對齊 TaskModal)
     }
     delete payload.store
     const { data, error: updateErr } = await updateTask(task.id, payload)
@@ -600,9 +601,9 @@ export default function TaskDetailPanel({
               <TaskTimeBlock task={task} />
 
               <div style={sectionStyle}>
-                <div style={{ ...labelStyle, marginTop: 0 }}>備註</div>
+                <div style={{ ...labelStyle, marginTop: 0 }}>備註 / 說明</div>
                 <textarea className="form-input" style={{ width: '100%', minHeight: 80, resize: 'vertical' }}
-                  placeholder="備註..." value={form.notes} onChange={e => setAndDirty('notes', e.target.value)} />
+                  placeholder="備註 / 說明..." value={form.notes} onChange={e => setAndDirty('notes', e.target.value)} />
               </div>
 
               {(task.bucket || task.section_id || task.recurrence_rule) && (

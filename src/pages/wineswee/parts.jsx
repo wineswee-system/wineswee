@@ -64,7 +64,7 @@ export function useBodyScroll() {
   }, [])
 }
 
-export function Reveal({ children, className = '', tag = 'div' }) {
+export function Reveal({ children, className = '', tag = 'div', ...rest }) {
   const ref = useRef(null)
   const [shown, setShown] = useState(false)
   useEffect(() => {
@@ -75,7 +75,11 @@ export function Reveal({ children, className = '', tag = 'div' }) {
     return () => io.disconnect()
   }, [])
   const Tag = tag
-  return <Tag ref={ref} className={`${className} reveal${shown ? ' in' : ''}`}>{children}</Tag>
+  // 轉發其餘 props(style / dangerouslySetInnerHTML 等)給真正的 DOM;
+  // 有 dangerouslySetInnerHTML 時不可同時給 children,故擇一。
+  return rest.dangerouslySetInnerHTML
+    ? <Tag ref={ref} className={`${className} reveal${shown ? ' in' : ''}`} {...rest} />
+    : <Tag ref={ref} className={`${className} reveal${shown ? ' in' : ''}`} {...rest}>{children}</Tag>
 }
 
 export function ProductCard({ p, idx }) {

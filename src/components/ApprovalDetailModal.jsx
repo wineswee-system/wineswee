@@ -9,7 +9,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react'
-import { X, Printer, FileText, Image as ImageIcon, User } from 'lucide-react'
+import { X, Printer, FileText, Image as ImageIcon, User, AlertTriangle } from 'lucide-react'
 import { ModalOverlay } from './Modal'
 import { supabase } from '../lib/supabase'
 import ApprovalActionBar from './ApprovalActionBar'
@@ -109,6 +109,28 @@ export default function ApprovalDetailModal({
       .then(({ data }) => { if (!cancelled) setOtDay(data || null) })
     return () => { cancelled = true }
   }, [open, requestType, requestId])
+
+  // 加班防呆:比對加班時間 vs 當天班表 / 打卡,標紅提示不合理處
+  //   A = 加班時段落在排定班表內(非額外工時)；B = 加班時段與當天打卡無交集(人不在場)
+  const otWarnings = useMemo(() => {
+    if (requestType !== 'overtime' || !otDay) return []
+    const toMin = t => { if (!t) return null; const [h, m] = String(t).slice(0, 5).split(':').map(Number); return h * 60 + m }
+    const overlap = (aS, aE, bS, bE) => Math.max(0, Math.min(aE, bE) - Math.max(aS, bS))
+    let s = toMin(otDay.req_start), e = toMin(otDay.req_end)
+    if (s == null || e == null) return []
+    if (e <= s) e += 1440  // 跨午夜
+    const w = []
+    const scheds = (otDay.schedule || []).filter(x => x.actual_start && x.actual_end)
+    const inSchedule = scheds.some(x => { let ss = toMin(x.actual_start), se = toMin(x.actual_end); if (se <= ss) se += 1440; return overlap(s, e, ss, se) > 0 })
+    if (inSchedule) w.push('加班時段落在排定班表內 — 屬正常工時、非額外加班')
+    const att = otDay.attendance
+    if (att && att.clock_in) {
+      let ci = toMin(att.clock_in), co = att.clock_out ? toMin(att.clock_out) : null
+      if (co != null && co <= ci) co += 1440
+      if (overlap(s, e, ci, co != null ? co : 1440) === 0) w.push('加班時段與當天打卡無交集 — 該時段員工不在場')
+    }
+    return w
+  }, [requestType, otDay])
 
   // 把 timeline 的 duration_text 合併進 chainSteps
   // 注意：chainSteps = [applicantStep, ...可能含加簽..., chain_step_0, chain_step_1, ...]
@@ -297,6 +319,15 @@ export default function ApprovalDetailModal({
                 <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
                   📋 當天班表 · 打卡（審核參考{otDay.date ? `：${otDay.date}` : ''}）
                 </div>
+                {otWarnings.length > 0 && (
+                  <div style={{ marginBottom: 10, padding: '8px 10px', borderRadius: 8, background: 'var(--accent-red-dim)', border: '1px solid var(--accent-red)' }}>
+                    {otWarnings.map((w, i) => (
+                      <div key={i} style={{ fontSize: 12.5, color: 'var(--accent-red)', fontWeight: 600, display: 'flex', alignItems: 'flex-start', gap: 6, lineHeight: 1.5 }}>
+                        <AlertTriangle size={13} style={{ flexShrink: 0, marginTop: 2 }} /> {w}
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <div>
                     <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>當天班表</div>

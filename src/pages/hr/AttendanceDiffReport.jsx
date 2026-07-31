@@ -150,6 +150,7 @@ export default function AttendanceDiffReport() {
       const { data, error } = await supabase.rpc('monthly_attendance_hours_report', {
         p_year_month: ym,
         p_store_id: storeId === '' ? null : Number(storeId),
+        p_org: profile?.organization_id ?? null,
       })
       if (error) throw error
       const rows = Array.isArray(data) ? data : []

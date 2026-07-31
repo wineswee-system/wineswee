@@ -124,6 +124,11 @@ export default function Sidebar() {
   const [showNotifPanel, setShowNotifPanel] = useState(false)
   const { profile, signOut, hasPermission } = useAuth()
   const { tenant } = useTenant()
+  // org1 = 威士威品牌換皮;其他 org 掉回換皮前的殼(純 CSS override 靠 data-brand 開關)
+  const isWineswee = tenant?.organization_id === 1
+  useEffect(() => {
+    document.documentElement.setAttribute('data-brand', isWineswee ? 'wineswee' : 'default')
+  }, [isWineswee])
   // 目前作用中的 organization id,供組建帶 orgId 的網址;active 比對則用去 org 段的 navPath
   const orgId = tenant?.organization_id ?? profile?.organization_id ?? null
   const link = (p) => withOrg(p, orgId)
@@ -407,7 +412,21 @@ export default function Sidebar() {
     {/* ═══════ Top Navigation Bar ═══════ */}
     <header className="topnav">
       <div className="topnav-brand" onClick={(e) => { e.currentTarget.blur(); navigate('/'); setOpenDropdown(null) }} role="button" tabIndex={0}>
-        <div className="topnav-brand-logo" role="img" aria-label="WINESWEE 威士威" />
+        {isWineswee ? (
+          <div className="topnav-brand-logo" role="img" aria-label="WINESWEE 威士威" />
+        ) : (
+          <>
+            <div className="topnav-brand-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="7" height="7" rx="1.5"/>
+                <rect x="14" y="3" width="7" height="7" rx="1.5"/>
+                <rect x="3" y="14" width="7" height="7" rx="1.5"/>
+                <rect x="14" y="14" width="7" height="7" rx="1.5"/>
+              </svg>
+            </div>
+            <span className="topnav-brand-label">SME Ops</span>
+          </>
+        )}
       </div>
 
       <nav className="topnav-groups">

@@ -34,6 +34,7 @@ export default function MonthScheduleTable({
   pendingLeaveMap = {},  // empName → Set<dateStr>（待審核/審核中請假）
   partialLeaveMap = {},  // empName → { dateStr → {code, time} }（已核准部分假，如半天特休）
   dailyHours = {},       // dateStr → 當日總工時
+  empHours = {},         // empName → 整月/整循環淨工時(已扣休息)
   dailyRevenue = {},     // dateStr → 預估業績
   onSaveRevenue = null,  // (date, value) => void；有值才顯示每日彙總列
   avgHourly = 350,       // 均薪(時薪)—人事成本 = 工時 × 此值
@@ -163,7 +164,8 @@ export default function MonthScheduleTable({
                   padding: '6px 8px', textAlign: 'center', minWidth: 50,
                   borderBottom: '2px solid var(--border-medium)', fontSize: 10, fontWeight: 700,
                 }}>
-                  出勤/休
+                  <div>出勤/休</div>
+                  <div style={{ color: 'var(--accent-purple)', marginTop: 1 }}>工時</div>
                 </th>
               </tr>
             </thead>
@@ -208,6 +210,7 @@ export default function MonthScheduleTable({
                       violationsByEmp={violationsByEmp}
                       onClickEmployeeBadge={onClickEmployeeBadge}
                       lockedDates={lockedDates}
+                      empHours={empHours}
                       onReorder={onReorder}
                     />
                   )
@@ -246,6 +249,7 @@ export default function MonthScheduleTable({
                     violationsByEmp={violationsByEmp}
                     onClickEmployeeBadge={onClickEmployeeBadge}
                     lockedDates={lockedDates}
+                    empHours={empHours}
                     onReorder={onReorder}
                   />
                 ))
@@ -330,6 +334,7 @@ function EmployeeRow({
   violationsByEmp = {}, onClickEmployeeBadge,
   lockedDates = new Set(),
   onReorder,
+  empHours = {},
 }) {
   const isDateLocked = (date) => lockedDates && lockedDates.has(date)
   const v = violationsByEmp[emp.name] || { errors: 0, warnings: 0 }
@@ -586,9 +591,14 @@ function EmployeeRow({
         textAlign: 'center', padding: '4px 6px', borderLeft: '1px solid var(--border-light)',
         fontSize: 10, fontWeight: 600,
       }}>
-        <span style={{ color: 'var(--accent-cyan)' }}>{workDays}</span>
-        <span style={{ color: 'var(--text-muted)' }}>/</span>
-        <span style={{ color: 'var(--text-muted)' }}>{restDays}</span>
+        <div>
+          <span style={{ color: 'var(--accent-cyan)' }}>{workDays}</span>
+          <span style={{ color: 'var(--text-muted)' }}>/</span>
+          <span style={{ color: 'var(--text-muted)' }}>{restDays}</span>
+        </div>
+        <div style={{ color: 'var(--accent-purple)', fontSize: 10, fontWeight: 700, marginTop: 1 }}>
+          {(empHours[emp.name] || 0) > 0 ? `${(empHours[emp.name]).toFixed(1)}h` : '·'}
+        </div>
       </td>
     </tr>
   )

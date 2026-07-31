@@ -1377,6 +1377,20 @@ export default function Schedule() {
     return m
   })()
 
+  // 每人整月/整循環總工時（跟著 activeDates 走:月視圖=整月、cycle 視圖=整循環)→ 右欄「出勤/休」下顯示
+  const empActiveHours = (() => {
+    const m = {}
+    for (const emp of filtered) {
+      let sum = 0
+      for (const date of activeDates) {
+        const s = schedules.find(x => x.employee === emp.name && x.date === date)
+        sum += cellNetHours(s)
+      }
+      m[emp.name] = sum
+    }
+    return m
+  })()
+
   // 拖拉調整同店員工顯示順序 → 寫回 schedule_sort（store/課管理者才可）
   const reorderEmployees = async (draggedId, targetId) => {
     if (!draggedId || !targetId || draggedId === targetId) return
@@ -1908,6 +1922,7 @@ export default function Schedule() {
           pendingLeaveMap={pendingLeaveMap}
           partialLeaveMap={partialLeaveMap}
           dailyHours={dailyHours}
+          empHours={empActiveHours}
           dailyRevenue={dailyRevenue}
           onSaveRevenue={saveRevenue}
           avgHourly={AVG_HOURLY_WAGE}

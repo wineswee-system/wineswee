@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { Upload, Eye, Plus, X, Trash2 } from 'lucide-react'
 import { getPTAnnualLeaveHours, getAnnualLeaveEntitlement } from '../../lib/leavePolicy'
 import SearchableSelect, { empOptions } from '../SearchableSelect'
@@ -61,16 +61,7 @@ export default function HrTabContent({
   const roleOptions = (roles || []).filter(
     r => r.name !== 'super_admin' || isSuperAdmin || form.role_id === 1 || form.role === 'super_admin'
   )
-
-  // 勞/健/退「加保日期」空的 → 自動帶入到職日(每位員工只帶一次;之後手改就以手改為準)
-  const insDateFilledRef = useRef(null)
-  useEffect(() => {
-    if (!employee?.id || !form.join_date || insDateFilledRef.current === employee.id) return
-    insDateFilledRef.current = employee.id
-    if (!form.labor_ins_start)     set('labor_ins_start', form.join_date)
-    if (!form.health_ins_start)    set('health_ins_start', form.join_date)
-    if (!form.labor_pension_start) set('labor_pension_start', form.join_date)
-  }, [employee?.id, form.join_date])  // eslint-disable-line react-hooks/exhaustive-deps
+  // 加保日期空→帶到職日:在父層 EmployeeDetail 初始化 form 時就預設(不會誤標 dirty)
 
   // ── 勞健保級距表（依薪資自動帶入用）─────────────────────────────
   const [insBrackets, setInsBrackets] = useState(null)

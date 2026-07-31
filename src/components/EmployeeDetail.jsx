@@ -128,7 +128,13 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
 
   useEffect(() => {
     if (!employee) return
-    setForm({ ...employee })
+    setForm({
+      ...employee,
+      // 勞/健/退加保日期空 → 預設到職日(在初始化階段填,不算 dirty;之後可手改)
+      labor_ins_start:     employee.labor_ins_start     || employee.join_date || null,
+      health_ins_start:    employee.health_ins_start    || employee.join_date || null,
+      labor_pension_start: employee.labor_pension_start || employee.join_date || null,
+    })
     setIsDirty(false)
     Promise.all([
       supabase.from('employee_skills').select('*').eq('employee_id', employee.id).order('id'),

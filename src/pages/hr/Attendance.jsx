@@ -213,10 +213,6 @@ export default function Attendance() {
   )
 
   // 「今日未打卡」只在「區間包含今天」時顯示 — 看過去區間時硬塞「今天 未打卡」row 沒意義
-  const showNotClockedToday = useMemo(() => {
-    const t = todayTW(); return startDate <= t && t <= endDate
-  }, [startDate, endDate])
-
   // 加班單 → 獨立加班列（起訖時間當打卡、狀態=加班）
   const otRows = useMemo(() => overtimes
     .filter(o =>
@@ -238,31 +234,37 @@ export default function Attendance() {
 
   const allRows = useMemo(() => {
     const recordRows = filtered.map(r => ({ ...r, _rowType: 'record' }))
-    // 正常列 + 加班列合併，同日同人排一起（加班列排在正常列後）
-    const merged = [...recordRows, ...otRows].sort((a, b) =>
+    // 區間內「每一天」都顯示(7/1~7/31 都列),當天沒打卡就補一列「未打卡」
+    const dateList = []
+    for (let d = new Date(startDate + 'T00:00:00Z'), end = new Date(endDate + 'T00:00:00Z'); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
+      dateList.push(d.toISOString().slice(0, 10))
+    }
+    const existing = new Set(records.map(r => `${r.employee}|${r.date}`))
+    const scopeEmps = employees.filter(e => {
+      const empDept  = e.departments?.name || e.dept || ''
+      const empStore = e.stores?.name || e.store || ''
+      return (storeFilter === '' || empStore === storeFilter) &&
+        (deptFilter === '' || empDept === deptFilter) &&
+        (search === '' || e.name.includes(search)) &&
+        (!isStaff || e.name === profile?.name) &&
+        (!isManager || !profile?.store || empStore === profile.store)
+    })
+    const noPunchRows = []
+    for (const e of scopeEmps) {
+      for (const d of dateList) {
+        if (existing.has(`${e.name}|${d}`)) continue
+        noPunchRows.push({
+          _rowType: 'notClocked', id: `nc-${e.id}-${d}`, employee: e.name,
+          dept: e.departments?.name || e.dept, store: e.stores?.name || e.store, date: d,
+        })
+      }
+    }
+    return [...recordRows, ...otRows, ...noPunchRows].sort((a, b) =>
       (b.date || '').localeCompare(a.date || '') ||
       (a.employee || '').localeCompare(b.employee || '') ||
       (a._rowType === 'overtime' ? 1 : 0) - (b._rowType === 'overtime' ? 1 : 0)
     )
-    if (!showNotClockedToday) return merged
-    const todayEmpNames = new Set(records.filter(r => r.date === today).map(r => r.employee))
-    const notClockedRows = employees
-      .filter(e => {
-        const empDept  = e.departments?.name || e.dept || ''
-        const empStore = e.stores?.name || e.store || ''
-        return !todayEmpNames.has(e.name) &&
-          (storeFilter === '' || empStore === storeFilter) &&
-          (deptFilter === '' || empDept === deptFilter) &&
-          (search === '' || e.name.includes(search))
-      })
-      .map(e => ({
-        _rowType: 'notClocked', id: `nc-${e.id}`, employee: e.name,
-        dept: e.departments?.name || e.dept,
-        store: e.stores?.name || e.store,
-        date: today,
-      }))
-    return [...merged, ...notClockedRows]
-  }, [filtered, otRows, records, employees, storeFilter, deptFilter, search, today, showNotClockedToday])
+  }, [filtered, otRows, records, employees, storeFilter, deptFilter, search, startDate, endDate, isStaff, isManager, profile])
 
   // 前端分頁：預設每頁 100 筆。篩選/區間/tab 改變時回第 1 頁。
   useEffect(() => { setPage(1) }, [search, deptFilter, storeFilter, startDate, endDate, tab])
@@ -498,8 +500,8 @@ export default function Attendance() {
           <div style={{ overflowX: 'auto' }}>
            <div style={{ minWidth: 1420 }}>
           {/* Virtual table header */}
-          <div style={{ display: 'grid', gridTemplateColumns: '140px 100px 100px 85px 85px 60px 110px 60px 80px 120px 145px 85px 110px 1fr', background: 'var(--bg-tertiary)', borderBottom: '1px solid var(--border-medium)', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>
-            {['員工', '部門', '日期', '上班打卡', '下班打卡', '工時', '當天班表', '加班', '請假', '打卡地點', '經緯度', '狀態', '模式', '操作'].map(h => (
+          <div style={{ display: 'grid', gridTemplateColumns: '140px 100px 100px 110px 85px 85px 60px 60px 80px 120px 145px 85px 110px 1fr', background: 'var(--bg-tertiary)', borderBottom: '1px solid var(--border-medium)', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>
+            {['員工', '部門', '日期', '當天班表', '上班打卡', '下班打卡', '工時', '加班', '請假', '打卡地點', '經緯度', '狀態', '模式', '操作'].map(h => (
               <div key={h} style={{ padding: '10px 8px' }}>{h}</div>
             ))}
           </div>
@@ -513,15 +515,16 @@ export default function Attendance() {
                 const canClockOut = !isNotClocked && !isOvertime && isToday && r.clock_in && !r.clock_out
                 const canClockIn = !isNotClocked && !isOvertime && isToday && !r.clock_in
                 return (
-                  <div key={r.id} style={{ display: 'grid', gridTemplateColumns: '140px 100px 100px 85px 85px 60px 110px 60px 80px 120px 145px 85px 110px 1fr', alignItems: 'center', borderBottom: '1px solid var(--border-subtle)', opacity: isNotClocked ? 0.75 : 1, background: isOvertime ? 'var(--accent-orange-dim)' : undefined }}>
+                  <div key={r.id} style={{ display: 'grid', gridTemplateColumns: '140px 100px 100px 110px 85px 85px 60px 60px 80px 120px 145px 85px 110px 1fr', alignItems: 'center', borderBottom: '1px solid var(--border-subtle)', opacity: isNotClocked ? 0.75 : 1, background: isOvertime ? 'var(--accent-orange-dim)' : undefined }}>
                     <div style={{ padding: '4px 8px', fontWeight: 600, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.employee}</div>
                     <div style={{ padding: '4px 8px', fontSize: 12, color: 'var(--text-muted)' }}>{isNotClocked ? (r.dept || '-') : (getEmpDept(r.employee) || '-')}</div>
                     <div style={{ padding: '4px 8px', fontSize: 13 }}>{r.date}</div>
+                    {/* 當天班表(緊接日期後)*/}
+                    <div style={{ padding: '4px 8px', fontSize: 12, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{dayCtx.sched[`${r.employee}|${r.date}`] || '-'}</div>
                     <div style={{ padding: '4px 8px', fontSize: 13 }}>{r.clock_in || '-'}</div>
                     <div style={{ padding: '4px 8px', fontSize: 13 }}>{r.clock_out || '-'}</div>
                     <div style={{ padding: '4px 8px', fontSize: 13 }}>{!isNotClocked && r.hours > 0 ? `${r.hours}h` : '-'}</div>
-                    {/* 當天班表 / 加班 / 請假 */}
-                    <div style={{ padding: '4px 8px', fontSize: 12, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{dayCtx.sched[`${r.employee}|${r.date}`] || '-'}</div>
+                    {/* 加班 / 請假 */}
                     <div style={{ padding: '4px 8px', fontSize: 12 }}>{(() => { const o = dayCtx.ot[`${r.employee}|${r.date}`]; return o?.h > 0 ? <span style={{ color: o.pending ? 'var(--accent-orange)' : 'var(--accent-purple)' }}>{o.h}h{o.pending ? ' 審' : ''}</span> : <span style={{ color: 'var(--text-muted)' }}>-</span> })()}</div>
                     <div style={{ padding: '4px 8px', fontSize: 12 }}>{(() => { const lv = dayCtx.leave[`${r.employee}|${r.date}`]; return lv ? <span style={{ color: lv.pending ? 'var(--accent-orange)' : 'var(--accent-blue)' }}>{lv.type}{lv.pending ? '(審)' : ''}</span> : <span style={{ color: 'var(--text-muted)' }}>-</span> })()}</div>
                     <div style={{ padding: '4px 8px' }}>{isNotClocked || isOvertime ? <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{isOvertime ? '加班單' : '-'}</span> : locationBadge(r)}</div>
@@ -543,7 +546,14 @@ export default function Attendance() {
                     </div>
                     <div style={{ padding: '4px 8px' }}>
                       {isNotClocked
-                        ? <span className="badge badge-danger"><span className="badge-dot"></span>未打卡</span>
+                        ? (() => {
+                            const sv = dayCtx.sched[`${r.employee}|${r.date}`]
+                            const isWork = sv && /\d{1,2}:\d{2}/.test(sv)   // 班別是時間段=該上班
+                            // 休假/例假/請假別(非時間段)→ 本來就不用打卡,不標紅;無排班也不算漏打
+                            if (sv && !isWork) return <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{sv}</span>
+                            if (!sv) return <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>無排班</span>
+                            return <span className="badge badge-danger"><span className="badge-dot"></span>未打卡</span>
+                          })()
                         : <span className={`badge ${r.status === '正常' ? 'badge-success' : r.status === '遲到' ? 'badge-warning' : r.status === '加班' ? 'badge-purple' : r.status === '請假' ? 'badge-info' : r.status === '外出' ? 'badge-success' : 'badge-danger'}`}><span className="badge-dot"></span>{r.status}</span>
                       }
                     </div>

@@ -1364,11 +1364,17 @@ export default function Schedule() {
   )
 
   // 每日總工時（純計算，不用 hook — 避免 hooks 順序/TDZ 問題）
+  // 任期外(未入職/已離職)的日期不列入工時 — 跟顯示層(灰字)同一把尺;
+  //   否則離職後/入職前殘留的班表會被算進去(如已離職員工仍冒出 56h)。
+  const outOfTenure = (emp, date) =>
+    (emp.join_date && date < emp.join_date) || (emp.resign_date && date > emp.resign_date)
+
   const dailyHours = (() => {
     const m = {}
     for (const date of activeDates) {
       let sum = 0
       for (const emp of filtered) {
+        if (outOfTenure(emp, date)) continue
         const s = schedules.find(x => x.employee === emp.name && x.date === date)
         sum += cellNetHours(s)
       }
@@ -1383,6 +1389,7 @@ export default function Schedule() {
     for (const emp of filtered) {
       let sum = 0
       for (const date of activeDates) {
+        if (outOfTenure(emp, date)) continue
         const s = schedules.find(x => x.employee === emp.name && x.date === date)
         sum += cellNetHours(s)
       }

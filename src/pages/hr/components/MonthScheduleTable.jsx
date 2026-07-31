@@ -341,6 +341,8 @@ function EmployeeRow({
   let workDays = 0
   let restDays = 0
   for (const d of monthDates) {
+    // 任期外(未入職/已離職)不列入出勤/休 — 跟工時、顯示層同一把尺
+    if ((emp.join_date && d < emp.join_date) || (emp.resign_date && d > emp.resign_date)) continue
     const s = getShift(emp.name, d)
     if (s && !isAbsence(s)) workDays++
     else if (isAbsence(s)) restDays++

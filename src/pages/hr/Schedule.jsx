@@ -7,6 +7,7 @@ import { gatherSchedulingData, runAiSchedule, runMonthlyAiSchedule, fixViolation
 import { runProgrammaticSchedule, runMonthlyProgrammaticSchedule } from '../../lib/schedulingAlgo'
 import { parseTime, getMonthDates, getWeekDates, isAbsence, formatYearMonth, parseYearMonth, getDayLabel, listCyclesInRange, getCycleFor, validateLeisureQuota, validateMonthlyOvertime, validateNightShiftProtection } from '../../lib/scheduleUtils'
 import { useAuth } from '../../contexts/AuthContext'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import MonthScheduleTable from './components/MonthScheduleTable'
 import StoreSettingsTab from './components/StoreSettingsTab'
@@ -229,8 +230,10 @@ export default function Schedule() {
   }, [authProfile?.organization_id])
 
   useEffect(() => {
-    // 多租戶：員工/部門/門市限本組織（有 org 欄零 null，安全）；避免跨組織門市/員工混入下拉
-    const orgId = authProfile?.organization_id
+    // 多租戶：員工/部門/門市限本組織；避免跨組織門市/員工混入下拉。
+    // ★ super_admin 沒固定 org(authProfile.organization_id=null)→ 改吃「目前切換的 org」
+    //   (getTenantOrgId，由 TenantContext.switchTenant 更新);否則 super_admin 會跨 org 看到全部門市。
+    const orgId = authProfile?.organization_id ?? getTenantOrgId()
     const withOrg = (q) => orgId ? q.eq('organization_id', orgId) : q
     Promise.all([
       // 不過濾 status：要支援「看歷史月份時，當時還在職、現在已離職」的員工顯示

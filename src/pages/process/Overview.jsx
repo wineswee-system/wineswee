@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { Workflow, ListChecks, CheckSquare, TrendingUp, Clock, CheckCircle, XCircle, AlertCircle, ChevronDown, ChevronUp, Check, X, Pencil, Save } from 'lucide-react'
 import { getWorkflows, getWorkflowInstances, getTasks, getChecklists, updateTask, getEmployees } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { useRealtimeTable } from '../../lib/hooks/useRealtimeSync'
 import { useAuth } from '../../contexts/AuthContext'
 import { advanceWorkflow } from '../../lib/workflowIntegration'
@@ -34,7 +35,7 @@ export default function ProcessOverview() {
   const [selectedTask, setSelectedTask] = useState(null)
 
   useEffect(() => {
-    const orgId = profile?.organization_id
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     const withOrg = (q) => orgId ? q.eq('organization_id', orgId) : q
     Promise.all([
       getWorkflows({ orgId }),
@@ -91,7 +92,7 @@ export default function ProcessOverview() {
 
   const reload = () => {
     setLoading(true)
-    const orgId = profile?.organization_id
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     Promise.all([
       getWorkflows({ orgId }), getWorkflowInstances({ orgId }),
       (orgId ? supabase.from('tasks').select('*').eq('organization_id', orgId) : supabase.from('tasks').select('*')).not('workflow_instance_id', 'is', null).order('step_order'),

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { FileText, Download, AlertTriangle, DatabaseZap, RefreshCw } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
 import { useOrgId } from '../../../contexts/AuthContext'
+import { getTenantOrgId } from '../../../lib/events/middleware/tenantContext'
 import { generate401FromVatDocs, generateVatMediaFile } from '../../../lib/taxReport'
 import Badge from '../../../components/ui/Badge'
 import LoadingSpinner from '../../../components/LoadingSpinner'
@@ -21,7 +22,7 @@ const FORMAT_LABEL = {
  * @param {{year: number, period: {label: string, startMonth: number, endMonth: number}}} props
  */
 export default function VatDocumentsTab({ year, period }) {
-  const orgId = useOrgId()
+  const orgId = useOrgId() ?? getTenantOrgId()   // super_admin 無固定 org → 吃目前切換的 org
   const periodInt = year * 100 + period.startMonth
   const rocYear = year - 1911
 

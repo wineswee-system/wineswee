@@ -15,6 +15,7 @@ import {
   getApprovalChains, drainEntity,
 } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { useRealtimeTasks, useRealtimeWorkflowInstances } from '../../lib/hooks/useRealtimeSync'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
@@ -118,7 +119,8 @@ export default function Workflows() {
 
   useEffect(() => {
     // 多租戶：流程/任務/員工/部門/專案/簽核鏈限本組織（避免混入其他組織資料）
-    const orgId = profile?.organization_id
+    // super_admin 無固定 org → 吃目前切換的 org(getTenantOrgId),否則跨 org 混入
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     const withOrg = (q) => orgId ? q.eq('organization_id', orgId) : q
     Promise.all([
       getWorkflows({ orgId }),

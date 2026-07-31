@@ -194,11 +194,16 @@ const PERM_KEY_MAP = {
 function PendingApprovalsView() {
   const navigate = useNavigate()
   const { profile } = useAuth()
-  const { pendingByTable, loading: pendingLoading } = usePendingApprovals()
+  const { pendingByTable, loading: pendingLoading, reload: reloadPending } = usePendingApprovals()
   const [activeGroup, setActiveGroup] = useState('hr')
   const [activeTab, setActiveTab] = useState('leave')
   const [data, setData] = useState({})
   const [loading, setLoading] = useState(true)
+
+  // 通過/退回後「立即」把該列從畫面移除(不等重撈);reloadPending 再刷新 pendingByTable
+  //   (否則 reload 會用舊的 pendingByTable id 把剛簽的單又撈回來 → 要手動刷新才消失)
+  const removeFromData = (tabKey, id) =>
+    setData(d => ({ ...d, [tabKey]: (d[tabKey] || []).filter(r => r.id !== id) }))
 
   // 🪶 待我會簽的加簽（web_list_my_extra_assignments）
   const [extras, setExtras] = useState([])
@@ -212,7 +217,7 @@ function PendingApprovalsView() {
     })
     if (error) { toast.error('核准失敗：' + error.message); return }
     toast.success('已核准會簽')
-    loadExtras(); reload()
+    loadExtras(); reloadPending()
   }
   const rejectExtra = async (ex) => {
     const reason = window.prompt('退回原因（必填）：')
@@ -222,7 +227,7 @@ function PendingApprovalsView() {
     })
     if (error) { toast.error('退回失敗：' + error.message); return }
     toast.success('已退回會簽')
-    loadExtras(); reload()
+    loadExtras(); reloadPending()
   }
 
   const reload = async () => {
@@ -389,7 +394,8 @@ function PendingApprovalsView() {
     if (!isOk(res)) { toast.error((action === 'approve' ? '通過' : '退回') + '失敗：' + (res.error?.message || res.data?.error || '未知')); return }
     toast.success(action === 'approve' ? '已通過' : '已退回')
     setSelected(s => { const n = new Set(s); n.delete(row.id); return n })
-    reload()
+    removeFromData(activeTab, row.id)   // 立即從畫面移除
+    reloadPending()                     // 刷新 pendingByTable(→ useEffect 觸發 reload 校正)
   }
 
   const bulkApprove = async () => {
@@ -398,11 +404,13 @@ function PendingApprovalsView() {
     if (!(await confirm({ message: `確定批次通過 ${ids.length} 張「${activeTabDef?.label}」？` }))) return
     setBulkBusy(true)
     let ok = 0, fail = 0
-    for (const id of ids) { const res = await approveAction(activeTab, id, 'approve', null); isOk(res) ? ok++ : fail++ }
+    const doneIds = []
+    for (const id of ids) { const res = await approveAction(activeTab, id, 'approve', null); if (isOk(res)) { ok++; doneIds.push(id) } else fail++ }
     setBulkBusy(false)
     setSelected(new Set())
     toast[fail ? 'warning' : 'success'](`批次通過完成：成功 ${ok}${fail ? `、失敗 ${fail}` : ''}`)
-    reload()
+    setData(d => ({ ...d, [activeTab]: (d[activeTab] || []).filter(r => !doneIds.includes(r.id)) }))  // 立即移除成功的
+    reloadPending()
   }
 
   if (loading) {
@@ -622,13 +630,15 @@ function PendingApprovalsView() {
             const res = await approveAction(detail.type, detail.row.id, 'approve', null)
             if (!isOk(res)) { toast.error('通過失敗：' + (res.error?.message || res.data?.error || '未知')); throw new Error('approve failed') }
             toast.success('已通過')
+            removeFromData(detail.type, detail.row.id)   // 立即從清單移除
           },
           onReject: async (_r, reason) => {
             const res = await approveAction(detail.type, detail.row.id, 'reject', reason)
             if (!isOk(res)) { toast.error('退回失敗：' + (res.error?.message || res.data?.error || '未知')); throw new Error('reject failed') }
             toast.success('已退回')
+            removeFromData(detail.type, detail.row.id)
           },
-          onChanged: () => { closeDetail(); reload(); loadExtras() },
+          onChanged: () => { closeDetail(); reloadPending(); loadExtras() },
         }}
       />
     )}

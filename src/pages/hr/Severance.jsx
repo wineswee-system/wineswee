@@ -156,6 +156,15 @@ export default function Severance() {
       status: 'cancelled', notes: (rec.notes ? rec.notes + '\n' : '') + `[取消] ${reason}`,
     }).eq('id', rec.id)
     if (error) { toast.error(`取消失敗：${error.message}`); return }
+    // ★ 資遣取消 → 同步清掉員工的離職預告(resign_date/reason/type)並恢復在職,
+    //   否則員工端仍掛「離職 7/31」、每日 cron 到期還是會把他離職。
+    if (rec.employee_id) {
+      const { error: e2 } = await supabase.from('employees')
+        .update({ status: '在職', resign_date: null, resign_reason: null, resign_type: null })
+        .eq('id', rec.employee_id)
+      if (e2) { toast.warning(`資遣已取消,但員工離職狀態未清除：${e2.message}`); load(); return }
+    }
+    toast.success('已取消資遣,員工恢復在職')
     load()
   }
 

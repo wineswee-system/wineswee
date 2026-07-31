@@ -63,6 +63,8 @@ export default function Attendance() {
 
   const [records, setRecords] = useState([])
   const [overtimes, setOvertimes] = useState([])   // 已核准加班單 → 打卡追蹤獨立加班列
+  const [daySchedules, setDaySchedules] = useState([])  // 當天班表對照
+  const [dayLeaves, setDayLeaves] = useState([])        // 已核准請假對照
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
   const [stores, setStores] = useState([])
@@ -109,7 +111,18 @@ export default function Attendance() {
         .eq('organization_id', orgId).eq('status', '已核准')
         .is('deleted_at', null)
         .gte('date', startDate).lte('date', endDate),
-    ]).then(([r, e, d, s, ot]) => {
+      // 當天班表(顯示排定班別)
+      supabase.from('schedules')
+        .select('employee, employee_id, date, shift, actual_start, actual_end')
+        .eq('organization_id', orgId)
+        .gte('date', startDate).lte('date', endDate),
+      // 已核准請假(覆蓋區間的)
+      supabase.from('leave_requests')
+        .select('employee, employee_id, start_date, end_date, type')
+        .eq('organization_id', orgId).eq('status', '已核准')
+        .is('deleted_at', null)
+        .lte('start_date', endDate).gte('end_date', startDate),
+    ]).then(([r, e, d, s, ot, sch, lv]) => {
       let recs = (r.data || []).map(r => ({
         ...r,
         // Edge Function 寫 total_hours；舊資料寫 hours；統一用 hours
@@ -131,6 +144,8 @@ export default function Attendance() {
         return emp?.store === profile.store
       })
       setOvertimes(ots)
+      setDaySchedules(sch.data || [])
+      setDayLeaves(lv.data || [])
       setEmployees(e.data || [])
       setDepartments(d.data || [])
       setStores(s.data || [])
@@ -152,6 +167,31 @@ export default function Attendance() {
     const e = employees.find(emp => emp.name === name)
     return e?.stores?.name || e?.store || ''
   }, [employees])
+
+  // 每人每天的「班表 / 加班 / 請假」對照(key = 姓名|日期)
+  const dayCtx = useMemo(() => {
+    const sched = {}, ot = {}, leave = {}
+    for (const s of daySchedules) {
+      const k = `${s.employee}|${s.date}`
+      if (!sched[k]) sched[k] = (s.actual_start && s.actual_end)
+        ? `${String(s.actual_start).slice(0, 5)}-${String(s.actual_end).slice(0, 5)}`
+        : (s.shift || '')
+    }
+    for (const o of overtimes) {
+      const k = `${o.employee}|${o.date}`
+      ot[k] = (ot[k] || 0) + Number(o.ot_hours ?? o.hours ?? 0)
+    }
+    for (const l of dayLeaves) {
+      if (!l.start_date || !l.end_date) continue
+      let d = new Date(l.start_date + 'T00:00:00Z'); const end = new Date(l.end_date + 'T00:00:00Z')
+      while (d <= end) {
+        const k = `${l.employee}|${d.toISOString().slice(0, 10)}`
+        if (!leave[k]) leave[k] = l.type || '請假'
+        d.setUTCDate(d.getUTCDate() + 1)
+      }
+    }
+    return { sched, ot, leave }
+  }, [daySchedules, overtimes, dayLeaves])
 
   const today = todayTW()
 
@@ -448,14 +488,17 @@ export default function Attendance() {
           {allRows.length === 0 && (
             <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>尚無出勤紀錄</div>
           )}
+          {/* 橫向捲動容器:表頭 + 內容一起捲 */}
+          <div style={{ overflowX: 'auto' }}>
+           <div style={{ minWidth: 1420 }}>
           {/* Virtual table header */}
-          <div style={{ display: 'grid', gridTemplateColumns: '140px 100px 100px 85px 85px 60px 120px 145px 85px 110px 1fr', background: 'var(--bg-tertiary)', borderBottom: '1px solid var(--border-medium)', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>
-            {['員工', '部門', '日期', '上班打卡', '下班打卡', '工時', '打卡地點', '經緯度', '狀態', '模式', '操作'].map(h => (
+          <div style={{ display: 'grid', gridTemplateColumns: '140px 100px 100px 85px 85px 60px 110px 60px 80px 120px 145px 85px 110px 1fr', background: 'var(--bg-tertiary)', borderBottom: '1px solid var(--border-medium)', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>
+            {['員工', '部門', '日期', '上班打卡', '下班打卡', '工時', '當天班表', '加班', '請假', '打卡地點', '經緯度', '狀態', '模式', '操作'].map(h => (
               <div key={h} style={{ padding: '10px 8px' }}>{h}</div>
             ))}
           </div>
           {/* List body */}
-          <div style={{ overflowX: 'hidden' }}>
+          <div>
             <div>
               {pagedRows.map((r) => {
                 const isToday = r.date === today
@@ -464,13 +507,17 @@ export default function Attendance() {
                 const canClockOut = !isNotClocked && !isOvertime && isToday && r.clock_in && !r.clock_out
                 const canClockIn = !isNotClocked && !isOvertime && isToday && !r.clock_in
                 return (
-                  <div key={r.id} style={{ display: 'grid', gridTemplateColumns: '140px 100px 100px 85px 85px 60px 120px 145px 85px 110px 1fr', alignItems: 'center', borderBottom: '1px solid var(--border-subtle)', opacity: isNotClocked ? 0.75 : 1, background: isOvertime ? 'var(--accent-orange-dim)' : undefined }}>
+                  <div key={r.id} style={{ display: 'grid', gridTemplateColumns: '140px 100px 100px 85px 85px 60px 110px 60px 80px 120px 145px 85px 110px 1fr', alignItems: 'center', borderBottom: '1px solid var(--border-subtle)', opacity: isNotClocked ? 0.75 : 1, background: isOvertime ? 'var(--accent-orange-dim)' : undefined }}>
                     <div style={{ padding: '4px 8px', fontWeight: 600, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.employee}</div>
                     <div style={{ padding: '4px 8px', fontSize: 12, color: 'var(--text-muted)' }}>{isNotClocked ? (r.dept || '-') : (getEmpDept(r.employee) || '-')}</div>
                     <div style={{ padding: '4px 8px', fontSize: 13 }}>{r.date}</div>
                     <div style={{ padding: '4px 8px', fontSize: 13 }}>{r.clock_in || '-'}</div>
                     <div style={{ padding: '4px 8px', fontSize: 13 }}>{r.clock_out || '-'}</div>
                     <div style={{ padding: '4px 8px', fontSize: 13 }}>{!isNotClocked && r.hours > 0 ? `${r.hours}h` : '-'}</div>
+                    {/* 當天班表 / 加班 / 請假 */}
+                    <div style={{ padding: '4px 8px', fontSize: 12, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{dayCtx.sched[`${r.employee}|${r.date}`] || '-'}</div>
+                    <div style={{ padding: '4px 8px', fontSize: 12 }}>{dayCtx.ot[`${r.employee}|${r.date}`] > 0 ? <span style={{ color: 'var(--accent-purple)' }}>{dayCtx.ot[`${r.employee}|${r.date}`]}h</span> : <span style={{ color: 'var(--text-muted)' }}>-</span>}</div>
+                    <div style={{ padding: '4px 8px', fontSize: 12 }}>{dayCtx.leave[`${r.employee}|${r.date}`] ? <span style={{ color: 'var(--accent-blue)' }}>{dayCtx.leave[`${r.employee}|${r.date}`]}</span> : <span style={{ color: 'var(--text-muted)' }}>-</span>}</div>
                     <div style={{ padding: '4px 8px' }}>{isNotClocked || isOvertime ? <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{isOvertime ? '加班單' : '-'}</span> : locationBadge(r)}</div>
                     <div style={{ padding: '4px 8px', fontSize: 10, fontFamily: 'monospace', color: 'var(--text-secondary)' }}>
                       {!isNotClocked && r.clock_in_lat != null && r.clock_in_lng != null ? (
@@ -518,6 +565,8 @@ export default function Attendance() {
                 )
               })}
             </div>
+          </div>
+           </div>
           </div>
           {/* 分頁 */}
           {allRows.length > PAGE_SIZE && (

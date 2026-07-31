@@ -4,6 +4,7 @@ import { useReturnNav } from '../../lib/useReturnNav'
 import { useAuth } from '../../contexts/AuthContext'
 import { Plus, X, Send, Settings, Search } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { getAccounts, getCurrencies } from '../../lib/db'
 import { exportExpenseRequestPdf } from '../../lib/exportPdf'
 import { createApprovalWorkflow } from '../../lib/workflowIntegration'
@@ -103,7 +104,8 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
   const [pendingExtras, setPendingExtras] = useState({})
   const load = async () => {
     setLoading(true)
-    const orgId = profile?.organization_id
+    // super_admin 無固定 org(profile.organization_id=null)→ 吃目前切換的 org,否則門市/部門/員工下拉跨 org 混入
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     let reqQuery = supabase.from('expense_requests').select('*').is('deleted_at', null).eq('doc_type', docType).order('created_at', { ascending: false })
     if (orgId) reqQuery = reqQuery.eq('organization_id', orgId)
     // 費用頁用員工的 id/name/dept/編號/門市（下拉+payload）+ signature_url（簽呈 PDF 蓋章），不需 getEmployees 的 56 欄
@@ -121,8 +123,10 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
         .select('id, source_id, insert_before_step, assignee_id, requested_by_id, reason, status, created_at')
         .eq('source_table', 'expense_requests')
         .eq('status', 'pending'),
-      // 門市清單給費用表單下拉用（manager_id 給「核銷單位→營運部→門市」解析店長）
-      supabase.from('stores').select('id, name, manager_id').order('name'),
+      // 門市清單給費用表單下拉用（manager_id 給「核銷單位→營運部→門市」解析店長）— 限本 org
+      (orgId
+        ? supabase.from('stores').select('id, name, manager_id').eq('organization_id', orgId).order('name')
+        : supabase.from('stores').select('id, name, manager_id').order('name')),
       getCurrencies(),
       // 部門清單給「驗收單位」下拉用（manager_id 給解析部門主管）
       (orgId

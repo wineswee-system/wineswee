@@ -43,6 +43,12 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url)
 
+  // 只處理 http(s);chrome-extension:// 等其他 scheme 不能進 Cache API(cache.put 會丟
+  // "Request scheme 'chrome-extension' is unsupported")→ 直接放行給瀏覽器,不攔截。
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    return
+  }
+
   // LIFF pages need fresh code every load (build-time env vars).
   // Bypass SW entirely for the HTML route and its referenced chunks.
   if (url.pathname.startsWith('/liff/')) {

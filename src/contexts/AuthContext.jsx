@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
-import { setTenantOrgId } from '../lib/events/middleware/tenantContext'
+import { setTenantOrgId, getTenantOrgId } from '../lib/events/middleware/tenantContext'
 
 const AuthContext = createContext(null)
 
@@ -220,4 +220,7 @@ export function AuthProvider({ children }) {
 }
 
 export const useAuth = () => useContext(AuthContext)
-export const useOrgId = () => useContext(AuthContext)?.profile?.organization_id ?? null
+// super_admin 沒固定 org(profile.organization_id=null)→ 回目前切換的 org(getTenantOrgId,
+//   由 TenantContext.switchTenant 更新)。一般使用者不受影響。這樣所有 useOrgId 消費者(finance/
+//   crm/dispatch…)的下拉/查詢都會鎖在目前檢視的 org,不會讓 super_admin 跨 org 混入。
+export const useOrgId = () => useContext(AuthContext)?.profile?.organization_id ?? getTenantOrgId()

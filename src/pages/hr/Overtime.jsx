@@ -421,7 +421,7 @@ export default function Overtime() {
   const filtered = records.filter(r =>
     (deptFilter === '' || getEmpDept(r.employee) === deptFilter) &&
     (storeFilter === '' || r.store === storeFilter) &&
-    (!search.trim() || [String(r.id), r.employee_name, r.reason, r.store].some(f => (f||'').toLowerCase().includes(search.trim().toLowerCase())))
+    (!search.trim() || [String(r.id), r.employee, r.reason, r.store].some(f => (f||'').toLowerCase().includes(search.trim().toLowerCase())))
   )
 
 
@@ -508,7 +508,7 @@ export default function Overtime() {
           <div className="card-title"><span className="card-title-icon">📋</span> 加班紀錄</div>
           <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
             <Search size={13} style={{ position: 'absolute', left: 8, color: 'var(--text-muted)', pointerEvents: 'none' }} />
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="搜尋單號" style={{ paddingLeft: 26, paddingRight: search ? 26 : 10, paddingTop: 5, paddingBottom: 5, borderRadius: 6, border: '1px solid var(--border-medium)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: 13, outline: 'none', width: 120 }} />
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="搜尋單號 / 員工姓名" style={{ paddingLeft: 26, paddingRight: search ? 26 : 10, paddingTop: 5, paddingBottom: 5, borderRadius: 6, border: '1px solid var(--border-medium)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: 13, outline: 'none', width: 180 }} />
             {search && <button onClick={() => setSearch('')} style={{ position: 'absolute', right: 6, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}><XIcon size={12} /></button>}
           </div>
         </div>

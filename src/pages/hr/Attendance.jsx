@@ -108,7 +108,7 @@ export default function Attendance() {
       getStores(orgId),
       supabase.from('overtime_requests')
         .select('id, employee, date, start_time, end_time, ot_hours, hours, ot_category, store, status, organization_id')
-        .eq('organization_id', orgId).eq('status', '已核准')
+        .eq('organization_id', orgId).in('status', ['已核准', '待審核'])
         .is('deleted_at', null)
         .gte('date', startDate).lte('date', endDate),
       // 當天班表(顯示排定班別)
@@ -116,10 +116,10 @@ export default function Attendance() {
         .select('employee, employee_id, date, shift, actual_start, actual_end')
         .eq('organization_id', orgId)
         .gte('date', startDate).lte('date', endDate),
-      // 已核准請假(覆蓋區間的)
+      // 請假(已核准 + 待審核;覆蓋區間的)
       supabase.from('leave_requests')
-        .select('employee, employee_id, start_date, end_date, type')
-        .eq('organization_id', orgId).eq('status', '已核准')
+        .select('employee, employee_id, start_date, end_date, type, status')
+        .eq('organization_id', orgId).in('status', ['已核准', '待審核'])
         .is('deleted_at', null)
         .lte('start_date', endDate).gte('end_date', startDate),
     ]).then(([r, e, d, s, ot, sch, lv]) => {
@@ -179,14 +179,19 @@ export default function Attendance() {
     }
     for (const o of overtimes) {
       const k = `${o.employee}|${o.date}`
-      ot[k] = (ot[k] || 0) + Number(o.ot_hours ?? o.hours ?? 0)
+      if (!ot[k]) ot[k] = { h: 0, pending: false }
+      ot[k].h += Number(o.ot_hours ?? o.hours ?? 0)
+      if (o.status !== '已核准') ot[k].pending = true
     }
     for (const l of dayLeaves) {
       if (!l.start_date || !l.end_date) continue
       let d = new Date(l.start_date + 'T00:00:00Z'); const end = new Date(l.end_date + 'T00:00:00Z')
       while (d <= end) {
         const k = `${l.employee}|${d.toISOString().slice(0, 10)}`
-        if (!leave[k]) leave[k] = l.type || '請假'
+        // 已核准優先;同天只有待審核才標 pending
+        if (!leave[k] || (leave[k].pending && l.status === '已核准')) {
+          leave[k] = { type: l.type || '請假', pending: l.status !== '已核准' }
+        }
         d.setUTCDate(d.getUTCDate() + 1)
       }
     }
@@ -215,6 +220,7 @@ export default function Attendance() {
   // 加班單 → 獨立加班列（起訖時間當打卡、狀態=加班）
   const otRows = useMemo(() => overtimes
     .filter(o =>
+      o.status === '已核准' &&   // 獨立加班列只顯示已核准(待審核只在「加班」欄呈現)
       (deptFilter === '' || getEmpDept(o.employee) === deptFilter) &&
       (storeFilter === '' || getEmpStore(o.employee) === storeFilter) &&
       (search === '' || o.employee?.includes(search))
@@ -516,8 +522,8 @@ export default function Attendance() {
                     <div style={{ padding: '4px 8px', fontSize: 13 }}>{!isNotClocked && r.hours > 0 ? `${r.hours}h` : '-'}</div>
                     {/* 當天班表 / 加班 / 請假 */}
                     <div style={{ padding: '4px 8px', fontSize: 12, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{dayCtx.sched[`${r.employee}|${r.date}`] || '-'}</div>
-                    <div style={{ padding: '4px 8px', fontSize: 12 }}>{dayCtx.ot[`${r.employee}|${r.date}`] > 0 ? <span style={{ color: 'var(--accent-purple)' }}>{dayCtx.ot[`${r.employee}|${r.date}`]}h</span> : <span style={{ color: 'var(--text-muted)' }}>-</span>}</div>
-                    <div style={{ padding: '4px 8px', fontSize: 12 }}>{dayCtx.leave[`${r.employee}|${r.date}`] ? <span style={{ color: 'var(--accent-blue)' }}>{dayCtx.leave[`${r.employee}|${r.date}`]}</span> : <span style={{ color: 'var(--text-muted)' }}>-</span>}</div>
+                    <div style={{ padding: '4px 8px', fontSize: 12 }}>{(() => { const o = dayCtx.ot[`${r.employee}|${r.date}`]; return o?.h > 0 ? <span style={{ color: o.pending ? 'var(--accent-orange)' : 'var(--accent-purple)' }}>{o.h}h{o.pending ? ' 審' : ''}</span> : <span style={{ color: 'var(--text-muted)' }}>-</span> })()}</div>
+                    <div style={{ padding: '4px 8px', fontSize: 12 }}>{(() => { const lv = dayCtx.leave[`${r.employee}|${r.date}`]; return lv ? <span style={{ color: lv.pending ? 'var(--accent-orange)' : 'var(--accent-blue)' }}>{lv.type}{lv.pending ? '(審)' : ''}</span> : <span style={{ color: 'var(--text-muted)' }}>-</span> })()}</div>
                     <div style={{ padding: '4px 8px' }}>{isNotClocked || isOvertime ? <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{isOvertime ? '加班單' : '-'}</span> : locationBadge(r)}</div>
                     <div style={{ padding: '4px 8px', fontSize: 10, fontFamily: 'monospace', color: 'var(--text-secondary)' }}>
                       {!isNotClocked && r.clock_in_lat != null && r.clock_in_lng != null ? (

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { ChevronLeft, ChevronRight, AlertCircle, RefreshCw, FileText, Send, CheckCircle, X, Save, Download } from 'lucide-react'
-import * as XLSX from 'xlsx'
+import * as XLSX from 'xlsx-js-style'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { toast } from '../../lib/toast'
@@ -156,48 +156,86 @@ export default function AttendanceDiffReport() {
       const rows = Array.isArray(data) ? data : []
       if (rows.length === 0) { toast.info('本月無資料'); setExporting(false); return }
       const num = v => Math.round((Number(v) || 0) * 100) / 100
+      const otTotal = r => num(r.ot_hours) + num(r.extra_ot_hours)  // 加班+額外加班 合併一欄
+      const storeLabel = storeId === '' ? '全部門市' : (stores.find(s => String(s.id) === String(storeId))?.name || '')
 
-      // ── 左:主表 ──
+      // ── 樣式 ──
+      const B = { style: 'thin', color: { rgb: 'D9D9D9' } }
+      const borderAll = { top: B, bottom: B, left: B, right: B }
+      const titleStyle = { font: { bold: true, sz: 15, color: { rgb: '1F3864' } }, alignment: { vertical: 'center' } }
+      const hdrStyle = fill => ({ font: { bold: true, sz: 11, color: { rgb: 'FFFFFF' } },
+        fill: { patternType: 'solid', fgColor: { rgb: fill } },
+        alignment: { horizontal: 'center', vertical: 'center', wrapText: true }, border: borderAll })
+      const textStyle = z => ({ alignment: { vertical: 'center' }, border: borderAll,
+        ...(z ? { fill: { patternType: 'solid', fgColor: { rgb: 'F2F6FC' } } } : {}) })
+      const numStyle = z => ({ alignment: { horizontal: 'center', vertical: 'center' }, border: borderAll,
+        ...(z ? { fill: { patternType: 'solid', fgColor: { rgb: 'F2F6FC' } } } : {}) })
+      const MAIN_FILL = '2F5597', RANK_FILL = '548235'
+
+      // ── 主表(加班已含額外加班)──
       const MAIN_HEADER = ['員工編號', '姓名', '部門', '應出勤時數(小時)', '實際出勤時數(小時)',
-        '加班時數(小時)', '額外加班時數(小時)', '遲到(小時)', '早退(小時)', '忘刷(次)', '假勤時數(小時)']
+        '加班時數(小時)', '遲到(小時)', '早退(小時)', '忘刷(次)', '假勤時數(小時)']
       const mainRows = rows.map(r => [
         r.employee_number || '', r.name || '', r.dept || '',
-        num(r.scheduled_hours), num(r.actual_hours), num(r.ot_hours), num(r.extra_ot_hours),
+        num(r.scheduled_hours), num(r.actual_hours), otTotal(r),
         num(r.late_hours), num(r.early_leave_hours), r.missing_punch_count ?? 0, num(r.leave_hours),
       ])
+      const NCOL = MAIN_HEADER.length  // 10
       const left = [MAIN_HEADER, ...mainRows]
 
       // ── 右:各項 Top 5 排行 ──
       const RANKS = [
-        { label: '遲到(小時)', key: 'late_hours' },
-        { label: '早退(小時)', key: 'early_leave_hours' },
-        { label: '忘刷(次)', key: 'missing_punch_count' },
-        { label: '加班時數(小時)', key: 'ot_hours' },
-        { label: '額外加班時數(小時)', key: 'extra_ot_hours' },
-        { label: '假勤時數(小時)', key: 'leave_hours' },
+        { label: '遲到(小時)', get: r => num(r.late_hours) },
+        { label: '早退(小時)', get: r => num(r.early_leave_hours) },
+        { label: '忘刷(次)', get: r => r.missing_punch_count ?? 0 },
+        { label: '加班時數(小時)', get: otTotal },
+        { label: '假勤時數(小時)', get: r => num(r.leave_hours) },
       ]
       const right = []
+      const rightHdr = new Set()
       for (const rk of RANKS) {
+        rightHdr.add(right.length)
         right.push(['序號', '姓名', '部門', rk.label])
-        const top = [...rows].filter(r => num(r[rk.key]) > 0)
-          .sort((a, b) => num(b[rk.key]) - num(a[rk.key])).slice(0, 5)
-        top.forEach((r, i) => right.push([i + 1, r.name || '', r.dept || '', num(r[rk.key])]))
-        right.push(['', '', '', ''])  // 區塊間空行
+        const top = [...rows].filter(r => rk.get(r) > 0).sort((a, b) => rk.get(b) - rk.get(a)).slice(0, 5)
+        top.forEach((r, i) => right.push([i + 1, r.name || '', r.dept || '', rk.get(r)]))
+        right.push(['', '', '', ''])
       }
 
-      // ── 合併成 AOA(左 11 欄 + 1 空欄 + 右 4 欄)──
-      const rowCount = Math.max(left.length, right.length)
-      const aoa = []
-      for (let i = 0; i < rowCount; i++) {
-        const l = left[i] || Array(MAIN_HEADER.length).fill('')
+      // ── AOA:第0列=標題,第1列=表頭,第2列起=資料;右側從第1列對齊 ──
+      const aoa = [[`每月出缺勤時數表　${ym}　${storeLabel}`, ...Array(NCOL + 4).fill('')]]
+      const bodyLen = Math.max(left.length, right.length)
+      for (let i = 0; i < bodyLen; i++) {
+        const l = left[i] || Array(NCOL).fill('')
         const r = right[i] || ['', '', '', '']
         aoa.push([...l, '', ...r])
       }
       const ws = XLSX.utils.aoa_to_sheet(aoa)
-      ws['!cols'] = [{ wch: 11 }, { wch: 9 }, { wch: 14 }, ...Array(8).fill({ wch: 13 }),
-        { wch: 2 }, { wch: 6 }, { wch: 9 }, { wch: 14 }, { wch: 13 }]
+      ws['!cols'] = [{ wch: 11 }, { wch: 10 }, { wch: 18 }, { wch: 17 }, { wch: 17 }, { wch: 15 },
+        { wch: 11 }, { wch: 11 }, { wch: 10 }, { wch: 15 }, { wch: 2 },
+        { wch: 6 }, { wch: 10 }, { wch: 18 }, { wch: 15 }]
+      ws['!rows'] = [{ hpt: 26 }, { hpt: 32 }]
+      ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: NCOL - 1 } }]
+      ws['!freeze'] = { xSplit: 0, ySplit: 2 }
+
+      // ── 逐格上樣式 ──
+      const range = XLSX.utils.decode_range(ws['!ref'])
+      for (let R = range.s.r; R <= range.e.r; R++) {
+        for (let C = range.s.c; C <= range.e.c; C++) {
+          const cell = ws[XLSX.utils.encode_cell({ r: R, c: C })]
+          if (!cell) continue
+          if (R === 0) { if (C === 0) cell.s = titleStyle; continue }
+          if (C < NCOL) {                              // 主表
+            if (R === 1) cell.s = hdrStyle(MAIN_FILL)
+            else cell.s = (C <= 2 ? textStyle : numStyle)(R % 2 === 1)
+          } else if (C > NCOL) {                       // 右側排行
+            const ri = R - 1, rc = C - (NCOL + 1)
+            if (rightHdr.has(ri)) cell.s = hdrStyle(RANK_FILL)
+            else if (right[ri] && String(right[ri][rc] ?? '') !== '') cell.s = (rc === 1 || rc === 2 ? textStyle : numStyle)(false)
+          }
+        }
+      }
+
       const wb = XLSX.utils.book_new()
-      const storeLabel = storeId === '' ? '全部門市' : (stores.find(s => String(s.id) === String(storeId))?.name || '')
       XLSX.utils.book_append_sheet(wb, ws, ym)
       XLSX.writeFile(wb, `每月出缺勤時數表_${ym}${storeLabel ? '_' + storeLabel : ''}.xlsx`)
       toast.success(`已匯出 ${rows.length} 人`)

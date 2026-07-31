@@ -87,9 +87,13 @@ export default function HrTabContent({
     const health = isPT
       ? findPTInsuredSalary(insBrackets.health, insuredBase)
       : findHealthBracket(insBrackets.health, insuredBase)?.insured_salary
-    // 職災/勞退預設「同投保級距」（高薪者上限不同可手動再調）
-    if (labor) { set('labor_ins_grade', labor); set('labor_occ_injury_grade', labor); set('labor_pension_grade', labor) }
-    if (health) set('health_ins_grade', health)
+    // 三者法定投保上限不同,各自封頂(級距表最高到 313,000,不 clamp 會超投保)
+    if (labor) {
+      set('labor_ins_grade',        Math.min(labor, 45800))   // 勞保封頂 45,800
+      set('labor_occ_injury_grade', Math.min(labor, 72800))   // 職災封頂 72,800
+      set('labor_pension_grade',    Math.min(labor, 150000))  // 勞退月提繳工資封頂 150,000
+    }
+    if (health) set('health_ins_grade', health)                // 健保最高 313,000(不封頂)
     toast.success(`已依投保基數 ${Math.round(insuredBase).toLocaleString()} 帶入級距，可再手動調整`)
   }
 

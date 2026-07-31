@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { ModalOverlay } from '../../components/Modal'
 import { createPortal } from 'react-dom'
 import { Plus, X, ArrowRight, Trash2, Edit3 } from 'lucide-react'
@@ -20,7 +21,7 @@ export default function Transfers() {
 
   const load = async () => {
     setLoading(true)
-    const orgId = profile?.organization_id
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     const [tRes, wRes] = await Promise.all([getWarehouseTransfers(), getWarehouses(orgId)])
     setTransfers(tRes.data || [])
     setWarehouses(wRes.data || [])

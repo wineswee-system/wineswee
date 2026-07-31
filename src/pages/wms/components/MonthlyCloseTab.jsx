@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { getTenantOrgId } from '../../../lib/events/middleware/tenantContext'
 import { CalendarCheck, Calculator, Lock, History } from 'lucide-react'
 import { useAuth } from '../../../contexts/AuthContext'
 import {
@@ -22,7 +23,7 @@ const prevMonth = () => {
 
 export default function MonthlyCloseTab() {
   const { profile } = useAuth()
-  const orgId = profile?.organization_id ?? null
+  const orgId = profile?.organization_id ?? getTenantOrgId()
 
   const [period, setPeriod] = useState(prevMonth)
   const [result, setResult] = useState(null)     // { run, lines, voucher_number, already_confirmed }

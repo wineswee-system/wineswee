@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { Plus, ChevronDown, ChevronRight, AlertTriangle, ScanBarcode, CheckCircle } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { getOutboundOrders, getWarehouses, getCustomers } from '../../lib/db'
@@ -28,7 +29,7 @@ export default function Outbound() {
   const [fefoLots, setFefoLots] = useState({})
 
   useEffect(() => {
-    const orgId = profile?.organization_id
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     if (!orgId) { setLoading(false); return }
     Promise.all([
       getOutboundOrders(orgId),

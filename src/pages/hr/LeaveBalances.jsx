@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { Calculator, Users, Search, Edit2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -97,7 +98,7 @@ export default function LeaveBalances() {
   useEffect(() => {
     const load = async () => {
       setEmpLoading(true)
-      const orgId = profile?.organization_id
+      const orgId = profile?.organization_id ?? getTenantOrgId()
       const { data } = await supabase.from('employees')
         .select('id, name, employee_number, dept, store, status, employment_type, salary_type, join_date, weekly_hours, gender')
         .eq('organization_id', orgId).order('name')
@@ -117,7 +118,7 @@ export default function LeaveBalances() {
     if (!selectedEmpId) { setTableRows([]); return }
     const load = async () => {
       setDataLoading(true)
-      const orgId = profile?.organization_id
+      const orgId = profile?.organization_id ?? getTenantOrgId()
       const yearStart = `${yearFilter}-01-01`
       const yearEnd   = `${yearFilter + 1}-01-01`
       const [balRes, lrRes, pendRes, compRes] = await Promise.all([
@@ -406,7 +407,7 @@ export default function LeaveBalances() {
     if (bulkDays === '' || isNaN(Number(bulkDays))) { toast.warning(bulkUnit === 'hour' ? '請輸入小時數' : '請輸入天數'); return }
     // 小時模式存 total_days 時除以 8
     const days = bulkUnit === 'hour' ? Number(bulkDays) / 8 : Number(bulkDays)
-    const orgId = profile?.organization_id
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     // 補休走 comp_time_ledger(手動加給,過期折現),不寫 leave_balances
     if (bulkLeaveType === '補休') {
       const hours = bulkUnit === 'hour' ? Number(bulkDays) : Number(bulkDays) * 8

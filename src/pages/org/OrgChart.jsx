@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { getDepartments, getDepartmentSections, getEmployees, getStores } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -13,7 +14,7 @@ export default function OrgChart() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const orgId = profile?.organization_id
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     Promise.all([
       getDepartments(orgId),
       getDepartmentSections(orgId),
@@ -36,7 +37,7 @@ export default function OrgChart() {
 
   // 即時反映部門改名 / 新增 / 刪除
   useEffect(() => {
-    const orgId = profile?.organization_id
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     if (!orgId) return
     const channel = supabase
       .channel(`org-depts-${orgId}`)

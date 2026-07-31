@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { getTenantOrgId } from '../../../lib/events/middleware/tenantContext'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../contexts/AuthContext'
 import Modal, { Field } from '../../../components/Modal'
@@ -8,7 +9,7 @@ import { toast } from '../../../lib/toast'
 // 任務綁定「跨部門工單」的 inline 填寫彈窗（原生，不開新分頁；欄位與一般開單一致）
 export default function WorkOrderCreate({ bindingId, onClose, onDone }) {
   const { profile } = useAuth()
-  const orgId = profile?.organization_id
+  const orgId = profile?.organization_id ?? getTenantOrgId()
   const [departments, setDepartments] = useState([])
   const [employees, setEmployees] = useState([])
   const [stores, setStores] = useState([])

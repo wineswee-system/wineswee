@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { Plus, Calculator, X, AlertCircle, Check, FileText } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -54,7 +55,7 @@ export default function Severance() {
 
   const load = async () => {
     setLoading(true)
-    const orgId = profile?.organization_id
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     const [recRes, empRes] = await Promise.all([
       supabase.from('severance_records').select('*').order('created_at', { ascending: false }),
       supabase.from('employees')

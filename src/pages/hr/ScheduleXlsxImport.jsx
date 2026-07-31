@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { Upload, CheckCircle2, AlertTriangle, RefreshCw, ChevronDown, ChevronRight, FileSpreadsheet, Users, Calendar } from 'lucide-react'
 // xlsx 改為動態 import（見 parseScheduleXlsx / parseShiftCatalog / handleFile）— 避免打進主 bundle
 import { supabase } from '../../lib/supabase'
@@ -313,7 +314,7 @@ function EmpRow({ emp, dbMatched, resigned, records, catalogMap }) {
 // ── 主元件 ───────────────────────────────────────────────────
 export default function ScheduleXlsxImport() {
   const { profile } = useAuth()
-  const orgId = profile?.organization_id
+  const orgId = profile?.organization_id ?? getTenantOrgId()
 
   const [dbEmployees,   setDbEmployees] = useState([])
   const [empsLoading,   setEmpsLoading] = useState(false)

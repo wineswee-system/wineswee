@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { Plus, Search, ArrowRightLeft, AlertTriangle, ScanBarcode, Package, History, ArrowUpDown, DollarSign } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { getInventoryAdjustments, getWarehouses } from '../../lib/db'
@@ -53,7 +54,7 @@ export default function Inventory() {
   }
 
   useEffect(() => {
-    const orgId = profile?.organization_id
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     if (!orgId) { setLoading(false); return }
     loadInventory(orgId).catch(err => {
       console.error('Failed to load data:', err)

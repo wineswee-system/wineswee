@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Send, Settings, FileText } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
@@ -72,7 +73,7 @@ export default function CustomFormFill({ templateId: propTemplateId, embedded: p
   }, [template])
 
   useEffect(() => {
-    const orgId = profile?.organization_id
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     if (!orgId || !template) return
     const tasks = []
     if (needPicker.employee && employees.length === 0) {

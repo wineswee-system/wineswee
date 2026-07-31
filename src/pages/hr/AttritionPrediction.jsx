@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { AlertTriangle, TrendingDown, Users, RefreshCw, ChevronDown, ChevronUp, Brain } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { getDepartments } from '../../lib/db'
@@ -56,7 +57,7 @@ export default function AttritionPrediction() {
   const [departments, setDepartments] = useState([])
 
   useEffect(() => {
-    const orgId = profile?.organization_id
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     if (!orgId) { setLoading(false); return }
     const now = new Date()
     const d90 = new Date(now)
@@ -182,7 +183,7 @@ export default function AttritionPrediction() {
   const handleSaveSnapshots = async () => {
     setComputing(true)
     const today = new Date().toISOString().slice(0, 10)
-    const orgId = profile?.organization_id || null
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     let success = 0
     let failed = 0
     for (const emp of riskData) {

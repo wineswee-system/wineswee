@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { Plus, Send, BarChart2, Eye, Trash2, Edit2, Copy, ChevronDown, ChevronUp, Sparkles } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { getEngagementSurveys, createEngagementSurvey, updateEngagementSurvey, deleteEngagementSurvey, getEngagementResponses, submitEngagementResponse } from '../../lib/db'
@@ -65,7 +66,7 @@ export default function EngagementSurveys() {
   const setS = (k, v) => setSurveyForm(f => ({ ...f, [k]: v }))
 
   useEffect(() => {
-    const orgId = profile?.organization_id
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     if (!orgId) { setLoading(false); return }
     Promise.all([
       getEngagementSurveys(orgId),

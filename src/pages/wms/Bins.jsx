@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { ModalOverlay } from '../../components/Modal'
 import { createPortal } from 'react-dom'
 import { Plus, Trash2, X, ChevronDown, ChevronRight, MapPin, Package, Warehouse } from 'lucide-react'
@@ -30,7 +31,7 @@ export default function Bins() {
 
   const load = async () => {
     setLoading(true)
-    const orgId = profile?.organization_id
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     const { data, error } = await getWarehouses(orgId)
     if (error) setError(error.message)
     else setWarehouses(data || [])

@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { toast } from '../../lib/toast'
@@ -28,7 +29,7 @@ function fmt(d) {
 
 export default function DataImportExport() {
   const { profile } = useAuth()
-  const orgId = profile?.organization_id
+  const orgId = profile?.organization_id ?? getTenantOrgId()
   const [files, setFiles] = useState({}) // kept for non-candidate imports
   const [loading, setLoading] = useState({})
   const [attendFrom, setAttendFrom] = useState(() => {

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useReturnNav } from '../../lib/useReturnNav'
 import { Plus, Check, X, Printer, Settings, Paperclip, Search } from 'lucide-react'
@@ -152,7 +153,7 @@ export default function PunchCorrection() {
   }
 
   const load = () => {
-    const orgId = profile?.organization_id
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     Promise.all([
       supabase.from('clock_corrections').select('*').is('deleted_at', null).order('created_at', { ascending: false }),
       supabase.from('employees').select('id, name, name_en, position, dept, department_id, store, store_id, signature_url, departments!department_id(name), stores!store_id(name)').eq('status', '在職').order('name'),

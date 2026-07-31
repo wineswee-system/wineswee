@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -43,7 +44,7 @@ const EMPTY_ACCOM = { name: '', address: '', capacity: 1, monthly_rent: '', note
 
 export default function ForeignWorkers() {
   const { profile } = useAuth()
-  const orgId = profile?.organization_id
+  const orgId = profile?.organization_id ?? getTenantOrgId()
   const [tab, setTab] = useState('overview')
   const [workers, setWorkers] = useState([])        // foreign_worker_profiles + employee
   const [docs, setDocs] = useState([])              // foreign_worker_docs

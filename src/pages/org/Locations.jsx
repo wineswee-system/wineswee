@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { Plus, Pencil, Trash2, MapPin } from 'lucide-react'
 import { getStores, createStore, updateStore, deleteStore, getEmployees, getCompanies } from '../../lib/db'
 import { getDepartmentSectionsAll } from '../../lib/db/org'
@@ -28,7 +29,7 @@ export default function Locations() {
   const [form, setForm] = useState(EMPTY_FORM)
 
   useEffect(() => {
-    const orgId = profile?.organization_id
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     Promise.all([getStores(orgId), getEmployees(orgId), getCompanies(orgId), getDepartmentSectionsAll(orgId)]).then(([s, e, c, sec]) => {
       setStores(s.data || [])
       setEmployees(e.data || [])

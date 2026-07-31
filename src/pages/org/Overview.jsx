@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { Building, MapPin, Users, ClipboardList } from 'lucide-react'
 import { getCompanies, getStores, getDepartments, getEmployees } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -14,7 +15,7 @@ export default function OrgOverview() {
   const [error, setError] = useState(null)
 
   useEffect(() => {
-    const orgId = profile?.organization_id
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     Promise.all([getCompanies(orgId), getStores(orgId), getDepartments(orgId), getEmployees(orgId)]).then(([c, s, d, e]) => {
       setCompanies(c.data || [])
       setStores(s.data || [])

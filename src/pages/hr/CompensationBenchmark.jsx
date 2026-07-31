@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { DollarSign, Plus, Trash2, Edit2, Save, X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { getCompensationBands, createCompensationBand, updateCompensationBand, deleteCompensationBand, getDepartments } from '../../lib/db'
@@ -48,7 +49,7 @@ export default function CompensationBenchmark() {
   const setB = (k, v) => setBandForm(f => ({ ...f, [k]: v }))
 
   useEffect(() => {
-    const orgId = profile?.organization_id
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     if (!orgId) { setLoading(false); return }
     Promise.all([
       getCompensationBands(orgId),

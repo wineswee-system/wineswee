@@ -1,5 +1,6 @@
 ﻿import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { Wallet, Receipt, FileText, ClipboardList, Package, ShoppingCart, Building2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -40,7 +41,7 @@ export default function BusinessApplications() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const orgId = profile?.organization_id
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     if (!orgId) return
     supabase.from('form_templates')
       .select('id, name, description, color, scope')

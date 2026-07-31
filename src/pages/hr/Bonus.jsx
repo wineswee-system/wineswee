@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { Plus, Settings, Gift } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -35,7 +36,7 @@ export default function Bonus() {
   const [settingForm, setSettingForm] = useState({ role_type: '業務', metric_name: '', target_value: '', weight: '1', reward_amount: '', period: '月' })
 
   useEffect(() => {
-    const orgId = profile?.organization_id
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     Promise.all([
       supabase.from('bonus_records').select('*').eq('organization_id', orgId).order('created_at', { ascending: false }),
       supabase.from('bonus_settings').select('*').eq('organization_id', orgId).order('role_type'),

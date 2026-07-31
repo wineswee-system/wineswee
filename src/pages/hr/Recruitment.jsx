@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { Plus, X, FileText, Briefcase, UserCheck, Calendar, Edit3, Star, Search, ClipboardList, CheckCircle, XCircle, FileEdit, Trash2, Eye } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { findHeadcountChain } from '../../lib/hrChain'
@@ -488,7 +489,7 @@ export default function Recruitment() {
   const { profile, hasPermission } = useAuth()
   const navigate = useNavigate()
   const canManage = hasPermission('recruit.manage')
-  const orgId = profile?.organization_id
+  const orgId = profile?.organization_id ?? getTenantOrgId()
   const [tab, setTab] = useState('jobs')
 
   const [jobs,          setJobs]          = useState([])

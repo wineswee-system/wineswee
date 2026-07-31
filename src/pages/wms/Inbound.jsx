@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { Plus, ChevronDown, ChevronRight, ScanBarcode } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { getInboundOrders, getWarehouses } from '../../lib/db'
@@ -34,7 +35,7 @@ export default function Inbound() {
   const [landedDraft, setLandedDraft] = useState({ cost_type: 'freight', amount: '', allocation_method: 'by_value', notes: '' })
 
   useEffect(() => {
-    const orgId = profile?.organization_id
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     if (!orgId) { setLoading(false); return }
     Promise.all([
       getInboundOrders(orgId),

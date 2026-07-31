@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { Search, Pencil, UserCog, ArrowRight } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import Modal, { Field } from '../../components/Modal'
@@ -37,7 +38,7 @@ const toLabel = (role, role_id) => ROLE_LABEL[ROLE_BY_ID[role_id] ?? role] ?? ro
 export default function Users() {
   const { profile } = useAuth()
   const navigate = useNavigate()
-  const orgId = profile?.organization_id
+  const orgId = profile?.organization_id ?? getTenantOrgId()
 
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)

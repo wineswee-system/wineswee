@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useReturnNav } from '../../lib/useReturnNav'
 import { Plus, Printer, Settings, Search, X as XIcon } from 'lucide-react'
@@ -46,7 +47,7 @@ export default function BusinessTravel() {
   const detailRowIdRef = useRef(null)
 
   const load = () => {
-    const orgId = profile?.organization_id
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     return Promise.all([
       getBusinessTrips(orgId),
       supabase.from('employees').select('id, name, dept, department_id, position, signature_url, departments!department_id(name)').eq('status', '在職').order('name'),

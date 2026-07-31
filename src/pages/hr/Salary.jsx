@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { useNavigate } from 'react-router-dom'
 import { Download, Plus, Calculator, Pencil, Landmark, Package, Send, Megaphone } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
@@ -103,7 +104,7 @@ export default function Salary() {
   // Role-based access
   const navigate = useNavigate()
   const { profile, isStoreStaff, isManager, hasPermission } = useAuth()
-  const orgId = profile?.organization_id
+  const orgId = profile?.organization_id ?? getTenantOrgId()
   const isStaff = isStoreStaff
   // 各功能由「全縣設定 → 權限」細項控制（admin/super_admin 永遠有）
   const canBank = hasPermission('salary.pay')               // 銀行帳號 / 代發薪

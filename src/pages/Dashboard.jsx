@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { getTenantOrgId } from '../lib/events/middleware/tenantContext'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import StaffDashboard from './dashboard/components/StaffDashboard'
@@ -97,7 +98,7 @@ function AdminDashboard({ profile }) {
   const tick = useMemo(() => ({ color: T.tertiary, font: { size: 11 } }), [T])
 
   useEffect(() => {
-    const orgId = profile?.organization_id
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     Promise.all([
       getEmployees(orgId), getTasks({ orgId }), getWorkflows({ orgId }), getAttendance(null, { from: monthStart, columns: 'date, status, hours', orgId }), getLeaveRequests({ orgId }),
       supabase.from('accounts_receivable').select('amount, paid_amount, status, due_date'),

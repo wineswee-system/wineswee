@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import { getEmployeeById, getEmployeesList } from '../../lib/db'
@@ -18,7 +19,7 @@ export default function EmployeeProfile() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const orgId = profile?.organization_id
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     Promise.all([
       getEmployeeById(id, orgId),     // 只撈這一個人(完整)
       getEmployeesList(orgId),        // 輕量名單(給主管下拉等用)

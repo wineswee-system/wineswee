@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { useNavigate } from 'react-router-dom'
 import { Search, Download, MapPin, Clock, CalendarCheck } from 'lucide-react'
 import { getAttendance, serverClockIn, getActiveEmployees, getDepartments, getStores } from '../../lib/db'
@@ -96,7 +97,7 @@ export default function Attendance() {
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    const orgId = profile?.organization_id
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     setLoading(true)
     Promise.all([
       getAttendance(null, { orgId, from: startDate, to: endDate }),

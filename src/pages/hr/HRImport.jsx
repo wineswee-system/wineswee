@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { Upload, Download, CheckCircle2, XCircle, AlertTriangle, RefreshCw } from 'lucide-react'
 // xlsx 改為動態 import（見 xlsxToRows）— 避免把 xlsx 打進主 bundle
 import { supabase } from '../../lib/supabase'
@@ -185,7 +186,7 @@ function downloadTemplate(mod) {
 // ── 主元件 ───────────────────────────────────────────────
 export default function HRImport() {
   const { profile } = useAuth()
-  const orgId = profile?.organization_id
+  const orgId = profile?.organization_id ?? getTenantOrgId()
 
   const [mod, setMod] = useState('attendance')
   const [employees, setEmployees] = useState([])

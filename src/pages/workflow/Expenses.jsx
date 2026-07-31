@@ -1,5 +1,6 @@
 ﻿import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { useReturnNav } from '../../lib/useReturnNav'
 import { Plus, Printer, Settings, Paperclip, Search, X, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
 import { getExpenses, createExpense, getAccounts } from '../../lib/db'
@@ -106,7 +107,7 @@ export default function Expenses() {
   }
 
   useEffect(() => {
-    const orgId = profile?.organization_id
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     Promise.all([
       getExpenses(orgId),
       supabase.from('employees').select('id, name, name_en, dept, department_id, store, store_id, position, signature_url, departments!department_id(name), stores!store_id(name)').eq('status', '在職').order('name'),

@@ -1,5 +1,6 @@
 ﻿import { useState, useEffect } from 'react'
 import { supabase } from '../../../lib/supabase'
+import { getTenantOrgId } from '../../../lib/events/middleware/tenantContext'
 import { getAccounts, getCurrencies } from '../../../lib/db'
 import { validateRequired } from '../../../lib/formValidation'
 import { useAuth } from '../../../contexts/AuthContext'
@@ -37,7 +38,7 @@ export default function ExpenseFormDraft({ initialDraft, onCapture, onClose, bus
   const [errors, setErrors] = useState({})
 
   useEffect(() => {
-    const orgId = profile?.organization_id
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     let empQuery = supabase.from('employees')
       .select('id, name, name_en, employee_number, dept, department_id, store, store_id, position, status, signature_url')
       .eq('status', '在職').order('name')
@@ -77,7 +78,7 @@ export default function ExpenseFormDraft({ initialDraft, onCapture, onClose, bus
 
     const emp = employees.find(e => e.name === form.employee)
     const acc = isExpense ? accounts.find(a => a.code === form.account_code) : null
-    const orgId = profile?.organization_id ?? null
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     const payload = {
       employee: form.employee,
       employee_id: emp?.id || null,

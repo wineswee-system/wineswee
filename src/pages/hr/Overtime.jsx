@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useReturnNav } from '../../lib/useReturnNav'
 import { Plus, Printer, Settings, Paperclip, Search, X as XIcon } from 'lucide-react'
@@ -115,7 +116,7 @@ export default function Overtime() {
 
   // employees 多帶 store_id 進來，這樣選人後可查 step
   const load = () => {
-    const orgId = profile?.organization_id
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     return Promise.all([
       getOvertimeRequests({ from: startDate, to: endDate }),
       supabase.from('employees').select('id, name, dept, store_id, department_id, position, signature_url, departments!department_id(name), salary_structures(salary_type)').eq('status', '在職').order('name'),

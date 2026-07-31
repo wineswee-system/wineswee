@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useReturnNav } from '../../lib/useReturnNav'
 import { Plus, CheckCircle, XCircle, ArrowRight, Printer, Settings, Pencil, Search, X as XIcon } from 'lucide-react'
@@ -150,7 +151,7 @@ export default function TransferRequest() {
         new_store:stores!new_store_id(id,name)`)
       .order('id', { ascending: false })
     if (!isManagerOrAbove && profile?.id) q = q.eq('employee_id', profile.id)
-    const orgId = profile?.organization_id
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     const [{ data: r }, { data: e }, { data: d }, { data: s }, chain, orgRes] = await Promise.all([
       q,
       supabase.from('employees').select('id,name,name_en,position,department_id,store_id,role,dept,store,signature_url,departments!department_id(name),stores!store_id(name)').eq('status','在職').order('name'),

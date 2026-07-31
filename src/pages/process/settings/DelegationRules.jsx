@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { getTenantOrgId } from '../../../lib/events/middleware/tenantContext'
 import { supabase } from '../../../lib/supabase'
 import { toast } from '../../../lib/toast'
 import { Plus, Trash2, CheckCircle, XCircle } from 'lucide-react'
@@ -8,7 +9,7 @@ const EMPTY = { delegator_employee_id: '', delegate_employee_id: '', effective_f
 
 export default function DelegationRules() {
   const { profile } = useAuth()
-  const orgId = profile?.organization_id
+  const orgId = profile?.organization_id ?? getTenantOrgId()
   const [rules, setRules] = useState([])
   const [employees, setEmployees] = useState([])
   const [form, setForm] = useState(EMPTY)

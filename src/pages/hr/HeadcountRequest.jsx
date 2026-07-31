@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useReturnNav } from '../../lib/useReturnNav'
 import { Plus, ArrowRight, Settings, Printer, Search, X as XIcon, BookOpen, Pencil, Trash2 } from 'lucide-react'
@@ -191,7 +192,7 @@ export default function HeadcountRequest() {
       .is('deleted_at', null)
       .order('id', { ascending: false })
     if (!isManagerOrAbove && profile?.id) q = q.eq('employee_id', profile.id)
-    const orgId = profile?.organization_id
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     const [{ data: r }, { data: e }, { data: d }, { data: s }, chain, orgRes] = await Promise.all([
       q,
       supabase.from('employees').select('id,name,name_en,position,department_id,store_id,signature_url,departments!department_id(name)').eq('status','在職').order('name'),

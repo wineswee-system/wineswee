@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { CheckCircle, XCircle, Printer, Building2, Settings, Plus, Paperclip, X, Search } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
@@ -92,7 +93,7 @@ export default function FormSubmissions() {
       setTemplateChain(null)
     }
 
-    const orgId = profile?.organization_id
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     const [listRes, orgRes] = await Promise.all([
       q,
       orgId ? supabase.from('organizations').select('name, logo_url').eq('id', orgId).maybeSingle() : Promise.resolve({ data: null }),

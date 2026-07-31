@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { getTenantOrgId } from '../../../lib/events/middleware/tenantContext'
 import { Paperclip, Plus } from 'lucide-react'
 import Modal, { Field } from '../../../components/Modal'
 import SearchableSelect, { empOptions } from '../../../components/SearchableSelect'
@@ -27,7 +28,7 @@ export default function ExpenseSimpleDraft({ initialDraft, onCapture, onClose })
   const [errors, setErrors] = useState({})
 
   useEffect(() => {
-    const orgId = profile?.organization_id
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     let empQ = supabase.from('employees').select('id, name, name_en, dept, position').eq('status', '在職').order('name')
     if (orgId) empQ = empQ.eq('organization_id', orgId)
     Promise.all([empQ, getAccounts(orgId)]).then(([eRes, aRes]) => {

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { RefreshCw, Plus, Star, Trash2, Link2, Users, MessageCircle, Terminal, Search, Wand2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { getLineGroups, getLineMessages } from '../../lib/db'
@@ -39,7 +40,7 @@ export default function LineIntegration() {
   useEffect(() => { loadData() }, [profile?.organization_id])
 
   async function loadData() {
-    const orgId = profile?.organization_id
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     if (!orgId) { setLoading(false); return }
     setLoading(true)
     setError(null)

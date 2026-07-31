@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { toast } from '../../lib/toast'
 import {
   Plus, ArrowLeft, Check, CheckCircle2, XCircle, ChevronRight,
@@ -140,7 +141,7 @@ export default function Approvals() {
   const [actionComment, setActionComment] = useState('')
   const [actionLoading, setActionLoading] = useState(false)
 
-  const orgId = profile?.organization_id || null
+  const orgId = profile?.organization_id ?? getTenantOrgId()
 
   useEffect(() => { loadData() }, [])
 

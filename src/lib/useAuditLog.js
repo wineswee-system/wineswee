@@ -8,6 +8,7 @@
  *   await logFieldChange('purchase_orders', orderId, 'status', '待確認', '已確認')
  */
 import { useCallback } from 'react'
+import { getTenantOrgId } from './events/middleware/tenantContext'
 import { useAuth } from '../contexts/AuthContext'
 import { logAudit } from './auditLogger'
 import { logger } from './logger'
@@ -15,7 +16,7 @@ import { logger } from './logger'
 export function useAuditLog() {
   const { profile } = useAuth()
   const userName = profile?.name || '系統'
-  const orgId = profile?.organization_id
+  const orgId = profile?.organization_id ?? getTenantOrgId()
 
   const logAction = useCallback(async (action, targetTable, targetId, description) => {
     try {

@@ -12,6 +12,7 @@
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { useNavigate } from 'react-router-dom'
 import { Upload, Download, AlertCircle, AlertTriangle, CheckCircle, FileSpreadsheet, Calculator, RefreshCw } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
@@ -95,7 +96,7 @@ export default function OvertimeExceptionImport() {
   const navigate = useNavigate()
 
   const isAuthorized = hasPermission('system.admin')
-  const orgId = profile?.organization_id
+  const orgId = profile?.organization_id ?? getTenantOrgId()
 
   const [month, setMonth] = useState(currentMonth())
   const [loading, setLoading] = useState(false)

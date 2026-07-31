@@ -1,5 +1,6 @@
 ﻿import { useState, useEffect, useMemo } from 'react'
 import { Search, Shield, ShieldOff, CheckCircle2, XCircle, AlertCircle, RotateCcw, Plus, Minus, LogOut } from 'lucide-react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -170,7 +171,7 @@ function BatchActionPill({ label, accent, onOpen, onClose, disabled }) {
 export default function EmployeePermissions() {
   const { profile, hasPermission } = useAuth()
   const isSuperAdmin = hasPermission('nav.group.super_admin')
-  const orgId = profile?.organization_id
+  const orgId = profile?.organization_id ?? getTenantOrgId()
   // super_admin / admin 都可以用此頁；DB RPC 也對應放寬
   const canManage = hasPermission('system.admin')
 

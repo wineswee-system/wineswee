@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useReturnNav } from '../../lib/useReturnNav'
 import { toast } from '../../lib/toast'
@@ -124,7 +125,7 @@ export default function Leave() {
     return urls
   }
   const load = () => {
-    const orgId = profile?.organization_id
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     return Promise.all([
       getLeaveRequests({ orgId, from: startDate, to: endDate }),
       getActiveEmployees('id, name, dept, store_id, department_id, position, join_date, phone, signature_url, salary_type, weekly_hours, departments!department_id(name)', orgId),

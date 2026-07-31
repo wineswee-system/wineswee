@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { Plus, Trash2, Clock } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -19,7 +20,7 @@ export default function EarlyLeaveForm() {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
   const fetchData = async () => {
-    const orgId = profile?.organization_id
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     if (!orgId) { setLoading(false); return }
     const [empRes, recRes] = await Promise.all([
       supabase.from('employees').select('id, name, dept, store, store_id')

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { useSearchParams } from 'react-router-dom'
 import { toast } from '../../lib/toast'
 import { supabase } from '../../lib/supabase'
@@ -182,7 +183,7 @@ export default function Projects() {
   }, [searchParams]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const load = async () => {
-    const orgId = profile?.organization_id
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     if (!orgId) return // Auth not ready; re-triggered when profile resolves (see useEffect below)
     setLoading(true)
     const [pRes, wRes, eRes, sRes, cRes, tplRes, acRes, expRes, dRes, clRes] = await Promise.all([
@@ -705,7 +706,7 @@ export default function Projects() {
     if (!deployTpl || !deployForm.name) return
     // ★ 多廠商安全：profile.organization_id 一定要有，沒有就拒絕（之前 fallback || 1 會把
     //   未載入的 profile 全部塞進 demo org，是 silent corruption）
-    const orgId = profile?.organization_id
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     if (!orgId) {
       toast.error('身份資訊未載入完成，請重新登入再操作')
       return

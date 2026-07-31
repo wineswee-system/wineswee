@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { UserCheck, Plus, Trash2, Power } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -24,7 +25,7 @@ export default function ApprovalDelegations() {
 
   const load = async () => {
     setLoading(true)
-    const orgId = profile?.organization_id
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     let empQ = supabase.from('employees').select('id, name, name_en, position, dept').eq('status', '在職').order('name')
     if (orgId) empQ = empQ.eq('organization_id', orgId)
     const [rRes, eRes] = await Promise.all([

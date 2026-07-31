@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { Settings, RefreshCw, Lock, Plus } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -38,7 +39,7 @@ export default function StoreBonus() {
   const [showCustomFields, setShowCustomFields] = useState(false)
 
   const reloadCustomFields = () => {
-    const orgId = profile?.organization_id
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     if (!orgId) return
     supabase.from('store_bonus_custom_fields').select('*')
       .eq('organization_id', orgId).eq('is_active', true).order('sort_order')
@@ -47,7 +48,7 @@ export default function StoreBonus() {
 
   // 載入門市清單 + role config + 自訂欄位
   useEffect(() => {
-    const orgId = profile?.organization_id
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     if (!orgId) return
     Promise.all([
       supabase.from('stores').select('id, name').eq('organization_id', orgId).order('name'),

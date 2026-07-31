@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { Plus, Pencil, Trash2, History, Layers, X } from 'lucide-react'
 import { getDepartments, createDepartment, updateDepartment, deleteDepartment, getEmployees, getDeptManagerHistory } from '../../lib/db'
 import { getDepartmentSectionsAll, createDepartmentSection, updateDepartmentSection, deleteDepartmentSection } from '../../lib/db/org'
@@ -36,7 +37,7 @@ export default function Departments() {
   const [secForm, setSecForm] = useState({ name: '', supervisor_id: '', sort_order: 0 })
 
   useEffect(() => {
-    const orgId = profile?.organization_id
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     Promise.all([getDepartments(orgId), getEmployees(orgId), getDepartmentSectionsAll(orgId)]).then(([d, e, s]) => {
       setDepartments(d.data || [])
       setEmployees(e.data || [])

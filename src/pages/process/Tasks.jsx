@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { useSearchParams } from 'react-router-dom'
 import { Plus, Search, List, Columns, Calendar as CalIcon, GitBranch, Users, Pencil, Trash2, ShieldCheck, X as XIcon, Download, Upload, Loader2, AlignJustify } from 'lucide-react'
 import { exportToCsv, fmtDate } from '../../lib/exportCsv'
@@ -86,7 +87,7 @@ export default function Tasks() {
   }
 
   const refresh = () => {
-    const orgId = profile?.organization_id
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     return Promise.all([
       getTasks({ orgId }),
       supabase.from('employees').select('id, name, department_id, position, dept').eq('status', '在職').order('name'),

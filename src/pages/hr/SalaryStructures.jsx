@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { Plus, Edit2, DollarSign, Users, X, Download } from 'lucide-react'
 // xlsx 改為動態 import（見 handleExport）— 避免打進主 bundle
 import { supabase } from '../../lib/supabase'
@@ -57,7 +58,7 @@ const emptyForm = {
 
 export default function SalaryStructures() {
   const { profile } = useAuth()
-  const orgId = profile?.organization_id
+  const orgId = profile?.organization_id ?? getTenantOrgId()
   const [structures, setStructures] = useState([])
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])

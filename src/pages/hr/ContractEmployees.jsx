@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -45,7 +46,7 @@ const EMPTY_FORM = { employee_id: '', contract_type: '定期勞動契約', posit
 
 export default function ContractEmployees() {
   const { profile } = useAuth()
-  const orgId = profile?.organization_id
+  const orgId = profile?.organization_id ?? getTenantOrgId()
   const [tab, setTab] = useState('list')
   const [contracts, setContracts] = useState([])
   const [employees, setEmployees] = useState([])

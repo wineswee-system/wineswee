@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { Plus, Search, X as XIcon, Send, Inbox, List, Flag, Building2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
@@ -26,7 +27,7 @@ const STATUS = {
 
 export default function WorkOrders() {
   const { profile, hasPermission } = useAuth()
-  const orgId = profile?.organization_id
+  const orgId = profile?.organization_id ?? getTenantOrgId()
   const isAdmin = hasPermission?.('system.admin') || ['super_admin', 'admin'].includes(profile?.role)
 
   const [me, setMe] = useState(null)          // { id, department_id }

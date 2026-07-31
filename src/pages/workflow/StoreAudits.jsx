@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { Link, useSearchParams } from 'react-router-dom'
 import { ClipboardCheck, Plus, Search, Settings, Trash2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
@@ -47,7 +48,7 @@ export default function StoreAudits() {
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const orgId = profile?.organization_id
+  const orgId = profile?.organization_id ?? getTenantOrgId()
 
   const load = async () => {
     if (!orgId) return

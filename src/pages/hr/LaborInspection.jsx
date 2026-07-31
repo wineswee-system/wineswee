@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { Shield, CheckCircle, XCircle, AlertTriangle, Download, Printer, FileText, RefreshCw } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -43,7 +44,7 @@ export default function LaborInspection() {
   const [detailModal, setDetailModal] = useState(null)
 
   useEffect(() => {
-    const orgId = profile?.organization_id
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     if (!orgId) { setLoading(false); return }
     // ★ 加 org_id filter + 限縮日期範圍到 90 天，避免一次載 2000+ 筆全公司資料
     const since90 = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10)

@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { useNavigate } from 'react-router-dom'
 import {
   Users, Calendar, Clock, FileCheck, AlertTriangle, Cake,
@@ -372,7 +373,7 @@ export default function TeamDashboard() {
   const [loading, setLoading] = useState(true)
   const [refreshTick, setRefreshTick] = useState(0)
 
-  const orgId = profile?.organization_id
+  const orgId = profile?.organization_id ?? getTenantOrgId()
 
   // ── 計算 scope（manager 鎖 store；admin 可選） ──
   const scopeStoreId = useMemo(() => {

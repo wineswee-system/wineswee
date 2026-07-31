@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { Users, Clock, CalendarOff, DollarSign } from 'lucide-react'
 import { getActiveEmployees, getAttendance, getLeaveRequests, getSalaryRecords } from '../../lib/db'
 import { useAuth } from '../../contexts/AuthContext'
@@ -14,7 +15,7 @@ export default function HRReport() {
   const [error, setError] = useState(null)
 
   useEffect(() => {
-    const orgId = profile?.organization_id
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     if (!orgId) { setLoading(false); return }
     // 出勤只取今日 + 只要 status 欄位（原本撈全表全欄只為算「今日遲到」，既慢又名實不符）
     const today = new Date().toLocaleDateString('en-CA')  // 本地 YYYY-MM-DD

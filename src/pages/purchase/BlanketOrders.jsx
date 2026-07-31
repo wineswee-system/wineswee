@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { ModalOverlay } from '../../components/Modal'
 import { createPortal } from 'react-dom'
 import { Plus, Trash2, Edit3, X, FileText, ChevronDown, ChevronRight } from 'lucide-react'
@@ -33,7 +34,7 @@ export default function BlanketOrders() {
 
   const load = async () => {
     setLoading(true)
-    const orgId = profile?.organization_id
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     const [boRes, supRes] = await Promise.all([getBlanketOrders(), getSuppliers(orgId)])
     if (boRes.error) setError(boRes.error.message)
     else setOrders(boRes.data || [])

@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useReturnNav } from '../../lib/useReturnNav'
 import { Plus, ArrowRight, Settings, Search, X as XIcon, Printer } from 'lucide-react'
@@ -117,7 +118,7 @@ export default function LeaveOfAbsence() {
       .select('*, employee:employees(id,name,name_en,department_id,position), approver:employees!approver_id(id,name,signature_url)')
       .order('id', { ascending: false })
     if (!isManagerOrAbove && profile?.id) q = q.eq('employee_id', profile.id)
-    const orgId = profile?.organization_id
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     const [{ data: r }, { data: e }, chain, orgRes] = await Promise.all([
       q,
       supabase.from('employees').select('id,name,name_en,position,dept,department_id,store,store_id,signature_url,departments!department_id(name),stores!store_id(name)').eq('status','在職').order('name'),

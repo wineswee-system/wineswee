@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { Save, RefreshCw, Upload, Trash2, Image as ImageIcon } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -29,7 +30,7 @@ export default function SystemSettings() {
   })
 
   useEffect(() => {
-    const orgId = profile?.organization_id
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     Promise.all([
       supabase.from('module_access').select('*').order('sort_order'),
       orgId ? supabase.from('organizations').select('name, tax_id, phone, address, contact_person, logo_url, settings').eq('id', orgId).maybeSingle() : Promise.resolve({ data: null }),
@@ -111,7 +112,7 @@ export default function SystemSettings() {
 
   // 儲存出勤設定(目前只有「換天時間」真的寫 DB → organizations.settings.day_boundary_hour)
   const saveAttendance = async () => {
-    const orgId = profile?.organization_id
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     if (!orgId) { setAttendanceMsg({ type: 'error', text: '無法取得 organization_id' }); return }
     setSaving(true); setAttendanceMsg(null)
     const h = Math.min(12, Math.max(0, parseInt(attendanceForm.dayBoundaryHour, 10) || 6))

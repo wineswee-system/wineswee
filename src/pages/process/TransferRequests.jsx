@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Plus, Search, Trash2, Pencil, CheckCircle2, XCircle, FileCheck, Paperclip, X, Settings, Printer } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
@@ -68,7 +69,7 @@ export default function TransferRequests() {
   const [searchParams, setSearchParams] = useSearchParams()
 
   useEffect(() => {
-    const orgId = profile?.organization_id
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     if (!orgId) return
     Promise.all([
       supabase.from('goods_transfer_requests').select('*, items:goods_transfer_items(*)').eq('organization_id', orgId).is('deleted_at', null).order('id', { ascending: false }),
@@ -111,7 +112,7 @@ export default function TransferRequests() {
   ), [records, statusFilter, search])
 
   const reload = () => {
-    const orgId = profile?.organization_id
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     supabase.from('goods_transfer_requests').select('*, items:goods_transfer_items(*)').eq('organization_id', orgId).is('deleted_at', null).order('id', { ascending: false })
       .then(({ data }) => setRecords(data || []))
   }

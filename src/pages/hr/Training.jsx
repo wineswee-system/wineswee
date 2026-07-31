@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { ModalOverlay } from '../../components/Modal'
 import { createPortal } from 'react-dom'
 import { Plus, Trash2, Edit3, X, BookOpen, Users, ChevronDown, ChevronRight, Award } from 'lucide-react'
@@ -16,7 +17,7 @@ const emptyForm = { title: '', description: '', category: '一般', duration_hou
 export default function Training() {
   const { profile, hasPermission } = useAuth()
   const canManage = hasPermission('training.manage')
-  const orgId = profile?.organization_id
+  const orgId = profile?.organization_id ?? getTenantOrgId()
   const [courses, setCourses] = useState([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)

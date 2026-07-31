@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import * as XLSX from 'xlsx'
 import { Plus, Trash2, Upload, CloudRain, MapPin, Users, FileSpreadsheet } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
@@ -32,7 +33,7 @@ const normDate = (v) => {
 
 export default function DisasterManagement() {
   const { profile, hasPermission } = useAuth()
-  const orgId = profile?.organization_id
+  const orgId = profile?.organization_id ?? getTenantOrgId()
   const canManage = hasPermission('hr_form.delete_all') || hasPermission('salary.edit') // admin 類
 
   const [loading, setLoading] = useState(true)

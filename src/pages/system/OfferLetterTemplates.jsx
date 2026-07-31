@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { Plus, Edit3, Trash2, Star, StarOff, FileText } from 'lucide-react'
 import {
   getOfferLetterTemplates,
@@ -45,7 +46,7 @@ const emptyForm = () => ({ name: '', body_html: DEFAULT_BODY, is_default: false 
 
 export default function OfferLetterTemplates() {
   const { profile } = useAuth()
-  const orgId = profile?.organization_id
+  const orgId = profile?.organization_id ?? getTenantOrgId()
   const [templates, setTemplates] = useState([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)

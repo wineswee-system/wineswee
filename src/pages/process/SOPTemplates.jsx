@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { Plus, Rocket, Trash2, ChevronDown, ChevronRight, Edit3 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { createTask, createChecklist } from '../../lib/db'
@@ -126,7 +127,7 @@ export default function SOPTemplates() {
       let tpls = t.data || []
       // If no templates in DB, seed defaults
       if (tpls.length === 0) {
-        const orgId = profile?.organization_id || null
+        const orgId = profile?.organization_id ?? getTenantOrgId()
         for (const tpl of DEFAULT_TEMPLATES) {
           const { data } = await supabase.from('sop_templates').insert({
             name: tpl.name,

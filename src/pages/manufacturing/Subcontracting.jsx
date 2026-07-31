@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { ModalOverlay } from '../../components/Modal'
 import { createPortal } from 'react-dom'
 import { Plus, Trash2, Edit3, X, Truck, Package } from 'lucide-react'
@@ -32,7 +33,7 @@ export default function Subcontracting() {
 
   const load = async () => {
     setLoading(true)
-    const orgId = profile?.organization_id
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     const [scRes, supRes, moRes] = await Promise.all([
       getSubcontracts(), getSuppliers(orgId), getManufacturingOrders(),
     ])

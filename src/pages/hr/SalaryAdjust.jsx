@@ -15,6 +15,7 @@
  */
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Calculator, Sparkles, Lock, Trash2, ArrowLeft, ChevronRight, ChevronDown, RotateCcw, AlertTriangle, CheckCircle, Plus, X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
@@ -50,7 +51,7 @@ export default function SalaryAdjust() {
   const [searchParams] = useSearchParams()
 
   const month = searchParams.get('month') || currentMonth()
-  const orgId = profile?.organization_id ?? null
+  const orgId = profile?.organization_id ?? getTenantOrgId()
 
   // ── State ─────────────────────────────────────────────────────────
   const [loading, setLoading]               = useState(true)

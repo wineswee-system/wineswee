@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Plus, Search, UserMinus, UserPlus, Pencil, Mail, Upload, Download, Building2, Trash2, Users, FileText, UserCheck, Power } from 'lucide-react'
 import { exportEmployeeCertificate } from '../../lib/exportCertificate'
@@ -172,7 +173,7 @@ export default function Employees() {
   useEffect(() => { loadPositions().then(setPositions) }, [])
 
   useEffect(() => {
-    const orgId = profile?.organization_id
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     let deptQ = supabase.from('departments').select('*').order('name')
     let storeQ = supabase.from('stores').select('*').order('name')
     if (orgId) { deptQ = deptQ.eq('organization_id', orgId); storeQ = storeQ.eq('organization_id', orgId) }

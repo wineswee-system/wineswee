@@ -8,6 +8,7 @@
  */
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { useNavigate } from 'react-router-dom'
 import { Search, Filter, AlertTriangle, RotateCcw, ArrowLeft, History } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
@@ -53,7 +54,7 @@ export default function PayrollAuditLog() {
   const { profile, profileReady } = useAuth()
   const navigate = useNavigate()
 
-  const orgId = profile?.organization_id ?? null
+  const orgId = profile?.organization_id ?? getTenantOrgId()
 
   // Filters
   const [month, setMonth]                 = useState(currentMonth())

@@ -5026,8 +5026,10 @@ div.data-table > table {
   background-size: 400px 400px;
   background-blend-mode: var(--wsw-wm-blend, screen);
 }
-/* 蓋過 line 1046 [data-theme=light] .main-content{background:var(--bg-primary)}(特異度較高) */
-[data-brand="wineswee"][data-theme="light"] .main-content { background-color: var(--wsw-main-bg); }
+/* 蓋過 line 1046 [data-theme=light] .main-content{background:var(--bg-primary)}(特異度較高)
+   ★ 淺色下要把背景圖關掉(浮水印只靠下方 ::before 的 0.045 淡層);
+     否則加 [data-brand] 後特異度追平 base、背景圖會整顆跑出來。 */
+[data-brand="wineswee"][data-theme="light"] .main-content { background-color: var(--wsw-main-bg); background-image: none; }
 
 [data-brand="wineswee"][data-theme="light"] .main-content::before {
   content: '';

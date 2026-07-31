@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
-import { ChevronLeft, ChevronRight, AlertCircle, RefreshCw, FileText, Send, CheckCircle, X, Save } from 'lucide-react'
+import { ChevronLeft, ChevronRight, AlertCircle, RefreshCw, FileText, Send, CheckCircle, X, Save, Download } from 'lucide-react'
+import * as XLSX from 'xlsx'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { toast } from '../../lib/toast'
@@ -49,6 +50,7 @@ export default function AttendanceDiffReport() {
   const [detailLoading, setDetailLoading] = useState(false)
   const [triggering, setTriggering] = useState(false)
   const [committing, setCommitting] = useState(false)
+  const [exporting, setExporting] = useState(false)
 
   const ym = formatYM(year, month)
 
@@ -141,6 +143,69 @@ export default function AttendanceDiffReport() {
     setCommitting(false)
   }
 
+  // 一鍵匯出「每月出缺勤時數表」(全部小時;左邊每人一列,右邊各項 Top 5)
+  const handleExportHours = async () => {
+    setExporting(true)
+    try {
+      const { data, error } = await supabase.rpc('monthly_attendance_hours_report', {
+        p_year_month: ym,
+        p_store_id: storeId === '' ? null : Number(storeId),
+      })
+      if (error) throw error
+      const rows = Array.isArray(data) ? data : []
+      if (rows.length === 0) { toast.info('本月無資料'); setExporting(false); return }
+      const num = v => Math.round((Number(v) || 0) * 100) / 100
+
+      // ── 左:主表 ──
+      const MAIN_HEADER = ['員工編號', '姓名', '部門', '應出勤時數(小時)', '實際出勤時數(小時)',
+        '加班時數(小時)', '額外加班時數(小時)', '遲到(小時)', '早退(小時)', '忘刷(次)', '假勤時數(小時)']
+      const mainRows = rows.map(r => [
+        r.employee_number || '', r.name || '', r.dept || '',
+        num(r.scheduled_hours), num(r.actual_hours), num(r.ot_hours), num(r.extra_ot_hours),
+        num(r.late_hours), num(r.early_leave_hours), r.missing_punch_count ?? 0, num(r.leave_hours),
+      ])
+      const left = [MAIN_HEADER, ...mainRows]
+
+      // ── 右:各項 Top 5 排行 ──
+      const RANKS = [
+        { label: '遲到(小時)', key: 'late_hours' },
+        { label: '早退(小時)', key: 'early_leave_hours' },
+        { label: '忘刷(次)', key: 'missing_punch_count' },
+        { label: '加班時數(小時)', key: 'ot_hours' },
+        { label: '額外加班時數(小時)', key: 'extra_ot_hours' },
+        { label: '假勤時數(小時)', key: 'leave_hours' },
+      ]
+      const right = []
+      for (const rk of RANKS) {
+        right.push(['序號', '姓名', '部門', rk.label])
+        const top = [...rows].filter(r => num(r[rk.key]) > 0)
+          .sort((a, b) => num(b[rk.key]) - num(a[rk.key])).slice(0, 5)
+        top.forEach((r, i) => right.push([i + 1, r.name || '', r.dept || '', num(r[rk.key])]))
+        right.push(['', '', '', ''])  // 區塊間空行
+      }
+
+      // ── 合併成 AOA(左 11 欄 + 1 空欄 + 右 4 欄)──
+      const rowCount = Math.max(left.length, right.length)
+      const aoa = []
+      for (let i = 0; i < rowCount; i++) {
+        const l = left[i] || Array(MAIN_HEADER.length).fill('')
+        const r = right[i] || ['', '', '', '']
+        aoa.push([...l, '', ...r])
+      }
+      const ws = XLSX.utils.aoa_to_sheet(aoa)
+      ws['!cols'] = [{ wch: 11 }, { wch: 9 }, { wch: 14 }, ...Array(8).fill({ wch: 13 }),
+        { wch: 2 }, { wch: 6 }, { wch: 9 }, { wch: 14 }, { wch: 13 }]
+      const wb = XLSX.utils.book_new()
+      const storeLabel = storeId === '' ? '全部門市' : (stores.find(s => String(s.id) === String(storeId))?.name || '')
+      XLSX.utils.book_append_sheet(wb, ws, ym)
+      XLSX.writeFile(wb, `每月出缺勤時數表_${ym}${storeLabel ? '_' + storeLabel : ''}.xlsx`)
+      toast.success(`已匯出 ${rows.length} 人`)
+    } catch (e) {
+      toast.error('匯出失敗：' + (e.message || '未知'))
+    }
+    setExporting(false)
+  }
+
   const handleSendNotifications = async () => {
     if (!hasPermission('system.admin')) return
     if (!confirm(`要對 ${ym} 所有「未通知」員工發送 LINE 提醒嗎？`)) return
@@ -175,6 +240,10 @@ export default function AttendanceDiffReport() {
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="btn btn-secondary" onClick={load}>
               <RefreshCw size={14} /> 重新整理
+            </button>
+            <button className="btn btn-secondary" onClick={handleExportHours} disabled={exporting}
+              title="匯出當月每人出缺勤時數(全部小時)+ 各項 Top 5">
+              <Download size={14} /> {exporting ? '匯出中...' : '匯出時數表'}
             </button>
             {hasPermission('system.admin') && (
               <button className="btn btn-primary" onClick={handleSendNotifications} disabled={triggering || stats.pending === 0}>

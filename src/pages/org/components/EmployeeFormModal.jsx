@@ -3,7 +3,7 @@ import Modal, { Field } from '../../../components/Modal'
 import SearchableSelect, { empOptions } from '../../../components/SearchableSelect'
 import { useAuth } from '../../../contexts/AuthContext'
 import { loadPositions, groupPositions, DEFAULT_POSITIONS } from '../../../lib/positions'
-import { loadInsuranceBrackets, findLaborBracket, findHealthBracket, findPTInsuredSalary } from '../../../lib/insuranceBrackets'
+import { loadInsuranceBrackets, findLaborBracket, findHealthBracket } from '../../../lib/insuranceBrackets'
 import { toast } from '../../../lib/toast'
 
 // 常見津貼快選（跟 SalaryFormModal / HrTabContent 一致）；點一下加進自訂津貼
@@ -74,9 +74,8 @@ export default function EmployeeFormModal({
       + (form.custom_allowances || []).reduce((s, c) => s + n(c.amount), 0)
     if (insuredBase <= 0) { toast.error('請先填「本薪 / 時薪」與津貼'); return }
     const labor = findLaborBracket(insBrackets.labor, insuredBase, { isPartTime: isPT })?.insured_salary
-    const health = isPT
-      ? findPTInsuredSalary(insBrackets.health, insuredBase)
-      : findHealthBracket(insBrackets.health, insuredBase)?.insured_salary
+    // 健保無 PT 例外:受僱者一律從第 1 級 29,500 起跳(對齊計薪引擎),不套 PT 11,100~29,500
+    const health = findHealthBracket(insBrackets.health, insuredBase)?.insured_salary
     // 三者法定投保上限不同,各自封頂(級距表最高到 313,000,不 clamp 會超投保)
     if (labor) {
       set('labor_ins_grade',        Math.min(labor, 45800))   // 勞保封頂 45,800

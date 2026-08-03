@@ -20,6 +20,18 @@ function computeNet(inStr, outStr, isAdmin = false) {
   return net > 0 ? Math.round(net * 100) / 100 : 0
 }
 import { todayTW, monthStartTW, nowTimeTW } from '../../lib/datetime'
+
+// 加班歸日:凌晨(6點換日線前)開始的加班算「前一天」的加班(跟打卡/補打卡 6 點換日同規則)。
+//   例:加班日期 8/3、00:00~01:00(跨午夜尾段)→ 歸 8/2,打卡追蹤才掛在 8/2 那天。
+const OT_DAY_BOUNDARY = '06:00:00'
+const shiftDateStr = (dstr, days) => {
+  const [y, m, d] = String(dstr).split('-').map(Number)
+  const dt = new Date(y, m - 1, d + days)
+  const p = n => String(n).padStart(2, '0')
+  return `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())}`
+}
+const otAttributedDate = (o) =>
+  (o.start_time && String(o.start_time) < OT_DAY_BOUNDARY) ? shiftDateStr(o.date, -1) : o.date
 import { useAuth } from '../../contexts/AuthContext'
 import { useErrorHandler } from '../../hooks/useErrorHandler'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -137,7 +149,8 @@ export default function Attendance() {
       })
       setRecords(recs)
       // 加班單 → 套跟出勤一樣的可見性（店員只看自己、店長只看自店）
-      let ots = ot.data || []
+      // 凌晨(換日線前)開始的加班歸前一天,打卡追蹤才掛對日子(跨午夜尾段 00:00~ 歸前一天)
+      let ots = (ot.data || []).map(o => ({ ...o, date: otAttributedDate(o) }))
       if (isStaff && profile?.name) ots = ots.filter(o => o.employee === profile.name)
       if (isManager && profile?.store) ots = ots.filter(o => {
         const emp = (e.data || []).find(emp => emp.name === o.employee)

@@ -30,6 +30,13 @@ ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarEle
 // ──────────────────────────────────────────────
 const todayStr = () => new Date().toISOString().slice(0, 10)
 const monthStr = () => new Date().toISOString().slice(0, 7)
+// 加班換日歸屬:凌晨 6 點前開始的加班算「前一天」(對齊打卡/計薪換日,避免 00:00~ 的跨夜尾段被算成今天)
+const OT_DAY_BOUNDARY = '06:00:00'
+const shiftDayStr = (dateStr, delta) => {
+  const [y, m, d] = String(dateStr).split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d + delta)).toISOString().slice(0, 10)
+}
+const otAttrDate = (o) => (o.start_time && String(o.start_time) < OT_DAY_BOUNDARY) ? shiftDayStr(o.date, -1) : o.date
 const greetingNow = () => {
   const h = new Date().getHours()
   return h < 5 ? '夜深了' : h < 12 ? '早安' : h < 18 ? '午安' : '晚安'
@@ -443,8 +450,8 @@ export default function TeamDashboard() {
 
     // 今日有 OT 紀錄（已核准）
     const { data: otToday } = await supabase.from('overtime_requests')
-      .select('id, employee_id, employee, date, hours, status')
-      .eq('status', '已核准').eq('date', today).in('employee_id', teamIds)
+      .select('id, employee_id, employee, date, start_time, hours, status')
+      .eq('status', '已核准').gte('date', today).lte('date', shiftDayStr(today, 1)).in('employee_id', teamIds)
       .is('deleted_at', null)
     setTodayOvertimes(otToday || [])
 
@@ -460,7 +467,7 @@ export default function TeamDashboard() {
     // 待簽核 — 不嚴格做「指派給我」(那要解 chain step)，先列「我 scope 內的待審核」
     const [pl, po, pt, pc] = await Promise.all([
       supabase.from('leave_requests').select('id, employee_id, employee, type, start_date, end_date, days, reason, created_at').eq('status', '待審核').in('employee_id', teamIds).is('deleted_at', null).order('created_at', { ascending: false }).limit(20),
-      supabase.from('overtime_requests').select('id, employee_id, employee, date, hours, reason, created_at').eq('status', '待審核').in('employee_id', teamIds).is('deleted_at', null).order('created_at', { ascending: false }).limit(20),
+      supabase.from('overtime_requests').select('id, employee_id, employee, date, start_time, hours, reason, created_at').eq('status', '待審核').in('employee_id', teamIds).is('deleted_at', null).order('created_at', { ascending: false }).limit(20),
       supabase.from('business_trips').select('id, employee_id, employee, start_date, end_date, destination, purpose, created_at').eq('status', '待審核').in('employee_id', teamIds).is('deleted_at', null).order('created_at', { ascending: false }).limit(20),
       supabase.from('clock_corrections').select('id, employee, date, reason, created_at').eq('status', '待審核').in('employee_id', teamIds).is('deleted_at', null).order('created_at', { ascending: false }).limit(20),
     ])
@@ -779,14 +786,15 @@ export default function TeamDashboard() {
 
   // ── 計算今日狀態 per emp ──
   const teamWithStatus = useMemo(() => {
+    const today = todayStr()
     const attByEmp = new Map(attendance.map(a => [a.employee_id, a]))
     const leaveByEmp = new Map(todayLeaves.map(l => [l.employee_id, l]))
-    const otByEmp = new Map(todayOvertimes.map(o => [o.employee_id, o]))
+    // 加班換日歸屬:00:00~ 的跨夜尾段歸前一天,不算今天(對齊打卡/計薪)
+    const otByEmp = new Map(todayOvertimes.filter(o => otAttrDate(o) === today).map(o => [o.employee_id, o]))
     const tripByEmp = new Map(todayTrips.map(t => [t.employee_id, t]))
-    const today = todayStr()
     const inRange = (r) => r.start_date && r.start_date <= today && (r.end_date || r.start_date) >= today
     const pLeaveByEmp = new Map(pendingLeaves.filter(inRange).map(l => [l.employee_id, l]))
-    const pOtByEmp = new Map(pendingOvertimes.filter(o => o.date === today).map(o => [o.employee_id, o]))
+    const pOtByEmp = new Map(pendingOvertimes.filter(o => otAttrDate(o) === today).map(o => [o.employee_id, o]))
     const pTripByEmp = new Map(pendingTrips.filter(inRange).map(t => [t.employee_id, t]))
     const hourNow = new Date().getHours()
 
@@ -824,7 +832,7 @@ export default function TeamDashboard() {
     const total = team.length
     const presentCount = teamWithStatus.filter(t => ['on', 'overtime'].includes(t.status)).length
     const leaveCount = teamWithStatus.filter(t => ['leave', 'sick'].includes(t.status)).length
-    const otCount = todayOvertimes.length
+    const otCount = todayOvertimes.filter(o => otAttrDate(o) === todayStr()).length
     const tripCount = todayTrips.length
     const lateCount = teamWithStatus.filter(t => t.status === 'late').length
 

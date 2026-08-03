@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { getTenantOrgId } from '../lib/events/middleware/tenantContext'
-import { Navigate, useNavigate } from 'react-router-dom'
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import StaffDashboard from './dashboard/components/StaffDashboard'
 import TeamDashboard from './dashboard/TeamDashboard'
@@ -607,11 +607,17 @@ function DashboardTabs({ overview }) {
   const navigate = useNavigate()
   // 預設：有待簽 → 直接顯示我的待簽；沒有 → 總覽
   // 載入完才做決定，避免閃爍
-  const [tab, setTab] = useState('overview')
+  const [searchParams] = useSearchParams()
+  const [tab, setTab] = useState(() => searchParams.get('tab') || 'overview')
   const [settleCount, setSettleCount] = useState(0)
   const [woCount, setWoCount] = useState(0)
+  // 深連結:URL ?tab=approvals（通知「待簽核」點過來）→ 切到簽核中心;變更時同步
   useEffect(() => {
-    if (!pendingLoading && totalPending > 0 && tab === 'overview') {
+    const t = searchParams.get('tab')
+    if (t) setTab(t)
+  }, [searchParams])
+  useEffect(() => {
+    if (!pendingLoading && totalPending > 0 && tab === 'overview' && !searchParams.get('tab')) {
       setTab('approvals')
     }
     // 只在首次載入完成時自動切，後續使用者切走不再自動切回

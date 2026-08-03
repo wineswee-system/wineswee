@@ -59,7 +59,7 @@ export default function NotificationPanel({ onClose, markSeen, totalPending = 0 
         {/* 待簽核（鈴鐺紅點來源）— 點了才知道那個數字是什麼 */}
         {totalPending > 0 && (
           <div
-            onClick={() => { onClose(); navigate('/process/approvals') }}
+            onClick={() => { onClose(); navigate('/?tab=approvals') }}
             style={{
               padding: '12px 16px', cursor: 'pointer',
               borderBottom: '1px solid var(--border-subtle)',

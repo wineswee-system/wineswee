@@ -37,6 +37,7 @@ import { useErrorHandler } from '../../hooks/useErrorHandler'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import DateRangeField from '../../components/DateRangeField'
 import { supabase } from '../../lib/supabase'
+import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 
 // 模式 tag — 對應 Edge Function 的 clock_in_mode / clock_out_mode（2026-05-28 簡化 5 → 2）
 //   normal 不顯示、outing 顯示「外出」
@@ -417,7 +418,7 @@ export default function Attendance() {
     if (allEmps.length === 0) {
       const orgId = profile?.organization_id ?? getTenantOrgId()
       const { data } = await supabase.from('employees')
-        .select('id, name, status, store_id')
+        .select('id, name, name_en, status, resign_date, position, store, dept, store_id, departments!department_id(name), stores!store_id(name)')
         .eq('organization_id', orgId)
         .order('status', { ascending: true }).order('name')
       setAllEmps(data || [])
@@ -784,12 +785,12 @@ export default function Attendance() {
 
             <div style={{ marginBottom: 14 }}>
               <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>員工 <span style={{ color: 'var(--accent-red)' }}>*</span></div>
-              <select className="form-input" style={{ width: '100%' }} value={bfEmpId} onChange={e => setBfEmpId(e.target.value)}>
-                <option value="">— 選擇員工 —</option>
-                {allEmps.map(e => (
-                  <option key={e.id} value={e.id}>{e.name}{e.status !== '在職' ? `（${e.status}）` : ''}</option>
-                ))}
-              </select>
+              <SearchableSelect
+                value={bfEmpId}
+                onChange={(v) => setBfEmpId(v || '')}
+                options={empOptions(allEmps, { keyBy: 'id' })}
+                placeholder="搜尋 / 選擇員工（含離職）"
+              />
             </div>
 
             <div style={{ marginBottom: 14 }}>

@@ -112,10 +112,12 @@ export default function ApprovalDetailModal({
 
   // 加班防呆:比對加班時間 vs 當天班表 / 打卡,標紅提示不合理處
   //   A = 加班時段落在排定班表內(非額外工時)；B = 加班時段與當天打卡無交集(人不在場)
+  //   C = 當天排定工時 + 本次加班 > 12 小時(看班表判斷單日加班上限;無排班以標準 8h 計)
   const otWarnings = useMemo(() => {
     if (requestType !== 'overtime' || !otDay) return []
     const toMin = t => { if (!t) return null; const [h, m] = String(t).slice(0, 5).split(':').map(Number); return h * 60 + m }
     const overlap = (aS, aE, bS, bE) => Math.max(0, Math.min(aE, bE) - Math.max(aS, bS))
+    const fmtH = h => (Number.isInteger(h) ? String(h) : h.toFixed(1))
     let s = toMin(otDay.req_start), e = toMin(otDay.req_end)
     if (s == null || e == null) return []
     if (e <= s) e += 1440  // 跨午夜
@@ -128,6 +130,23 @@ export default function ApprovalDetailModal({
       let ci = toMin(att.clock_in), co = att.clock_out ? toMin(att.clock_out) : null
       if (co != null && co <= ci) co += 1440
       if (overlap(s, e, ci, co != null ? co : 1440) === 0) w.push('加班時段與當天打卡無交集 — 該時段員工不在場')
+    }
+    // C：單日加班上限 = 12 − 當天排定工時（排 10h → 上限 2h；無排班以標準 8h 計 → 上限 4h）
+    const otH = (e - s) / 60
+    let schedMin = 0
+    for (const x of scheds) {
+      let ss = toMin(x.actual_start), se = toMin(x.actual_end)
+      if (se <= ss) se += 1440
+      const span = se - ss
+      const brk = span >= 540 ? 60 : span >= 300 ? 30 : 0   // 休息:≥9h→60、≥5h→30(對齊計薪)
+      schedMin += Math.max(0, span - brk)
+    }
+    const schedH = scheds.length ? schedMin / 60 : 8   // 無排班 → 以標準 8h 為基準
+    const cap = Math.max(0, 12 - schedH)
+    if (otH > cap + 0.01) {
+      w.push(scheds.length
+        ? `當天排定 ${fmtH(schedH)} 小時 → 單日加班上限約 ${fmtH(cap)} 小時,本次 ${fmtH(otH)} 小時已超過（單日總工時逾 12 小時）`
+        : `當天無排班（以標準 8 小時計）→ 單日加班上限約 4 小時,本次 ${fmtH(otH)} 小時已超過（單日總工時逾 12 小時）`)
     }
     return w
   }, [requestType, otDay])

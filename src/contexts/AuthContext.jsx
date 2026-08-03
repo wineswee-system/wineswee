@@ -50,7 +50,10 @@ export function AuthProvider({ children }) {
         supabase.rpc('get_employee_effective_permissions', { p_emp_id: emp.id }),
       ])
       setOrganization(orgResult.data || null)
-      setRole(roleResult.data || null)
+      // roles 表對非 admin 有 RLS 擋讀時 roleResult.data=null → 退回用 employees.role 文字欄
+      //   (每個人都讀得到自己的 employees 列;role 文字=role name)。否則主管在 web 會被
+      //   誤判成非主管(isManagerOrAbove=false)→ 各頁自我降級成「只看自己」。
+      setRole(roleResult.data || (emp.role ? { name: emp.role } : null))
       // 用 effective_permissions RPC 抓含個人 override 的最終清單
       setPermissions((permsResult.data || []).filter(p => p.effective).map(p => p.code).filter(Boolean))
     } catch (err) {

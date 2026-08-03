@@ -540,7 +540,21 @@ export default function Salary() {
         supabase.from('employees').select('id, employee_number, join_date, store').eq('organization_id', orgId),
         supabase.from('organizations').select('name').eq('id', orgId).maybeSingle(),
       ])
-      const empMap = new Map((emps || []).map(e => [e.id, e]))
+      const empMap = new Map((emps || []).map(e => [e.id, { ...e }]))
+      // 離職/被清 store 的人 → 用當月排班 source_store 補回「任職時的門市」,不落到未分類
+      const needStore = list.filter(p => !p.store && !empMap.get(p.employee_id)?.store).map(p => p.employee_id)
+      if (needStore.length) {
+        const [y, mm] = month.split('-').map(Number)
+        const nextM = mm === 12 ? `${y + 1}-01` : `${y}-${String(mm + 1).padStart(2, '0')}`
+        const { data: sc } = await supabase.from('schedules')
+          .select('employee_id, source_store')
+          .gte('date', `${month}-01`).lt('date', `${nextM}-01`)
+          .in('employee_id', needStore).not('source_store', 'is', null)
+        for (const s of (sc || [])) {
+          const e = empMap.get(s.employee_id)
+          if (e && !e.store) e.store = s.source_store  // 取當月第一筆排班門市
+        }
+      }
       const { exportPayrollRegister } = await import('../../lib/exportPayrollRegister')
       exportPayrollRegister(list, empMap, month, org?.name || '')
       toast.success(`已匯出 ${month} 薪資報表（${list.length} 人）`)

@@ -18,6 +18,7 @@ export default function CompTimeBalance() {
   const [ledgers, setLedgers] = useState([])  // 全公司 active ledger
   const [deptFilter, setDeptFilter] = useState('')
   const [storeFilter, setStoreFilter] = useState('')
+  const [visibleStoreIds, setVisibleStoreIds] = useState(null)  // 主管/督導可見門市 id
   const [search, setSearch] = useState(isStaff ? (profile?.name || '') : '')
   const [expandedEmpId, setExpandedEmpId] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -29,7 +30,7 @@ export default function CompTimeBalance() {
     Promise.all([
       supabase
         .from('employees')
-        .select('id, name, dept, store, status, additional_stores, departments!department_id(name), stores!store_id(name)')
+        .select('id, name, dept, store, status, store_id, additional_stores, departments!department_id(name), stores!store_id(name)')
         .eq('organization_id', orgId)
         .order('name'),
       supabase
@@ -41,27 +42,22 @@ export default function CompTimeBalance() {
         .order('expires_at', { ascending: true }),
       supabase.from('departments').select('id, name').eq('organization_id', orgId),
       supabase.from('stores').select('id, name').eq('organization_id', orgId),
-    ]).then(([eRes, lRes, dRes, sRes]) => {
+      supabase.rpc('web_my_visible_store_ids'),  // 跨店主管/督導可見門市(_can_see_store_for_emp)
+    ]).then(([eRes, lRes, dRes, sRes, visRes]) => {
+      const visIds = Array.isArray(visRes?.data) ? visRes.data : null
+      setVisibleStoreIds(visIds)
       let emps = eRes.data || []
       if (isStaff && profile?.name) {
         emps = emps.filter(e => e.name === profile.name)
-      } else if (isManager && profile?.store) {
-        // manager 只看自己門市 + additional_stores 的員工
-        const myStores = new Set([profile.store, ...(Array.isArray(profile.additional_stores) ? profile.additional_stores : [])])
-        emps = emps.filter(e => {
-          const empStore = e.stores?.name || e.store
-          if (myStores.has(empStore)) return true
-          if (Array.isArray(e.additional_stores) && e.additional_stores.some(s => myStores.has(s))) return true
-          return false
-        })
+      } else if (isManager && visIds) {
+        // manager/督導：看轄下所有可見門市(對齊 _can_see_store_for_emp,取代 additional_stores)
+        emps = emps.filter(e => visIds.includes(e.store_id))
       }
       setEmployees(emps)
       const allLedgers = (lRes.data || []).filter(l => Number(l.hours) - Number(l.hours_used) > 0)
       setLedgers(allLedgers)
       setDepartments(dRes.data || [])
       setStores(sRes.data || [])
-      // manager: 把 storeFilter 預設成自己的店（避免一打開看到全部 store dropdown 但只能看部分人）
-      if (isManager && profile?.store) setStoreFilter(profile.store)
     }).catch(err => {
       console.error('Failed to load comp_time balance:', err)
       setError('資料載入失敗，請重新整理頁面')
@@ -161,11 +157,9 @@ export default function CompTimeBalance() {
         }}>
           <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>🏪 門市</span>
           <select className="form-input" style={{ fontSize: 13, minWidth: 160 }} value={storeFilter}
-            onChange={e => setStoreFilter(e.target.value)}
-            disabled={isManager}
-            title={isManager ? '主管角色只能看自己門市' : ''}>
-            {!isManager && <option value="">全部門市</option>}
-            {stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+            onChange={e => setStoreFilter(e.target.value)}>
+            <option value="">全部門市</option>
+            {stores.filter(s => !isManager || !visibleStoreIds || visibleStoreIds.includes(s.id)).map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
           </select>
           <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>🏢 部門</span>
           <div style={{ minWidth: 200 }}>

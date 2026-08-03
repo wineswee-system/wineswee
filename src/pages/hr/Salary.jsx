@@ -119,7 +119,8 @@ export default function Salary() {
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
   const [deptFilter, setDeptFilter] = useState('')
-  const [storeFilter, setStoreFilter] = useState(isManager ? (profile?.store || '') : '')
+  const [storeFilter, setStoreFilter] = useState('')
+  const [visibleStoreIds, setVisibleStoreIds] = useState(null)  // 薪資可見門市 id(主管/督導,減總部)
   const [stores, setStores] = useState([])
   const [loading, setLoading] = useState(true)
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7))
@@ -165,18 +166,23 @@ export default function Salary() {
       supabase.from('employees').select('id, name, dept, store, additional_stores, department_id, position, store_id, base_salary, hourly_rate, salary_type, meal_allowance, transport_allowance, housing_allowance, join_date, resign_date, status, labor_pension_self_rate, labor_insurance, health_insurance, departments!department_id(name), stores!store_id(name)').or(`status.eq.在職,and(status.eq.離職,resign_date.gte.${mStart},resign_date.lte.${mEnd})`).eq('organization_id', orgId).order('name'),
       supabase.from('departments').select('*').eq('organization_id', orgId).order('name'),
       supabase.from('stores').select('*').eq('organization_id', orgId).order('name'),
-    ]).then(([s, b, e, d, st]) => {
+      supabase.rpc('web_my_salary_visible_store_ids'),  // 薪資可見門市(_can_see_store_for_emp − 總部hq)
+    ]).then(([s, b, e, d, st, visRes]) => {
+      const visIds = Array.isArray(visRes?.data) ? visRes.data : null
+      setVisibleStoreIds(visIds)
+      let emps = e.data || []
       let recs = s.data || []
       // store_staff: 只看自己的薪資
       if (isStaff && profile?.name) recs = recs.filter(r => r.employee === profile.name)
-      // manager: 只看自己門市
-      if (isManager && profile?.store) {
-        const storeEmps = new Set((e.data || []).filter(emp => emp.store === profile.store).map(emp => emp.name))
+      // manager/督導: 看轄下門市薪資,但「總部」不給看(督導不看高層/行政薪資)
+      if (isManager && visIds) {
+        emps = emps.filter(emp => visIds.includes(emp.store_id))
+        const storeEmps = new Set(emps.map(emp => emp.name))
         recs = recs.filter(r => storeEmps.has(r.employee))
       }
       setRecords(recs)
       setBonusRecords(b.data || [])
-      setEmployees(e.data || [])
+      setEmployees(emps)
       setDepartments(d.data || [])
       setStores(st.data || [])
     }).catch(err => {
@@ -679,10 +685,9 @@ export default function Salary() {
                 style={{ fontSize: 13, minWidth: 140, border: 'none', background: 'transparent', padding: '2px 4px' }}
                 value={storeFilter}
                 onChange={e => setStoreFilter(e.target.value)}
-                disabled={isManager}
               >
                 <option value="">全部門市</option>
-                {stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                {stores.filter(s => !isManager || !visibleStoreIds || visibleStoreIds.includes(s.id)).map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
               </select>
             </div>
           </>

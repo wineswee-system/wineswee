@@ -10,7 +10,7 @@ import { toast } from '../../../lib/toast'
 import { confirm } from '../../../lib/confirm'
 import {
   Users, Wallet, Calendar, ClipboardCheck, CalendarOff,
-  ChevronRight, CheckCircle2, Inbox, FileCheck, FileText, ShoppingCart,
+  ChevronRight, CheckCircle2, Inbox, FileCheck, FileText, ShoppingCart, Search,
 } from 'lucide-react'
 
 // 已簽核 type → 路由 (對齊 GROUPS 的 route)，給 SignedView row 跳轉用
@@ -308,6 +308,11 @@ function PendingApprovalsView() {
   const activeGroupDef = GROUPS.find(g => g.key === activeGroup)
   const activeTabDef = activeGroupDef?.tabs.find(t => t.key === activeTab)
   const rows = data[activeTab] || []
+  // 申請人姓名篩選(只看某人的單,避免其他人干擾);切 tab/group 會清空(見下方 effect)
+  const [nameQuery, setNameQuery] = useState('')
+  const filteredRows = nameQuery.trim()
+    ? rows.filter(r => (r.employee || '').toLowerCase().includes(nameQuery.trim().toLowerCase()))
+    : rows
 
   // ── 就地開明細 modal（leave/overtime/trip/correction）；其餘仍跳 HR 頁 ──
   const [detail, setDetail] = useState(null)        // { type, row, emp }
@@ -379,7 +384,7 @@ function PendingApprovalsView() {
   const [rowBusy, setRowBusy] = useState(null)     // 正在處理的 id
   const [selected, setSelected] = useState(() => new Set())
   const [bulkBusy, setBulkBusy] = useState(false)
-  useEffect(() => { setSelected(new Set()) }, [activeTab, activeGroup])
+  useEffect(() => { setSelected(new Set()); setNameQuery('') }, [activeTab, activeGroup])
 
   const toggleSel = (id) => setSelected(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
 
@@ -400,7 +405,7 @@ function PendingApprovalsView() {
   }
 
   const bulkApprove = async () => {
-    const ids = rows.filter(r => selected.has(r.id)).map(r => r.id)
+    const ids = filteredRows.filter(r => selected.has(r.id)).map(r => r.id)
     if (!ids.length) return
     if (!(await confirm({ message: `確定批次通過 ${ids.length} 張「${activeTabDef?.label}」？` }))) return
     setBulkBusy(true)
@@ -556,9 +561,28 @@ function PendingApprovalsView() {
 
       {/* Row list */}
       <div style={{ padding: 16 }}>
+        {/* 申請人姓名篩選 — 只看某個人的單 */}
+        {rows.length > 0 && (
+          <div style={{ position: 'relative', marginBottom: 10 }}>
+            <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
+            <input
+              value={nameQuery}
+              onChange={e => setNameQuery(e.target.value)}
+              placeholder="篩選申請人姓名…"
+              style={{ width: '100%', boxSizing: 'border-box', padding: '8px 30px', borderRadius: 8, border: '1px solid var(--border-medium)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: 13 }}
+            />
+            {nameQuery && (
+              <button onClick={() => setNameQuery('')} title="清除篩選" style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 14, lineHeight: 1 }}>✕</button>
+            )}
+          </div>
+        )}
         {rows.length === 0 ? (
           <div style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
             此類別目前沒有待簽核
+          </div>
+        ) : filteredRows.length === 0 ? (
+          <div style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+            查無「{nameQuery}」的待簽單
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -566,10 +590,10 @@ function PendingApprovalsView() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '2px 2px 6px' }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-secondary)', cursor: 'pointer' }}>
                   <input type="checkbox"
-                    checked={selected.size > 0 && selected.size === rows.length}
-                    ref={el => { if (el) el.indeterminate = selected.size > 0 && selected.size < rows.length }}
-                    onChange={e => setSelected(e.target.checked ? new Set(rows.map(r => r.id)) : new Set())} />
-                  全選
+                    checked={selected.size > 0 && selected.size === filteredRows.length}
+                    ref={el => { if (el) el.indeterminate = selected.size > 0 && selected.size < filteredRows.length }}
+                    onChange={e => setSelected(e.target.checked ? new Set(filteredRows.map(r => r.id)) : new Set())} />
+                  全選{nameQuery ? '(篩選後)' : ''}
                 </label>
                 {selected.size > 0 && (
                   <button onClick={bulkApprove} disabled={bulkBusy} style={{
@@ -580,7 +604,7 @@ function PendingApprovalsView() {
                 )}
               </div>
             )}
-            {rows.map(row => (
+            {filteredRows.map(row => (
               <ApprovalRow
                 key={`${activeTab}-${row.id}`}
                 row={row} tabDef={activeTabDef}

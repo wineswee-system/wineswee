@@ -64,7 +64,8 @@ export default function DisasterManagement() {
     const [dRes, sRes, eRes] = await Promise.all([
       supabase.from('disaster_days').select('*').eq('organization_id', orgId).order('date', { ascending: false }),
       supabase.from('stores').select('id, name').eq('organization_id', orgId).order('name'),
-      supabase.from('employees').select('id, name, employee_number, store_id, store').eq('organization_id', orgId).eq('status', '在職'),
+      // 含離職:天災當時在職、之後才離職的人也要能被「沒來結算」(下方 noShowList 用天災區間再濾任期)
+      supabase.from('employees').select('id, name, employee_number, store_id, store, status, join_date, resign_date').eq('organization_id', orgId).in('status', ['在職', '離職']),
     ])
     setDisasters(dRes.data || [])
     setStores(sRes.data || [])
@@ -98,9 +99,12 @@ export default function DisasterManagement() {
   // 沒來名單：範圍內（門市/全部）當天沒打卡的人
   const noShowList = useMemo(() => {
     if (!selected) return []
-    const inScope = selected.store_ids?.length
+    const { start, end } = dRange(selected)
+    const inScope = (selected.store_ids?.length
       ? employees.filter(e => selected.store_ids.includes(e.store_id))
-      : employees
+      : employees)
+      // 天災期間在職才算「沒來」:到職<=結束 且 (未離職 或 離職日>=開始)。排除當時根本還沒到職/早已離職的人
+      .filter(e => (!e.join_date || e.join_date <= end) && (!e.resign_date || e.resign_date >= start))
     const clockedIds = new Set(attendance.map(a => a.employee_id))
     const clockedNames = new Set(attendance.map(a => a.employee))
     return inScope.filter(e => !clockedIds.has(e.id) && !clockedNames.has(e.name))

@@ -571,7 +571,17 @@ export default function Attendance() {
                             if (!sv) return <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>無排班</span>
                             return <span className="badge badge-danger"><span className="badge-dot"></span>未打卡</span>
                           })()
-                        : <span className={`badge ${r.status === '正常' ? 'badge-success' : r.status === '遲到' ? 'badge-warning' : r.status === '加班' ? 'badge-purple' : r.status === '請假' ? 'badge-info' : r.status === '外出' ? 'badge-success' : 'badge-danger'}`}><span className="badge-dot"></span>{r.status}</span>
+                        : (() => {
+                            // 缺下班:過去日、有上班卡、沒下班卡(含外出/outing)→ 提示主管補下班
+                            //   今天在途中(還沒下班)不算;加班單另計
+                            const missingOut = !isToday && !isOvertime && r.clock_in && !r.clock_out
+                            return (
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
+                                <span className={`badge ${r.status === '正常' ? 'badge-success' : r.status === '遲到' ? 'badge-warning' : r.status === '加班' ? 'badge-purple' : r.status === '請假' ? 'badge-info' : r.status === '外出' ? 'badge-success' : 'badge-danger'}`}><span className="badge-dot"></span>{r.status}</span>
+                                {missingOut && <span className="badge badge-danger" title="有上班打卡但沒有下班打卡,請補登下班時間"><span className="badge-dot"></span>缺下班</span>}
+                              </div>
+                            )
+                          })()
                       }
                     </div>
                     <div style={{ padding: '4px 8px' }}>

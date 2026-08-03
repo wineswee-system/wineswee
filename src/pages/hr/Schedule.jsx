@@ -53,6 +53,8 @@ export default function Schedule() {
 
   const navigate = useNavigate()
   const { profile: authProfile, hasPermission } = useAuth()
+  // 我是否為「營運部」部門主管(departments.manager_id)→ 自動獲得鎖/解班表能力(對齊後端 RPC,換人自動轉)
+  const [isOpsDeptManager, setIsOpsDeptManager] = useState(false)
   const isAdmin = hasPermission('system.admin')
   const isSuperAdmin = hasPermission('nav.group.super_admin')
   // 排班權限吃「權限碼」而非靠 manager 角色自動給：manager 角色預設就帶 schedule.edit/algo，
@@ -60,10 +62,18 @@ export default function Schedule() {
   // 儲備幹部則用 position_permissions 對職位授權開通（可排自己門市）。
   const canEditSchedule = isAdmin || isSuperAdmin || hasPermission('schedule.edit')
   const canUseAISchedule = isAdmin || isSuperAdmin || hasPermission('schedule.algo')
-  // 鎖定 / 解鎖班表：需 schedule.lock 權限（預設 admin/super_admin，可在權限頁授權他人）
-  const canLockSchedule = isAdmin || isSuperAdmin || hasPermission('schedule.lock')
+  // 鎖定 / 解鎖班表：需 schedule.lock 權限（預設 admin/super_admin），或為「營運部」部門主管（自動跟隨）
+  const canLockSchedule = isAdmin || isSuperAdmin || hasPermission('schedule.lock') || isOpsDeptManager
   // 可排「全部門市」：admin/super_admin，或被授予 schedule.view_all（如營運部經理）
   const canScheduleAllStores = isAdmin || isSuperAdmin || hasPermission('schedule.view_all')
+
+  // 判定「我是不是營運部部門主管」→ 鎖/解按鈕顯示(後端 RPC 同款判定,真正把關在後端)
+  useEffect(() => {
+    if (!authProfile?.id) { setIsOpsDeptManager(false); return }
+    supabase.from('departments').select('id').eq('name', '營運部').eq('manager_id', authProfile.id).limit(1)
+      .then(({ data }) => setIsOpsDeptManager((data || []).length > 0))
+      .catch(() => setIsOpsDeptManager(false))
+  }, [authProfile?.id])
 
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])

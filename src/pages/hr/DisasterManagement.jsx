@@ -173,12 +173,23 @@ export default function DisasterManagement() {
   }
 
   const deleteDecl = async (d) => {
-    if (!(await confirm({ message: `刪除 ${fmtRange(d)} ${d.disaster_type} 宣告？（該區間津貼不會自動刪）` }))) return
+    if (!(await confirm({ message: `刪除 ${fmtRange(d)} ${d.disaster_type} 宣告？\n會一併撤掉此次天災「沒來結算」自動產生的假單（軟刪，可還原）。津貼不會自動刪。` }))) return
+    // 先軟刪這次天災自動產生的無薪假/特休(靠 reason 天災類型 + 區間 + org 對應),避免刪宣告後留孤兒假
+    const { start, end } = dRange(d)
+    if (start && end) {
+      const { error: lvErr } = await supabase.from('leave_requests')
+        .update({ deleted_at: new Date().toISOString() })
+        .like('reason', `天災停班（${d.disaster_type}）%`)
+        .gte('start_date', start).lte('start_date', end)
+        .eq('organization_id', d.organization_id)
+        .is('deleted_at', null)
+      if (lvErr) return toast.error('撤銷天災假失敗：' + lvErr.message)
+    }
     const { error } = await supabase.from('disaster_days').delete().eq('id', d.id)
     if (error) return toast.error('刪除失敗：' + error.message)
     setDisasters(prev => prev.filter(x => x.id !== d.id))
     if (selected?.id === d.id) setSelected(null)
-    toast.success('已刪除')
+    toast.success('已刪除宣告，並撤銷該次自動產生的天災假')
   }
 
   // ── 津貼匯入 ──

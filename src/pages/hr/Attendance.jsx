@@ -82,7 +82,8 @@ export default function Attendance() {
   const [departments, setDepartments] = useState([])
   const [stores, setStores] = useState([])
   const [deptFilter, setDeptFilter] = useState('')
-  const [storeFilter, setStoreFilter] = useState(isManager ? (profile?.store || '') : '')
+  const [storeFilter, setStoreFilter] = useState('')
+  const [visibleStoreIds, setVisibleStoreIds] = useState(null)  // 主管/督導可見門市 id(null=未載入/不限)
   // 日期區間篩選（預設：本月 1 號 ~ 今天）
   const [startDate, setStartDate] = useState(() => monthStartTW())
   const [endDate, setEndDate] = useState(() => todayTW())
@@ -147,9 +148,13 @@ export default function Attendance() {
         .lte('start_date', endDate).gte('end_date', startDate),
       // 換日線設定(day_boundary_hour):凌晨加班歸前一天用
       supabase.from('organizations').select('settings').eq('id', orgId).maybeSingle(),
-    ]).then(([r, e, d, s, ot, sch, lv, orgRes]) => {
+      supabase.rpc('web_my_visible_store_ids'),  // 跨店主管/督導可見門市(_can_see_store_for_emp)
+    ]).then(([r, e, d, s, ot, sch, lv, orgRes, visRes]) => {
       const boundaryHour = parseInt(orgRes?.data?.settings?.day_boundary_hour, 10) || 6
       const boundaryStr = `${String(boundaryHour).padStart(2, '0')}:00:00`
+      const visIds = Array.isArray(visRes?.data) ? visRes.data : null
+      setVisibleStoreIds(visIds)
+      const empStoreId = (name) => (e.data || []).find(emp => emp.name === name)?.store_id ?? null
       let recs = (r.data || []).map(r => ({
         ...r,
         // Edge Function 寫 total_hours；舊資料寫 hours；統一用 hours
@@ -157,20 +162,14 @@ export default function Attendance() {
       }))
       // store_staff: 只顯示自己的紀錄
       if (isStaff && profile?.name) recs = recs.filter(r => r.employee === profile.name)
-      // manager: 只顯示自己門市
-      if (isManager && profile?.store) recs = recs.filter(r => {
-        const emp = (e.data || []).find(emp => emp.name === r.employee)
-        return emp?.store === profile.store
-      })
+      // manager/督導: 只顯示「可見門市」(含所督導的多店),取代舊的單一所屬門市
+      if (isManager && visIds) recs = recs.filter(r => visIds.includes(empStoreId(r.employee)))
       setRecords(recs)
-      // 加班單 → 套跟出勤一樣的可見性（店員只看自己、店長只看自店）
+      // 加班單 → 套跟出勤一樣的可見性（店員只看自己、主管看可見門市）
       // 凌晨(換日線前)開始的加班歸前一天,打卡追蹤才掛對日子(跨午夜尾段 00:00~ 歸前一天)
       let ots = (ot.data || []).map(o => ({ ...o, date: otAttributedDate(o, boundaryStr) }))
       if (isStaff && profile?.name) ots = ots.filter(o => o.employee === profile.name)
-      if (isManager && profile?.store) ots = ots.filter(o => {
-        const emp = (e.data || []).find(emp => emp.name === o.employee)
-        return emp?.store === profile.store
-      })
+      if (isManager && visIds) ots = ots.filter(o => visIds.includes(empStoreId(o.employee)))
       setOvertimes(ots)
       setDaySchedules(sch.data || [])
       setDayLeaves(lv.data || [])
@@ -275,7 +274,7 @@ export default function Attendance() {
         (deptFilter === '' || empDept === deptFilter) &&
         (search === '' || e.name.includes(search)) &&
         (!isStaff || e.name === profile?.name) &&
-        (!isManager || !profile?.store || empStore === profile.store)
+        (!isManager || !visibleStoreIds || visibleStoreIds.includes(e.store_id))
     })
     const noPunchRows = []
     for (const e of scopeEmps) {
@@ -292,7 +291,7 @@ export default function Attendance() {
       (a.employee || '').localeCompare(b.employee || '') ||
       (a._rowType === 'overtime' ? 1 : 0) - (b._rowType === 'overtime' ? 1 : 0)
     )
-  }, [filtered, otRows, records, employees, storeFilter, deptFilter, search, startDate, endDate, isStaff, isManager, profile])
+  }, [filtered, otRows, records, employees, storeFilter, deptFilter, search, startDate, endDate, isStaff, isManager, profile, visibleStoreIds])
 
   // 前端分頁：預設每頁 100 筆。篩選/區間/tab 改變時回第 1 頁。
   useEffect(() => { setPage(1) }, [search, deptFilter, storeFilter, startDate, endDate, tab])
@@ -511,10 +510,9 @@ export default function Attendance() {
         <DateRangeField start={startDate} end={endDate} onChange={(s, e) => { setStartDate(s); setEndDate(e) }} />
         {!isStaff && <>
           <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>🏪 門市</span>
-          <select className="form-input" style={{ fontSize: 13, width: 150 }} value={storeFilter} onChange={e => setStoreFilter(e.target.value)}
-            disabled={isManager}>
+          <select className="form-input" style={{ fontSize: 13, width: 150 }} value={storeFilter} onChange={e => setStoreFilter(e.target.value)}>
             <option value="">全部門市</option>
-            {stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+            {stores.filter(s => !isManager || !visibleStoreIds || visibleStoreIds.includes(s.id)).map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
           </select>
           <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>🏢 部門</span>
           <select className="form-input" style={{ fontSize: 13, width: 150 }} value={deptFilter} onChange={e => setDeptFilter(e.target.value)}>

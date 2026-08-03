@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { useNavigate } from 'react-router-dom'
-import { Download, Plus, Calculator, Pencil, Landmark, Package, Send, Megaphone } from 'lucide-react'
+import { Download, Plus, Calculator, Pencil, Landmark, Package, Send, Megaphone, FileSpreadsheet } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { calculateLaborInsurance, calculateHealthInsurance, calculateLaborPension, calculateMonthlyWithholding, calculateNetSalary, calculateInServiceDays } from '../../lib/payroll'
@@ -123,6 +123,7 @@ export default function Salary() {
   const [stores, setStores] = useState([])
   const [loading, setLoading] = useState(true)
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7))
+  const [exportingReg, setExportingReg] = useState(false)
   const [publishing, setPublishing] = useState(false)
   const [expanded, setExpanded] = useState(null)
   const [showModal, setShowModal] = useState(false)
@@ -524,6 +525,33 @@ export default function Salary() {
     else toast.success(`已匯出 ${pay.length} 筆代發薪資料`)
   }
 
+  // ── 匯出薪資計算報表（每門市一張工作表，對齊會計薪資帳表）──
+  // 走 preview_payroll（與批次計薪/入帳同源）→ 吃當前選的月份 + 門市篩選
+  const handleExportRegister = async () => {
+    setExportingReg(true)
+    try {
+      const { data: rows, error } = await supabase.rpc('preview_payroll', {
+        p_period: month, p_org: orgId, p_store_filter: storeFilter || null,
+      })
+      if (error) throw error
+      const list = Array.isArray(rows) ? rows : []
+      if (list.length === 0) { toast.error(`${month} 沒有可計薪的員工`); return }
+      const [{ data: emps }, { data: org }] = await Promise.all([
+        supabase.from('employees').select('id, employee_number, join_date, store').eq('organization_id', orgId),
+        supabase.from('organizations').select('name').eq('id', orgId).maybeSingle(),
+      ])
+      const empMap = new Map((emps || []).map(e => [e.id, e]))
+      const { exportPayrollRegister } = await import('../../lib/exportPayrollRegister')
+      exportPayrollRegister(list, empMap, month, org?.name || '')
+      toast.success(`已匯出 ${month} 薪資報表（${list.length} 人）`)
+    } catch (err) {
+      console.error('Export register failed:', err)
+      toast.error('匯出報表失敗：' + (err.message || '未知錯誤'))
+    } finally {
+      setExportingReg(false)
+    }
+  }
+
   if (loading) return <LoadingSpinner />
   if (error) return (
     <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}>
@@ -546,7 +574,7 @@ export default function Salary() {
             <h2><span className="header-icon">💰</span> 薪資管理</h2>
             <p>員工薪資計算與發放管理（整合勞健保 / 所得稅自動計算）</p>
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end', maxWidth: '68%' }}>
             {!isStaff && <>
               {canEditSalary && (
                 <button className="btn btn-primary" onClick={() => { setEditingRecord(null); setForm(emptyForm); setShowModal(true) }}>
@@ -576,6 +604,12 @@ export default function Salary() {
               {canExport && (
                 <button className="btn btn-secondary" onClick={() => exportSalaryPdf(filtered, month)}>
                   <Download size={14} /> 匯出 PDF
+                </button>
+              )}
+              {canExport && (
+                <button className="btn btn-secondary" onClick={handleExportRegister} disabled={exportingReg}
+                  title="每門市一張工作表的完整薪資帳表（含加項/扣項/公司負擔），吃當前月份與門市篩選">
+                  <FileSpreadsheet size={14} /> {exportingReg ? '產生中…' : '薪資報表'}
                 </button>
               )}
               {canBank && (

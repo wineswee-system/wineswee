@@ -1678,7 +1678,10 @@ export default function Schedule() {
             </button>
             <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 16px' }} onClick={async () => {
               const empNames = filtered.map(e => e.name)
-              if (!(await confirm({ message: `確定要清除 ${selectedMonth} ${storeFilter || '所有門市'} 共 ${empNames.length} 人的排班嗎？` }))) return
+              if (!(await confirm({
+                message: `⚠️ 將刪除「${storeFilter || '所有門市'}」${selectedMonth} 全部 ${empNames.length} 人的整月排班（含已排好的班）。\n\n請再次確認「門市」與「月份」都正確 —— 這會清空這些人本月所有班表。`,
+                danger: true,
+              }))) return
               await supabase.from('schedules').delete().in('employee', empNames).gte('date', monthStart).lte('date', monthEnd)
               setSchedules(prev => prev.filter(s => !empNames.includes(s.employee) || s.date < monthStart || s.date > monthEnd))
             }}>

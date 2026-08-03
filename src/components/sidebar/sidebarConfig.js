@@ -371,7 +371,8 @@ export const groupNav = {
         { icon: FolderOpen, label: '專案', path: '/process/projects', title: '專案管理：建立和追蹤多步驟的工作（例：新店開幕、系統上線）' },
         { icon: Workflow, label: '流程', path: '/process/workflows', title: '流程設計：定義可重複的標準作業流程（例：新進報到流程）' },
         { icon: Layout, label: 'SOP 範本庫', path: '/process/sop', title: 'SOP 標準作業範本：建立、管理、部署可重複使用的流程模板' },
-        { icon: ClipboardCheck, label: '簽核', path: '/process/approvals', title: '簽核中心：管理需要核可的單據（HR / 費用 / 採購 等）' },
+        // 「簽核」(自訂簽核單/簽核管理) 選單隱藏 — 2026-08-03 停用;路由 /process/approvals 與資料保留,要恢復把此行取消註解即可
+        // { icon: ClipboardCheck, label: '簽核', path: '/process/approvals', title: '簽核中心：管理需要核可的單據（HR / 費用 / 採購 等）' },
         { icon: ClipboardList, label: '表單設定', path: '/process/applications', title: '費用 / 非費用類表單（門市報修、叫貨驗收、費用申請、費用報銷）' },
         { icon: ClipboardCheck, label: '門市稽核', path: '/process/store-audits', title: '門市稽核：填寫稽核表 → 簽核 → 缺失/小過自動寫入業績獎金' },
         { icon: ListChecks, label: '任務', path: '/process/tasks', title: '任務清單：個人和團隊的待辦事項' },

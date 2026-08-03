@@ -521,6 +521,7 @@ export default function PayrollFormulaModal({ payroll, month, onClose }) {
                 formula={'曠職天數 × 8h × 時薪（與無薪假同率，扣一日 = 投保基準 ÷ 30）'}
                 vars={[
                   { k: '曠職天數', v: p.awolDays },
+                  { k: '曠職日期', v: (p._awol_rows || []).join('、') || '—' },
                   { k: '時薪', v: hr },
                 ]}
                 hint="行政（編制內）應上班日整天沒打卡、又沒請假/出差；補打卡核准後自動不算"

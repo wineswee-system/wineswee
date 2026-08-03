@@ -109,6 +109,16 @@ export default function Attendance() {
   const [editHistory, setEditHistory] = useState([])
   const [historyLoading, setHistoryLoading] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [reloadKey, setReloadKey] = useState(0)
+  // 補登打卡（可補離職者 / 任意日期）
+  const [backfillOpen, setBackfillOpen] = useState(false)
+  const [allEmps, setAllEmps] = useState([])   // 含離職,補登下拉用（懶載）
+  const [bfEmpId, setBfEmpId] = useState('')
+  const [bfDate, setBfDate] = useState('')
+  const [bfIn, setBfIn] = useState('')
+  const [bfOut, setBfOut] = useState('')
+  const [bfReason, setBfReason] = useState('')
+  const [bfSaving, setBfSaving] = useState(false)
 
   useEffect(() => {
     const orgId = profile?.organization_id ?? getTenantOrgId()
@@ -172,7 +182,7 @@ export default function Attendance() {
     }).finally(() => {
       setLoading(false)
     })
-  }, [startDate, endDate, profile?.organization_id])
+  }, [startDate, endDate, profile?.organization_id, reloadKey])
 
   // dept / store 優先用 FK join 出來的名字（departments.name / stores.name），
   // 退而求其次才用 text 欄（e.dept / e.store）— 新匯入員工 text 欄常常是 NULL
@@ -401,6 +411,38 @@ export default function Attendance() {
     cancelEdit()
   }
 
+  const openBackfill = async () => {
+    setBfEmpId(''); setBfDate(''); setBfIn(''); setBfOut(''); setBfReason('')
+    setBackfillOpen(true)
+    if (allEmps.length === 0) {
+      const orgId = profile?.organization_id ?? getTenantOrgId()
+      const { data } = await supabase.from('employees')
+        .select('id, name, status, store_id')
+        .eq('organization_id', orgId)
+        .order('status', { ascending: true }).order('name')
+      setAllEmps(data || [])
+    }
+  }
+
+  const saveBackfill = async () => {
+    if (!bfEmpId || !bfDate || !bfIn) { alert('請選員工、日期、上班時間'); return }
+    if (!bfReason.trim()) { alert('請填補登原因'); return }
+    setBfSaving(true)
+    const emp = allEmps.find(e => String(e.id) === String(bfEmpId))
+    const { data, error } = await supabase.rpc('hr_backfill_attendance', {
+      p_emp_id: Number(bfEmpId), p_date: bfDate, p_clock_in: bfIn,
+      p_clock_out: bfOut || null, p_reason: bfReason.trim(), p_actor_id: profile?.id ?? null,
+    })
+    setBfSaving(false)
+    if (error || !data?.ok) {
+      setClockMsg({ type: 'error', text: '補登失敗：' + (error?.message || data?.error || '未知錯誤') })
+      return
+    }
+    setBackfillOpen(false)
+    setClockMsg({ type: 'success', text: `已補登 ${emp?.name || ''} ${bfDate} 打卡（${data.action === 'update' ? '覆蓋既有' : '新增'}）` })
+    setReloadKey(k => k + 1)
+  }
+
   const locationBadge = (r) => {
     if (!r.clock_in_location) return <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>-</span>
     const isExternal = r.clock_in_location === '外部位置'
@@ -420,7 +462,12 @@ export default function Attendance() {
             <h2><span className="header-icon">⏰</span> 打卡追蹤</h2>
             <p>員工每日出缺勤即時追蹤（含 GPS 地點 / WiFi IP 驗證）</p>
           </div>
-          <button className="btn btn-secondary" onClick={() => exportAttendancePdf(filtered, { dept: deptFilter, date: `${startDate} ~ ${endDate}` })}><Download size={14} /> 匯出 PDF</button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {canEditClock && (
+              <button className="btn btn-primary" onClick={openBackfill}><Clock size={14} /> 補登打卡</button>
+            )}
+            <button className="btn btn-secondary" onClick={() => exportAttendancePdf(filtered, { dept: deptFilter, date: `${startDate} ~ ${endDate}` })}><Download size={14} /> 匯出 PDF</button>
+          </div>
         </div>
       </div>
 
@@ -726,6 +773,63 @@ export default function Attendance() {
       {tab === 'comparison' && <ScheduleComparisonTab storeFilter={storeFilter} />}
 
       {/* ── 改時間 Modal ── */}
+      {backfillOpen && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1000, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '40px 16px 16px' }}
+          onClick={e => { if (e.target === e.currentTarget) setBackfillOpen(false) }}>
+          <div style={{ background: 'var(--bg-card)', borderRadius: 14, padding: 24, width: '100%', maxWidth: 480, maxHeight: '85vh', overflowY: 'auto', border: '1px solid var(--border-medium)' }}>
+            <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 4 }}>⏰ 補登打卡紀錄</div>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 20 }}>
+              幫當天沒打卡的人補一筆（含已離職員工）
+            </div>
+
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>員工 <span style={{ color: 'var(--accent-red)' }}>*</span></div>
+              <select className="form-input" style={{ width: '100%' }} value={bfEmpId} onChange={e => setBfEmpId(e.target.value)}>
+                <option value="">— 選擇員工 —</option>
+                {allEmps.map(e => (
+                  <option key={e.id} value={e.id}>{e.name}{e.status !== '在職' ? `（${e.status}）` : ''}</option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>日期 <span style={{ color: 'var(--accent-red)' }}>*</span></div>
+              <input type="date" value={bfDate} onChange={e => setBfDate(e.target.value)} className="form-input" style={{ width: '100%' }} />
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 8 }}>
+              <div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>上班打卡 <span style={{ color: 'var(--accent-red)' }}>*</span></div>
+                <input type="time" value={bfIn} onChange={e => setBfIn(e.target.value)} className="form-input" style={{ width: '100%' }} />
+              </div>
+              <div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>
+                  下班打卡{bfIn && bfOut && bfOut < bfIn && <span style={{ color: 'var(--accent-cyan)', marginLeft: 4 }}>· 隔天</span>}
+                </div>
+                <input type="time" value={bfOut} onChange={e => setBfOut(e.target.value)} className="form-input" style={{ width: '100%' }} />
+              </div>
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 14 }}>
+              下班可留空（只補上班）；有下班則工時依上下班自動算（扣休息）。
+            </div>
+
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>補登原因 <span style={{ color: 'var(--accent-red)' }}>*</span></div>
+              <textarea className="form-input" rows={3} style={{ width: '100%', resize: 'vertical' }}
+                placeholder="例：離職員工補齊出勤、忘打卡..."
+                value={bfReason} onChange={e => setBfReason(e.target.value)} />
+            </div>
+
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-primary" style={{ flex: 1 }} disabled={bfSaving} onClick={saveBackfill}>
+                {bfSaving ? '補登中…' : '確認補登'}
+              </button>
+              <button className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setBackfillOpen(false)}>取消</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {editModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1000, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '40px 16px 16px' }}
           onClick={e => { if (e.target === e.currentTarget) cancelEdit() }}>

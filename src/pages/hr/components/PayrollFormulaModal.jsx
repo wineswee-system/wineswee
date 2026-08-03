@@ -271,8 +271,9 @@ export default function PayrollFormulaModal({ payroll, month, onClose }) {
     + (p.unused_leave_payout||0) + (p.severance_total||0)
 
   const leaveDeduction = (p.unpaidDeduction||0) + (p.halfPayDeduction||0)
+  const awolDeduction = (p.awolDeduction||0)
   const totalDedCheck = (p.laborInsurance||0) + (p.healthInsurance||0) + (p.pension||0)
-    + leaveDeduction + (p.lateDeduction||0) + (p.earlyLeaveDeduction||0) + (p.legal_deduction||0)
+    + leaveDeduction + awolDeduction + (p.lateDeduction||0) + (p.earlyLeaveDeduction||0) + (p.legal_deduction||0)
 
   return createPortal(
     <div onClick={onClose} style={{
@@ -511,6 +512,18 @@ export default function PayrollFormulaModal({ payroll, month, onClose }) {
                   { k: '半薪扣款', v: p.halfPayDeduction },
                 ]}
                 hint={isHourly ? '時薪制 PT 請假不扣（沒上班→沒工時→自然不算薪）' : null}
+              />
+            )}
+            {awolDeduction > 0 && (
+              <FormulaRow
+                label="曠職扣款"
+                value={-awolDeduction}
+                formula={'曠職天數 × 8h × 時薪（與無薪假同率，扣一日 = 投保基準 ÷ 30）'}
+                vars={[
+                  { k: '曠職天數', v: p.awolDays },
+                  { k: '時薪', v: hr },
+                ]}
+                hint="行政（編制內）應上班日整天沒打卡、又沒請假/出差；補打卡核准後自動不算"
               />
             )}
             {p.lateDeduction > 0 && (

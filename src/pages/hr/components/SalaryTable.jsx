@@ -69,6 +69,7 @@ function buildFullItems(d) {
   if (n(d.absenceDeduction) > 0) push({ label: '事假/缺勤扣', value: n(d.absenceDeduction), sign: '-', section: 'deduct', color: 'var(--accent-red)', note: n(d.absenceDays) ? `${n(d.absenceDays)} 天` : null })
   if (n(d.unpaidDeduction) > 0) push({ label: '無薪假扣', value: n(d.unpaidDeduction), sign: '-', section: 'deduct', color: 'var(--accent-red)' })
   if (n(d.halfPayDeduction) > 0) push({ label: '半薪假扣', value: n(d.halfPayDeduction), sign: '-', section: 'deduct', color: 'var(--accent-red)' })
+  if (n(d.awolDeduction) > 0) push({ label: '曠職扣', value: n(d.awolDeduction), sign: '-', section: 'deduct', color: 'var(--accent-red)', note: n(d.awolDays) ? `${n(d.awolDays)} 天` : null })
   if (n(d.lateDeduction) > 0) push({ label: '遲到扣', value: n(d.lateDeduction), sign: '-', section: 'deduct', color: 'var(--accent-red)', note: n(d.lateMins) ? `${n(d.lateMins)} 分鐘` : null })
   if (n(d.legal_deduction) > 0) push({ label: '法定扣款', value: n(d.legal_deduction), sign: '-', section: 'deduct', color: 'var(--accent-red)' })
 

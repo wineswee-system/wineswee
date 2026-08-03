@@ -100,6 +100,7 @@ export function printOvertimeSignOff(row, opts = {}) {
       rows: [
         ['加班類型', row.is_pre_approval ? '預先申請' : '事後補登'],
         ['加班日期', fmtDate(row.date)],
+        ...(row.store ? [['加班門市', row.store]] : []),
         ['時數', `${row.hours || 0} 小時`],
         ['事由', row.reason || ''],
       ],

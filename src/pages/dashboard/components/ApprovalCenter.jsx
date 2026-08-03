@@ -67,6 +67,7 @@ function buildDetailFields(type, row) {
         { label: '加班類型', value: row.is_pre_approval ? '預先申請' : '事後補登' },
         { label: '加班日期', value: row.date },
         { label: '加班時間', value: timeRange || '—' },
+        { label: '加班門市', value: row.store || '—' },
         { label: '時數', value: `${row.hours || 0} 小時` },
         { label: '事由', value: row.reason, multiline: true },
         ...rej,

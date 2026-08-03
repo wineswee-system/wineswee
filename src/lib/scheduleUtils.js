@@ -656,6 +656,23 @@ export function listCyclesInRange(rangeStart, rangeEnd, system, anchorDate) {
 // @param anchorDate - 變形工時 cycle 起算日 'YYYY-MM-DD'（標準工時可省）
 // @param startDate, endDate - 檢查範圍 'YYYY-MM-DD'
 // @returns { errors: [{ employee, constraint, law, message, severity }], warnings: [] }
+// ── 單格淨工時(實際時間 − 休息)──────────────────────────────────────────
+// 班表「工時」欄(Schedule.jsx cellNetHours)與合規週期統計(validateLeisureQuota)
+// 的單一來源。兩邊曾各算一套(name-keyed hoursMap||8 vs 實際時間)→ 數字對不上。
+// 收斂成這支:gross=實際起訖(跨午夜/兩頭班),rest=rest_minutes 或公式(<5→0/<9→30/≥9→60)。
+export function cellNetWorkHours(s) {
+  if (!s || !s.shift || isAbsence(s.shift)) return 0
+  const seg = (st, en) => {
+    if (!st || !en) return 0
+    const a = parseTime(st), b = parseTime(en)
+    return b > a ? b - a : (24 - a + b)   // 跨午夜
+  }
+  let gross = seg(s.actual_start, s.actual_end)
+  if (s.shift_2) gross += seg(s.actual_start_2, s.actual_end_2)
+  const rest = (s.rest_minutes != null) ? Number(s.rest_minutes) : (gross < 5 ? 0 : gross < 9 ? 30 : 60)
+  return Math.max(0, gross - rest / 60)
+}
+
 export function validateLeisureQuota({ schedules, workHourSystem, anchorDate, startDate, endDate, shiftDefs = [], employees = [] }) {
   const errors = []
   const warnings = []
@@ -738,10 +755,14 @@ export function validateLeisureQuota({ schedules, workHourSystem, anchorDate, st
           severity: 'error',
         })
       }
-      // 統計週期工時：把 inRange 的工作班 hours 累加，超 cap 給 warning
+      // 統計週期工時：用實際時間淨工時(對齊班表「工時」欄,單一來源 cellNetWorkHours);
+      //   無實際時間的薄資料才退回「定義淨時 / 估 8h」,避免漏算。
       const periodHours = inRange
         .filter(s => !isAbsenceShift(s.shift))
-        .reduce((sum, s) => sum + (hoursMap[s.shift] || 8), 0)
+        .reduce((sum, s) => {
+          const net = cellNetWorkHours(s)
+          return sum + (net > 0 ? net : (hoursMap[s.shift] || 8))
+        }, 0)
       if (periodHours > periodHourCap) {
         warnings.push({
           employee: empName,

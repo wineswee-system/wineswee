@@ -5,7 +5,7 @@ import { supabase } from '../../lib/supabase'
 import { validateSchedule } from '../../lib/laborLaw'
 import { gatherSchedulingData, runAiSchedule, runMonthlyAiSchedule, fixViolations } from '../../lib/schedulingAi'
 import { runProgrammaticSchedule, runMonthlyProgrammaticSchedule } from '../../lib/schedulingAlgo'
-import { parseTime, getMonthDates, getWeekDates, isAbsence, formatYearMonth, parseYearMonth, getDayLabel, listCyclesInRange, getCycleFor, validateLeisureQuota, validateMonthlyOvertime, validateNightShiftProtection } from '../../lib/scheduleUtils'
+import { parseTime, getMonthDates, getWeekDates, isAbsence, formatYearMonth, parseYearMonth, getDayLabel, listCyclesInRange, getCycleFor, validateLeisureQuota, validateMonthlyOvertime, validateNightShiftProtection, cellNetWorkHours } from '../../lib/scheduleUtils'
 import { useAuth } from '../../contexts/AuthContext'
 import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -374,18 +374,8 @@ export default function Schedule() {
 
   // ── 每日彙總:總工時 / 預估業績 / 人事成本比 ──────────────────────────────
   const AVG_HOURLY_WAGE = 350  // 均薪(時薪)—人事成本 = 工時 × 此值
-  const cellNetHours = (s) => {
-    if (!s || !s.shift || isAbsence(s.shift)) return 0
-    const seg = (st, en) => {
-      if (!st || !en) return 0
-      const a = parseTime(st), b = parseTime(en)
-      return b > a ? b - a : (24 - a + b)   // 跨午夜
-    }
-    let gross = seg(s.actual_start, s.actual_end)
-    if (s.shift_2) gross += seg(s.actual_start_2, s.actual_end_2)
-    const rest = (s.rest_minutes != null) ? Number(s.rest_minutes) : (gross < 5 ? 0 : gross < 9 ? 30 : 60)
-    return Math.max(0, gross - rest / 60)
-  }
+  // 單一來源:與合規週期統計共用 cellNetWorkHours(scheduleUtils),避免兩邊數字漂移
+  const cellNetHours = cellNetWorkHours
   // dailyHours 定義在 filtered 宣告之後（見下方）— 這裡只留 cellNetHours / saveRevenue
 
   const saveRevenue = async (date, value) => {

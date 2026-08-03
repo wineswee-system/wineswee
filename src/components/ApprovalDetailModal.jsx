@@ -132,14 +132,21 @@ export default function ApprovalDetailModal({
       if (overlap(s, e, ci, co != null ? co : 1440) === 0) w.push('加班時段與當天打卡無交集 — 該時段員工不在場')
     }
     // C：單日加班上限 = 12 − 當天排定工時（排 10h → 上限 2h；無排班以標準 8h 計 → 上限 4h）
-    const otH = (e - s) / 60
+    //     時數皆為「淨工時」(扣休息:≥9h→60、≥5h→30、else 0),對齊計薪
+    const brkOf = m => (m >= 540 ? 60 : m >= 300 ? 30 : 0)
+    const otH = Math.max(0, (e - s) - brkOf(e - s)) / 60
     let schedMin = 0
     for (const x of scheds) {
       let ss = toMin(x.actual_start), se = toMin(x.actual_end)
       if (se <= ss) se += 1440
-      const span = se - ss
-      const brk = span >= 540 ? 60 : span >= 300 ? 30 : 0   // 休息:≥9h→60、≥5h→30(對齊計薪)
-      schedMin += Math.max(0, span - brk)
+      let seg = se - ss
+      if (x.actual_start_2 && x.actual_end_2) {   // 兩頭班第二段
+        let ss2 = toMin(x.actual_start_2), se2 = toMin(x.actual_end_2)
+        if (se2 <= ss2) se2 += 1440
+        seg += se2 - ss2
+      }
+      const brk = x.rest_minutes != null ? x.rest_minutes : brkOf(seg)   // 手動休息優先,否則公式
+      schedMin += Math.max(0, seg - brk)
     }
     const schedH = scheds.length ? schedMin / 60 : 8   // 無排班 → 以標準 8h 為基準
     const cap = Math.max(0, 12 - schedH)

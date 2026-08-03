@@ -382,6 +382,9 @@ export default function TeamDashboard() {
 
   const orgId = profile?.organization_id ?? getTenantOrgId()
 
+  // 主管/督導可見門市(_can_see_store_for_emp;督導看得到轄下多店,不只所屬門市)
+  const [visibleStoreIds, setVisibleStoreIds] = useState(null)
+
   // ── 計算 scope（manager 鎖 store；admin 可選） ──
   const scopeStoreId = useMemo(() => {
     if (isManager) return profile?.store_id || null
@@ -396,6 +399,12 @@ export default function TeamDashboard() {
       .then(({ data }) => setStores(data || []))
   }, [isAdmin, orgId])
 
+  // ── 主管/督導的可見門市(給團隊 scope 用) ──
+  useEffect(() => {
+    if (!isManager) { setVisibleStoreIds(null); return }
+    supabase.rpc('web_my_visible_store_ids').then(({ data }) => setVisibleStoreIds(Array.isArray(data) ? data : null))
+  }, [isManager, profile?.id])
+
   // ── 主資料載入 ──
   const loadAll = useCallback(async () => {
     if (!orgId) return
@@ -408,7 +417,8 @@ export default function TeamDashboard() {
       .eq('organization_id', orgId)
       .eq('status', '在職')
       .order('name')
-    if (scopeStoreId) empQ = empQ.eq('store_id', scopeStoreId)
+    if (isManager && visibleStoreIds) empQ = empQ.in('store_id', visibleStoreIds)  // 督導看轄下多店
+    else if (scopeStoreId) empQ = empQ.eq('store_id', scopeStoreId)
     const { data: empData, error: empErr } = await empQ
     if (empErr) {
       console.warn('[TeamDashboard] employees query failed:', empErr)
@@ -638,7 +648,7 @@ export default function TeamDashboard() {
 
     setAlerts(al)
     setLoading(false)
-  }, [orgId, scopeStoreId])
+  }, [orgId, scopeStoreId, isManager, visibleStoreIds])
 
   useEffect(() => { loadAll() }, [loadAll, refreshTick])
 

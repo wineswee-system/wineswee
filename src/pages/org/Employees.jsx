@@ -83,6 +83,7 @@ export default function Employees() {
     id_number: '', birth_date: '', gender: '', employee_number: '',
     probation_end_date: '', address: '',
     in_payroll: true,
+    can_open: true, can_close: true,  // 新進預設可開/關店(門市排班常態;個別再到員工排班分頁調整)
   })
   const navigate = useNavigate()
   const openDetail = (emp) => navigate(`/org/employees/${emp.id}`)
@@ -285,6 +286,7 @@ export default function Employees() {
           id_number: '', birth_date: '', gender: '', employee_number: '',
           probation_end_date: '', address: '',
           in_payroll: true,
+          can_open: true, can_close: true,
         })
 
       }

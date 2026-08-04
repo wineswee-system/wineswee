@@ -65,6 +65,10 @@ export default function TaskDiscussionTab({ task, profile, attachments, setAttac
   const handleInput = (e) => {
     const val = e.target.value
     setCommentText(val)
+    // 自動長高:隨內容撐開到 240px 再捲動(height 不寫在 style prop 才不會被 re-render 重置)
+    const el = e.target
+    el.style.height = 'auto'
+    el.style.height = Math.min(el.scrollHeight, 240) + 'px'
     const q = getMentionQuery(val, e.target.selectionStart)
     setMentionQuery(q)
   }
@@ -128,6 +132,7 @@ export default function TaskDiscussionTab({ task, profile, attachments, setAttac
       })
     }
     setCommentText('')
+    if (inputRef.current) inputRef.current.style.height = 'auto'  // 送出後縮回原高
     setMentionedIds([])
     setMentionQuery(null)
     setSending(false)
@@ -167,7 +172,7 @@ export default function TaskDiscussionTab({ task, profile, attachments, setAttac
             <textarea
               ref={inputRef}
               className="form-input"
-              style={{ flex: 1, resize: 'none', minHeight: 38, maxHeight: 120, overflow: 'auto', lineHeight: 1.5 }}
+              style={{ flex: 1, resize: 'vertical', minHeight: 38, maxHeight: 240, overflow: 'auto', lineHeight: 1.5 }}
               rows={1}
               placeholder="輸入備註… 打 @ 可以標記同事"
               value={commentText}

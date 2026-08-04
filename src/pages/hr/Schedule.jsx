@@ -651,7 +651,7 @@ export default function Schedule() {
         if (k === 'm') { e.preventDefault(); applyToSelection('會議'); return }
         if (e.key === 'Delete' || e.key === 'Backspace') {
           e.preventDefault()
-          // 砍 selection 範圍內所有 cell
+          // 砍 selection 範圍內所有 cell —— 先確認(防手滑一鍵刪一整片)
           ;(async () => {
             const aIdx = filteredEmps.findIndex(em => em.name === selection.anchor.empName)
             const eIdx = filteredEmps.findIndex(em => em.name === selection.end.empName)
@@ -659,11 +659,16 @@ export default function Schedule() {
             const eDIdx = dates.findIndex(d => d === selection.end.date)
             const eMin = Math.min(aIdx, eIdx), eMax = Math.max(aIdx, eIdx)
             const dMin = Math.min(aDIdx, eDIdx), dMax = Math.max(aDIdx, eDIdx)
-            for (let i = eMin; i <= eMax; i++) {
+            // 只收集「真的有排班」的格子
+            const toDelete = []
+            for (let i = eMin; i <= eMax; i++)
               for (let j = dMin; j <= dMax; j++) {
-                await handleDeleteShift(filteredEmps[i].name, dates[j])
+                const nm = filteredEmps[i].name, dt = dates[j]
+                if (schedules.some(s => s.employee === nm && s.date === dt)) toDelete.push([nm, dt])
               }
-            }
+            if (toDelete.length === 0) return
+            if (!(await confirm({ message: `確定清除選取範圍內的 ${toDelete.length} 格排班？\n\n刪除後可到「系統 → 操作紀錄 → 班表異動」還原。` }))) return
+            for (const [nm, dt] of toDelete) await handleDeleteShift(nm, dt)
           })()
           return
         }

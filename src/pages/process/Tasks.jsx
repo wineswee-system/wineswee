@@ -631,7 +631,8 @@ export default function Tasks() {
           assigneeOptions={employees.map(e => e.name)}
           onAssign={async (id, name) => {
             const { updateTask } = await import('../../lib/db')
-            const { data } = await updateTask(id, { assignee: name })
+            // ★寫 assignee_id(非 assignee 文字):trigger 只在 UPDATE OF assignee_id 反推,只寫文字會讓 assignee_id 停舊人
+            const { data } = await updateTask(id, { assignee_id: name ? (employees.find(e => e.name === name)?.id ?? null) : null })
             if (data) setTasks(prev => prev.map(x => x.id === id ? data : x))
           }}
         />

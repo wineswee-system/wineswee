@@ -600,7 +600,10 @@ export default function InstanceDetailView({
                         <select autoFocus className="form-input" style={{ fontSize: 11, padding: '2px 4px', minWidth: 90 }}
                           value={step.assignee || ''}
                           onChange={async e => {
-                            const { data } = await updateTask(step.id, { assignee: e.target.value || null })
+                            // ★寫 assignee_id(非 assignee 文字):trigger 只在 UPDATE OF assignee_id 才反推文字,
+                            //   只寫文字會讓 assignee_id 停在舊人(通知/我的任務錯人)。
+                            const nm = e.target.value
+                            const { data } = await updateTask(step.id, { assignee_id: nm ? (employees.find(emp => emp.name === nm)?.id ?? null) : null })
                             if (data) onStepUpdate?.(data)
                             setEditingAssigneeId(null)
                           }}
@@ -723,7 +726,8 @@ export default function InstanceDetailView({
           onDelete={id => { onStepDelete?.(id); setCtxMenu(null) }}
           assigneeOptions={employees.map(e => e.name)}
           onAssign={async (id, name) => {
-            const { data } = await updateTask(id, { assignee: name })
+            // ★寫 assignee_id(見上,只寫文字 assignee_id 不同步)
+            const { data } = await updateTask(id, { assignee_id: name ? (employees.find(e => e.name === name)?.id ?? null) : null })
             if (data) onStepUpdate?.(data)
             setCtxMenu(null)
           }}

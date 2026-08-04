@@ -42,6 +42,37 @@ export const getAuditLogs = ({ limit = 100, offset = 0, orgId, userName, action,
   return q.range(offset, offset + limit - 1)
 }
 
+// 班表異動歸檔:schedules 硬刪不進 audit_logs,改讀 schedule_deletions,映射成與 audit log 相同形狀
+export const getScheduleArchive = async ({ limit = 100, offset = 0, orgId, action, from, to, search } = {}) => {
+  if (!orgId) return { data: [], count: 0, error: null }
+  let q = supabase.from('schedule_deletions').select('*', { count: 'exact' })
+    .eq('organization_id', orgId).order('deleted_at', { ascending: false })
+  if (from) q = q.gte('deleted_at', from)
+  if (to) q = q.lte('deleted_at', to)
+  if (action?.includes('刪除')) q = q.eq('op', 'delete')
+  else if (action && (action.includes('編輯') || action.includes('更新') || action.includes('修改'))) q = q.eq('op', 'update')
+  if (search) {
+    const s = search.replace(/[^\w\s\-一-鿿]/g, '').replace(/_/g, '\\_').trim()
+    if (s) q = q.or(`employee.ilike.%${s}%,deleted_by_name.ilike.%${s}%,source_store.ilike.%${s}%`)
+  }
+  const { data, count, error } = await q.range(offset, offset + limit - 1)
+  if (error) return { data: [], count: 0, error }
+  const logs = (data || []).map(r => ({
+    id: `sd_${r.id}`,
+    time: r.deleted_at,
+    user: r.deleted_by_name || '(未知)',
+    action: r.op === 'delete' ? '刪除班表' : '編輯班表',
+    target: [r.employee, r.date, r.shift, r.source_store].filter(Boolean).join('｜'),
+    target_table: 'schedules',
+    field_name: null,
+    old_value: r.shift || '(無班別)',
+    new_value: r.op === 'delete' ? '已刪除' : '已編輯（改為現值）',
+    ip: null,
+    _row_json: r.row_json,   // 保留整列快照,救援用
+  }))
+  return { data: logs, count: count || 0, error: null }
+}
+
 export const getAuditLogsAll = ({ limit = 100, offset = 0, orgId, userName, action, tables, targetId, from, to, search } = {}) => {
   let q = supabase.from('audit_logs').select('*, organizations(name)', { count: 'exact' }).order('time', { ascending: false })
   if (orgId) q = q.eq('organization_id', orgId)

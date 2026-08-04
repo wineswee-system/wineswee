@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Search, Download, User, Filter, X, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react'
-import { getAuditLogs } from '../../lib/db'
+import { getAuditLogs, getScheduleArchive } from '../../lib/db'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { SECTIONS, ACTION_TYPES, getActionStyle, formatTime, timeAgo, DiffBadge } from '../../lib/auditLogUtils'
@@ -37,7 +37,9 @@ export default function AuditLog() {
     if (filters.from) params.from = new Date(filters.from).toISOString()
     if (filters.to) params.to = filters.to + 'T23:59:59Z'
     if (debouncedSearch) params.search = debouncedSearch
-    const { data, count, error: err } = await getAuditLogs(params)
+    // 班表異動 section 改讀 schedule_deletions 歸檔表(schedules 硬刪不進 audit_logs)
+    const fetcher = currentSection?.source === 'schedule_deletions' ? getScheduleArchive : getAuditLogs
+    const { data, count, error: err } = await fetcher(params)
     if (err) setError('資料載入失敗，請重新整理頁面')
     else { setLogs(data || []); setTotal(count || 0) }
     setLoading(false)

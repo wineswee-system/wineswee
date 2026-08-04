@@ -11,6 +11,8 @@ export const SECTIONS = [
   { key: 'purchase',      label: '採購',        tables: ['purchase_orders', 'suppliers', 'purchase_items', 'goods_receipts'] },
   { key: 'manufacturing', label: '製造',        tables: ['production_orders', 'bom', 'work_orders', 'bom_items', 'work_centers'] },
   { key: 'system',        label: '系統',        tables: ['users', 'roles', 'settings', 'organizations', 'triggers'] },
+  // 班表異動:schedules 是硬刪、不進 audit_logs;改讀 schedule_deletions 歸檔表(delete/edit 都留痕)
+  { key: 'schedule_archive', label: '班表異動', tables: null, source: 'schedule_deletions' },
 ]
 
 export const ACTION_TYPES = ['新增', '編輯', '更新', '修改', '刪除', '檢視', '登入', '設定']

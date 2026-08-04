@@ -323,6 +323,7 @@ export default function LeaveBalances() {
         pendingHours: pendH, canApplyHours: canApply,
         dbId: dbBal?.id, isManual: dbTotal > 0,
         notStarted, effectiveFrom: notStarted ? _periodStartStr : null,   // 未生效 + 生效日(給 UI 標註)
+        ptPaused: !!(type === 'annual' && annualEnt?.is_pt && annualEnt?.pt_paused),  // PT 實排折算暫停(待班表匯入)
       })
     }
 
@@ -652,6 +653,11 @@ export default function LeaveBalances() {
                                 {r.notStarted && (
                                   <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 500, color: 'var(--accent-orange)', background: 'var(--accent-orange-dim)', padding: '1px 6px', borderRadius: 4, whiteSpace: 'nowrap' }}>
                                     未生效 · {String(r.effectiveFrom || '').replace(/-/g, '/')} 生效
+                                  </span>
+                                )}
+                                {r.ptPaused && (
+                                  <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 500, color: 'var(--accent-blue)', background: 'var(--accent-blue-dim)', padding: '1px 6px', borderRadius: 4, whiteSpace: 'nowrap' }}>
+                                    待班表匯入
                                   </span>
                                 )}
                               </td>

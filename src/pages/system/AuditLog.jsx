@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Search, Download, User, Filter, X, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react'
-import { getAuditLogs, getScheduleArchive } from '../../lib/db'
+import { getAuditLogs, getScheduleArchive, restoreScheduleDeletion } from '../../lib/db'
+import { toast } from '../../lib/toast'
+import { confirm } from '../../lib/confirm'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { SECTIONS, ACTION_TYPES, getActionStyle, formatTime, timeAgo, DiffBadge } from '../../lib/auditLogUtils'
@@ -23,6 +25,21 @@ export default function AuditLog() {
   const [search, setSearch] = useState('')
   const [showFilters, setShowFilters] = useState(false)
   const [filters, setFilters] = useState({ action: '', from: '', to: '' })
+  // 班表異動:能編輯/鎖定班表者可「還原」(後端 RPC 再把關一次)
+  const canRestore = hasPermission('schedule.edit') || hasPermission('schedule.lock')
+  const [restoring, setRestoring] = useState(null)
+  const doRestore = async (log) => {
+    if (!(await confirm({ message: `確定還原這筆班表異動？\n${log.action}｜${log.target}` }))) return
+    setRestoring(log._archive_id)
+    const { data, error: err } = await restoreScheduleDeletion(log._archive_id)
+    setRestoring(null)
+    if (err || data?.ok === false) {
+      toast.error('還原失敗：' + (data?.note || data?.error || err?.message || '未知'))
+      return
+    }
+    toast.success('已還原班表')
+    fetchLogs()
+  }
 
   const debouncedSearch = useDebouncedValue(search, 300)
 
@@ -247,6 +264,22 @@ export default function AuditLog() {
                             <span>{timeAgo(log.time)}</span>
                             {log.ip && <span style={{ fontFamily: 'monospace' }}>{log.ip}</span>}
                           </div>
+                          {/* 班表異動:還原 / 已還原 */}
+                          {log._archive_id && (
+                            <div style={{ marginTop: 8 }} onClick={e => e.stopPropagation()}>
+                              {log._restored_at ? (
+                                <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--accent-green)' }}>
+                                  ✓ 已還原{log._restored_by ? `（${log._restored_by}）` : ''}
+                                </span>
+                              ) : canRestore ? (
+                                <button className="btn btn-secondary" style={{ fontSize: 11, padding: '3px 12px' }}
+                                  disabled={restoring === log._archive_id}
+                                  onClick={() => doRestore(log)}>
+                                  {restoring === log._archive_id ? '還原中…' : '↩ 還原這筆'}
+                                </button>
+                              ) : null}
+                            </div>
+                          )}
                           {isOpen && hasDiff && (
                             <div style={{ marginTop: 10, padding: '8px 12px', background: 'var(--bg-secondary)', borderRadius: 8, borderLeft: '3px solid var(--accent-orange)' }}>
                               {log.field_name && (

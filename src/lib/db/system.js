@@ -42,6 +42,10 @@ export const getAuditLogs = ({ limit = 100, offset = 0, orgId, userName, action,
   return q.range(offset, offset + limit - 1)
 }
 
+// 從歸檔一鍵還原班表(誤刪救回 / 誤改回舊值)
+export const restoreScheduleDeletion = (archiveId) =>
+  supabase.rpc('restore_schedule_deletion', { p_archive_id: archiveId })
+
 // 班表異動歸檔:schedules 硬刪不進 audit_logs,改讀 schedule_deletions,映射成與 audit log 相同形狀
 export const getScheduleArchive = async ({ limit = 100, offset = 0, orgId, action, from, to, search } = {}) => {
   if (!orgId) return { data: [], count: 0, error: null }
@@ -69,6 +73,10 @@ export const getScheduleArchive = async ({ limit = 100, offset = 0, orgId, actio
     new_value: r.op === 'delete' ? '已刪除' : '已編輯（改為現值）',
     ip: null,
     _row_json: r.row_json,   // 保留整列快照,救援用
+    _archive_id: r.id,       // schedule_deletions.id → 還原 RPC 用
+    _op: r.op,
+    _restored_at: r.restored_at || null,
+    _restored_by: r.restored_by_name || null,
   }))
   return { data: logs, count: count || 0, error: null }
 }

@@ -157,13 +157,13 @@ export default function Salary() {
   useEffect(() => {
     if (!orgId) { setLoading(false); return }
     // 員工範圍以「計薪月份(month)」為準，與 preview_payroll / generate_payroll(入帳) 一致：
-    // 在職 OR 當月離職(resign_date 在該月內)。非相對今天 → 6月薪資不會撈到4/5月離職的人。
+    // 「該月有在職」= 到職≤月底 AND (在職 OR resign_date≥月初)。
+    // 離職者在「到職~離職」之間的每個月都算得到(如 8/3 離職者 7 月薪水不漏)；離職後的月份仍排除。
     const mStart = `${month}-01`
-    const mEnd = `${month}-${String(new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0).getDate()).padStart(2, '0')}`
     Promise.all([
       supabase.from('salary_records').select('*').eq('organization_id', orgId).order('id'),
       supabase.from('bonus_records').select('*').eq('organization_id', orgId),
-      supabase.from('employees').select('id, name, dept, store, additional_stores, department_id, position, store_id, base_salary, hourly_rate, salary_type, meal_allowance, transport_allowance, housing_allowance, join_date, resign_date, status, labor_pension_self_rate, labor_insurance, health_insurance, departments!department_id(name), stores!store_id(name)').or(`status.eq.在職,and(status.eq.離職,resign_date.gte.${mStart},resign_date.lte.${mEnd})`).eq('organization_id', orgId).order('name'),
+      supabase.from('employees').select('id, name, dept, store, additional_stores, department_id, position, store_id, base_salary, hourly_rate, salary_type, meal_allowance, transport_allowance, housing_allowance, join_date, resign_date, status, labor_pension_self_rate, labor_insurance, health_insurance, departments!department_id(name), stores!store_id(name)').or(`status.eq.在職,and(status.eq.離職,resign_date.gte.${mStart})`).eq('organization_id', orgId).order('name'),
       supabase.from('departments').select('*').eq('organization_id', orgId).order('name'),
       supabase.from('stores').select('*').eq('organization_id', orgId).order('name'),
       supabase.rpc('web_my_salary_visible_store_ids'),  // 薪資可見門市(_can_see_store_for_emp − 總部hq)

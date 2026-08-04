@@ -166,6 +166,7 @@ export default function ProjectDetailPanel({
   pWorkflows,
   pComments,
   tasks,
+  setTasks,
   employees,
   stores,
   templates,
@@ -845,8 +846,8 @@ export default function ProjectDetailPanel({
           employees={employees}
           stores={stores}
           checklists={[]}
-          onUpdate={updated => setSelectedTask(updated)}
-          onDelete={() => setSelectedTask(null)}
+          onUpdate={updated => { setSelectedTask(updated); setTasks?.(prev => prev.map(t => t.id === updated.id ? updated : t)) }}
+          onDelete={() => { setTasks?.(prev => prev.filter(t => t.id !== selectedTask.id)); setSelectedTask(null) }}
           onClose={() => setSelectedTask(null)}
         />
       </div>

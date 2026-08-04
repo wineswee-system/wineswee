@@ -50,7 +50,7 @@ export default function TaskAttachmentsTab({ task, profile, attachments, setAtta
       // 詳情頁上傳一律當「回報附件」— 發起附件只在 TaskNew 預選階段建立
       const { data, error: dbError } = await createTaskAttachment({
         task_id: task.id,
-        file_name: sanitizedFileName,
+        file_name: file.name,            // ★顯示用原始檔名(含中文);sanitized 只給 storage_path 當 ASCII 安全鍵
         storage_path: storagePath,
         uploaded_by: profile?.name || '使用者',
         kind: 'reporter',

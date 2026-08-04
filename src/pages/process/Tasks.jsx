@@ -266,7 +266,7 @@ export default function Tasks() {
             if (!uploadError) {
               await createTaskAttachment({
                 task_id: data.id,
-                file_name: sanitizedFileName,
+                file_name: file.name,          // ★顯示用原始檔名(含中文);sanitized 只給 storage_path
                 storage_path: storagePath,
                 uploaded_by: profile?.name || '使用者',
                 kind: 'initiator',

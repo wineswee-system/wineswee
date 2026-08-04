@@ -31,7 +31,7 @@ export async function uploadInitiatorAttachments(taskId, files, uploadedBy) {
       if (!error) {
         await createTaskAttachment({
           task_id: taskId,
-          file_name: sanitizedFileName,
+          file_name: file.name,          // ★顯示用原始檔名(含中文);sanitized 只給 storage_path
           storage_path: storagePath,
           uploaded_by: uploadedBy || '使用者',
           kind: 'initiator',

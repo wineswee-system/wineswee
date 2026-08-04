@@ -286,12 +286,43 @@ export default function Attendance() {
         })
       }
     }
-    return [...recordRows, ...otRows, ...noPunchRows].sort((a, b) =>
+    // 已核准/待審核請假 → 補「請假列」:涵蓋不在 active employees 名單的人(如離職者),
+    //   他們沒打卡、又不會被上面的未打卡迴圈補到 → 請假整個看不到。在職者的請假已由未打卡列帶出,
+    //   故用 covered 去重,不重複產列。
+    const covered = new Set(existing)
+    for (const r of noPunchRows) covered.add(`${r.employee}|${r.date}`)
+    const leaveRows = []
+    for (const lv of dayLeaves) {
+      const nm = lv.employee
+      if (!nm || !lv.start_date) continue
+      if (search !== '' && !nm.includes(search)) continue
+      const empDept = getEmpDept(nm), empStore = getEmpStore(nm)
+      if (deptFilter !== '' && empDept !== deptFilter) continue
+      if (storeFilter !== '' && empStore !== storeFilter) continue
+      if (isStaff && nm !== profile?.name) continue
+      // 主管/督導:只顯示能解析到可見門市的(離職者在 active 名單解析不到 → 保守略過,不外洩他店)
+      const eObj = employees.find(x => x.name === nm)
+      if (isManager && visibleStoreIds && !(eObj && visibleStoreIds.includes(eObj.store_id))) continue
+      const ls = lv.start_date < startDate ? startDate : lv.start_date
+      const leEnd = lv.end_date || lv.start_date
+      const le = leEnd > endDate ? endDate : leEnd
+      for (let d = new Date(ls + 'T00:00:00Z'), end = new Date(le + 'T00:00:00Z'); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
+        const ds = d.toISOString().slice(0, 10)
+        const key = `${nm}|${ds}`
+        if (covered.has(key)) continue
+        covered.add(key)
+        leaveRows.push({
+          _rowType: 'notClocked', id: `lv-${lv.employee_id || nm}-${ds}`, employee: nm,
+          dept: empDept, store: empStore, date: ds,
+        })
+      }
+    }
+    return [...recordRows, ...otRows, ...noPunchRows, ...leaveRows].sort((a, b) =>
       (b.date || '').localeCompare(a.date || '') ||
       (a.employee || '').localeCompare(b.employee || '') ||
       (a._rowType === 'overtime' ? 1 : 0) - (b._rowType === 'overtime' ? 1 : 0)
     )
-  }, [filtered, otRows, records, employees, storeFilter, deptFilter, search, startDate, endDate, isStaff, isManager, profile, visibleStoreIds])
+  }, [filtered, otRows, records, employees, dayLeaves, getEmpDept, getEmpStore, storeFilter, deptFilter, search, startDate, endDate, isStaff, isManager, profile, visibleStoreIds])
 
   // 前端分頁：預設每頁 100 筆。篩選/區間/tab 改變時回第 1 頁。
   useEffect(() => { setPage(1) }, [search, deptFilter, storeFilter, startDate, endDate, tab])
@@ -610,6 +641,9 @@ export default function Attendance() {
                     <div style={{ padding: '4px 8px' }}>
                       {isNotClocked
                         ? (() => {
+                            // 當天有請假(含離職者補的請假列)→ 直接顯示「請假」,不判無排班/漏打
+                            const lv = dayCtx.leave[`${r.employee}|${r.date}`]
+                            if (lv) return <span className="badge badge-info"><span className="badge-dot"></span>{lv.pending ? '請假(審)' : '請假'}</span>
                             const sv = dayCtx.sched[`${r.employee}|${r.date}`]
                             const isWork = sv && /\d{1,2}:\d{2}/.test(sv)   // 班別是時間段=該上班
                             // 休假/例假/請假別(非時間段)→ 本來就不用打卡,不標紅;無排班也不算漏打

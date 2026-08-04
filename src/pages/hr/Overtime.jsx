@@ -804,6 +804,7 @@ export default function Overtime() {
                   ? `${String(detailRow.start_time || '').slice(0, 5)}–${String(detailRow.end_time || '').slice(0, 5)}` : '—' },
               { label: '加班門市', value: detailRow.store || '—' },
               { label: '時數', value: `${detailRow.hours || 0} 小時` },
+              { label: '折算方式', value: (detailRow.ot_type === 'comp_time' || detailRow.is_comp_leave) ? '換補休' : '換現金' },
               { label: '事由', value: detailRow.reason, multiline: true },
               ...(detailRow.reject_reason
                 ? [{ label: '駁回原因', value: detailRow.reject_reason, multiline: true }]

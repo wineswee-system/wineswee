@@ -69,6 +69,7 @@ function buildDetailFields(type, row) {
         { label: '加班時間', value: timeRange || '—' },
         { label: '加班門市', value: row.store || '—' },
         { label: '時數', value: `${row.hours || 0} 小時` },
+        { label: '折算方式', value: (row.ot_type === 'comp_time' || row.is_comp_leave) ? '換補休' : '換現金' },
         { label: '事由', value: row.reason, multiline: true },
         ...rej,
       ]

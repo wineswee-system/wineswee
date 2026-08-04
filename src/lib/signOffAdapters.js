@@ -102,6 +102,7 @@ export function printOvertimeSignOff(row, opts = {}) {
         ['加班日期', fmtDate(row.date)],
         ...(row.store ? [['加班門市', row.store]] : []),
         ['時數', `${row.hours || 0} 小時`],
+        ['折算方式', (row.ot_type === 'comp_time' || row.is_comp_leave) ? '換補休' : '換現金'],
         ['事由', row.reason || ''],
       ],
     }],

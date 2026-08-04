@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import { X, Upload, Loader2 } from 'lucide-react'
+import { X, Upload, Loader2, Download } from 'lucide-react'
 import { createTaskAttachment, deleteTaskAttachment } from '../../lib/db'
 import { toast } from '../../lib/toast'
 import { supabase } from '../../lib/supabase'
@@ -88,6 +88,13 @@ export default function TaskAttachmentsTab({ task, profile, attachments, setAtta
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, marginLeft: 8 }}>
         {a.uploaded_by && (
           <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{a.uploaded_by}</span>
+        )}
+        {a.storage_path && (
+          // 下載:帶 download 參數 → Supabase 設 Content-Disposition,存到電腦是原始中文檔名
+          <a href={supabase.storage.from('task-attachments').getPublicUrl(a.storage_path, { download: a.file_name }).data?.publicUrl}
+            title="下載" style={{ color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}>
+            <Download size={13} />
+          </a>
         )}
         <button onClick={() => handleDelete(a.id)} style={{
           background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 0,

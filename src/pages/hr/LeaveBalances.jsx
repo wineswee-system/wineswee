@@ -135,7 +135,7 @@ export default function LeaveBalances() {
         // 補休：改讀 comp_time_ledger（與補休管理 tab / 104 同源，不用 leave_balances 那套髒的）
         // 可休/已休要算「賺過的全部」(active 未用完 + exhausted 已用完),不能只算 active,
         // 否則已用完的 11 筆被排除→可休/已休失真(只剩餘正確)。排除 settled(已折現非休)。
-        supabase.from('comp_time_ledger').select('hours,hours_used,status,ot_date,expires_at')
+        supabase.from('comp_time_ledger').select('hours,hours_used,hours_reserved,status,ot_date,expires_at')
           .eq('employee_id', selectedEmpId).in('status', ['active', 'exhausted']),
       ])
       const bals    = balRes.data  || []
@@ -164,8 +164,9 @@ export default function LeaveBalances() {
   const buildRows = (emp, bals, lrs, pending, comp = [], annualEnt = null) => {
     if (!emp) return []
     // 補休：以 comp_time_ledger 為準（可休=sum(hours)、已休=sum(hours_used)）
-    const compTotal = comp.reduce((s, c) => s + Number(c.hours || 0), 0)
-    const compUsed  = comp.reduce((s, c) => s + Number(c.hours_used || 0), 0)
+    const compTotal    = comp.reduce((s, c) => s + Number(c.hours || 0), 0)
+    const compUsed     = comp.reduce((s, c) => s + Number(c.hours_used || 0), 0)      // 已休=核准實扣
+    const compReserved = comp.reduce((s, c) => s + Number(c.hours_reserved || 0), 0)  // 簽核中=待審預留(軟扣)
     const balByType = {}
     for (const b of bals) balByType[normalizeType(b.leave_type)] = b
 
@@ -303,7 +304,10 @@ export default function LeaveBalances() {
         : (dbBal
           ? daysToHours(Number(dbBal.used_days || 0))
           : ((type === 'annual' && annualStartStr) ? sumH(lrs.filter(inAnnual)) : (usedByType[type] || 0)))
-      const pendH    = (type === 'annual' && annualStartStr) ? sumH(pending.filter(inAnnual)) : (pendByType[type] || 0)
+      // 補休簽核中=comp_time_ledger 的 hours_reserved(軟扣/待審預留);其餘走請假單 pending
+      const pendH    = type === '補休'
+        ? compReserved
+        : ((type === 'annual' && annualStartStr) ? sumH(pending.filter(inAnnual)) : (pendByType[type] || 0))
       const remH     = totalHours - usedH
       const canApply = notStarted ? 0 : Math.max(0, remH - pendH)   // 未生效→現在不可申請
 

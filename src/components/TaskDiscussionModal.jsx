@@ -31,7 +31,7 @@ export default function TaskDiscussionModal({ task, onClose }) {
   return createPortal(
     <div style={{ position: 'fixed', inset: 0, zIndex: 1200, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
       onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
-      <div style={{ background: 'var(--bg-card)', borderRadius: 14, width: 'min(560px, 96vw)', maxHeight: '85vh', display: 'flex', flexDirection: 'column', boxShadow: '0 12px 40px rgba(0,0,0,0.3)' }}>
+      <div style={{ background: 'var(--bg-card)', borderRadius: 14, zoom: 'var(--app-font-scale, 1)', width: 'min(560px, calc(96vw / var(--app-font-scale, 1)))', maxHeight: 'calc(85vh / var(--app-font-scale, 1))', display: 'flex', flexDirection: 'column', boxShadow: '0 12px 40px rgba(0,0,0,0.3)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', borderBottom: '1px solid var(--border-subtle)' }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>💬 討論 — {task.title}</div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', padding: 4 }}><X size={20} /></button>

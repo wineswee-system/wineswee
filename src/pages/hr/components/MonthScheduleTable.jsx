@@ -275,7 +275,7 @@ export default function MonthScheduleTable({
                     <td style={stickyR}>{totHours.toFixed(0)}h</td>
                   </tr>
                   <tr>
-                    <td style={stickyL}>💰 預估業績</td>
+                    <td style={stickyL}>💰 預估業績<span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>(千)</span></td>
                     {monthDates.map(d => (
                       <td key={d} style={{ ...cell, padding: 1 }}>
                         <RevenueInput value={dailyRevenue[d]} disabled={!canEditSchedule} onSave={v => onSaveRevenue(d, v)} />
@@ -608,15 +608,19 @@ function EmployeeRow({
 
 
 // 每日預估業績輸入格：本地編輯、失焦才存（避免每個鍵盤事件都寫 DB）
+//   ★單位=千：畫面顯示/輸入用「千」(打 100 = 100,000),存回 DB 仍是全額。少打 3 個 0。
 function RevenueInput({ value, onSave, disabled }) {
-  const [v, setV] = useState(value == null ? '' : String(value))
-  useEffect(() => { setV(value == null ? '' : String(value)) }, [value])
+  const toK   = (val) => (val == null || val === '' ? '' : String(Number(val) / 1000))
+  const fromK = (kv)  => (kv === '' || kv == null ? '' : String(Math.round(Number(kv) * 1000)))
+  const [v, setV] = useState(toK(value))
+  useEffect(() => { setV(toK(value)) }, [value])
   return (
     <input
       type="number" inputMode="numeric" value={v} disabled={disabled}
       onChange={e => setV(e.target.value)}
-      onBlur={() => { if (String(value ?? '') !== v) onSave(v) }}
+      onBlur={() => { const full = fromK(v); if (String(value ?? '') !== full) onSave(full) }}
       placeholder="—"
+      title="單位：千（打 100 = 100,000）"
       style={{
         width: '100%', border: 'none', background: 'transparent', textAlign: 'center',
         fontSize: 9, color: 'var(--text-primary)', padding: '2px 0', outline: 'none',

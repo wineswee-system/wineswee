@@ -278,7 +278,7 @@ export default function SalaryTable({ filtered, expanded, setExpanded, getEmpDep
                                             <span style={{ color: 'var(--text-secondary)' }}>{lv.date}</span>
                                             <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: 'var(--glass-light)', color: 'var(--text-muted)' }}>{lv.type}</span>
                                           </div>
-                                          <span style={{ color: 'var(--text-muted)', fontWeight: 600, whiteSpace: 'nowrap' }}>{n(lv.hours) > 0 ? `${n(lv.hours)} 小時${lv.days ? ` · ${lv.days} 天` : ''}` : (lv.days ? `${lv.days} 天` : '-')}</span>
+                                          <span style={{ color: 'var(--text-muted)', fontWeight: 600, whiteSpace: 'nowrap' }}>{(() => { const dh = n(lv.hours) || (n(lv.days) || 0) * 8; return dh > 0 ? `${dh} 小時${lv.days ? ` · ${lv.days} 天` : ''}` : '-' })()}</span>
                                         </div>
                                       ))}
                                   </div>

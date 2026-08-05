@@ -85,7 +85,7 @@ export default function PayslipRow({ record: rec, employee: emp, selectedRun, pr
                   <DetailRow
                     key={`lv-${i}`}
                     label={`└ ${String(lv.date || '').slice(5).replace('-', '/')} ${lv.type || ''}`}
-                    value={Number(lv.hours) > 0 ? `${lv.hours}h${lv.days ? ` · ${lv.days}天` : ''}` : (lv.days ? `${lv.days}天` : '-')}
+                    value={(() => { const dh = Number(lv.hours) || (Number(lv.days) || 0) * 8; return dh > 0 ? `${dh}h${lv.days ? ` · ${lv.days}天` : ''}` : '-' })()}
                   />
                 ))}
               </div>

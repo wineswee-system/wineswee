@@ -20,6 +20,7 @@ import TransferReceiptChains from '../pages/process/settings/TransferReceiptChai
 import ChainEdit from '../pages/process/settings/ChainEdit'
 import DelegationRules from '../pages/process/settings/DelegationRules'
 import BusinessApplications from '../pages/process/BusinessApplications'
+import Collections from '../pages/process/Collections'
 import TransferRequests from '../pages/process/TransferRequests'
 import WorkOrders from '../pages/process/WorkOrders'
 import StoreAudits from '../pages/workflow/StoreAudits'
@@ -71,6 +72,7 @@ export default function ProcessModule() {
       <Route path="sop/legacy" element={<SOPTemplates />} />
       <Route path="approvals" element={<Approvals />} />
       <Route path="applications" element={<BusinessApplications />} />
+      <Route path="collections" element={<Collections />} />
       <Route path="transfer-requests" element={<TransferRequests />} />
       <Route path="work-orders" element={<WorkOrders />} />
       <Route path="store-audits" element={<StoreAudits />} />

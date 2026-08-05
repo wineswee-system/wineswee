@@ -1,7 +1,7 @@
 ﻿import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
-import { Wallet, Receipt, FileText, ClipboardList, Package, ShoppingCart, Building2 } from 'lucide-react'
+import { Wallet, Receipt, FileText, ClipboardList, Package, ShoppingCart, Building2, Banknote, Handshake } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -21,6 +21,12 @@ const FIXED_EXPENSE = [
 const FIXED_NON_EXPENSE = [
   { icon: Package, name: '商品調撥', desc: '總倉 ↔ 門市 / 跨門市調貨 → 申請審核 + 驗收兩階段', action: '/process/transfer-requests', color: 'var(--accent-orange)', dim: 'var(--accent-orange-dim)', tag: '兩階段' },
   { icon: Building2, name: '跨部門工單', desc: '請其他部門協助處理事項 → 受理排程 → 完成結案', action: '/process/work-orders', color: 'var(--accent-blue)', dim: 'var(--accent-blue-dim)', tag: '派工' },
+]
+
+// 收款組（純記帳，不走簽核）— 訂金 + 加盟金
+const FIXED_COLLECTION = [
+  { icon: Banknote, name: '訂金收款', desc: '固定 30 萬，分多筆記錄，加總滿額自動完成', action: '/process/collections?tab=deposit', color: 'var(--accent-cyan)', dim: 'var(--accent-cyan-dim)', tag: '記帳' },
+  { icon: Handshake, name: '加盟金收款', desc: '訂金完成後開，選投資人 + 總額，三期 45/45/10 分期收', action: '/process/collections?tab=franchise', color: 'var(--accent-green)', dim: 'var(--accent-green-dim)', tag: '三期' },
 ]
 
 const COLOR_MAP = {
@@ -92,6 +98,7 @@ export default function BusinessApplications() {
 
       <FormGroup title="💰 費用組" desc="會產生費用支出，需驗收" items={expenseGroup} navigate={navigate} />
       <FormGroup title="📋 非費用組" desc="純流程申請，不涉及驗收" items={nonExpenseGroup} navigate={navigate} />
+      <FormGroup title="💵 收款" desc="訂金 / 加盟金收款記錄（純記帳，加總滿額自動完成）" items={FIXED_COLLECTION} navigate={navigate} />
 
       {expenseGroup.length === 0 && nonExpenseGroup.length === 0 && (
         <div className="card" style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>

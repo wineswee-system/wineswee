@@ -58,6 +58,10 @@ function buildFullItems(d) {
   }
   if (n(d.attendance_bonus) > 0) push({ label: '全勤獎金', value: n(d.attendance_bonus), sign: '+', section: 'add', color: 'var(--accent-green)' })
   if (n(d.policyBonus) > 0) push({ label: '獎金', value: n(d.policyBonus), sign: '+', section: 'add', color: 'var(--accent-purple)' })
+  // 離職相關加項（有值才列，已含在應發）
+  if (n(d.unused_leave_payout) > 0) push({ label: '特休折現', value: n(d.unused_leave_payout), sign: '+', section: 'add', color: 'var(--accent-green)', note: n(d.unused_leave_days) ? `${n(d.unused_leave_days)} 天` : null })
+  if (n(d.severance_amount) > 0) push({ label: '資遣費', value: n(d.severance_amount), sign: '+', section: 'add', color: 'var(--accent-green)' })
+  if (n(d.severance_notice_wage) > 0) push({ label: '預告工資', value: n(d.severance_notice_wage), sign: '+', section: 'add', color: 'var(--accent-green)' })
 
   push({ section: 'divider' })
   push({ label: '總薪資（應發）', value: n(d.gross), sign: '=', section: 'total', color: 'var(--accent-cyan)' })
@@ -255,6 +259,26 @@ export default function SalaryTable({ filtered, expanded, setExpanded, getEmpDep
                                             {ot._rate_label && <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{ot._rate_label}</span>}
                                           </div>
                                           <span style={{ color: 'var(--accent-cyan)', fontWeight: 600, whiteSpace: 'nowrap' }}>{fmt(n(ot._pay))}</span>
+                                        </div>
+                                      ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* 請假逐筆明細（逐日逐筆，含不扣款的特休/補休）*/}
+                              {detail && (detail._leave_rows || []).length > 0 && (
+                                <div style={{ marginTop: 16 }}>
+                                  <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8 }}>🏖️ 請假逐筆明細</div>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                    {[...detail._leave_rows]
+                                      .sort((a, b) => (a.date || '').localeCompare(b.date || ''))
+                                      .map((lv, i) => (
+                                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 10px', borderRadius: 7, background: 'var(--bg-card)', fontSize: 12 }}>
+                                          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                                            <span style={{ color: 'var(--text-secondary)' }}>{lv.date}</span>
+                                            <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: 'var(--glass-light)', color: 'var(--text-muted)' }}>{lv.type}</span>
+                                          </div>
+                                          <span style={{ color: 'var(--text-muted)', fontWeight: 600, whiteSpace: 'nowrap' }}>{n(lv.hours)} 小時{lv.days ? ` · ${lv.days} 天` : ''}</span>
                                         </div>
                                       ))}
                                   </div>

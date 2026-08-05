@@ -77,6 +77,19 @@ export default function PayslipRow({ record: rec, employee: emp, selectedRun, pr
             {(rec.leave_deduction > 0 && !rec.paid_leave_deduction && !rec.unpaid_leave_deduction) && (
               <DetailRow label="請假扣款" value={fmt(rec.leave_deduction)} />
             )}
+            {/* 請假明細（逐筆假別，計薪當下凍結；含不扣款的特休/補休）*/}
+            {Array.isArray(rec.leave_breakdown) && rec.leave_breakdown.length > 0 && (
+              <div style={{ margin: '4px 0 6px' }}>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 2 }}>🏖️ 請假明細</div>
+                {[...rec.leave_breakdown].sort((a, b) => (a.date || '').localeCompare(b.date || '')).map((lv, i) => (
+                  <DetailRow
+                    key={`lv-${i}`}
+                    label={`└ ${String(lv.date || '').slice(5).replace('-', '/')} ${lv.type || ''}`}
+                    value={`${lv.hours ?? '-'}h${lv.days ? ` · ${lv.days}天` : ''}`}
+                  />
+                ))}
+              </div>
+            )}
             {rec.late_deduction > 0 && <DetailRow label="遲到扣款" value={fmt(rec.late_deduction)} />}
             {rec.advance_recovery > 0 && <DetailRow label="預支扣回" value={fmt(rec.advance_recovery)} />}
             <DetailRow label="勞保（個人）" value={fmt(rec.labor_ins_employee)} />

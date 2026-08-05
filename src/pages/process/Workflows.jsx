@@ -1298,6 +1298,32 @@ export default function Workflows() {
   const notStartedInstances = filteredInstances.filter(i => i.status === '未開始' && !i.archived_at)
   const archivedInstances = filteredInstances.filter(i => i.status === '已完成' || i.archived_at)
 
+  // ── 負責人下拉選項:只列「目前真的有流程的負責人」(非全公司員工);選了部門/門市會再過濾 ──
+  //    來源用本頁可見的流程宇宙(排除 HR 簽核/專案內流程,與部門下拉、列表口徑一致),
+  //    套用 filterStore/filterDept 但「不套 filterAssignee/search」,否則選一個人清單就只剩他。
+  const assigneeOptions = (() => {
+    const names = new Set(
+      instances
+        .filter(i => !HR_TEMPLATE_SET.has(i.template_name) && !i.project_id)
+        .filter(i => !filterStore || i.store === filterStore)
+        .filter(i => !filterDept  || i.department === filterDept)
+        .map(i => i.assignee)
+        .filter(Boolean)
+    )
+    // 用在職員工清單過濾以沿用 empOptions 的分組/職稱標籤;對不上的(離職/名字未對應)補純名字選項避免漏
+    const withEmp = employees.filter(e => names.has(e.name))
+    const covered = new Set(withEmp.map(e => e.name))
+    const extras = [...names].filter(n => !covered.has(n)).sort()
+      .map(n => ({ value: n, label: n, group: '其他' }))
+    return [...empOptions(withEmp, { keyBy: 'name' }), ...extras]
+  })()
+  // 部門/門市改變後,若已選的負責人不在新清單中就自動清掉(避免過濾到空)
+  useEffect(() => {
+    if (filterAssignee && !assigneeOptions.some(o => o.value === filterAssignee)) {
+      setFilterAssignee('')
+    }
+  }, [filterDept, filterStore]) // eslint-disable-line react-hooks/exhaustive-deps
+
   if (loading) return <LoadingSpinner />
   if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3></div>
 
@@ -1397,7 +1423,7 @@ export default function Workflows() {
             <SearchableSelect
               value={filterAssignee}
               onChange={(v) => setFilterAssignee(v || '')}
-              options={empOptions(employees, { keyBy: 'name' })}
+              options={assigneeOptions}
               placeholder="全部人員"
             />
           </div>

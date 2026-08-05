@@ -85,7 +85,7 @@ export default function PayslipRow({ record: rec, employee: emp, selectedRun, pr
                   <DetailRow
                     key={`lv-${i}`}
                     label={`└ ${String(lv.date || '').slice(5).replace('-', '/')} ${lv.type || ''}`}
-                    value={`${lv.hours ?? '-'}h${lv.days ? ` · ${lv.days}天` : ''}`}
+                    value={Number(lv.hours) > 0 ? `${lv.hours}h${lv.days ? ` · ${lv.days}天` : ''}` : (lv.days ? `${lv.days}天` : '-')}
                   />
                 ))}
               </div>

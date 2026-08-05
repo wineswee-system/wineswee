@@ -33,7 +33,7 @@ const COLS = [
   { h: '其他津貼', group: '薪資科目加項', w: 10, get: (p) => n(p.other_custom_total) },
   { h: '底薪', group: '薪資科目加項', w: 8, get: () => 0 },
   { h: '微調加項', group: '薪資科目加項', w: 10, get: (p) => n(p.manual_bonus) },            // 逐筆調整:補發/紅包等手動加項(有值才出欄)
-  { h: '微調說明', group: '薪資科目加項', txt: true, noteCol: true, w: 20, get: (p) => p._adjust_note || '' },  // 逐筆調整名目(補發/加項/扣款的自訂 label);有值才出欄
+  { h: '微調加項說明', group: '薪資科目加項', txt: true, noteCol: true, w: 18, get: (p) => p._adjust_note_add || '' },  // 加項側名目;有值才出欄
   // ── 薪資科目扣項 ──
   { h: '勞保費', group: '薪資科目扣項', w: 9, get: (p) => n(p.laborInsurance) },
   { h: '健保費', group: '薪資科目扣項', w: 9, get: (p) => n(p.healthInsurance) },
@@ -46,6 +46,7 @@ const COLS = [
   { h: '曠職扣款', group: '薪資科目扣項', w: 9, get: (p) => n(p.awolDeduction) },
   { h: '補充保費', group: '薪資科目扣項', w: 9, get: (p) => n(p.nhi_supplementary) },
   { h: '微調扣款', group: '薪資科目扣項', w: 10, get: (p) => n(p.manual_deduction) },        // 逐筆調整:手動扣項
+  { h: '微調扣款說明', group: '薪資科目扣項', txt: true, noteCol: true, w: 18, get: (p) => p._adjust_note_ded || '' },  // 扣款側名目(如「調整薪資差額」);有值才出欄
   { h: '所得稅', group: '薪資科目扣項', w: 8, get: (p) => n(p.incomeTax) },
   // ── 薪資總計(永遠顯示)──
   { h: '應稅所得', group: '薪資總計', always: true, w: 10, get: (p) => Math.max(0, n(p.gross) - n(p.regular_overtime_pay) - n(p.meal_allowance) - n(p.unused_leave_payout) - n(p.unpaidDeduction)) },

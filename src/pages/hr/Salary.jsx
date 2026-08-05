@@ -659,10 +659,11 @@ export default function Salary() {
         const bonus   = raw.filter(a => a.source_type === 'manual_bonus').reduce((s, a) => s + nn(a.new_value?.amount), 0)
         const deduct  = raw.filter(a => a.source_type === 'manual_deduction').reduce((s, a) => s + nn(a.new_value?.amount), 0)
         if (!backpay && !bonus && !deduct) return p
-        // 名目:逐筆微調的自訂 label(如「補足薪資差額」)串起來,給報表「微調說明」欄顯示
-        const note = raw.map(a => a.new_value?.label).filter(Boolean).join('、')
+        // 名目分兩串:加項側(補發/紅包)給「微調加項說明」欄、扣款側給「微調扣款說明」欄,各自貼著金額
+        const noteAdd = raw.filter(a => a.source_type === 'manual_bonus' || a.source_type === 'manual_backpay').map(a => a.new_value?.label).filter(Boolean).join('、')
+        const noteDed = raw.filter(a => a.source_type === 'manual_deduction').map(a => a.new_value?.label).filter(Boolean).join('、')
         // 補發(manual_backpay)與加項(manual_bonus)都歸「微調加項」欄(對齊畫面「加項」呈現),不另列補發前月差額
-        return { ...p, manual_bonus: bonus + backpay, manual_deduction: deduct, _adjust_note: note }
+        return { ...p, manual_bonus: bonus + backpay, manual_deduction: deduct, _adjust_note_add: noteAdd, _adjust_note_ded: noteDed }
       })
       const { exportPayrollRegister } = await import('../../lib/exportPayrollRegister')
       exportPayrollRegister(enriched, empMap, month, org?.name || '')

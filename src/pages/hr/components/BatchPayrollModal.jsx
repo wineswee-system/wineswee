@@ -391,7 +391,7 @@ export default function BatchPayrollModal({ month, batchPreview, batchSaving, on
               </button>
             )}
             <button className="btn btn-primary" onClick={onSave} disabled={batchSaving}>
-              {batchSaving ? '儲存中...' : (<><Play size={14} /> 確認儲存 {batchPreview.length} 筆</>)}
+              {batchSaving ? '儲存中...' : (<><Play size={14} /> 儲存 {batchPreview.length} 筆（草稿）</>)}
             </button>
           </div>
         </div>

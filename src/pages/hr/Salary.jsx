@@ -384,7 +384,7 @@ export default function Salary() {
   }
 
 
-  const handleBatchSaveCore = async (status) => {
+  const handleBatchSaveCore = async (status, navigateAfter = false) => {
     setBatchSaving(true)
     try {
       const payloads = batchPreview.map(p => ({
@@ -444,11 +444,11 @@ export default function Salary() {
       }
       setShowBatchModal(false)
       setBatchPreview([])
-      if (isDraft) {
+      if (navigateAfter) {
         toast.success(`已存為草稿（${data.length} 筆），跳到逐筆調整 →`)
         navigate(`/hr/salary-adjust?month=${month}`)
       } else {
-        toast.success(`已確認儲存 ${data.length} 筆`)
+        toast.success(`已儲存 ${data.length} 筆（草稿；可到逐筆調整編輯，確認入帳才鎖定）`)
       }
     } catch (err) {
       console.error('Batch save failed:', err)
@@ -458,8 +458,10 @@ export default function Salary() {
     }
   }
 
-  const handleBatchSave        = () => handleBatchSaveCore('finalized')
-  const handleBatchSaveAsDraft = () => handleBatchSaveCore('draft')
+  // ★ 批次一律存 draft(不直接鎖):確認儲存=存草稿留在原頁、存為草稿=存草稿+跳逐筆調整。
+  //   鎖定只發生在逐筆調整頁的「確認入帳」。避免批次一按就 finalized、調整進不去。
+  const handleBatchSave        = () => handleBatchSaveCore('draft', false)
+  const handleBatchSaveAsDraft = () => handleBatchSaveCore('draft', true)
 
   // ── 發布 / 取消發布本月薪資給員工（控制員工 LINE 薪資卡可見性；不動資料本身）──
   const handlePublishMonth = async () => {

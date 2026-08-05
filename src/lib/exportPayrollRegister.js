@@ -34,6 +34,7 @@ const COLS = [
   { h: '底薪', group: '薪資科目加項', w: 8, get: () => 0 },
   { h: '補發前月差額', group: '薪資科目加項', w: 12, get: (p) => n(p.back_pay_adjustment) },  // 逐筆調整:補發(有值才出欄)
   { h: '微調加項', group: '薪資科目加項', w: 10, get: (p) => n(p.manual_bonus) },            // 逐筆調整:紅包等手動加項
+  { h: '微調說明', group: '薪資科目加項', txt: true, noteCol: true, w: 20, get: (p) => p._adjust_note || '' },  // 逐筆調整名目(補發/加項/扣款的自訂 label);有值才出欄
   // ── 薪資科目扣項 ──
   { h: '勞保費', group: '薪資科目扣項', w: 9, get: (p) => n(p.laborInsurance) },
   { h: '健保費', group: '薪資科目扣項', w: 9, get: (p) => n(p.healthInsurance) },
@@ -76,6 +77,7 @@ const cell = (v, s) => ({ v: v == null ? '' : v, t: typeof v === 'number' ? 'n' 
 // 依「該次匯出全部 rows」決定哪些金額欄有值 → 回傳 active 欄位陣列(所有分頁共用同一組欄位)
 function activeColumns(allRows, empMap) {
   return COLS.filter(col => {
+    if (col.noteCol) return allRows.some(p => (col.get(p, empMap.get(p.employee_id)) || '') !== '')  // 文字說明欄:有內容才出
     if (col.always || col.txt || col.group === null) return true
     // 金額欄:任一員工有非 0 值才保留
     return allRows.some(p => n(col.get(p, empMap.get(p.employee_id))) !== 0)
@@ -110,7 +112,7 @@ function buildSheet(storeName, rows, empMap, company, cols) {
   }
   aoa.push(cols.map((col, i) => {
     if (i === 0) return cell('合計', totalTxt)
-    if (col.group === null) return cell('', totalTxt)
+    if (col.group === null || col.txt) return cell('', totalTxt)  // 身分欄/文字說明欄:合計列留空
     return cell(Math.round(totals[i]), totalNum)
   }))
 

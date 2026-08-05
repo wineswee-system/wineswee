@@ -659,7 +659,9 @@ export default function Salary() {
         const bonus   = raw.filter(a => a.source_type === 'manual_bonus').reduce((s, a) => s + nn(a.new_value?.amount), 0)
         const deduct  = raw.filter(a => a.source_type === 'manual_deduction').reduce((s, a) => s + nn(a.new_value?.amount), 0)
         if (!backpay && !bonus && !deduct) return p
-        return { ...p, back_pay_adjustment: backpay, manual_bonus: bonus, manual_deduction: deduct }
+        // 名目:逐筆微調的自訂 label(如「補足薪資差額」)串起來,給報表「微調說明」欄顯示
+        const note = raw.map(a => a.new_value?.label).filter(Boolean).join('、')
+        return { ...p, back_pay_adjustment: backpay, manual_bonus: bonus, manual_deduction: deduct, _adjust_note: note }
       })
       const { exportPayrollRegister } = await import('../../lib/exportPayrollRegister')
       exportPayrollRegister(enriched, empMap, month, org?.name || '')

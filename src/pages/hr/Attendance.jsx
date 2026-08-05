@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { useNavigate } from 'react-router-dom'
 import { Search, Download, MapPin, Clock, CalendarCheck } from 'lucide-react'
-import { getAttendance, serverClockIn, getActiveEmployees, getDepartments, getStores } from '../../lib/db'
+import { getAttendance, serverClockIn, getDepartments, getStores } from '../../lib/db'
 import { exportAttendancePdf } from '../../lib/exportPdf'
 import { validateClockIn } from '../../lib/clockInValidator'
 import { getRestMinutes } from '../../lib/scheduleUtils'
@@ -127,7 +127,12 @@ export default function Attendance() {
     setLoading(true)
     Promise.all([
       getAttendance(null, { orgId, from: startDate, to: endDate }),
-      getActiveEmployees('id, name, dept, store, department_id, position, store_id, departments!department_id(name), stores!store_id(name)', orgId),
+      // 在職 + 「該區間內還在職過」的離職者(resign_date≥區間起日)→ 讓離職者也能補齊每日出勤列
+      supabase.from('employees')
+        .select('id, name, dept, store, department_id, position, store_id, status, join_date, resign_date, departments!department_id(name), stores!store_id(name)')
+        .eq('organization_id', orgId)
+        .or(`status.eq.在職,resign_date.gte.${startDate}`)
+        .order('name'),
       getDepartments(orgId),
       getStores(orgId),
       supabase.from('overtime_requests')
@@ -278,7 +283,11 @@ export default function Attendance() {
     })
     const noPunchRows = []
     for (const e of scopeEmps) {
+      const jd = e.join_date || null      // 到職前不補列
+      const rd = e.resign_date || null    // 離職後不補列(離職者只補在職期間)
       for (const d of dateList) {
+        if (jd && d < jd) continue
+        if (rd && d > rd) continue
         if (existing.has(`${e.name}|${d}`)) continue
         noPunchRows.push({
           _rowType: 'notClocked', id: `nc-${e.id}-${d}`, employee: e.name,

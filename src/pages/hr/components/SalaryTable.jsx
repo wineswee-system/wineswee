@@ -28,10 +28,14 @@ function buildFallbackItems(r, brackets) {
 
 const OT_CAT_LABEL = { weekday: '平日', restday: '休息日', weekly_off: '例假', holiday: '國定假' }
 
-// ── 完整計算過程（從 _compute_payroll_for_employee 的回傳組）──
-function buildFullItems(d) {
+// ── 完整計算過程（從 _compute_payroll_for_employee 的回傳組 + 手動加項/扣項）──
+function buildFullItems(d, adjustments = []) {
   const items = []
   const push = (o) => items.push(o)
+  const addAdj = (adjustments || []).filter(a => a.type === 'add')
+  const dedAdj = (adjustments || []).filter(a => a.type === 'deduct')
+  const addAdjSum = addAdj.reduce((s, a) => s + n(a.amount), 0)
+  const dedAdjSum = dedAdj.reduce((s, a) => s + n(a.amount), 0)
   push({ label: '底薪', value: n(d.base_salary), sign: '', section: 'add', color: 'var(--text-primary)' })
 
   // 加班費（分類 + 時數）
@@ -62,9 +66,11 @@ function buildFullItems(d) {
   if (n(d.unused_leave_payout) > 0) push({ label: '特休折現', value: n(d.unused_leave_payout), sign: '+', section: 'add', color: 'var(--accent-green)', note: n(d.unused_leave_days) ? `${n(d.unused_leave_days)} 天` : null })
   if (n(d.severance_amount) > 0) push({ label: '資遣費', value: n(d.severance_amount), sign: '+', section: 'add', color: 'var(--accent-green)' })
   if (n(d.severance_notice_wage) > 0) push({ label: '預告工資', value: n(d.severance_notice_wage), sign: '+', section: 'add', color: 'var(--accent-green)' })
+  // 手動加項(逐筆調整:紅包/補發)→ 灌進應發
+  addAdj.forEach(a => push({ label: `加項·${a.label}`, value: n(a.amount), sign: '+', section: 'add', color: 'var(--accent-green)' }))
 
   push({ section: 'divider' })
-  push({ label: '總薪資（應發）', value: n(d.gross), sign: '=', section: 'total', color: 'var(--accent-cyan)' })
+  push({ label: '總薪資（應發）', value: n(d.gross) + addAdjSum, sign: '=', section: 'total', color: 'var(--accent-cyan)' })
   push({ section: 'divider' })
 
   // 減項
@@ -78,9 +84,11 @@ function buildFullItems(d) {
   if (n(d.awolDeduction) > 0) push({ label: '曠職扣', value: n(d.awolDeduction), sign: '-', section: 'deduct', color: 'var(--accent-red)', note: n(d.awolDays) ? `${n(d.awolDays)} 天` : null })
   if (n(d.lateDeduction) > 0) push({ label: '遲到扣', value: n(d.lateDeduction), sign: '-', section: 'deduct', color: 'var(--accent-red)', note: n(d.lateMins) ? `${n(d.lateMins)} 分鐘` : null })
   if (n(d.legal_deduction) > 0) push({ label: '法定扣款', value: n(d.legal_deduction), sign: '-', section: 'deduct', color: 'var(--accent-red)' })
+  // 手動扣項(逐筆調整)→ 灌進減項
+  dedAdj.forEach(a => push({ label: `扣項·${a.label}`, value: n(a.amount), sign: '-', section: 'deduct', color: 'var(--accent-red)' }))
 
   push({ section: 'divider' })
-  push({ label: '減項合計', value: n(d.totalDeductions), sign: '-', section: 'subtotal', color: 'var(--accent-orange)' })
+  push({ label: '減項合計', value: n(d.totalDeductions) + dedAdjSum, sign: '-', section: 'subtotal', color: 'var(--accent-orange)' })
   return items
 }
 
@@ -132,8 +140,11 @@ export default function SalaryTable({ filtered, adjByRecord = {}, expanded, setE
               const isExpanded = expanded === r.id
               const bonusDetail = isExpanded ? getBonusDetail(r.employee) : []
               const detail = detailMap[r.id]   // object | null | undefined
-              const items = isExpanded ? (detail ? buildFullItems(detail) : buildFallbackItems(r, brackets)) : []
-              const shownNet = detail ? n(detail.netSalary) : n(r.net_salary)
+              const rowAdjs = adjByRecord[r.id] || []
+              const addAdjSum = rowAdjs.filter(a => a.type === 'add').reduce((s, a) => s + n(a.amount), 0)
+              const dedAdjSum = rowAdjs.filter(a => a.type === 'deduct').reduce((s, a) => s + n(a.amount), 0)
+              const items = isExpanded ? (detail ? buildFullItems(detail, rowAdjs) : buildFallbackItems(r, brackets)) : []
+              const shownNet = detail ? (n(detail.netSalary) + addAdjSum - dedAdjSum) : n(r.net_salary)
               const savedNet = n(r.net_salary)
               return (
                 <Fragment key={r.id}>

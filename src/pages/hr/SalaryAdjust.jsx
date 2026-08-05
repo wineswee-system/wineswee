@@ -697,7 +697,7 @@ function EmployeeAdjustmentBody({ record, sourceData, adjustments, onSave, onDel
       </SectionBox>
 
       {/* 自由項：紅包/扣項 */}
-      <SectionBox title="自由項 — 紅包 / 補發前月差額 / 扣項" emptyMsg={null} rows={[1]}>
+      <SectionBox title="自由項 — 加項 / 扣項（金額填正數，正負由類型決定）" emptyMsg={null} rows={[1]}>
         <ManualEntries
           existing={[...manualBonuses, ...manualBackpays, ...manualDeductions]}
           onAdd={(type, amount, label, reason) => onSave({
@@ -797,7 +797,7 @@ function ManualEntries({ existing, onAdd, onRemove }) {
           <span style={{ padding: '1px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600,
             color: e.source_type === 'manual_deduction' ? 'var(--accent-red)' : 'var(--accent-green)',
             background: e.source_type === 'manual_deduction' ? 'var(--accent-red-dim)' : 'var(--accent-green-dim)' }}>
-            {e.source_type === 'manual_bonus' ? '+ 紅包' : e.source_type === 'manual_backpay' ? '+ 補發' : '- 扣項'}
+            {e.source_type === 'manual_deduction' ? '- 扣項' : '+ 加項'}
           </span>
           <span style={{ flex: 1 }}>
             {e.new_value?.label || '(無註記)'} {e.reason ? ` · ${e.reason}` : ''}
@@ -814,8 +814,7 @@ function ManualEntries({ existing, onAdd, onRemove }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px', flexWrap: 'wrap' }}>
         <select className="form-input" style={{ fontSize: 12, padding: '4px 8px', width: 128 }}
           value={type} onChange={e => setType(e.target.value)}>
-          <option value="manual_bonus">紅包</option>
-          <option value="manual_backpay">補發前月差額</option>
+          <option value="manual_bonus">加項</option>
           <option value="manual_deduction">扣項</option>
         </select>
         <input type="number" placeholder="金額"

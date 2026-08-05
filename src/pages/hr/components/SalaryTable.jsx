@@ -176,15 +176,7 @@ export default function SalaryTable({ filtered, adjByRecord = {}, expanded, setE
                     <td style={{ color: 'var(--accent-orange)', fontSize: 12 }}>-{(r.health_insurance || 0).toLocaleString()}</td>
                     <td style={{ color: 'var(--accent-orange)', fontSize: 12 }}>{r.pension_self ? `-${r.pension_self.toLocaleString()}` : '-'}</td>
                     <td style={{ color: 'var(--accent-red)', fontSize: 12 }}>{r.income_tax ? `-${r.income_tax.toLocaleString()}` : '-'}</td>
-                    <td style={{ fontWeight: 800, color: 'var(--accent-green)', fontSize: 15 }}>
-                      {/* 展開且引擎現算可用 → 外面同步顯示現算值;存檔值縮成劃線備註（純顯示，未寫回，要落地請重跑批次） */}
-                      {fmt(isExpanded && detail ? shownNet : savedNet)}
-                      {isExpanded && detail && Math.abs(shownNet - savedNet) > 1 && (
-                        <div style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-muted)', textDecoration: 'line-through' }}>
-                          存檔 {fmt(savedNet)}
-                        </div>
-                      )}
-                    </td>
+                    <td style={{ fontWeight: 800, color: 'var(--accent-green)', fontSize: 15 }}>{fmt(r.net_salary)}</td>
                     <td>
                       <button className="btn btn-secondary" style={{ padding: '2px 8px', fontSize: 11 }} onClick={e => { e.stopPropagation(); openEdit(r) }}>編輯</button>
                     </td>

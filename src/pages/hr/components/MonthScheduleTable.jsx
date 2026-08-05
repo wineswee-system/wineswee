@@ -37,7 +37,8 @@ export default function MonthScheduleTable({
   empHours = {},         // empName → 整月/整循環淨工時(已扣休息)
   dailyRevenue = {},     // dateStr → 預估業績
   onSaveRevenue = null,  // (date, value) => void；有值才顯示每日彙總列
-  avgHourly = 350,       // 均薪(時薪)—人事成本 = 工時 × 此值
+  avgHourly = 350,       // 均薪(時薪)—人事成本 = 工時 × 此值(讀 stores.avg_hourly_wage)
+  onSaveWage = null,     // (wage) => void;有值+可編輯才顯示時薪輸入格
   violationsByEmp = {},   // empName → { errors: N, warnings: N }
   onClickEmployeeBadge,   // 點 badge 開合規 modal
   lockedDates = new Set(),  // Set<'YYYY-MM-DD'> — 鎖定（已發布）的日期，cell 不可編輯
@@ -284,7 +285,14 @@ export default function MonthScheduleTable({
                     <td style={stickyR}>{totRev > 0 ? Math.round(totRev / 1000) + 'k' : '—'}</td>
                   </tr>
                   <tr style={{ background: 'var(--bg-secondary)' }}>
-                    <td style={stickyL} title="人事成本 = 總工時 × 均薪350；比 = 成本 ÷ 預估業績">人事成本比</td>
+                    <td style={stickyL} title="人事成本 = 總工時 × 時薪；比 = 成本 ÷ 預估業績">
+                      人事成本比
+                      <div style={{ fontWeight: 400, fontSize: 10, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 3, marginTop: 1 }}>
+                        時薪 {onSaveWage && canEditSchedule
+                          ? <WageInput value={avgHourly} onSave={onSaveWage} />
+                          : <span>${avgHourly}</span>}
+                      </div>
+                    </td>
                     {monthDates.map(d => {
                       const h = dailyHours[d] || 0, rev = Number(dailyRevenue[d]) || 0
                       const pct = rev > 0 ? (h * avgHourly / rev * 100) : null
@@ -606,6 +614,25 @@ function EmployeeRow({
   )
 }
 
+
+// 時薪輸入格：本地編輯、失焦才存(人事成本比試算用;存 stores.avg_hourly_wage)
+function WageInput({ value, onSave }) {
+  const [v, setV] = useState(String(value ?? ''))
+  useEffect(() => { setV(String(value ?? '')) }, [value])
+  return (
+    <input
+      type="number" inputMode="numeric" value={v}
+      onChange={e => setV(e.target.value)}
+      onBlur={() => { if (v !== '' && String(value ?? '') !== v) onSave(v) }}
+      title="每小時均薪(用於人事成本比試算)"
+      style={{
+        width: 46, border: '1px solid var(--border-medium)', borderRadius: 4,
+        background: 'var(--bg-primary)', textAlign: 'center', fontSize: 10,
+        color: 'var(--text-primary)', padding: '1px 2px', outline: 'none', MozAppearance: 'textfield',
+      }}
+    />
+  )
+}
 
 // 每日預估業績輸入格：本地編輯、失焦才存（避免每個鍵盤事件都寫 DB）
 //   ★單位=千：畫面顯示/輸入用「千」(打 100 = 100,000),存回 DB 仍是全額。少打 3 個 0。

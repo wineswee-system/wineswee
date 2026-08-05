@@ -383,7 +383,7 @@ export default function Schedule() {
   )
 
   // ── 每日彙總:總工時 / 預估業績 / 人事成本比 ──────────────────────────────
-  const AVG_HOURLY_WAGE = 350  // 均薪(時薪)—人事成本 = 工時 × 此值
+  const storeWage = Number(currentStore?.avg_hourly_wage) || 350  // 均薪(時薪)讀該店設定,預設350
   // 單一來源:與合規週期統計共用 cellNetWorkHours(scheduleUtils),避免兩邊數字漂移
   const cellNetHours = cellNetWorkHours
   // dailyHours 定義在 filtered 宣告之後（見下方）— 這裡只留 cellNetHours / saveRevenue
@@ -399,6 +399,16 @@ export default function Schedule() {
       updated_by: authProfile?.id ?? null, updated_at: new Date().toISOString(),
     }, { onConflict: 'store_id,date' })
     if (error) toast.error('預估業績儲存失敗：' + error.message)
+  }
+
+  // 均薪(時薪)存 stores.avg_hourly_wage — 走 DEFINER RPC(店長也能改,不受 stores RLS 限制)
+  const saveWage = async (value) => {
+    if (!currentStore) return
+    const num = Number(value)
+    if (!num || Number.isNaN(num) || num <= 0) { toast.error('時薪需為正數'); return }
+    setLocations(prev => prev.map(l => l.id === currentStore.id ? { ...l, avg_hourly_wage: num } : l))
+    const { error } = await supabase.rpc('set_store_avg_hourly_wage', { p_store_id: currentStore.id, p_wage: num })
+    if (error) toast.error('時薪儲存失敗：' + error.message)
   }
   const lockedDates = new Set((activeDates || []).filter(d => lockedMonths.has(d.slice(0, 7))))
   // 當前畫面（cycle 可能跨月）碰到的月份，給狀態列「逐月鎖定/解鎖」用
@@ -1940,7 +1950,8 @@ export default function Schedule() {
           empHours={empActiveHours}
           dailyRevenue={dailyRevenue}
           onSaveRevenue={saveRevenue}
-          avgHourly={AVG_HOURLY_WAGE}
+          avgHourly={storeWage}
+          onSaveWage={saveWage}
           violationsByEmp={(() => {
             const map = {}
             for (const e of (compliance.errors || [])) {

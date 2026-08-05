@@ -84,7 +84,7 @@ function buildFullItems(d) {
   return items
 }
 
-export default function SalaryTable({ filtered, expanded, setExpanded, getEmpDept, getBonusDetail, openEdit, brackets }) {
+export default function SalaryTable({ filtered, adjByRecord = {}, expanded, setExpanded, getEmpDept, getBonusDetail, openEdit, brackets }) {
   // 展開時呼叫批次同款引擎 RPC，取完整計算過程（依 row id 快取）
   const [detailMap, setDetailMap] = useState({})
   const [loadingId, setLoadingId] = useState(null)
@@ -139,7 +139,22 @@ export default function SalaryTable({ filtered, expanded, setExpanded, getEmpDep
                 <Fragment key={r.id}>
                   <tr style={{ cursor: 'pointer' }} onClick={() => setExpanded(isExpanded ? null : r.id)}>
                     <td>{isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</td>
-                    <td style={{ fontWeight: 600 }}>{r.employee}</td>
+                    <td style={{ fontWeight: 600 }}>
+                      {r.employee}
+                      {(adjByRecord[r.id] || []).length > 0 && (
+                        <div style={{ marginTop: 3, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                          {adjByRecord[r.id].map((a, i) => (
+                            <span key={i} style={{
+                              fontSize: 11, fontWeight: 500, padding: '1px 6px', borderRadius: 4, whiteSpace: 'nowrap',
+                              color: a.type === 'deduct' ? 'var(--accent-red)' : 'var(--accent-green)',
+                              background: a.type === 'deduct' ? 'var(--accent-red-dim)' : 'var(--accent-green-dim)',
+                            }}>
+                              {a.type === 'deduct' ? '扣項' : '加項'}·{a.label} {a.type === 'deduct' ? '−' : '+'}{a.amount.toLocaleString()}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </td>
                     <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{getEmpDept(r.employee) || '-'}</td>
                     <td>{fmt(r.base_salary)}</td>
                     <td style={{ color: 'var(--accent-cyan)' }}>{r.overtime ? `+${(r.overtime).toLocaleString()}` : '-'}</td>

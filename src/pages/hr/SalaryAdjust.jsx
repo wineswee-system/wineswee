@@ -263,6 +263,12 @@ export default function SalaryAdjust() {
       context,
     )
 
+    // 扣項名目寫進 note(取代通用「逐筆調整」),薪資單/首頁看得到是什麼扣款
+    const manualDeductNote = (adjs || [])
+      .filter(a => a.source_type === 'manual_deduction')
+      .map(a => a.new_value?.label || '扣項')
+      .join('、') || '逐筆調整'
+
     // UPSERT 回 DB（status='draft'）
     const payload = {
       employee:             record.employee,
@@ -280,7 +286,7 @@ export default function SalaryAdjust() {
       absence_deduction:    newItem.absenceDeduction,
       late_deduction:       newItem.lateDeduction,
       other_deduction:      newItem._manualDeductionTotal,
-      other_deduction_note: '逐筆調整',
+      other_deduction_note: manualDeductNote,
       back_pay_adjustment:  newItem._manualBackpayTotal || 0,
       // 分項 pass-through（調整不動保費/稅/特休折現，保留存檔值供明細顯示）
       labor_insurance:      record.labor_insurance     || 0,

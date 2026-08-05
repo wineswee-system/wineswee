@@ -115,6 +115,7 @@ export default function Salary() {
   const canSendPayslip = hasPermission('salary.send_payslip') // 發送薪資條 LINE
 
   const [records, setRecords] = useState([])
+  const [adjByRecord, setAdjByRecord] = useState({})  // salary_record_id → [{type,label,amount}] 手動加項/扣項
   const [bonusRecords, setBonusRecords] = useState([])
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
@@ -167,7 +168,9 @@ export default function Salary() {
       supabase.from('departments').select('*').eq('organization_id', orgId).order('name'),
       supabase.from('stores').select('*').eq('organization_id', orgId).order('name'),
       supabase.rpc('web_my_salary_visible_store_ids'),  // 薪資可見門市(_can_see_store_for_emp − 總部hq)
-    ]).then(([s, b, e, d, st, visRes]) => {
+      supabase.from('salary_adjustments').select('salary_record_id, source_type, new_value')
+        .in('source_type', ['manual_bonus', 'manual_backpay', 'manual_deduction']).is('superseded_at', null),
+    ]).then(([s, b, e, d, st, visRes, adjRes]) => {
       const visIds = Array.isArray(visRes?.data) ? visRes.data : null
       setVisibleStoreIds(visIds)
       let emps = e.data || []
@@ -181,6 +184,18 @@ export default function Salary() {
         recs = recs.filter(r => storeEmps.has(r.employee))
       }
       setRecords(recs)
+      // 手動加項/扣項摘要(給首頁每列直接顯示,不用點進調整頁)
+      const adjMap = {}
+      ;(adjRes?.data || []).forEach(a => {
+        const amt = Number(a.new_value?.amount) || 0
+        if (amt <= 0) return
+        ;(adjMap[a.salary_record_id] ||= []).push({
+          type: a.source_type === 'manual_deduction' ? 'deduct' : 'add',
+          label: a.new_value?.label || (a.source_type === 'manual_deduction' ? '扣項' : a.source_type === 'manual_backpay' ? '補發' : '加項'),
+          amount: amt,
+        })
+      })
+      setAdjByRecord(adjMap)
       setBonusRecords(b.data || [])
       setEmployees(emps)
       setDepartments(d.data || [])
@@ -719,6 +734,7 @@ export default function Salary() {
       {/* ── Salary table ── */}
       <SalaryTable
         filtered={filtered}
+        adjByRecord={adjByRecord}
         expanded={expanded}
         setExpanded={setExpanded}
         getEmpDept={getEmpDept}

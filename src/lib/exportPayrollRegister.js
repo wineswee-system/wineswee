@@ -32,7 +32,8 @@ const COLS = [
   { h: '國定加給', group: '薪資科目加項', w: 9, get: (p) => n(p.holidayBonus) },
   { h: '其他津貼', group: '薪資科目加項', w: 10, get: (p) => n(p.other_custom_total) },
   { h: '底薪', group: '薪資科目加項', w: 8, get: () => 0 },
-  { h: '補發前月差額', group: '薪資科目加項', w: 12, get: () => 0 },
+  { h: '補發前月差額', group: '薪資科目加項', w: 12, get: (p) => n(p.back_pay_adjustment) },  // 逐筆調整:補發(有值才出欄)
+  { h: '微調加項', group: '薪資科目加項', w: 10, get: (p) => n(p.manual_bonus) },            // 逐筆調整:紅包等手動加項
   // ── 薪資科目扣項 ──
   { h: '勞保費', group: '薪資科目扣項', w: 9, get: (p) => n(p.laborInsurance) },
   { h: '健保費', group: '薪資科目扣項', w: 9, get: (p) => n(p.healthInsurance) },
@@ -44,12 +45,14 @@ const COLS = [
   { h: '早退扣款', group: '薪資科目扣項', w: 9, get: (p) => n(p.earlyLeaveDeduction) },
   { h: '曠職扣款', group: '薪資科目扣項', w: 9, get: (p) => n(p.awolDeduction) },
   { h: '補充保費', group: '薪資科目扣項', w: 9, get: (p) => n(p.nhi_supplementary) },
+  { h: '微調扣款', group: '薪資科目扣項', w: 10, get: (p) => n(p.manual_deduction) },        // 逐筆調整:手動扣項
   { h: '所得稅', group: '薪資科目扣項', w: 8, get: (p) => n(p.incomeTax) },
   // ── 薪資總計(永遠顯示)──
   { h: '應稅所得', group: '薪資總計', always: true, w: 10, get: (p) => Math.max(0, n(p.gross) - n(p.regular_overtime_pay) - n(p.meal_allowance) - n(p.unused_leave_payout) - n(p.unpaidDeduction)) },
-  { h: '應發總額', group: '薪資總計', always: true, w: 10, get: (p) => n(p.gross) },
-  { h: '應減總額', group: '薪資總計', always: true, w: 10, get: (p) => n(p.totalDeductions) },
-  { h: '實發金額', group: '薪資總計', always: true, w: 11, get: (p) => n(p.netSalary) },
+  // 應稅所得:依決策不因微調變動(補發/紅包不併入課稅基礎),維持引擎值
+  { h: '應發總額', group: '薪資總計', always: true, w: 10, get: (p) => n(p.gross) + n(p.back_pay_adjustment) + n(p.manual_bonus) },
+  { h: '應減總額', group: '薪資總計', always: true, w: 10, get: (p) => n(p.totalDeductions) + n(p.manual_deduction) },
+  { h: '實發金額', group: '薪資總計', always: true, w: 11, get: (p) => n(p.netSalary) + n(p.back_pay_adjustment) + n(p.manual_bonus) - n(p.manual_deduction) },
   // ── 公司負擔(永遠顯示)──
   { h: '勞保費', group: '公司負擔', always: true, w: 9, get: (p) => n(p.laborEmployer) },
   { h: '健保費', group: '公司負擔', always: true, w: 9, get: (p) => n(p.healthEmployer) },

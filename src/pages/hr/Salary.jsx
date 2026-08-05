@@ -648,8 +648,21 @@ export default function Salary() {
           if (e && !e.store) e.store = s.source_store  // 取當月第一筆排班門市
         }
       }
+      // 逐筆調整(微調)疊回:引擎(preview_payroll)不含 salary_adjustments,依存檔 salary_records 比對補上,
+      //   落到對應科目欄(補發前月差額/微調加項/微調扣款);與畫面 displayRecords、存檔映射(handleBatchSaveCore)一致。
+      const nn = (v) => Number(v) || 0
+      const enriched = list.map(p => {
+        const rec = records.find(r => r.employee === p.employee && r.month === month)
+        const raw = rec ? (rawAdjByRecord[rec.id] || []) : []
+        if (raw.length === 0) return p
+        const backpay = raw.filter(a => a.source_type === 'manual_backpay').reduce((s, a) => s + nn(a.new_value?.amount), 0)
+        const bonus   = raw.filter(a => a.source_type === 'manual_bonus').reduce((s, a) => s + nn(a.new_value?.amount), 0)
+        const deduct  = raw.filter(a => a.source_type === 'manual_deduction').reduce((s, a) => s + nn(a.new_value?.amount), 0)
+        if (!backpay && !bonus && !deduct) return p
+        return { ...p, back_pay_adjustment: backpay, manual_bonus: bonus, manual_deduction: deduct }
+      })
       const { exportPayrollRegister } = await import('../../lib/exportPayrollRegister')
-      exportPayrollRegister(list, empMap, month, org?.name || '')
+      exportPayrollRegister(enriched, empMap, month, org?.name || '')
       toast.success(`已匯出 ${month} 薪資報表（${list.length} 人）`)
     } catch (err) {
       console.error('Export register failed:', err)

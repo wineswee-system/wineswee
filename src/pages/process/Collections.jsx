@@ -148,7 +148,7 @@ export default function Collections() {
 }
 
 // ── 共用：投資人選擇器（下拉既有名冊 + 當場新增）──
-function InvestorPicker({ value, onChange, investors, addInvestor, exclude = [], placeholder = '選擇投資人…' }) {
+function InvestorPicker({ value, onChange, investors, addInvestor, exclude = [], placeholder = '選擇投資人…', noAdd = false }) {
   const [adding, setAdding] = useState(false)
   const [f, setF] = useState({ company: '', name: '', phone: '' })
   const list = investors.filter(i => !exclude.includes(i.id) || i.id === value)
@@ -175,7 +175,7 @@ function InvestorPicker({ value, onChange, investors, addInvestor, exclude = [],
         <option value="">{placeholder}</option>
         {list.map(i => <option key={i.id} value={i.id}>{i.name}{i.company ? `（${i.company}）` : ''}</option>)}
       </select>
-      <button className="btn btn-secondary" style={{ padding: '5px 8px', whiteSpace: 'nowrap' }} onClick={() => setAdding(true)}><Plus size={13} /> 新增</button>
+      {!noAdd && <button className="btn btn-secondary" style={{ padding: '5px 8px', whiteSpace: 'nowrap' }} onClick={() => setAdding(true)}><Plus size={13} /> 新增</button>}
     </div>
   )
 }
@@ -282,14 +282,17 @@ function DepositTab({ orgId, profile, deposits, depPays, investors, addInvestor,
 // ══════════════════════════════ 加盟金 ══════════════════════════════
 function FranchiseTab({ orgId, profile, franchises, ffInvestors, ffPays, deposits, investors, addInvestor, reload }) {
   const [showAdd, setShowAdd] = useState(false)
-  const [depId, setDepId] = useState('')
+  const [title, setTitle] = useState('')
   const [total, setTotal] = useState('')
   const [allocs, setAllocs] = useState([{ investor_id: '', amount: '' }])   // 分攤列
   const [expanded, setExpanded] = useState(null)
   const [saving, setSaving] = useState(false)
 
-  const completedDeposits = deposits.filter(d => d.status === 'completed')
-  const depTitle = useMemo(() => Object.fromEntries(deposits.map(d => [d.id, d.title])), [deposits])
+  // 加盟金投資人只能從「已付訂金(訂金收款完成)」的投資人裡選
+  const eligibleInvestors = useMemo(() => {
+    const ok = new Set(deposits.filter(d => d.status === 'completed' && d.investor_id).map(d => d.investor_id))
+    return investors.filter(i => ok.has(i.id))
+  }, [deposits, investors])
   const invById = useMemo(() => Object.fromEntries(investors.map(i => [i.id, i])), [investors])
   const ffiByFf = useMemo(() => { const m = {}; ffInvestors.forEach(x => { (m[x.franchise_fee_id] ||= []).push(x) }); return m }, [ffInvestors])
   const paysByFf = useMemo(() => { const m = {}; ffPays.forEach(p => { (m[p.franchise_fee_id] ||= []).push(p) }); return m }, [ffPays])
@@ -298,10 +301,10 @@ function FranchiseTab({ orgId, profile, franchises, ffInvestors, ffPays, deposit
   const pickedIds = allocs.map(a => a.investor_id).filter(Boolean)
   const setAlloc = (i, k, v) => setAllocs(prev => prev.map((a, idx) => idx === i ? { ...a, [k]: v } : a))
 
-  const resetForm = () => { setDepId(''); setTotal(''); setAllocs([{ investor_id: '', amount: '' }]) }
+  const resetForm = () => { setTitle(''); setTotal(''); setAllocs([{ investor_id: '', amount: '' }]) }
 
   const addFranchise = async () => {
-    if (!depId) { toast.warning('請選（已完成的）訂金'); return }
+    if (!title.trim()) { toast.warning('請填標的名稱'); return }
     if (n(total) <= 0) { toast.warning('請填總額'); return }
     const rows = allocs.filter(a => a.investor_id && n(a.amount) > 0)
     if (rows.length === 0) { toast.warning('至少一位投資人 + 分攤金額'); return }
@@ -309,7 +312,7 @@ function FranchiseTab({ orgId, profile, franchises, ffInvestors, ffPays, deposit
     if (Math.abs(allocSum - n(total)) > 0.5) { toast.warning(`分攤加總 ${fmt(allocSum)} ≠ 總額 ${fmt(n(total))}`); return }
     setSaving(true)
     const { data: ff, error } = await supabase.from('franchise_fees').insert({
-      organization_id: orgId, deposit_id: depId, total_amount: n(total), created_by: profile?.name || null,
+      organization_id: orgId, title: title.trim(), total_amount: n(total), created_by: profile?.name || null,
     }).select().single()
     if (error) { setSaving(false); toast.error('建立失敗：' + error.message); return }
     const { error: e2 } = await supabase.from('franchise_fee_investors').insert(
@@ -335,17 +338,12 @@ function FranchiseTab({ orgId, profile, franchises, ffInvestors, ffPays, deposit
 
       {showAdd && (
         <div className="card" style={{ padding: 16, marginBottom: 12 }}>
-          {completedDeposits.length === 0 ? (
-            <div style={{ color: 'var(--accent-orange)', fontSize: 13 }}>⚠ 目前沒有「收款完成」的訂金，先到「訂金」把訂金收滿 30 萬才能開加盟金。</div>
-          ) : (
+          {(
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
-                <div style={{ minWidth: 200 }}>
-                  <label style={{ fontSize: 12, color: 'var(--text-muted)' }}>訂金（限已完成）</label>
-                  <select className="form-input" value={depId} onChange={e => setDepId(e.target.value)}>
-                    <option value="">選擇訂金案…</option>
-                    {completedDeposits.map(d => <option key={d.id} value={d.id}>{d.title}</option>)}
-                  </select>
+                <div style={{ flex: 1, minWidth: 200 }}>
+                  <label style={{ fontSize: 12, color: 'var(--text-muted)' }}>標的 / 案名</label>
+                  <input className="form-input" value={title} onChange={e => setTitle(e.target.value)} placeholder="例：台中大墩加盟案" autoFocus />
                 </div>
                 <div style={{ minWidth: 160 }}>
                   <label style={{ fontSize: 12, color: 'var(--text-muted)' }}>加盟金總額</label>
@@ -355,12 +353,13 @@ function FranchiseTab({ orgId, profile, franchises, ffInvestors, ffPays, deposit
 
               {/* 投資人分攤 */}
               <div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>投資人分攤（每位金額各自拆 45 / 45 / 10 三期，加總須等於總額）</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>投資人分攤（每位金額各自拆 45 / 45 / 10 三期，加總須等於總額）— 只能選「已付訂金」的投資人</div>
+                {eligibleInvestors.length === 0 && <div style={{ fontSize: 12, color: 'var(--accent-orange)', marginBottom: 6 }}>⚠ 目前沒有「訂金收款完成」的投資人，先到「訂金」讓投資人付滿 30 萬。</div>}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {allocs.map((a, i) => (
                     <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                       <InvestorPicker value={a.investor_id} onChange={v => setAlloc(i, 'investor_id', v)}
-                        investors={investors} addInvestor={addInvestor} exclude={pickedIds.filter(id => id !== a.investor_id)} />
+                        investors={eligibleInvestors} addInvestor={addInvestor} noAdd exclude={pickedIds.filter(id => id !== a.investor_id)} />
                       <input className="form-input" type="number" value={a.amount} onChange={e => setAlloc(i, 'amount', e.target.value)} placeholder="分攤金額" style={{ width: 140 }} />
                       {n(a.amount) > 0 && <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>三期 {stageTargets(a.amount).map(fmt).join(' / ')}</span>}
                       {allocs.length > 1 && <button className="btn btn-secondary" style={{ padding: '5px 8px' }} onClick={() => setAllocs(prev => prev.filter((_, idx) => idx !== i))}><X size={13} /></button>}
@@ -385,7 +384,7 @@ function FranchiseTab({ orgId, profile, franchises, ffInvestors, ffPays, deposit
         <table className="data-table">
           <thead>
             <tr>
-              <th style={{ width: 32 }}></th><th>訂金案</th><th>投資人</th>
+              <th style={{ width: 32 }}></th><th>標的</th><th>投資人</th>
               <th style={{ minWidth: 180 }}>總進度</th><th>狀態</th><th style={{ width: 40 }}></th>
             </tr>
           </thead>
@@ -400,7 +399,7 @@ function FranchiseTab({ orgId, profile, franchises, ffInvestors, ffPays, deposit
                 <Grp key={f.id}>
                   <tr style={{ cursor: 'pointer' }} onClick={() => setExpanded(isExp ? null : f.id)}>
                     <td>{isExp ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</td>
-                    <td style={{ fontWeight: 600 }}>{depTitle[f.deposit_id] || '—'}</td>
+                    <td style={{ fontWeight: 600 }}>{f.title || '—'}</td>
                     <td style={{ fontSize: 12 }}>{ffis.map(x => invById[x.investor_id]?.name || '?').join('、') || '—'}</td>
                     <td><Progress paid={n(f.paid_total)} target={n(f.total_amount)} /></td>
                     <td><StatusPill done={done} doneText="收款成功" /></td>

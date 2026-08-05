@@ -26,7 +26,7 @@ const FIXED_NON_EXPENSE = [
 // 收款組（純記帳，不走簽核）— 訂金 + 加盟金
 const FIXED_COLLECTION = [
   { icon: Banknote, name: '訂金收款', desc: '固定 30 萬，分多筆記錄，加總滿額自動完成', action: '/process/collections?tab=deposit', color: 'var(--accent-cyan)', dim: 'var(--accent-cyan-dim)', tag: '記帳' },
-  { icon: Handshake, name: '加盟金收款', desc: '訂金完成後開，多位投資人分攤總額，每人各自三期 45/45/10', action: '/process/collections?tab=franchise', color: 'var(--accent-green)', dim: 'var(--accent-green-dim)', tag: '分攤·三期' },
+  { icon: Handshake, name: '加盟金收款', desc: '獨立單；多位投資人分攤總額、每人各自三期 45/45/10（投資人須先付訂金）', action: '/process/collections?tab=franchise', color: 'var(--accent-green)', dim: 'var(--accent-green-dim)', tag: '分攤·三期' },
 ]
 
 const COLOR_MAP = {

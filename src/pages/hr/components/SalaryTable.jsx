@@ -38,14 +38,19 @@ function buildFullItems(d, adjustments = []) {
   const dedAdjSum = dedAdj.reduce((s, a) => s + n(a.amount), 0)
   push({ label: '底薪', value: n(d.base_salary), sign: '', section: 'add', color: 'var(--text-primary)' })
 
-  // 加班費（分類 + 時數）
-  ;[['平日加班', d.otWeekday, d.otPayWeekday],
-    ['休息日加班', d.otRestday, d.otPayRestday],
-    ['例假加班', d.otWeeklyOff, d.otPayWeeklyOff],
-    ['國定加班', d.otHoliday, d.otPayHoliday],
-  ].forEach(([lbl, hrs, pay]) => {
-    if (n(pay) > 0 || n(hrs) > 0) push({ label: lbl, value: n(pay), sign: '+', section: 'add', color: 'var(--accent-cyan)', note: `${n(hrs)} 小時` })
-  })
+  // 加班費（分類 + 時數）— 用逐筆明細(_ot_rows + _ot_exception_rows,含例外/擬制加班)依類別加總,
+  //   而非 otPay* 聚合欄(會漏掉例外加班,導致左欄 OT 少於 gross);與右欄逐筆、gross 一致。
+  const _otRows = [...(Array.isArray(d._ot_rows) ? d._ot_rows : []), ...(Array.isArray(d._ot_exception_rows) ? d._ot_exception_rows : [])]
+  if (_otRows.length > 0) {
+    const otAgg = {}
+    for (const r of _otRows) { const c = r.category || 'weekday'; (otAgg[c] ??= { hours: 0, pay: 0 }); otAgg[c].hours += n(r.hours); otAgg[c].pay += n(r._pay) }
+    const otOrder = ['weekday', 'restday', 'weekly_off', 'holiday']
+    const otCats = [...otOrder.filter(c => otAgg[c]), ...Object.keys(otAgg).filter(c => !otOrder.includes(c))]
+    otCats.forEach(c => { const a = otAgg[c]; if (a.pay > 0 || a.hours > 0) push({ label: `${OT_CAT_LABEL[c] || c}加班`, value: Math.round(a.pay), sign: '+', section: 'add', color: 'var(--accent-cyan)', note: `${a.hours} 小時` }) })
+  } else {
+    ;[['平日加班', d.otWeekday, d.otPayWeekday], ['休息日加班', d.otRestday, d.otPayRestday], ['例假加班', d.otWeeklyOff, d.otPayWeeklyOff], ['國定加班', d.otHoliday, d.otPayHoliday]]
+      .forEach(([lbl, hrs, pay]) => { if (n(pay) > 0 || n(hrs) > 0) push({ label: lbl, value: n(pay), sign: '+', section: 'add', color: 'var(--accent-cyan)', note: `${n(hrs)} 小時` }) })
+  }
   if (n(d.comp_time_settled_pay) > 0) push({ label: '補休兌現', value: n(d.comp_time_settled_pay), sign: '+', section: 'add', color: 'var(--accent-cyan)', note: `${n(d.comp_time_settled_count)} 筆` })
   if (n(d.holidayBonus) > 0) push({ label: '國定假日出勤加給', value: n(d.holidayBonus), sign: '+', section: 'add', color: 'var(--accent-cyan)' })
 
@@ -68,6 +73,10 @@ function buildFullItems(d, adjustments = []) {
   if (n(d.severance_notice_wage) > 0) push({ label: '預告工資', value: n(d.severance_notice_wage), sign: '+', section: 'add', color: 'var(--accent-green)' })
   // 手動加項(逐筆調整:紅包/補發)→ 灌進應發
   addAdj.forEach(a => push({ label: `加項·${a.label}`, value: n(a.amount), sign: '+', section: 'add', color: 'var(--accent-green)' }))
+  // 保險:顯示加項若加不回應發(引擎有算但畫面漏列的欄位),補一行殘差,確保逐項永遠對得回應發
+  const _shownAdd = items.filter(it => it.section === 'add').reduce((s, it) => s + n(it.value), 0)
+  const _addResidual = (n(d.gross) + addAdjSum) - _shownAdd
+  if (_addResidual > 0.5) push({ label: '其他加項', value: _addResidual, sign: '+', section: 'add', color: 'var(--accent-green)' })
 
   push({ section: 'divider' })
   push({ label: '總薪資（應發）', value: n(d.gross) + addAdjSum, sign: '=', section: 'total', color: 'var(--accent-cyan)' })
@@ -78,14 +87,22 @@ function buildFullItems(d, adjustments = []) {
   ded('勞保自付', d.laborInsurance, n(d.insuredLabor) ? `投保級距 ${n(d.insuredLabor).toLocaleString()}` : null)
   ded('健保自付', d.healthInsurance, n(d.insuredHealth) ? `投保級距 ${n(d.insuredHealth).toLocaleString()}${n(d.health_ins_dependents) ? ` ×${1 + Math.min(n(d.health_ins_dependents), 3)}口` : ''}` : null)
   ded('勞退自提', d.pension, n(d.pension_self_pct) ? `自提 ${d.pension_self_pct}%` : null)
-  if (n(d.absenceDeduction) > 0) push({ label: '事假/缺勤扣', value: n(d.absenceDeduction), sign: '-', section: 'deduct', color: 'var(--accent-red)', note: n(d.absenceDays) ? `${n(d.absenceDays)} 天` : null })
+  // 事假/缺勤扣(absenceDeduction) = 無薪+半薪+曠職 的加總,直接拆成獨立項顯示(不再列加總,避免看似重複)。
+  // 殘差保險:若總額有三項之外無法歸類的部分才補一行(正常為 0),確保顯示項加得回減項合計。
+  const absenceResidual = n(d.absenceDeduction) - n(d.unpaidDeduction) - n(d.halfPayDeduction) - n(d.awolDeduction)
+  if (absenceResidual > 0) push({ label: '其他缺勤扣', value: absenceResidual, sign: '-', section: 'deduct', color: 'var(--accent-red)', note: n(d.absenceDays) ? `${n(d.absenceDays)} 天` : null })
   if (n(d.unpaidDeduction) > 0) push({ label: '無薪假扣', value: n(d.unpaidDeduction), sign: '-', section: 'deduct', color: 'var(--accent-red)' })
   if (n(d.halfPayDeduction) > 0) push({ label: '半薪假扣', value: n(d.halfPayDeduction), sign: '-', section: 'deduct', color: 'var(--accent-red)' })
   if (n(d.awolDeduction) > 0) { const awolDates = Array.isArray(d._awol_rows) && d._awol_rows.length ? `（${d._awol_rows.join('、')}）` : ''; push({ label: '曠職扣', value: n(d.awolDeduction), sign: '-', section: 'deduct', color: 'var(--accent-red)', note: n(d.awolDays) ? `${n(d.awolDays)} 天${awolDates}` : null }) }
   if (n(d.lateDeduction) > 0) push({ label: '遲到扣', value: n(d.lateDeduction), sign: '-', section: 'deduct', color: 'var(--accent-red)', note: n(d.lateMins) ? `${n(d.lateMins)} 分鐘` : null })
+  if (n(d.earlyLeaveDeduction) > 0) { const earlyDates = Array.isArray(d._early_rows) && d._early_rows.length ? `（${d._early_rows.map(r => r.date).join('、')}）` : ''; push({ label: '早退扣', value: n(d.earlyLeaveDeduction), sign: '-', section: 'deduct', color: 'var(--accent-red)', note: n(d.earlyLeaveMinutes) ? `${n(d.earlyLeaveMinutes)} 分鐘${earlyDates}` : null }) }
   if (n(d.legal_deduction) > 0) push({ label: '法定扣款', value: n(d.legal_deduction), sign: '-', section: 'deduct', color: 'var(--accent-red)' })
   // 手動扣項(逐筆調整)→ 灌進減項
   dedAdj.forEach(a => push({ label: `扣項·${a.label}`, value: n(a.amount), sign: '-', section: 'deduct', color: 'var(--accent-red)' }))
+  // 保險:顯示扣項若加不回減項合計(引擎有算但畫面漏列的欄位,如所得稅/補充保費/未來新扣項),補一行殘差,確保逐項永遠對得回合計
+  const _shownDed = items.filter(it => it.section === 'deduct').reduce((s, it) => s + n(it.value), 0)
+  const _dedResidual = (n(d.totalDeductions) + dedAdjSum) - _shownDed
+  if (_dedResidual > 0.5) push({ label: '其他扣款', value: _dedResidual, sign: '-', section: 'deduct', color: 'var(--accent-red)' })
 
   push({ section: 'divider' })
   push({ label: '減項合計', value: n(d.totalDeductions) + dedAdjSum, sign: '-', section: 'subtotal', color: 'var(--accent-orange)' })

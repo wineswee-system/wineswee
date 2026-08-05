@@ -115,6 +115,8 @@ export default function Salary() {
   const canSendPayslip = hasPermission('salary.send_payslip') // 發送薪資條 LINE
 
   const [records, setRecords] = useState([])
+  const [computedMap, setComputedMap] = useState({})  // employee name → 引擎現算(preview_payroll)；列表外面同步現算用
+  const [computing, setComputing] = useState(false)
   const [adjByRecord, setAdjByRecord] = useState({})  // salary_record_id → [{type,label,amount}] 手動加項/扣項(顯示)
   const [rawAdjByRecord, setRawAdjByRecord] = useState({})  // salary_record_id → [raw adjustment rows](批次重算自動套回用)
   const [bonusRecords, setBonusRecords] = useState([])
@@ -211,6 +213,25 @@ export default function Salary() {
     })
   }, [orgId, month])
 
+  // 即時試算：載本月引擎現算值(preview_payroll，與批次/入帳同源)，讓列表「外面」與展開明細同步現算，
+  // 不必先重批次就能看到正確數字。存檔值仍保留在列上(_saved_net)當備註。非阻塞：先出存檔、算好再升級。
+  useEffect(() => {
+    if (!orgId) { setComputedMap({}); return }
+    let cancelled = false
+    setComputing(true)
+    supabase.rpc('preview_payroll', { p_period: month, p_org: orgId, p_store_filter: null })
+      .then(({ data, error }) => {
+        if (cancelled) return
+        if (error || !Array.isArray(data)) { setComputedMap({}); return }
+        const m = {}
+        data.forEach(p => { if (p?.employee) m[p.employee] = p })
+        setComputedMap(m)
+      })
+      .catch(() => { if (!cancelled) setComputedMap({}) })
+      .finally(() => { if (!cancelled) setComputing(false) })
+    return () => { cancelled = true }
+  }, [orgId, month])
+
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
   // ★ 自訂津貼操作（跟 SalaryStructures 同 pattern）
@@ -274,17 +295,53 @@ export default function Salary() {
     (storeFilter === '' || (empNameMap[r.employee]?.store || '') === storeFilter)
   ), [records, month, deptFilter, storeFilter, empNameMap])
 
+  // ★ 列表「外面」用引擎現算 + 逐筆加項/扣項覆蓋(與展開明細同步)；存檔值保留在 _saved_net 當備註。
+  //   只對「當月」的列套現算(computedMap 是本月的),其他月維持存檔。現算未載入前 fallback 存檔(不擋畫面)。
+  const displayRecords = useMemo(() => {
+    const nn = (v) => Number(v) || 0
+    return records.map(r => {
+      const comp = r.month === month ? computedMap[r.employee] : null
+      if (!comp) return r
+      const adjs = adjByRecord[r.id] || []
+      const addSum = adjs.filter(a => a.type === 'add').reduce((s, a) => s + nn(a.amount), 0)
+      const dedSum = adjs.filter(a => a.type === 'deduct').reduce((s, a) => s + nn(a.amount), 0)
+      const allow = nn(comp.role_allowance) + nn(comp.meal_allowance) + nn(comp.transport_allowance) + nn(comp.attendance_bonus) + nn(comp.custom_allowances_total)
+      return {
+        ...r,
+        base_salary:         nn(comp.base_salary),
+        overtime:            nn(comp.overtimePay),
+        allowance:           allow,
+        bonus:               nn(comp.policyBonus),
+        unused_leave_payout: nn(comp.unused_leave_payout),
+        labor_insurance:     nn(comp.laborInsurance),
+        health_insurance:    nn(comp.healthInsurance),
+        pension_self:        nn(comp.pension),
+        income_tax:          nn(comp.incomeTax),
+        deductions:          nn(comp.totalDeductions) + dedSum,
+        net_salary:          nn(comp.netSalary) + addSum - dedSum,
+        _saved_net:          nn(r.net_salary),
+        _is_computed:        true,
+      }
+    })
+  }, [records, computedMap, adjByRecord, month])
+
+  const displayFiltered = useMemo(() => displayRecords.filter(r =>
+    (!month || !r.month || r.month === month) &&
+    (deptFilter === '' || (empNameMap[r.employee]?.dept || '') === deptFilter) &&
+    (storeFilter === '' || (empNameMap[r.employee]?.store || '') === storeFilter)
+  ), [displayRecords, month, deptFilter, storeFilter, empNameMap])
+
   // 當月是否「已發布給員工」：該月所有 salary_records 都有 published_at（獨立於結算 status）
   const monthRows = useMemo(() => records.filter(r => r.month === month), [records, month])
   const monthPublished = monthRows.length > 0 && monthRows.every(r => r.published_at)
 
-  // Stats — derived from filtered; recomputed only when filtered changes
+  // Stats — 用 displayFiltered(現算)讓上方卡片與列表一致
   const { totalGross, totalDeductionsSum, totalNet, employeeCount } = useMemo(() => ({
-    totalGross:        filtered.reduce((s, r) => s + (r.base_salary || 0) + (r.allowance || 0) + (r.overtime || 0) + (r.bonus || 0), 0),
-    totalDeductionsSum: filtered.reduce((s, r) => s + (r.deductions || 0), 0),
-    totalNet:          filtered.reduce((s, r) => s + (r.net_salary || 0), 0),
-    employeeCount:     filtered.length,
-  }), [filtered])
+    totalGross:        displayFiltered.reduce((s, r) => s + (r.base_salary || 0) + (r.allowance || 0) + (r.overtime || 0) + (r.bonus || 0), 0),
+    totalDeductionsSum: displayFiltered.reduce((s, r) => s + (r.deductions || 0), 0),
+    totalNet:          displayFiltered.reduce((s, r) => s + (r.net_salary || 0), 0),
+    employeeCount:     displayFiltered.length,
+  }), [displayFiltered])
 
   // ── Create / Edit submit ──
   const handleSubmit = async () => {
@@ -746,8 +803,9 @@ export default function Salary() {
 
       {/* ── Salary table ── */}
       <SalaryTable
-        filtered={filtered}
+        filtered={displayFiltered}
         adjByRecord={adjByRecord}
+        computing={computing}
         expanded={expanded}
         setExpanded={setExpanded}
         getEmpDept={getEmpDept}

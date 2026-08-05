@@ -92,7 +92,7 @@ function buildFullItems(d, adjustments = []) {
   return items
 }
 
-export default function SalaryTable({ filtered, adjByRecord = {}, expanded, setExpanded, getEmpDept, getBonusDetail, openEdit, brackets }) {
+export default function SalaryTable({ filtered, adjByRecord = {}, computing = false, expanded, setExpanded, getEmpDept, getBonusDetail, openEdit, brackets }) {
   // 展開時呼叫批次同款引擎 RPC，取完整計算過程（依 row id 快取）
   const [detailMap, setDetailMap] = useState({})
   const [loadingId, setLoadingId] = useState(null)
@@ -110,7 +110,9 @@ export default function SalaryTable({ filtered, adjByRecord = {}, expanded, setE
     <div className="card">
       <div className="card-header">
         <div className="card-title"><span className="card-title-icon">📋</span> 薪資明細</div>
-        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>點擊列展開完整計算過程</span>
+        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+          {computing ? '⏳ 即時試算同步中…' : '外面數字為引擎現算；點擊列展開完整計算過程'}
+        </span>
       </div>
       <div className="data-table-wrapper">
         <table className="data-table">
@@ -145,7 +147,7 @@ export default function SalaryTable({ filtered, adjByRecord = {}, expanded, setE
               const dedAdjSum = rowAdjs.filter(a => a.type === 'deduct').reduce((s, a) => s + n(a.amount), 0)
               const items = isExpanded ? (detail ? buildFullItems(detail, rowAdjs) : buildFallbackItems(r, brackets)) : []
               const shownNet = detail ? (n(detail.netSalary) + addAdjSum - dedAdjSum) : n(r.net_salary)
-              const savedNet = n(r.net_salary)
+              const savedNet = n(r._saved_net ?? r.net_salary)   // 真正的存檔值(外面已改成現算,存檔退成備註)
               return (
                 <Fragment key={r.id}>
                   <tr style={{ cursor: 'pointer' }} onClick={() => setExpanded(isExpanded ? null : r.id)}>
@@ -176,7 +178,14 @@ export default function SalaryTable({ filtered, adjByRecord = {}, expanded, setE
                     <td style={{ color: 'var(--accent-orange)', fontSize: 12 }}>-{(r.health_insurance || 0).toLocaleString()}</td>
                     <td style={{ color: 'var(--accent-orange)', fontSize: 12 }}>{r.pension_self ? `-${r.pension_self.toLocaleString()}` : '-'}</td>
                     <td style={{ color: 'var(--accent-red)', fontSize: 12 }}>{r.income_tax ? `-${r.income_tax.toLocaleString()}` : '-'}</td>
-                    <td style={{ fontWeight: 800, color: 'var(--accent-green)', fontSize: 15 }}>{fmt(r.net_salary)}</td>
+                    <td style={{ fontWeight: 800, color: 'var(--accent-green)', fontSize: 15 }}>
+                      {fmt(r.net_salary)}
+                      {r._is_computed && Math.abs(n(r.net_salary) - savedNet) > 1 && (
+                        <div style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-muted)' }}>
+                          存檔 {fmt(savedNet)}
+                        </div>
+                      )}
+                    </td>
                     <td>
                       <button className="btn btn-secondary" style={{ padding: '2px 8px', fontSize: 11 }} onClick={e => { e.stopPropagation(); openEdit(r) }}>編輯</button>
                     </td>

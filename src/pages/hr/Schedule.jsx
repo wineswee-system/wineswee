@@ -412,6 +412,17 @@ export default function Schedule() {
     if (error) toast.error('時薪儲存失敗：' + error.message)
   }
   const lockedDates = new Set((activeDates || []).filter(d => lockedMonths.has(d.slice(0, 7))))
+  // 全部門市模式:每格鎖定要看「該員工的店 + 月份」有無鎖(currentStore 為 null → lockedDates 會是空的)。
+  // 單店模式沿用 lockedDates(以下 Set 也含當前店,冗餘但無害)。key = `${store_id}|${YYYY-MM}`。
+  const lockedStoreMonths = new Set(
+    (storeFilter === '' ? allMonthLocks : monthLocks).map(r => `${r.store_id}|${r.month}`)
+  )
+  const isCellLocked = (emp, date) => {
+    if (!date) return false
+    if (lockedDates.has(date)) return true
+    const sid = emp?.store_id
+    return sid != null && lockedStoreMonths.has(`${sid}|${date.slice(0, 7)}`)
+  }
   // 當前畫面（cycle 可能跨月）碰到的月份，給狀態列「逐月鎖定/解鎖」用
   const viewMonths = [...new Set((activeDates || []).map(d => d.slice(0, 7)))].sort()
   // 我可排班的門市範圍：admin/super_admin 或有 schedule.view_all(如營運部經理) → 全部；
@@ -644,7 +655,7 @@ export default function Schedule() {
     for (let i = eMin; i <= eMax; i++) {
       for (let j = dMin; j <= dMax; j++) {
         const date = activeDates[j]
-        if (lockedDates?.has?.(date)) continue   // 鎖定月份跳過
+        if (isCellLocked(emps[i], date)) continue   // 鎖定月份跳過(全門市:看該員工的店該月)
         // 平鋪:用 (offset % 剪貼簿尺寸) 取對應格 → 複製 1 格會填滿整個框選
         const cell = schedClipboard.cells[(i - eMin) % schedClipboard.rows][(j - dMin) % schedClipboard.cols]
         ops.push({ empName: emps[i].name, date, cell, store: emps[i].store || null })
@@ -794,6 +805,8 @@ export default function Schedule() {
 
   const handleSetShift = async (empName, date, shift, actualStart, actualEnd, sourceStore) => {
     if (!canEditSchedule) return
+    // 鎖定守門(所有填班路徑的最後防線:鍵盤/拖曳/貼上/程式)。全門市:看該員工的店該月是否鎖定
+    if (isCellLocked(employees.find(e => e.name === empName), date)) return
 
     // Real-time validation before saving
     if (!isAbsence(shift)) {
@@ -847,6 +860,7 @@ export default function Schedule() {
 
   const handleDeleteShift = async (empName, date) => {
     if (!canEditSchedule) return
+    if (isCellLocked(employees.find(e => e.name === empName), date)) return  // 鎖定守門(同上)
     const existing = schedules.find(s => s.employee === empName && s.date === date)
     if (!existing) return
     const { error } = await supabase.from('schedules').delete().eq('id', existing.id)
@@ -2044,6 +2058,7 @@ export default function Schedule() {
           })()}
           onClickEmployeeBadge={(empName) => { setComplianceFilterEmp(empName || null); setShowComplianceModal(true) }}
           lockedDates={lockedDates}
+          lockedStoreMonths={lockedStoreMonths}
         />
         </div>
       )}

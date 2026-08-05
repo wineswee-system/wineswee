@@ -41,7 +41,8 @@ export default function MonthScheduleTable({
   onSaveWage = null,     // (wage) => void;有值+可編輯才顯示時薪輸入格
   violationsByEmp = {},   // empName → { errors: N, warnings: N }
   onClickEmployeeBadge,   // 點 badge 開合規 modal
-  lockedDates = new Set(),  // Set<'YYYY-MM-DD'> — 鎖定（已發布）的日期，cell 不可編輯
+  lockedDates = new Set(),  // Set<'YYYY-MM-DD'> — 鎖定（已發布）的日期，cell 不可編輯（單店模式）
+  lockedStoreMonths = new Set(),  // Set<`${store_id}|${YYYY-MM}`> — 全門市模式:依員工的店該月是否鎖定
   onReorder,              // (draggedId, targetId) => void — 拖拉調整員工顯示順序
 }) {
   const isDateLocked = (date) => lockedDates && lockedDates.has(date)
@@ -211,6 +212,7 @@ export default function MonthScheduleTable({
                       violationsByEmp={violationsByEmp}
                       onClickEmployeeBadge={onClickEmployeeBadge}
                       lockedDates={lockedDates}
+                      lockedStoreMonths={lockedStoreMonths}
                       empHours={empHours}
                       onReorder={onReorder}
                     />
@@ -250,6 +252,7 @@ export default function MonthScheduleTable({
                     violationsByEmp={violationsByEmp}
                     onClickEmployeeBadge={onClickEmployeeBadge}
                     lockedDates={lockedDates}
+                    lockedStoreMonths={lockedStoreMonths}
                     empHours={empHours}
                     onReorder={onReorder}
                   />
@@ -341,10 +344,18 @@ function EmployeeRow({
   pendingLeaveMap = {}, partialLeaveMap = {}, schedules = [],
   violationsByEmp = {}, onClickEmployeeBadge,
   lockedDates = new Set(),
+  lockedStoreMonths = new Set(),  // Set<`${store_id}|${YYYY-MM}`> — 全門市模式:依本列員工的店該月是否鎖定
   onReorder,
   empHours = {},
 }) {
-  const isDateLocked = (date) => lockedDates && lockedDates.has(date)
+  const isDateLocked = (date) => {
+    if (lockedDates && lockedDates.has(date)) return true  // 單店模式(或跨月共同鎖)
+    // 全門市模式:currentStore 為 null → lockedDates 空,改看「本列員工的店 + 月份」
+    if (emp?.store_id != null && lockedStoreMonths && lockedStoreMonths.size) {
+      return lockedStoreMonths.has(`${emp.store_id}|${date.slice(0, 7)}`)
+    }
+    return false
+  }
   const v = violationsByEmp[emp.name] || { errors: 0, warnings: 0 }
   let workDays = 0
   let restDays = 0

@@ -30,9 +30,23 @@ function getShiftStyle(shiftLabel, shiftDefs) {
 export default function ScheduleBuilderGrid({
   employees, dates, shiftDefs, storeSettings, assignments,
   handleSetShift, handleDeleteShift,
-  lockedDates = new Set(),  // Set<'YYYY-MM-DD'> — 鎖定（已發布）的日期，cell 不可編輯
+  lockedDates = new Set(),  // Set<'YYYY-MM-DD'> — 鎖定（已發布）的日期，cell 不可編輯（單店模式）
+  lockedStoreMonths = new Set(),  // Set<`${store_id}|${YYYY-MM}`> — 全門市模式:依員工的店該月是否鎖定
 }) {
-  const isLocked = (date) => lockedDates && lockedDates.has(date)
+  // 依員工名查其店 store_id → 全門市模式下每格鎖定要看該員工的店該月有無鎖
+  const empStoreByName = useMemo(() => {
+    const m = new Map()
+    for (const e of employees) m.set(e.name, e.store_id)
+    return m
+  }, [employees])
+  const isLocked = (date, empName) => {
+    if (lockedDates && lockedDates.has(date)) return true
+    if (empName && lockedStoreMonths && lockedStoreMonths.size) {
+      const sid = empStoreByName.get(empName)
+      if (sid != null) return lockedStoreMonths.has(`${sid}|${date.slice(0, 7)}`)
+    }
+    return false
+  }
   const [editCell, setEditCell] = useState(null)
   const [dragShift, setDragShift] = useState(null)
   const [dragSource, setDragSource] = useState(null)
@@ -142,10 +156,10 @@ export default function ScheduleBuilderGrid({
       const pi = key.lastIndexOf('|')
       const empName = key.slice(0, pi)
       const date = key.slice(pi + 1)
-      if (isLocked(date)) continue  // silent skip
+      if (isLocked(date, empName)) continue  // silent skip
       handleSetShift(empName, date, shift.label, shift.start_time || null, shift.end_time || null, null)
     }
-  }, [selectedCells, handleSetShift, lockedDates])  // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedCells, handleSetShift, lockedDates, lockedStoreMonths])  // eslint-disable-line react-hooks/exhaustive-deps
 
   // 複製：取 selected cells 的相對 pattern
   const copySelection = useCallback(() => {
@@ -188,11 +202,11 @@ export default function ScheduleBuilderGrid({
       const r = minRow + c.rowOffset
       const d = minCol + c.colOffset
       if (r < 0 || r >= empNames.length || d < 0 || d >= dates.length) continue
-      if (isLocked(dates[d])) continue  // 鎖定日期 silent skip
+      if (isLocked(dates[d], empNames[r])) continue  // 鎖定日期 silent skip
       if (c.shift) handleSetShift(empNames[r], dates[d], c.shift, c.actual_start || null, c.actual_end || null, null)
       else handleDeleteShift(empNames[r], dates[d])
     }
-  }, [clipboard, selectedCells, employees, dates, handleSetShift, handleDeleteShift, lockedDates])  // eslint-disable-line react-hooks/exhaustive-deps
+  }, [clipboard, selectedCells, employees, dates, handleSetShift, handleDeleteShift, lockedDates, lockedStoreMonths])  // eslint-disable-line react-hooks/exhaustive-deps
 
   // 刪除已選 — 鎖定的跳過
   const deleteSelection = useCallback(() => {
@@ -200,10 +214,10 @@ export default function ScheduleBuilderGrid({
     for (const key of selectedCells) {
       const pi = key.lastIndexOf('|')
       const date = key.slice(pi + 1)
-      if (isLocked(date)) continue  // silent skip
+      if (isLocked(date, key.slice(0, pi))) continue  // silent skip
       handleDeleteShift(key.slice(0, pi), date)
     }
-  }, [selectedCells, handleDeleteShift, lockedDates])  // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedCells, handleDeleteShift, lockedDates, lockedStoreMonths])  // eslint-disable-line react-hooks/exhaustive-deps
 
   // 鍵盤快捷
   useEffect(() => {
@@ -553,7 +567,7 @@ export default function ScheduleBuilderGrid({
                     const dow = new Date(date).getDay()
                     const isWeekend = dow === 0 || dow === 6
                     const style = shift ? getShiftStyle(shift, shiftDefs) : {}
-                    const cellLocked = isLocked(date)
+                    const cellLocked = isLocked(date, emp.name)
 
                     return (
                       <td

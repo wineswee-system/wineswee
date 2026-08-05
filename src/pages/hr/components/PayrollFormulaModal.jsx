@@ -81,13 +81,34 @@ function OvertimeDetailTable({ rows, hourlyRate, isHourly }) {
   // 每筆 row 的金額/倍率 label 由 backend 算好（payrollCalc.js → calcRowPayAndLabel）
   // 因為 holiday 倍率要看員工分類（PT ×2 / 行政 ×1 / 門市 1.34/1.67），UI 不再自算
   // fallback：舊資料沒 _pay 時用最基本算法（不分流，weekday 階梯）
+  // 休息日 deem 擬制:≤4→4、4<h<8→8、≥8→實際(上限12)。對齊 payrollCalc.js
+  const deemHours = (h) => h <= 4 ? 4 : h < 8 ? 8 : Math.min(h, 12)
+  // 明細=「每筆獨立金額」。引擎的 _pay 是「額外(邊際)」值,休息日等已計入主項的會回 0,
+  //   直接顯示會誤導(有付卻標0)。故:引擎 _pay>0 才採用(保留 holiday 依員工分類的倍率);
+  //   _pay 為 0/缺 → 自己照類別獨立算,讓每筆都顯示真實獨立金額。純顯示,不影響實發。
   const calcRowPay = (row) => {
-    if (typeof row._pay === 'number') return row._pay
-    const hours = row.hours || 0
-    // fallback：薪資金額一律無條件進位（對齊 backend 跟工資不可少給原則）
-    return hours <= 2
-      ? Math.ceil(hours * hourlyRate * 1.34)
-      : Math.ceil(2 * hourlyRate * 1.34 + (hours - 2) * hourlyRate * 1.67)
+    if (typeof row._pay === 'number' && row._pay > 0) return row._pay
+    const h = Number(row.hours) || 0
+    if (h <= 0) return 0
+    const cat = row.category || 'weekday'
+    if (cat === 'restday') {
+      if (isHourly) return Math.ceil(h * hourlyRate * 2)
+      const dh = deemHours(h)
+      const rd1 = Math.min(dh, 2), rd2 = Math.min(Math.max(dh - 2, 0), 6), rd3 = Math.max(dh - 8, 0)
+      return Math.ceil(rd1 * hourlyRate * 1.34 + rd2 * hourlyRate * 1.67 + rd3 * hourlyRate * 2.67)
+    }
+    if (cat === 'weekly_off') {
+      if (isHourly) return Math.ceil(h * hourlyRate * 2)
+      return Math.ceil(Math.min(h, 8) * hourlyRate + Math.max(h - 8, 0) * hourlyRate * 2)
+    }
+    if (cat === 'holiday') {
+      if (isHourly) return Math.ceil(h * hourlyRate * 2)
+      return Math.ceil(8 * hourlyRate + Math.min(Math.max(h - 8, 0), 2) * hourlyRate * 1.34 + Math.max(h - 10, 0) * hourlyRate * 1.67)
+    }
+    // weekday(平日):薪資金額一律無條件進位(工資不可少給)
+    return h <= 2
+      ? Math.ceil(h * hourlyRate * 1.34)
+      : Math.ceil(2 * hourlyRate * 1.34 + (h - 2) * hourlyRate * 1.67)
   }
   const rateLabelFor = (row) => {
     if (row._rate_label) return row._rate_label

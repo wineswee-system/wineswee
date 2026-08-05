@@ -113,6 +113,7 @@ export default function Schedule() {
   const [publishStatus, setPublishStatus] = useState(null) // { status: 'draft'|'published', published_at } — 發布狀態（cycle）
   const [publishStatusRows, setPublishStatusRows] = useState([]) // 多筆 cycle 級別發布狀態
   const [monthLocks, setMonthLocks] = useState([]) // schedule_month_locks: [{store_id, month, locked_at, locked_by}] — 月鎖（對齊薪資）
+  const [allMonthLocks, setAllMonthLocks] = useState([]) // 全部門市模式:所有可排門市的月鎖，供「一次全鎖」聚合狀態用
   const [dailyRevenue, setDailyRevenue] = useState({}) // date → 預估業績（人事成本比試算用）
   const [storeSettings, setStoreSettings] = useState(null)
   const [staffing, setStaffing] = useState([])
@@ -458,6 +459,49 @@ export default function Schedule() {
     if (error) { toast.error('解鎖失敗：' + error.message); return }
     await reloadMonthLocks()
     toast.success(`已解鎖 ${month}`)
+  }
+
+  // ── 全部門市模式：載入所有可排門市的月鎖 + 一次全鎖/全解 ─────────────────
+  const reloadAllMonthLocks = async (ids) => {
+    if (!ids || ids.length === 0) { setAllMonthLocks([]); return }
+    const { data } = await supabase.from('schedule_month_locks').select('*').in('store_id', ids)
+    setAllMonthLocks(data || [])
+  }
+  useEffect(() => {
+    if (storeFilter !== '') return  // 只在「全部門市」時載入聚合鎖定狀態
+    reloadAllMonthLocks(scopedLocations.map(l => l.id))
+  }, [storeFilter, locations, myStoreIds, mySectionIds]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 一次鎖定全門市（逐店呼叫既有 lock_schedule_month RPC，idempotent；不動單店流程）
+  const handleLockAllStores = async (month) => {
+    if (!canLockSchedule) return
+    const stores = scopedLocations
+    if (stores.length === 0) return
+    if (!(await confirm({ message: `確定一次鎖定全部 ${stores.length} 間門市的 ${month} 班表？\n\n鎖定後各店該月班表不能再改，薪資才能結算（薪資結算前一定要先鎖）。` }))) return
+    const results = await Promise.all(stores.map(s =>
+      supabase.rpc('lock_schedule_month', { p_store_id: s.id, p_month: month })
+        .then(({ error }) => ({ store: s.name, error }))
+    ))
+    const failed = results.filter(r => r.error)
+    await reloadAllMonthLocks(stores.map(s => s.id))
+    if (failed.length) toast.error(`鎖定完成，但 ${failed.length} 間失敗：${failed.map(f => f.store).join('、')}`)
+    else toast.success(`已鎖定全門市 ${month}（${stores.length} 間）`)
+  }
+
+  // 一次解鎖全門市（admin / super_admin only）
+  const handleUnlockAllStores = async (month) => {
+    if (!canLockSchedule) return
+    const stores = scopedLocations
+    if (stores.length === 0) return
+    if (!(await confirm({ message: `確定一次解鎖全部 ${stores.length} 間門市的 ${month}？\n\n解鎖後各店該月可再編輯。注意：薪資結算前請再鎖回。` }))) return
+    const results = await Promise.all(stores.map(s =>
+      supabase.rpc('unlock_schedule_month', { p_store_id: s.id, p_month: month })
+        .then(({ error }) => ({ store: s.name, error }))
+    ))
+    const failed = results.filter(r => r.error)
+    await reloadAllMonthLocks(stores.map(s => s.id))
+    if (failed.length) toast.error(`解鎖完成，但 ${failed.length} 間失敗：${failed.map(f => f.store).join('、')}`)
+    else toast.success(`已解鎖全門市 ${month}（${stores.length} 間）`)
   }
 
   // Run compliance check when schedules update（debounce 250ms：連續填格時只在停下後驗一次，
@@ -1487,6 +1531,40 @@ export default function Schedule() {
                         background: 'rgba(245,158,11,0.12)', color: 'var(--accent-orange)',
                         border: '1px solid var(--accent-orange)', cursor: 'pointer',
                       }} title="解鎖（需鎖定/解鎖班表權限）">🔓 解鎖 {m}</button>
+                    )}
+                  </span>
+                )
+              })}
+              {/* 全部門市模式：一次鎖定/解鎖所有可排門市（省得一間一間鎖） */}
+              {storeFilter === '' && canLockSchedule && viewMonths.map(m => {
+                const total = scopedLocations.length
+                const lockedCount = new Set(allMonthLocks.filter(r => r.month === m).map(r => r.store_id)).size
+                const allLocked = total > 0 && lockedCount >= total
+                return (
+                  <span key={`all-${m}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{
+                      padding: '2px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700,
+                      background: allLocked ? 'rgba(16,185,129,0.12)' : 'rgba(245,158,11,0.12)',
+                      color: allLocked ? 'var(--accent-green)' : 'var(--accent-orange)',
+                      border: `1px solid ${allLocked ? 'rgba(16,185,129,0.35)' : 'rgba(245,158,11,0.35)'}`,
+                    }} title={`全門市 ${m}：${lockedCount}/${total} 間已鎖定`}>
+                      {allLocked ? `🔒 ${m} 全門市已鎖` : `🔓 ${m} 全門市 ${lockedCount}/${total} 已鎖`}
+                    </span>
+                    {!allLocked && (
+                      <button onClick={() => handleLockAllStores(m)} style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 5,
+                        padding: '7px 16px', borderRadius: 8, fontSize: 13, fontWeight: 700, lineHeight: 1,
+                        background: 'var(--accent-green-dim)', color: 'var(--accent-green)',
+                        border: '1px solid var(--accent-green)', cursor: 'pointer',
+                      }} title={`一次鎖定全部 ${total} 間門市的 ${m} 班表`}>🔒 一次鎖定全門市 {m}</button>
+                    )}
+                    {lockedCount > 0 && (
+                      <button onClick={() => handleUnlockAllStores(m)} style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 5,
+                        padding: '7px 16px', borderRadius: 8, fontSize: 13, fontWeight: 700, lineHeight: 1,
+                        background: 'rgba(245,158,11,0.12)', color: 'var(--accent-orange)',
+                        border: '1px solid var(--accent-orange)', cursor: 'pointer',
+                      }} title={`一次解鎖全部門市的 ${m}`}>🔓 解鎖全門市 {m}</button>
                     )}
                   </span>
                 )

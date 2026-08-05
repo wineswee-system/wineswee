@@ -115,7 +115,8 @@ export default function Salary() {
   const canSendPayslip = hasPermission('salary.send_payslip') // 發送薪資條 LINE
 
   const [records, setRecords] = useState([])
-  const [adjByRecord, setAdjByRecord] = useState({})  // salary_record_id → [{type,label,amount}] 手動加項/扣項
+  const [adjByRecord, setAdjByRecord] = useState({})  // salary_record_id → [{type,label,amount}] 手動加項/扣項(顯示)
+  const [rawAdjByRecord, setRawAdjByRecord] = useState({})  // salary_record_id → [raw adjustment rows](批次重算自動套回用)
   const [bonusRecords, setBonusRecords] = useState([])
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
@@ -168,7 +169,7 @@ export default function Salary() {
       supabase.from('departments').select('*').eq('organization_id', orgId).order('name'),
       supabase.from('stores').select('*').eq('organization_id', orgId).order('name'),
       supabase.rpc('web_my_salary_visible_store_ids'),  // 薪資可見門市(_can_see_store_for_emp − 總部hq)
-      supabase.from('salary_adjustments').select('salary_record_id, source_type, new_value')
+      supabase.from('salary_adjustments').select('salary_record_id, source_type, field, new_value')
         .in('source_type', ['manual_bonus', 'manual_backpay', 'manual_deduction']).is('superseded_at', null),
     ]).then(([s, b, e, d, st, visRes, adjRes]) => {
       const visIds = Array.isArray(visRes?.data) ? visRes.data : null
@@ -184,9 +185,10 @@ export default function Salary() {
         recs = recs.filter(r => storeEmps.has(r.employee))
       }
       setRecords(recs)
-      // 手動加項/扣項摘要(給首頁每列直接顯示,不用點進調整頁)
-      const adjMap = {}
+      // 手動加項/扣項:摘要(首頁顯示)+ raw(批次重算時自動套回)
+      const adjMap = {}, rawMap = {}
       ;(adjRes?.data || []).forEach(a => {
+        ;(rawMap[a.salary_record_id] ||= []).push(a)
         const amt = Number(a.new_value?.amount) || 0
         if (amt <= 0) return
         ;(adjMap[a.salary_record_id] ||= []).push({
@@ -196,6 +198,7 @@ export default function Salary() {
         })
       })
       setAdjByRecord(adjMap)
+      setRawAdjByRecord(rawMap)
       setBonusRecords(b.data || [])
       setEmployees(emps)
       setDepartments(d.data || [])
@@ -402,7 +405,16 @@ export default function Salary() {
   const handleBatchSaveCore = async (status, navigateAfter = false) => {
     setBatchSaving(true)
     try {
-      const payloads = batchPreview.map(p => ({
+      // ★ 重批次自動黏回既有逐筆調整:調整=net上的 +紅包 +補發 −扣項(直接加減,不重算gross、不漏特休折現/資遣費)
+      const nn = (v) => Number(v) || 0
+      const payloads = batchPreview.map(p => {
+        const rec = records.find(r => r.employee === p.employee && r.month === month)
+        const rawAdjs = rec ? (rawAdjByRecord[rec.id] || []) : []
+        const addSum     = rawAdjs.filter(a => a.source_type === 'manual_bonus'   || a.source_type === 'manual_backpay').reduce((s, a) => s + nn(a.new_value?.amount), 0)
+        const backpaySum = rawAdjs.filter(a => a.source_type === 'manual_backpay').reduce((s, a) => s + nn(a.new_value?.amount), 0)
+        const deductSum  = rawAdjs.filter(a => a.source_type === 'manual_deduction').reduce((s, a) => s + nn(a.new_value?.amount), 0)
+        const deductNote = rawAdjs.filter(a => a.source_type === 'manual_deduction').map(a => a.new_value?.label || '扣項').join('、')
+        return {
         employee:             p.employee,
         month,
         base_salary:          p.base_salary,
@@ -417,18 +429,19 @@ export default function Salary() {
         pension_self_pct:     p.pension_self_pct      || 0,
         absence_deduction:    p.absenceDeduction      || 0,
         late_deduction:       p.lateDeduction         || 0,
-        other_deduction:      0,
-        other_deduction_note: '',
+        other_deduction:      deductSum,
+        other_deduction_note: deductSum > 0 ? deductNote : '',
+        back_pay_adjustment:  backpaySum,
         allowances_total:     (p.role_allowance || 0) + (p.meal_allowance || 0) + (p.transport_allowance || 0) + (p.attendance_bonus || 0) + (p.custom_allowances_total || 0),
         insurance:            (p.laborInsurance || 0) + (p.healthInsurance || 0),
-        deductions_total:     p.totalDeductions       || 0,
-        net_salary:           p.netSalary             || 0,
+        deductions_total:     (p.totalDeductions || 0) + deductSum,
+        net_salary:           (p.netSalary || 0) + addSum - deductSum,
         labor_insurance:      p.laborInsurance        || 0,
         health_insurance:     p.healthInsurance       || 0,
         pension_self:         p.pension               || 0,
         income_tax:           p.incomeTax             || 0,
         unused_leave_payout:  p.unused_leave_payout   || 0,
-      }))
+      }})
       // status='draft' → 走 _with_status wrapper；其他 → 既有 v2 行為
       const isDraft = status === 'draft'
       const results = await Promise.all(

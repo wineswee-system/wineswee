@@ -279,7 +279,7 @@ export function estimateAdjustmentImpact(adjustment, hourlyRate = 0) {
       const newRate = factor(newV.mode || 'unpaid') * h
       return Math.round((oldRate - newRate) * days * 8)
     }
-  } else if (stype === 'manual_bonus' && field === 'amount') {
+  } else if ((stype === 'manual_bonus' || stype === 'manual_backpay') && field === 'amount') {
     return n(newV.amount)
   } else if (stype === 'manual_deduction' && field === 'amount') {
     return -n(newV.amount)

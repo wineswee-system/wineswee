@@ -50,7 +50,9 @@ function buildFullItems(d) {
     ['夜班津貼', d.night_allowance], ['跨區津貼', d.cross_store_allowance],
   ].forEach(([lbl, v]) => { if (n(v) > 0) push({ label: lbl, value: n(v), sign: '+', section: 'add', color: 'var(--accent-green)' }) })
   if (Array.isArray(d.custom_allowances)) {
-    d.custom_allowances.forEach(c => { if (n(c.amount) > 0) push({ label: c.name || '自訂津貼', value: n(c.amount), sign: '+', section: 'add', color: 'var(--accent-green)' }) })
+    // 夜間/跨店名目的自訂津貼已被引擎抽進「夜班津貼/跨區津貼」固定欄顯示,這裡排除避免重複列
+    //（對齊引擎 v_other_custom 的 WHERE name !~ '夜班|夜間|跨店|跨區'）
+    d.custom_allowances.forEach(c => { if (n(c.amount) > 0 && !/夜班|夜間|跨店|跨區/.test(c.name || '')) push({ label: c.name || '自訂津貼', value: n(c.amount), sign: '+', section: 'add', color: 'var(--accent-green)' }) })
   } else if (n(d.other_custom_total) > 0) {
     push({ label: '其他自訂津貼', value: n(d.other_custom_total), sign: '+', section: 'add', color: 'var(--accent-green)' })
   }

@@ -61,7 +61,7 @@ export default function PayslipRow({ record: rec, employee: emp, selectedRun, pr
             {rec.notice_wage > 0 && <DetailRow label="預告工資" value={fmt(rec.notice_wage)} />}
             {Array.isArray(rec.custom_allowances_breakdown) && rec.custom_allowances_breakdown.length > 0 && (
               <>
-                {rec.custom_allowances_breakdown.map((c, i) => (
+                {rec.custom_allowances_breakdown.filter(c => !/夜班|夜間|跨店|跨區/.test(c.name || '')).map((c, i) => (
                   <DetailRow key={i} label={`└ ${c.name}`} value={fmt(c.amount)} />
                 ))}
                 <DetailRow label="自訂津貼合計" value={fmt(rec.custom_allowances_total)} bold />

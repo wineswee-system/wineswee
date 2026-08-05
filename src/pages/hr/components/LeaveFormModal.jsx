@@ -3,7 +3,7 @@ import { Paperclip } from 'lucide-react'
 import Modal, { Field } from '../../../components/Modal'
 import SearchableSelect, { empOptions } from '../../../components/SearchableSelect'
 import Time24 from '../../../components/Time24'
-import { LEAVE_TYPES, getLeaveTypeInfo } from '../../../lib/leavePolicy'
+import { LEAVE_TYPES, getLeaveTypeInfo, leaveRequiresProof } from '../../../lib/leavePolicy'
 import { clearError } from '../../../lib/formValidation'
 import CarriedAttachments from '../../../components/CarriedAttachments'
 import { countWorkDays, snapToStep, diffHours } from '../../../lib/leaveDaysCalc'
@@ -276,8 +276,18 @@ export default function LeaveFormModal({
       <Field label="事由" required error={errors.reason} errorMsg="請填寫請假事由">
         <input className="form-input" type="text" style={{ width: '100%' }} placeholder="請輸入請假事由" value={form.reason} onChange={e => { set('reason', e.target.value); clearError('reason', setErrors) }} />
       </Field>
-      <Field label="附件（最多 5 個）">
+      <Field
+        label={leaveRequiresProof(form.type) ? '附件（證明）' : '附件（最多 5 個）'}
+        required={leaveRequiresProof(form.type)}
+        error={leaveRequiresProof(form.type) && errors.attachment}
+        errorMsg="請附上證明，以免被駁回"
+      >
         <div>
+          {leaveRequiresProof(form.type) && (
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent-orange)', marginBottom: 6 }}>
+              ⚠ 此假別請附上證明（診斷書／相關文件），以免被駁回
+            </div>
+          )}
           <CarriedAttachments atts={carriedAtts} onRemove={onRemoveCarried} />
           <input type="file" multiple accept="image/*,application/pdf"
             onChange={onFileSelect}

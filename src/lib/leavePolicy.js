@@ -294,6 +294,18 @@ export const LEAVE_TYPES = [
 ]
 
 // ══════════════════════════════════════
+//  需附證明的假別(沒附會被駁回)
+//  病/喪/婚/產/陪產/產檢/育嬰/公傷病 —— 與 DB _leave_requires_proof() 同步,
+//  後端 create_leave_request / liff_insert_leave_request 為權威鐵閘,此清單供前端即時必填標記+送出前 pre-check。
+// ══════════════════════════════════════
+export const PROOF_REQUIRED_LEAVE_CODES = [
+  'sick', 'bereavement', 'marriage', 'maternity', 'paternity', 'prenatal', 'parental', 'occupational',
+]
+export function leaveRequiresProof(code) {
+  return PROOF_REQUIRED_LEAVE_CODES.includes(code)
+}
+
+// ══════════════════════════════════════
 //  計算特休天數
 // ══════════════════════════════════════
 

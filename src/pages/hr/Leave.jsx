@@ -11,7 +11,7 @@ import { getSupervisor } from '../../lib/approval'
 import { useAuth } from '../../contexts/AuthContext'
 import DateRangeField from '../../components/DateRangeField'
 import { monthStartTW, todayTW } from '../../lib/datetime'
-import { LEAVE_TYPES, getAnnualLeaveEntitlement, getLeaveTypeInfo, validateLeaveRequest } from '../../lib/leavePolicy'
+import { LEAVE_TYPES, getAnnualLeaveEntitlement, getLeaveTypeInfo, validateLeaveRequest, leaveRequiresProof } from '../../lib/leavePolicy'
 import { getEffectiveBenefits, getStoreIdByName } from '../../lib/benefitPolicy'
 import { createApprovalWorkflow, getWorkflowForRecord, advanceWorkflow } from '../../lib/workflowIntegration'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -182,6 +182,13 @@ export default function Leave() {
     if (form.unit === 'day') requiredKeys.push('end_date')
     if (form.unit === 'hour') requiredKeys.push('start_time', 'end_time')
     if (!validateRequired(form, requiredKeys, setErrors)) return
+
+    // 證明必附:病/喪/婚/產/陪產/產檢/育嬰/公傷病 沒附附件擋下(後端 RPC 亦守門;此為即時 UX,含編輯重送)
+    if (leaveRequiresProof(form.type) && attachFiles.length === 0 && cloneSourceAtts.length === 0) {
+      setErrors(prev => ({ ...prev, attachment: true }))
+      setValidationMsg('此假別需附上證明（診斷書／相關文件），以免被駁回。請上傳附件後再送出。')
+      return
+    }
 
     // 解析假別 policy（之前漏宣告 → selectedPolicy.shortName 永遠 undefined，
     // 導致 leave_requests.type 存到 code 而不是中文 shortName）
@@ -359,6 +366,7 @@ export default function Leave() {
       p_start_time: form.unit === 'hour' ? form.start_time : null,
       p_end_time: form.unit === 'hour' ? form.end_time : null,
       p_reason: form.reason,
+      p_attachment_count: attachFiles.length + cloneSourceAtts.length,  // 後端證明必附守門用
     })
     if (createErr) { setValidationMsg(createErr.message); return }
     if (data) {

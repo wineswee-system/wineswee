@@ -76,7 +76,7 @@ export default function Collections() {
       supabase.from('deposit_records').select('*').eq('organization_id', orgId).order('created_at', { ascending: false }),
       supabase.from('deposit_payments').select('*').eq('organization_id', orgId).order('paid_date'),
       supabase.from('franchise_fees').select('*').eq('organization_id', orgId).order('created_at', { ascending: false }),
-      supabase.from('franchise_fee_investors').select('*').eq('organization_id', orgId),
+      supabase.from('franchise_fee_investors').select('*').eq('organization_id', orgId).order('amount', { ascending: false }).order('investor_id'),
       supabase.from('franchise_fee_payments').select('*').eq('organization_id', orgId).order('paid_date'),
       supabase.from('collection_investors').select('*').eq('organization_id', orgId).order('created_at', { ascending: false }),
     ])
@@ -294,7 +294,14 @@ function FranchiseTab({ orgId, profile, franchises, ffInvestors, ffPays, deposit
     return investors.filter(i => ok.has(i.id))
   }, [deposits, investors])
   const invById = useMemo(() => Object.fromEntries(investors.map(i => [i.id, i])), [investors])
-  const ffiByFf = useMemo(() => { const m = {}; ffInvestors.forEach(x => { (m[x.franchise_fee_id] ||= []).push(x) }); return m }, [ffInvestors])
+  // ★ 固定排序：記款會 UPDATE ffi 列 → 實體順序會變 → 每次 reload 區塊會跳。
+  //   照分攤額大→小(同額用 investor_id)排,順序穩定不再跳。
+  const ffiByFf = useMemo(() => {
+    const m = {}
+    ffInvestors.forEach(x => { (m[x.franchise_fee_id] ||= []).push(x) })
+    Object.values(m).forEach(arr => arr.sort((a, b) => n(b.amount) - n(a.amount) || String(a.investor_id).localeCompare(String(b.investor_id))))
+    return m
+  }, [ffInvestors])
   const paysByFf = useMemo(() => { const m = {}; ffPays.forEach(p => { (m[p.franchise_fee_id] ||= []).push(p) }); return m }, [ffPays])
 
   const allocSum = allocs.reduce((s, a) => s + n(a.amount), 0)

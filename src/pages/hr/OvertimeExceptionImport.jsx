@@ -105,6 +105,7 @@ export default function OvertimeExceptionImport() {
   const [parsed, setParsed] = useState([])          // CSV 預覽資料
   const [importing, setImporting] = useState(false)
   const [recentImports, setRecentImports] = useState([])
+  const [selOtx, setSelOtx] = useState(() => new Set())   // 勾選要刪的 otx id
   const [statsSearch, setStatsSearch] = useState('')
   const [showOnlyOver, setShowOnlyOver] = useState(false)
   // Google Sheet 直讀（記住上次貼的連結）
@@ -137,8 +138,10 @@ export default function OvertimeExceptionImport() {
           .eq('organization_id', orgId)
           .eq('is_exception', true)
           .is('deleted_at', null)
+          .gte('request_date', monthStart).lte('request_date', monthEnd)   // 只列本月額外加班
+          .order('request_date', { ascending: true })
           .order('exception_imported_at', { ascending: false, nullsFirst: false })
-          .limit(50),
+          .limit(1000),
       ])
 
       const tally = {}
@@ -153,6 +156,7 @@ export default function OvertimeExceptionImport() {
       setEmployees(empRes.data || [])
       setOtByEmp(tally)
       setRecentImports(recRes.data || [])
+      setSelOtx(new Set())
     } catch (err) {
       console.error('Load failed:', err)
       toast.error('載入失敗：' + (err.message || ''))
@@ -399,6 +403,19 @@ export default function OvertimeExceptionImport() {
     loadMonthStats()
     toast.success(`已刪除整批 ${count} 筆`)
   }
+  const toggleSel = (id) => setSelOtx(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s })
+  const toggleSelAll = () => setSelOtx(prev => prev.size === recentImports.length ? new Set() : new Set(recentImports.map(r => r.id)))
+  const handleDeleteSelected = async () => {
+    const ids = [...selOtx]
+    if (ids.length === 0) return
+    if (!window.confirm(`刪除勾選的 ${ids.length} 筆額外加班？\n\n(軟刪除,該月薪資要重算/重匯。可還原)`)) return
+    const { error } = await supabase.from('overtime_requests').update({ deleted_at: new Date().toISOString() }).in('id', ids)
+    if (error) { toast.error('刪除失敗：' + error.message); return }
+    setRecentImports(prev => prev.filter(r => !selOtx.has(r.id)))
+    setSelOtx(new Set())
+    loadMonthStats()
+    toast.success(`已刪除 ${ids.length} 筆`)
+  }
 
   const handleDownloadTemplate = () => {
     const blob = new Blob([CSV_TEMPLATE], { type: 'text/csv;charset=utf-8' })
@@ -573,19 +590,29 @@ export default function OvertimeExceptionImport() {
       {/* ─── 嵌入完整薪資管理（同 /hr/salary 全功能）─── */}
       <Salary />
 
-      {/* ─── 最近匯入紀錄 ─── */}
+      {/* ─── 本月額外加班（可勾選刪除，刪完可重新匯入） ─── */}
       <div className="card">
         <div className="card-header">
           <div className="card-title">
-            <FileSpreadsheet size={14} style={{ verticalAlign: 'middle' }} /> 最近匯入紀錄
+            <FileSpreadsheet size={14} style={{ verticalAlign: 'middle' }} /> {month} 額外加班紀錄
           </div>
-          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{recentImports.length} 筆</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {selOtx.size > 0 && (
+              <button className="btn" style={{ padding: '4px 12px', fontSize: 12, fontWeight: 700, background: 'var(--accent-red)', color: '#fff', border: 'none' }} onClick={handleDeleteSelected}>
+                🗑 刪除選取 ({selOtx.size})
+              </button>
+            )}
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{recentImports.length} 筆</span>
+          </div>
         </div>
         <div style={{ overflowX: 'auto', maxHeight: 320 }}>
           <div className="data-table-wrapper">
             <table className="data-table" style={{ fontSize: 12, width: '100%' }}>
               <thead>
                 <tr>
+                  <th style={{ width: 32, textAlign: 'center' }}>
+                    <input type="checkbox" checked={recentImports.length > 0 && selOtx.size === recentImports.length} onChange={toggleSelAll} title="全選/取消" />
+                  </th>
                   <th>員工</th>
                   <th>日期</th>
                   <th style={{ textAlign: 'right' }}>時數</th>
@@ -598,9 +625,12 @@ export default function OvertimeExceptionImport() {
               </thead>
               <tbody>
                 {recentImports.length === 0 ? (
-                  <tr><td colSpan={8} style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)' }}>尚無匯入紀錄</td></tr>
+                  <tr><td colSpan={9} style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)' }}>本月尚無額外加班紀錄</td></tr>
                 ) : recentImports.map(r => (
-                  <tr key={r.id}>
+                  <tr key={r.id} style={selOtx.has(r.id) ? { background: 'var(--accent-red-dim)' } : undefined}>
+                    <td style={{ textAlign: 'center' }}>
+                      <input type="checkbox" checked={selOtx.has(r.id)} onChange={() => toggleSel(r.id)} />
+                    </td>
                     <td>{r.employee}</td>
                     <td>{r.request_date}</td>
                     <td style={{ textAlign: 'right' }}>{r.ot_hours}</td>

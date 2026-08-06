@@ -292,6 +292,7 @@ export default function OvertimeExceptionImport() {
         .from('overtime_requests')
         .select('employee_id, request_date, ot_hours')
         .eq('is_exception', true)
+        .is('deleted_at', null)
         .in('employee_id', empIds)
         .in('request_date', dates)
       const dupSet = new Set((existing || []).map(o => `${o.employee_id}|${o.request_date}|${Number(o.ot_hours)}`))
@@ -373,6 +374,30 @@ export default function OvertimeExceptionImport() {
     }
     setParsed([])
     loadMonthStats()
+  }
+
+  // 刪除(軟刪 deleted_at)—引擎/去重都濾 deleted_at,薪資不再計此筆、可還原。刪完那月薪資要重算。
+  const handleDeleteOne = async (row) => {
+    if (!window.confirm(`刪除這筆加班例外？\n\n${row.employee}　${row.request_date}　${row.ot_hours}h\n\n(軟刪除,該月薪資將不再計此筆;需重新試算/入帳。可請工程還原)`)) return
+    const { error } = await supabase.from('overtime_requests').update({ deleted_at: new Date().toISOString() }).eq('id', row.id)
+    if (error) { toast.error('刪除失敗：' + error.message); return }
+    setRecentImports(prev => prev.filter(r => r.id !== row.id))
+    loadMonthStats()
+    toast.success('已刪除 1 筆')
+  }
+  const handleDeleteBatch = async (row) => {
+    const batch = row.exception_imported_at
+    if (!batch) return handleDeleteOne(row)
+    // 用 exception_imported_at 抓「整批」(可能超過清單只顯示的 50 筆,如 250 筆那批)
+    const { count } = await supabase.from('overtime_requests').select('*', { count: 'exact', head: true })
+      .eq('is_exception', true).eq('exception_imported_at', batch).is('deleted_at', null)
+    if (!window.confirm(`刪除「這整批匯入」？\n\n匯入時間：${batch.slice(0, 16).replace('T', ' ')}\n共 ${count} 筆\n\n(軟刪除整批,相關月份薪資要重算。可請工程還原)`)) return
+    const { error } = await supabase.from('overtime_requests').update({ deleted_at: new Date().toISOString() })
+      .eq('is_exception', true).eq('exception_imported_at', batch).is('deleted_at', null)
+    if (error) { toast.error('刪除失敗：' + error.message); return }
+    setRecentImports(prev => prev.filter(r => r.exception_imported_at !== batch))
+    loadMonthStats()
+    toast.success(`已刪除整批 ${count} 筆`)
   }
 
   const handleDownloadTemplate = () => {
@@ -568,11 +593,12 @@ export default function OvertimeExceptionImport() {
                   <th>原因</th>
                   <th>備註</th>
                   <th>匯入時間</th>
+                  <th style={{ textAlign: 'center' }}>操作</th>
                 </tr>
               </thead>
               <tbody>
                 {recentImports.length === 0 ? (
-                  <tr><td colSpan={7} style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)' }}>尚無匯入紀錄</td></tr>
+                  <tr><td colSpan={8} style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)' }}>尚無匯入紀錄</td></tr>
                 ) : recentImports.map(r => (
                   <tr key={r.id}>
                     <td>{r.employee}</td>
@@ -583,6 +609,10 @@ export default function OvertimeExceptionImport() {
                     <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.exception_note || '—'}</td>
                     <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                       {r.exception_imported_at?.slice(0, 16).replace('T', ' ')}
+                    </td>
+                    <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                      <button className="btn btn-secondary" style={{ padding: '2px 8px', fontSize: 11 }} onClick={() => handleDeleteOne(r)} title="刪除這一筆(軟刪)">刪除</button>
+                      <button className="btn btn-secondary" style={{ padding: '2px 8px', fontSize: 11, marginLeft: 4, color: 'var(--accent-red)', borderColor: 'var(--accent-red)' }} onClick={() => handleDeleteBatch(r)} title="刪除同一次匯入的整批">刪整批</button>
                     </td>
                   </tr>
                 ))}

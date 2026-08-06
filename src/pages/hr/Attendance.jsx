@@ -278,6 +278,10 @@ export default function Attendance() {
     (filtered.filter(r => r.hours > 0).length || 1),
     [filtered]
   )
+  const totalHours = useMemo(() =>
+    filtered.filter(r => r.hours > 0).reduce((s, r) => s + Number(r.hours), 0),
+    [filtered]
+  )
 
   // 「今日未打卡」只在「區間包含今天」時顯示 — 看過去區間時硬塞「今天 未打卡」row 沒意義
   // 加班單 → 獨立加班列（起訖時間當打卡、狀態=加班）
@@ -604,7 +608,7 @@ export default function Attendance() {
       </div>
 
       {tab === 'records' && <>
-      <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
+      <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(6, 1fr)' }}>
         <div className="stat-card" style={{ '--card-accent': 'var(--accent-green)', '--card-accent-dim': 'var(--accent-green-dim)' }}>
           <div className="stat-card-label">正常</div>
           <div className="stat-card-value">{filtered.filter(r => r.status === '正常').length}</div>
@@ -624,6 +628,10 @@ export default function Attendance() {
         <div className="stat-card" style={{ '--card-accent': 'var(--accent-cyan)', '--card-accent-dim': 'var(--accent-cyan-dim)' }}>
           <div className="stat-card-label">平均工時</div>
           <div className="stat-card-value">{avgHours.toFixed(1)}h</div>
+        </div>
+        <div className="stat-card" style={{ '--card-accent': 'var(--accent-blue)', '--card-accent-dim': 'var(--accent-blue-dim)' }}>
+          <div className="stat-card-label">總工時</div>
+          <div className="stat-card-value">{totalHours.toFixed(1)}h</div>
         </div>
       </div>
 

@@ -40,6 +40,7 @@ export const PAGE_PERM = {
   '/hr/bonus':            'bonus.view',
   // 薪資結構設定 / 薪資發放作業 = HR/管理功能（非員工自助頁），堵繞 URL。
   // 用 sidebar 既有的 nav.salary.basic（PATH_REQUIRES 已用同碼隱藏這兩條），admin/HR 進得去。
+  '/hr/salary-summary':    'nav.salary.basic',
   '/hr/salary-structures': 'nav.salary.basic',
   '/hr/payroll':           'nav.salary.basic',
   '/hr/surveys':          'survey.view_result',

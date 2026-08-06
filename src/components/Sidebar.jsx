@@ -308,6 +308,7 @@ export default function Sidebar() {
     '/hr/schedule-xlsx-import':   'nav.schedule.basic',   // manager+（排班匯入）
     // ── 薪酬與福利 ──
     '/hr/salary':            'nav.salary.basic',
+    '/hr/salary-summary':    'nav.salary.basic',
     '/hr/salary-structures': 'nav.salary.basic',
     '/hr/payroll':           'nav.salary.basic',
     '/hr/severance':         'nav.salary.advanced',

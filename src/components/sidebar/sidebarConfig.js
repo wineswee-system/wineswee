@@ -307,6 +307,7 @@ export const groupNav = {
       icon: DollarSign,
       children: [
         { icon: DollarSign, label: '薪資管理', path: '/hr/salary' },
+        { icon: DollarSign, label: '薪資統整', path: '/hr/salary-summary' },
         { icon: DollarSign, label: '薪資結構', path: '/hr/salary-structures' },
         { icon: CreditCard, label: '薪資發放', path: '/hr/payroll' },
         { icon: Scale, label: '資遣管理', path: '/hr/severance' },

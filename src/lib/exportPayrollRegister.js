@@ -36,6 +36,11 @@ const COLS = [
   { h: '底薪', group: '薪資科目加項', w: 8, get: () => 0 },
   { h: '微調加項', group: '薪資科目加項', w: 10, get: (p) => n(p.manual_bonus) },            // 逐筆調整:補發/紅包等手動加項(有值才出欄)
   { h: '微調加項說明', group: '薪資科目加項', txt: true, noteCol: true, w: 18, get: (p) => p._adjust_note_add || '' },  // 加項側名目;有值才出欄
+  // 對帳保險:各加項欄若加不回應發總額(有引擎算進 gross 但沒獨立欄的項目)→ 差額顯示在此,確保永不憑空消失。有值才出欄。
+  { h: '其他加項', group: '薪資科目加項', residual: true, w: 10, get: (p, e) => {
+    const shown = COLS.filter(c => (c.group === '薪資結構' || c.group === '薪資科目加項') && !c.residual && !c.txt).reduce((s, c) => s + n(c.get(p, e)), 0)
+    const g = Math.round((n(p.gross) + n(p.manual_bonus)) - shown); return g > 1 ? g : 0
+  } },
   // ── 薪資科目扣項 ──
   { h: '勞保費', group: '薪資科目扣項', w: 9, get: (p) => n(p.laborInsurance) },
   { h: '健保費', group: '薪資科目扣項', w: 9, get: (p) => n(p.healthInsurance) },
@@ -50,6 +55,11 @@ const COLS = [
   { h: '微調扣款', group: '薪資科目扣項', w: 10, get: (p) => n(p.manual_deduction) },        // 逐筆調整:手動扣項
   { h: '微調扣款說明', group: '薪資科目扣項', txt: true, noteCol: true, w: 18, get: (p) => p._adjust_note_ded || '' },  // 扣款側名目(如「調整薪資差額」);有值才出欄
   { h: '所得稅', group: '薪資科目扣項', w: 8, get: (p) => n(p.incomeTax) },
+  // 對帳保險:各扣項欄若加不回應減總額(有引擎算進 total 但沒獨立欄的項目)→ 差額顯示在此。有值才出欄。
+  { h: '其他扣款', group: '薪資科目扣項', residual: true, w: 10, get: (p, e) => {
+    const shown = COLS.filter(c => c.group === '薪資科目扣項' && !c.residual && !c.txt).reduce((s, c) => s + n(c.get(p, e)), 0)
+    const g = Math.round((n(p.totalDeductions) + n(p.manual_deduction)) - shown); return g > 1 ? g : 0
+  } },
   // ── 薪資總計(永遠顯示)──
   { h: '應稅所得', group: '薪資總計', always: true, w: 10, get: (p) => Math.max(0, n(p.gross) - n(p.regular_overtime_pay) - n(p.meal_allowance) - n(p.unused_leave_payout) - n(p.unpaidDeduction)) },
   // 應稅所得:依決策不因微調變動(補發/紅包不併入課稅基礎),維持引擎值

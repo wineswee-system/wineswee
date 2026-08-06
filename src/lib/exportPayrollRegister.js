@@ -25,6 +25,8 @@ const COLS = [
   // ── 薪資科目加項 ──
   { h: '免稅加班費', group: '薪資科目加項', w: 12, get: (p) => n(p.regular_overtime_pay) },
   { h: '特休未休折抵費', group: '薪資科目加項', w: 15, get: (p) => n(p.unused_leave_payout) },
+  { h: '資遣費', group: '薪資科目加項', w: 10, get: (p) => n(p.severance_amount) },              // 離職結算:資遣費(有值才出欄;原本漏欄→應發對不齊)
+  { h: '預告工資', group: '薪資科目加項', w: 10, get: (p) => n(p.severance_notice_wage) },       // 離職結算:預告工資(同上)
   { h: '額外加班費', group: '薪資科目加項', w: 11, get: (p) => n(p.extra_overtime_pay) },
   { h: '全勤獎金', group: '薪資科目加項', w: 9, get: (p) => n(p.attendance_bonus) },
   { h: '獎金', group: '薪資科目加項', w: 9, get: (p) => n(p.policyBonus) },

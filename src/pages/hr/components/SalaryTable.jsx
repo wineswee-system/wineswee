@@ -38,7 +38,20 @@ function buildFullItems(d, adjustments = []) {
   const dedAdjSum = dedAdj.reduce((s, a) => s + n(a.amount), 0)
   push({ label: '底薪', value: n(d.base_salary), sign: '', section: 'add', color: 'var(--text-primary)' })
 
-  // 加班費（分類 + 時數）— 每類別 = legal(otPay*) + exception(_ot_exc_*_pay) 相加。
+  // ── 加項順序:底薪 → 津貼 → 加班費 → 其他加項(獎金/離職/微調/殘差) ──
+  // 1) 津貼（往上，逐項）
+  ;[['主管加給', d.role_allowance], ['餐費津貼', d.meal_allowance], ['交通津貼', d.transport_allowance],
+    ['夜班津貼', d.night_allowance], ['跨區津貼', d.cross_store_allowance],
+  ].forEach(([lbl, v]) => { if (n(v) > 0) push({ label: lbl, value: n(v), sign: '+', section: 'add', color: 'var(--accent-green)' }) })
+  if (Array.isArray(d.custom_allowances)) {
+    // 夜間/跨店名目的自訂津貼已被引擎抽進「夜班津貼/跨區津貼」固定欄顯示,這裡排除避免重複列
+    //（對齊引擎 v_other_custom 的 WHERE name !~ '夜班|夜間|跨店|跨區'）
+    d.custom_allowances.forEach(c => { if (n(c.amount) > 0 && !/夜班|夜間|跨店|跨區/.test(c.name || '')) push({ label: c.name || '自訂津貼', value: n(c.amount), sign: '+', section: 'add', color: 'var(--accent-green)' }) })
+  } else if (n(d.other_custom_total) > 0) {
+    push({ label: '其他自訂津貼', value: n(d.other_custom_total), sign: '+', section: 'add', color: 'var(--accent-green)' })
+  }
+
+  // 2) 加班費（第二段，分類 + 時數）— 每類別 = legal(otPay*) + exception(_ot_exc_*_pay) 相加。
   //   兩者相加 = regular+extra = gross 的加班,對得回應發。★別用逐筆 row 的 _pay(休息日混合費率該欄有 bug=0)。
   ;[['平日加班',   n(d.otWeekday)   + n(d._ot_exc_weekday),    n(d.otPayWeekday)   + n(d._ot_exc_weekday_pay)],
     ['休息日加班', n(d.otRestday)   + n(d._ot_exc_restday),    n(d.otPayRestday)   + n(d._ot_exc_restday_pay)],
@@ -50,20 +63,9 @@ function buildFullItems(d, adjustments = []) {
   if (n(d.comp_time_settled_pay) > 0) push({ label: '補休兌現', value: n(d.comp_time_settled_pay), sign: '+', section: 'add', color: 'var(--accent-cyan)', note: `${n(d.comp_time_settled_count)} 筆` })
   if (n(d.holidayBonus) > 0) push({ label: '國定假日出勤加給', value: n(d.holidayBonus), sign: '+', section: 'add', color: 'var(--accent-cyan)' })
 
-  // 津貼（逐項）
-  ;[['主管加給', d.role_allowance], ['餐費津貼', d.meal_allowance], ['交通津貼', d.transport_allowance],
-    ['夜班津貼', d.night_allowance], ['跨區津貼', d.cross_store_allowance],
-  ].forEach(([lbl, v]) => { if (n(v) > 0) push({ label: lbl, value: n(v), sign: '+', section: 'add', color: 'var(--accent-green)' }) })
-  if (Array.isArray(d.custom_allowances)) {
-    // 夜間/跨店名目的自訂津貼已被引擎抽進「夜班津貼/跨區津貼」固定欄顯示,這裡排除避免重複列
-    //（對齊引擎 v_other_custom 的 WHERE name !~ '夜班|夜間|跨店|跨區'）
-    d.custom_allowances.forEach(c => { if (n(c.amount) > 0 && !/夜班|夜間|跨店|跨區/.test(c.name || '')) push({ label: c.name || '自訂津貼', value: n(c.amount), sign: '+', section: 'add', color: 'var(--accent-green)' }) })
-  } else if (n(d.other_custom_total) > 0) {
-    push({ label: '其他自訂津貼', value: n(d.other_custom_total), sign: '+', section: 'add', color: 'var(--accent-green)' })
-  }
+  // 3) 其他加項（最下面）:獎金 / 離職相關 / 微調 / 殘差
   if (n(d.attendance_bonus) > 0) push({ label: '全勤獎金', value: n(d.attendance_bonus), sign: '+', section: 'add', color: 'var(--accent-green)' })
   if (n(d.policyBonus) > 0) push({ label: '獎金', value: n(d.policyBonus), sign: '+', section: 'add', color: 'var(--accent-purple)' })
-  // 離職相關加項（有值才列，已含在應發）
   if (n(d.unused_leave_payout) > 0) push({ label: '特休折現', value: n(d.unused_leave_payout), sign: '+', section: 'add', color: 'var(--accent-green)', note: n(d.unused_leave_days) ? `${n(d.unused_leave_days)} 天` : null })
   if (n(d.severance_amount) > 0) push({ label: '資遣費', value: n(d.severance_amount), sign: '+', section: 'add', color: 'var(--accent-green)' })
   if (n(d.severance_notice_wage) > 0) push({ label: '預告工資', value: n(d.severance_notice_wage), sign: '+', section: 'add', color: 'var(--accent-green)' })

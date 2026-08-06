@@ -682,17 +682,18 @@ export default function Attendance() {
                             // 缺下班:過去日、有上班卡、沒下班卡(含外出/outing)→ 提示主管補下班
                             //   今天在途中(還沒下班)不算;加班單另計
                             const missingOut = !isToday && !isOvertime && r.clock_in && !r.clock_out
+                            const le = lateEarly(r)
+                            // DB 狀態「正常」但實際有遲到/早退/缺下班 → 顯示「異常」（狀態欄與旁邊細項一致）
+                            const abnormal = r.status === '正常' && ((le && (le.late > 0 || le.early > 0)) || missingOut)
                             return (
                               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
-                                <span className={`badge ${r.status === '正常' ? 'badge-success' : r.status === '遲到' ? 'badge-warning' : r.status === '加班' ? 'badge-purple' : r.status === '請假' ? 'badge-info' : r.status === '外出' ? 'badge-success' : 'badge-danger'}`}><span className="badge-dot"></span>{r.status}</span>
-                                {(() => {
-                                  const le = lateEarly(r)
-                                  if (!le) return null
-                                  return (<>
-                                    {le.late > 0 && <span className="badge badge-warning" title={`上班晚於班表 ${le.late} 分鐘`}><span className="badge-dot"></span>遲到 {le.late} 分</span>}
-                                    {le.early > 0 && <span className="badge badge-danger" title={`下班早於班表 ${le.early} 分鐘`}><span className="badge-dot"></span>早退 {le.early} 分</span>}
-                                  </>)
-                                })()}
+                                {abnormal
+                                  ? <span className="badge badge-danger" title="有遲到／早退／缺下班"><span className="badge-dot"></span>異常</span>
+                                  : <span className={`badge ${r.status === '正常' ? 'badge-success' : r.status === '遲到' ? 'badge-warning' : r.status === '加班' ? 'badge-purple' : r.status === '請假' ? 'badge-info' : r.status === '外出' ? 'badge-success' : 'badge-danger'}`}><span className="badge-dot"></span>{r.status}</span>}
+                                {le && (<>
+                                  {le.late > 0 && <span className="badge badge-warning" title={`上班晚於班表 ${le.late} 分鐘`}><span className="badge-dot"></span>遲到 {le.late} 分</span>}
+                                  {le.early > 0 && <span className="badge badge-danger" title={`下班早於班表 ${le.early} 分鐘`}><span className="badge-dot"></span>早退 {le.early} 分</span>}
+                                </>)}
                                 {missingOut && <span className="badge badge-danger" title="有上班打卡但沒有下班打卡,請補登下班時間"><span className="badge-dot"></span>缺下班</span>}
                               </div>
                             )

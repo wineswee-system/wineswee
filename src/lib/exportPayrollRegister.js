@@ -41,22 +41,22 @@ const COLS = [
     const g = Math.round((n(p.gross) + n(p.manual_bonus)) - shown); return g > 1 ? g : 0
   } },
   // ── 薪資科目扣項 ──
-  { h: '勞保自付', group: '薪資科目扣項', w: 9, get: (p) => n(p.laborInsurance) },
-  { h: '健保自付', group: '薪資科目扣項', w: 9, get: (p) => n(p.healthInsurance) },
-  { h: '勞退自提', group: '薪資科目扣項', w: 12, get: (p) => n(p.pension) },
-  { h: '無薪假扣', group: '薪資科目扣項', w: 11, get: (p) => n(p.unpaidDeduction) },
-  { h: '半薪假扣', group: '薪資科目扣項', w: 11, get: (p) => n(p.halfPayDeduction) },
-  { h: '法定扣款', group: '薪資科目扣項', w: 9, get: (p) => n(p.legal_deduction) },
-  { h: '遲到扣', group: '薪資科目扣項', w: 9, get: (p) => n(p.lateDeduction) },
-  { h: '早退扣', group: '薪資科目扣項', w: 9, get: (p) => n(p.earlyLeaveDeduction) },
-  { h: '曠職扣', group: '薪資科目扣項', w: 9, get: (p) => n(p.awolDeduction) },
-  { h: '補充保費', group: '薪資科目扣項', w: 9, get: (p) => n(p.nhi_supplementary) },
-  { h: '微調扣款', group: '薪資科目扣項', w: 10, get: (p) => n(p.manual_deduction) },        // 逐筆調整:手動扣項
-  { h: '微調扣款說明', group: '薪資科目扣項', txt: true, noteCol: true, w: 18, get: (p) => p._adjust_note_ded || '' },  // 扣款側名目(如「調整薪資差額」);有值才出欄
-  { h: '所得稅', group: '薪資科目扣項', w: 8, get: (p) => n(p.incomeTax) },
+  { h: '勞保自付', group: '薪資科目減項', w: 9, get: (p) => n(p.laborInsurance) },
+  { h: '健保自付', group: '薪資科目減項', w: 9, get: (p) => n(p.healthInsurance) },
+  { h: '勞退自提', group: '薪資科目減項', w: 12, get: (p) => n(p.pension) },
+  { h: '無薪假', group: '薪資科目減項', w: 11, get: (p) => n(p.unpaidDeduction) },
+  { h: '半薪假', group: '薪資科目減項', w: 11, get: (p) => n(p.halfPayDeduction) },
+  { h: '法定扣款', group: '薪資科目減項', w: 9, get: (p) => n(p.legal_deduction) },
+  { h: '遲到', group: '薪資科目減項', w: 9, get: (p) => n(p.lateDeduction) },
+  { h: '早退', group: '薪資科目減項', w: 9, get: (p) => n(p.earlyLeaveDeduction) },
+  { h: '曠職', group: '薪資科目減項', w: 9, get: (p) => n(p.awolDeduction) },
+  { h: '補充保費', group: '薪資科目減項', w: 9, get: (p) => n(p.nhi_supplementary) },
+  { h: '微調扣款', group: '薪資科目減項', w: 10, get: (p) => n(p.manual_deduction) },        // 逐筆調整:手動扣項
+  { h: '微調扣款說明', group: '薪資科目減項', txt: true, noteCol: true, w: 18, get: (p) => p._adjust_note_ded || '' },  // 扣款側名目(如「調整薪資差額」);有值才出欄
+  { h: '所得稅', group: '薪資科目減項', w: 8, get: (p) => n(p.incomeTax) },
   // 對帳保險:各扣項欄若加不回應減總額(有引擎算進 total 但沒獨立欄的項目)→ 差額顯示在此。有值才出欄。
-  { h: '其他扣款', group: '薪資科目扣項', residual: true, w: 10, get: (p, e) => {
-    const shown = COLS.filter(c => c.group === '薪資科目扣項' && !c.residual && !c.txt).reduce((s, c) => s + n(c.get(p, e)), 0)
+  { h: '其他扣款', group: '薪資科目減項', residual: true, w: 10, get: (p, e) => {
+    const shown = COLS.filter(c => c.group === '薪資科目減項' && !c.residual && !c.txt).reduce((s, c) => s + n(c.get(p, e)), 0)
     const g = Math.round((n(p.totalDeductions) + n(p.manual_deduction)) - shown); return g > 1 ? g : 0
   } },
   // ── 薪資總計(永遠顯示)──

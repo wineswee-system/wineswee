@@ -234,6 +234,8 @@ export default function Attendance() {
   //   只在「有排班時間段」且真的遲到/早退才回值;跨午夜班(end<=start)自動 +1440。
   const toMin = (t) => { if (!t) return null; const [h, m] = String(t).split(':'); return Number(h) * 60 + Number(m) }
   const lateEarly = (r) => {
+    // 加班列(加班單)的打卡是加班時段,非正常班,別拿去比班表標遲到/早退
+    if (r._rowType === 'overtime' || r.status === '加班' || r.clock_in_mode === 'overtime') return null
     const sv = dayCtx.sched[`${r.employee}|${r.date}`]
     const mm = sv && sv.match(/^(\d{1,2}:\d{2})-(\d{1,2}:\d{2})$/)
     if (!mm) return null

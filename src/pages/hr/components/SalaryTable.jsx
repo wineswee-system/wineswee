@@ -38,19 +38,15 @@ function buildFullItems(d, adjustments = []) {
   const dedAdjSum = dedAdj.reduce((s, a) => s + n(a.amount), 0)
   push({ label: '底薪', value: n(d.base_salary), sign: '', section: 'add', color: 'var(--text-primary)' })
 
-  // 加班費（分類 + 時數）— 用逐筆明細(_ot_rows + _ot_exception_rows,含例外/擬制加班)依類別加總,
-  //   而非 otPay* 聚合欄(會漏掉例外加班,導致左欄 OT 少於 gross);與右欄逐筆、gross 一致。
-  const _otRows = [...(Array.isArray(d._ot_rows) ? d._ot_rows : []), ...(Array.isArray(d._ot_exception_rows) ? d._ot_exception_rows : [])]
-  if (_otRows.length > 0) {
-    const otAgg = {}
-    for (const r of _otRows) { const c = r.category || 'weekday'; (otAgg[c] ??= { hours: 0, pay: 0 }); otAgg[c].hours += n(r.hours); otAgg[c].pay += n(r._pay) }
-    const otOrder = ['weekday', 'restday', 'weekly_off', 'holiday']
-    const otCats = [...otOrder.filter(c => otAgg[c]), ...Object.keys(otAgg).filter(c => !otOrder.includes(c))]
-    otCats.forEach(c => { const a = otAgg[c]; if (a.pay > 0 || a.hours > 0) push({ label: `${OT_CAT_LABEL[c] || c}加班`, value: Math.round(a.pay), sign: '+', section: 'add', color: 'var(--accent-cyan)', note: `${a.hours} 小時` }) })
-  } else {
-    ;[['平日加班', d.otWeekday, d.otPayWeekday], ['休息日加班', d.otRestday, d.otPayRestday], ['例假加班', d.otWeeklyOff, d.otPayWeeklyOff], ['國定加班', d.otHoliday, d.otPayHoliday]]
-      .forEach(([lbl, hrs, pay]) => { if (n(pay) > 0 || n(hrs) > 0) push({ label: lbl, value: n(pay), sign: '+', section: 'add', color: 'var(--accent-cyan)', note: `${n(hrs)} 小時` }) })
-  }
+  // 加班費（分類 + 時數）— 每類別 = legal(otPay*) + exception(_ot_exc_*_pay) 相加。
+  //   兩者相加 = regular+extra = gross 的加班,對得回應發。★別用逐筆 row 的 _pay(休息日混合費率該欄有 bug=0)。
+  ;[['平日加班',   n(d.otWeekday)   + n(d._ot_exc_weekday),    n(d.otPayWeekday)   + n(d._ot_exc_weekday_pay)],
+    ['休息日加班', n(d.otRestday)   + n(d._ot_exc_restday),    n(d.otPayRestday)   + n(d._ot_exc_restday_pay)],
+    ['例假加班',   n(d.otWeeklyOff) + n(d._ot_exc_weekly_off), n(d.otPayWeeklyOff) + n(d._ot_exc_weekly_off_pay)],
+    ['國定加班',   n(d.otHoliday)   + n(d._ot_exc_holiday),    n(d.otPayHoliday)   + n(d._ot_exc_holiday_pay)],
+  ].forEach(([lbl, hrs, pay]) => {
+    if (n(pay) > 0 || n(hrs) > 0) push({ label: lbl, value: Math.round(n(pay)), sign: '+', section: 'add', color: 'var(--accent-cyan)', note: `${n(hrs)} 小時` })
+  })
   if (n(d.comp_time_settled_pay) > 0) push({ label: '補休兌現', value: n(d.comp_time_settled_pay), sign: '+', section: 'add', color: 'var(--accent-cyan)', note: `${n(d.comp_time_settled_count)} 筆` })
   if (n(d.holidayBonus) > 0) push({ label: '國定假日出勤加給', value: n(d.holidayBonus), sign: '+', section: 'add', color: 'var(--accent-cyan)' })
 

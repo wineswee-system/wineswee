@@ -275,9 +275,18 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
     if (data) {
       onUpdate(data); setIsDirty(false)
       if (storeChanged) {
-        const today = new Date().toISOString().slice(0, 10)
-        await supabase.from('schedules').delete().eq('employee_id', data.id).gt('date', today)
-        toast.success(`已調至${form.store}，未來排班已清除，請重新排班`)
+        // ★ 換門市不再「靜默清除未來排班」— 督導/跨店人員會被整批誤刪(見 20260806140000)。
+        //   改成先問:單店員工轉店可選「是」清掉舊班;督導/跨店選「否」保留。
+        const clear = await confirm({
+          message: `已將主要門市改為「${form.store}」。\n\n要一併清除 ${form.name || '該員工'} 今天以後的排班嗎？\n（單店員工轉店可清；督導 / 跨店人員請選「否」，避免誤刪跨店班表）`,
+        })
+        if (clear) {
+          const today = new Date().toISOString().slice(0, 10)
+          await supabase.from('schedules').delete().eq('employee_id', data.id).gt('date', today)
+          toast.success(`已調至${form.store}，未來排班已清除，請重新排班`)
+        } else {
+          toast.success(`已調至${form.store}（未來排班保留）`)
+        }
       }
     }
 

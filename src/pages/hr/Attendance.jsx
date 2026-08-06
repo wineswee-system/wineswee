@@ -230,6 +230,22 @@ export default function Attendance() {
     return { sched, ot, leave }
   }, [daySchedules, overtimes, dayLeaves])
 
+  // 遲到/早退:拿當天班表時間段(HH:MM-HH:MM)跟打卡比。上班晚於班表=遲到、下班早於班表=早退(分鐘)。
+  //   只在「有排班時間段」且真的遲到/早退才回值;跨午夜班(end<=start)自動 +1440。
+  const toMin = (t) => { if (!t) return null; const [h, m] = String(t).split(':'); return Number(h) * 60 + Number(m) }
+  const lateEarly = (r) => {
+    const sv = dayCtx.sched[`${r.employee}|${r.date}`]
+    const mm = sv && sv.match(/^(\d{1,2}:\d{2})-(\d{1,2}:\d{2})$/)
+    if (!mm) return null
+    let start = toMin(mm[1]), end = toMin(mm[2])
+    if (end <= start) end += 1440
+    const ci = toMin(r.clock_in), coRaw = toMin(r.clock_out)
+    let late = 0, early = 0
+    if (ci != null && ci > start) late = ci - start
+    if (coRaw != null) { let co = coRaw; if (co < start) co += 1440; if (co < end) early = end - co }
+    return (late > 0 || early > 0) ? { late, early } : null
+  }
+
   const today = todayTW()
 
   const filtered = useMemo(() => records.filter(r =>
@@ -667,6 +683,14 @@ export default function Attendance() {
                             return (
                               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
                                 <span className={`badge ${r.status === '正常' ? 'badge-success' : r.status === '遲到' ? 'badge-warning' : r.status === '加班' ? 'badge-purple' : r.status === '請假' ? 'badge-info' : r.status === '外出' ? 'badge-success' : 'badge-danger'}`}><span className="badge-dot"></span>{r.status}</span>
+                                {(() => {
+                                  const le = lateEarly(r)
+                                  if (!le) return null
+                                  return (<>
+                                    {le.late > 0 && <span className="badge badge-warning" title={`上班晚於班表 ${le.late} 分鐘`}><span className="badge-dot"></span>遲到 {le.late} 分</span>}
+                                    {le.early > 0 && <span className="badge badge-danger" title={`下班早於班表 ${le.early} 分鐘`}><span className="badge-dot"></span>早退 {le.early} 分</span>}
+                                  </>)
+                                })()}
                                 {missingOut && <span className="badge badge-danger" title="有上班打卡但沒有下班打卡,請補登下班時間"><span className="badge-dot"></span>缺下班</span>}
                               </div>
                             )

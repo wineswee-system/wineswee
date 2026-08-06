@@ -26,9 +26,9 @@ function Progress({ paid, target, small }) {
   const done = paid >= target && target > 0
   return (
     <div style={{ minWidth: small ? 120 : 160 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-muted)', marginBottom: 3 }}>
-        <span>{fmt(paid)} / {fmt(target)}</span>
-        <span>{pct}%</span>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 11, color: 'var(--text-muted)', marginBottom: 3 }}>
+        <span style={{ whiteSpace: 'nowrap' }}>{fmt(paid)} / {fmt(target)}</span>
+        <span style={{ whiteSpace: 'nowrap' }}>{pct}%</span>
       </div>
       <div style={{ height: 6, borderRadius: 3, background: 'var(--bg-secondary)', overflow: 'hidden' }}>
         <div style={{ width: `${pct}%`, height: '100%', background: done ? 'var(--accent-green)' : 'var(--accent-cyan)', transition: 'width .2s' }} />
@@ -259,7 +259,7 @@ function DepositTab({ orgId, profile, deposits, depPays, investors, addInvestor,
                   </tr>
                   {isExp && (
                     <tr><td colSpan={6} style={{ padding: 0 }}>
-                      <PaymentEditor rows={paysByDep[d.id] || []}
+                      <PaymentEditor rows={paysByDep[d.id] || []} max={Math.max(0, n(d.target_amount) - n(d.paid_total))}
                         onAdd={async ({ paid_date, amount, note }) => {
                           const { error } = await supabase.from('deposit_payments').insert({ organization_id: orgId, deposit_id: d.id, paid_date, amount, note: note || null, created_by: profile?.name || null })
                           if (error) { toast.error('新增失敗：' + error.message); return false }
@@ -434,7 +434,7 @@ function FranchiseTab({ orgId, profile, franchises, ffInvestors, ffPays, deposit
                                         <div style={{ fontWeight: 600, fontSize: 12 }}>第 {stage} 期 <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>（{pct}%）</span></div>
                                         <Progress small paid={paidStages[si]} target={targets[si]} />
                                       </div>
-                                      <PaymentEditor compact rows={stagePays}
+                                      <PaymentEditor compact rows={stagePays} max={Math.max(0, targets[si] - paidStages[si])}
                                         onAdd={async ({ paid_date, amount, note }) => {
                                           const { error } = await supabase.from('franchise_fee_payments').insert({
                                             organization_id: orgId, franchise_fee_id: f.id, investor_id: ffi.investor_id, stage, paid_date, amount, note: note || null, created_by: profile?.name || null,
@@ -539,15 +539,20 @@ function InvestorTab({ orgId, profile, investors, deposits, ffInvestors, addInve
   )
 }
 
-// ── 共用：一組收款明細 + 新增列 ──
-function PaymentEditor({ rows, onAdd, onDelete, compact }) {
+// ── 共用：一組收款明細 + 新增列（max：本期/本案剩餘上限，超收擋下）──
+function PaymentEditor({ rows, onAdd, onDelete, compact, max }) {
   const [date, setDate] = useState(today())
   const [amount, setAmount] = useState('')
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
 
+  const capped = max != null
+  const remaining = capped ? Math.max(0, n(max)) : null
+  const full = capped && remaining <= 0.5
+
   const submit = async () => {
     if (n(amount) <= 0) { toast.warning('金額要 > 0'); return }
+    if (capped && n(amount) > remaining + 0.5) { toast.warning(`超過剩餘上限，最多再記 ${fmt(remaining)}`); return }
     setBusy(true)
     const ok = await onAdd({ paid_date: date, amount: n(amount), note })
     setBusy(false)
@@ -571,12 +576,16 @@ function PaymentEditor({ rows, onAdd, onDelete, compact }) {
           </div>
         ))}
       </div>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-        <input className="form-input" type="date" value={date} onChange={e => setDate(e.target.value)} style={{ width: 150 }} />
-        <input className="form-input" type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="金額" style={{ width: 120 }} />
-        <input className="form-input" value={note} onChange={e => setNote(e.target.value)} placeholder="備註（選填）" style={{ flex: 1, minWidth: 120 }} />
-        <button className="btn btn-primary" style={{ padding: '6px 12px' }} onClick={submit} disabled={busy}><Plus size={13} /> {busy ? '記錄中…' : '記一筆'}</button>
-      </div>
+      {full ? (
+        <div style={{ fontSize: 12, color: 'var(--accent-green)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}><Check size={13} /> 已收滿</div>
+      ) : (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <input className="form-input" type="date" value={date} onChange={e => setDate(e.target.value)} style={{ width: 150 }} />
+          <input className="form-input" type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder={capped ? `金額（最多 ${fmt(remaining)}）` : '金額'} style={{ width: capped ? 180 : 120 }} />
+          <input className="form-input" value={note} onChange={e => setNote(e.target.value)} placeholder="備註（選填）" style={{ flex: 1, minWidth: 120 }} />
+          <button className="btn btn-primary" style={{ padding: '6px 12px' }} onClick={submit} disabled={busy}><Plus size={13} /> {busy ? '記錄中…' : '記一筆'}</button>
+        </div>
+      )}
     </div>
   )
 }

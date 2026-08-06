@@ -516,7 +516,7 @@ export default function Recruitment() {
 
   const [jobForm,     setJobForm]     = useState({ title: '', dept: '', location: '', type: '全職', headcount: 1, description: '', evaluation_template_id: '' })
   const [editingJob,  setEditingJob]  = useState(null)
-  const [candForm,    setCandForm]    = useState({ name: '', email: '', phone: '', source: '主動投遞', job_id: '', notes: '', resume_url: '', tags: [] })
+  const [candForm,    setCandForm]    = useState({ name: '', email: '', phone: '', source: '主動投遞', job_id: '', notes: '', resume_url: '', resume_filename: '', tags: [] })
   const [editingCand, setEditingCand] = useState(null)  // null=新增, obj=編輯
   const [tagInput,    setTagInput]    = useState('')
   const [resumeUploading, setResumeUploading] = useState(false)
@@ -680,6 +680,7 @@ export default function Recruitment() {
       source:          candForm.source,
       notes:           candForm.notes   || null,
       resume_url:      candForm.resume_url || null,
+      resume_filename: candForm.resume_filename || null,
       tags:            candForm.tags?.length ? candForm.tags : null,
       job_id:          candForm.job_id  ? Number(candForm.job_id) : null,
       organization_id: orgId,
@@ -689,7 +690,7 @@ export default function Recruitment() {
     if (data) {
       setCandidates(prev => [...prev, data])
       setShowCandModal(false)
-      setCandForm({ name: '', email: '', phone: '', source: '主動投遞', job_id: '', notes: '', resume_url: '', tags: [] })
+      setCandForm({ name: '', email: '', phone: '', source: '主動投遞', job_id: '', notes: '', resume_url: '', resume_filename: '', tags: [] })
       setTagInput('')
       if (data.job_id) {
         const job = jobs.find(j => j.id === data.job_id)
@@ -703,7 +704,7 @@ export default function Recruitment() {
     setCandForm({
       name: c.name || '', email: c.email || '', phone: c.phone || '',
       source: c.source || '主動投遞', job_id: c.job_id ? String(c.job_id) : '',
-      notes: c.notes || '', resume_url: c.resume_url || '', tags: c.tags || [],
+      notes: c.notes || '', resume_url: c.resume_url || '', resume_filename: c.resume_filename || '', tags: c.tags || [],
     })
     setTagInput('')
     setShowCandModal(true)
@@ -718,6 +719,7 @@ export default function Recruitment() {
       source:     candForm.source,
       notes:      candForm.notes || null,
       resume_url: candForm.resume_url || null,
+      resume_filename: candForm.resume_filename || null,
       tags:       candForm.tags?.length ? candForm.tags : null,
       job_id:     candForm.job_id ? Number(candForm.job_id) : null,
     })
@@ -730,7 +732,7 @@ export default function Recruitment() {
       if (selectedCand?.id === editingCand.id) setSelectedCand(s => ({ ...s, ...merged }))
       setShowCandModal(false)
       setEditingCand(null)
-      setCandForm({ name: '', email: '', phone: '', source: '主動投遞', job_id: '', notes: '', resume_url: '', tags: [] })
+      setCandForm({ name: '', email: '', phone: '', source: '主動投遞', job_id: '', notes: '', resume_url: '', resume_filename: '', tags: [] })
       setTagInput('')
       toast.success('候選人已更新')
     }
@@ -1059,7 +1061,7 @@ export default function Recruitment() {
           {tab === 'candidates' && canManage && (
             <button className="btn btn-primary" onClick={() => {
               setEditingCand(null)
-              setCandForm({ name: '', email: '', phone: '', source: '主動投遞', job_id: '', notes: '', resume_url: '', tags: [] })
+              setCandForm({ name: '', email: '', phone: '', source: '主動投遞', job_id: '', notes: '', resume_url: '', resume_filename: '', tags: [] })
               setTagInput('')
               setShowCandModal(true)
             }}>
@@ -1876,9 +1878,9 @@ export default function Recruitment() {
                 background: 'var(--bg-secondary)', borderRadius: 6, border: '1px solid var(--border-subtle)' }}>
                 <a href={candForm.resume_url} target="_blank" rel="noreferrer"
                    style={{ color: 'var(--accent-cyan)', fontSize: 13, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  📄 已上傳：{candForm.resume_url.split('/').pop()}
+                  📄 已上傳：{candForm.resume_filename || candForm.resume_url.split('/').pop()}
                 </a>
-                <button type="button" onClick={() => setCandForm(f => ({ ...f, resume_url: '' }))}
+                <button type="button" onClick={() => setCandForm(f => ({ ...f, resume_url: '', resume_filename: '' }))}
                   style={{ background: 'none', border: 'none', color: 'var(--accent-red)', cursor: 'pointer', padding: 0, fontSize: 13 }}>
                   ✕ 移除
                 </button>
@@ -1898,7 +1900,7 @@ export default function Recruitment() {
                     const { error: upErr } = await supabase.storage.from('attachments').upload(path, file, { upsert: false })
                     if (upErr) { toast('上傳失敗：' + upErr.message); return }
                     const { data: { publicUrl } } = supabase.storage.from('attachments').getPublicUrl(path)
-                    setCandForm(f => ({ ...f, resume_url: publicUrl }))
+                    setCandForm(f => ({ ...f, resume_url: publicUrl, resume_filename: file.name }))  // 原始中文檔名另存供顯示
                     toast.success('履歷已上傳')
                   } finally {
                     setResumeUploading(false)

@@ -1,6 +1,19 @@
 import { useLocation } from 'react-router-dom'
 import { ShieldAlert } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { NAV_ENTRIES, NAV_SENTINEL, navEntryCode } from './sidebar/sidebarConfig'
+
+// 逐入口權限：所有 leaf 路徑（依長度降冪，供最長前綴比對）
+const NAV_PATHS = NAV_ENTRIES.map(e => e.path).sort((a, b) => b.length - a.length)
+// 去掉純數字段：org-scoped(/crm/123/customers) 與明細頁(/crm/customers/123) 都正規化成 /crm/customers
+function normPath(pathname) {
+  const n = pathname.split('/').filter(seg => seg === '' || !/^\d+$/.test(seg)).join('/')
+  return n || '/'
+}
+function matchNavPath(pathname) {
+  const n = normPath(pathname)
+  return NAV_PATHS.find(p => n === p || n.startsWith(p + '/'))
+}
 
 // ════════════════════════════════════════════════════════════════════════
 // 中央頁面權限 guard
@@ -79,5 +92,11 @@ export default function PagePermGuard({ children }) {
   const { hasPermission } = useAuth()
   const code = PAGE_PERM[pathname]
   if (code && !hasPermission(code)) return <NoPermission />
+  // 逐入口權限（migration 20260806120000 上線後才生效；哨兵判斷，未上線不影響）
+  // super_admin hasPermission 恆真 → 永遠放行；一般人缺該入口權限 → 擋 URL 直連。
+  if (hasPermission(NAV_SENTINEL)) {
+    const navPath = matchNavPath(pathname)
+    if (navPath && !hasPermission(navEntryCode(navPath))) return <NoPermission />
+  }
   return children
 }

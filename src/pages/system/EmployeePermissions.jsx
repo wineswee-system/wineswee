@@ -7,6 +7,15 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 import { toast } from '../../lib/toast'
 import PermissionModuleSection from './components/PermissionModuleSection'
 import { SOURCE_BADGE } from './components/PermissionFeatureRow'
+import { majorGroups, NAV_ENTRIES, navTopCode, navEntryCode } from '../../components/sidebar/sidebarConfig'
+
+// ── 逐入口導航權限（自動從 sidebarConfig 生成，每 top tab / 每 leaf 一個開關）──
+// 用 view 欄當「可見」單一 toggle；只在 DB 有該碼時才顯示（migration 20260806120000 上線後）。
+const NAV_GROUP_LABEL = Object.fromEntries(majorGroups.map(g => [g.key, g.label]))
+const NAV_FEATURES = [
+  ...majorGroups.map(g => ({ module: '導航 · 上排（整組）', label: g.label, view: navTopCode(g.key), edit: null })),
+  ...NAV_ENTRIES.map(e => ({ module: '導航 · ' + (NAV_GROUP_LABEL[e.topKey] || e.topKey), label: e.label, view: navEntryCode(e.path), edit: null })),
+]
 
 const ROLE_LABEL = {
   store_staff:  '門市人員',
@@ -459,7 +468,7 @@ const { error } = await supabase.rpc('admin_force_logout', { p_emp_id: selectedE
 
   // 把 FEATURES 過濾掉「兩個 perm 都不存在」的（例：admin 看不到 finance.* 那兩個 feature 自動消失）
   const visibleFeatures = useMemo(() => {
-    return FEATURES.filter(f => {
+    return [...FEATURES, ...NAV_FEATURES].filter(f => {
       const hasView = f.view && permByCode[f.view]
       const hasEdit = f.edit && permByCode[f.edit]
       return hasView || hasEdit

@@ -19,7 +19,7 @@ import { useLanguage } from '../contexts/LanguageContext'
 import { withOrg, stripOrg } from '../lib/orgPath'
 import FontSizeControl from './FontSizeControl'
 import { prefetchGroup } from '../modules/prefetch'
-import { majorGroups, groupNav } from './sidebar/sidebarConfig'
+import { majorGroups, groupNav, NAV_SENTINEL, navTopCode, navEntryCode } from './sidebar/sidebarConfig'
 import { usePendingApprovals } from '../lib/usePendingApprovals'
 import { useMentionCount } from '../lib/useMentionCount'
 import NotificationPanel from './NotificationPanel'
@@ -275,7 +275,11 @@ export default function Sidebar() {
   // 物流調度 / 通訊協作：新模組，暫時只開放 super_admin（不吃 GROUP_REQUIRES / dispatch.view）
   const SUPER_ADMIN_ONLY_GROUPS = new Set(['dispatch', 'comms'])
   const isSuperAdmin = profile?.role === 'super_admin'
+  // 逐入口權限新制是否上線（migration 20260806120000 跑了才有哨兵）。
+  // 上線後 top tab / leaf 一律吃 nav.top.* / nav.entry.*；未上線走下方舊 fallback，避免部署順序鎖人。
+  const navLive = hasPermission(NAV_SENTINEL)
   const roleFiltered = majorGroups.filter(g => {
+    if (navLive) return hasPermission(navTopCode(g.key))
     if (SUPER_ADMIN_ONLY_GROUPS.has(g.key)) return isSuperAdmin
     const required = GROUP_REQUIRES[g.key]
     if (!required) return true
@@ -367,8 +371,9 @@ export default function Sidebar() {
       .map(s => ({
         ...s,
         children: s.children?.filter(c => {
+          if (navLive) return hasPermission(navEntryCode(c.path))   // 新制：逐入口
           const required = PATH_REQUIRES[c.path]
-          if (!required) return true        // 缺項 = 全員可見（Tier 1）
+          if (!required) return true        // 舊 fallback：缺項 = 全員可見（Tier 1）
           return hasPermission(required)
         })
       }))

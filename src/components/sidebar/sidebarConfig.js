@@ -505,3 +505,19 @@ export const groupNav = {
     },
   ],
 }
+
+// ════════════════════════════════════════════════════════════════════════
+// 逐入口權限 helper（對應 migration 20260806120000_nav_entry_permissions）
+//   top tab → nav.top.<key>；leaf → nav.entry.<path 去斜線改點>
+//   哨兵 nav.entry.system.enabled：全角色皆有 → 前端判斷新制是否上線
+// ════════════════════════════════════════════════════════════════════════
+export const NAV_SENTINEL = 'nav.entry.system.enabled'
+export const navTopCode = (key) => 'nav.top.' + key
+export const navEntryCode = (path) => 'nav.entry.' + String(path).replace(/^\//, '').replace(/\//g, '.')
+
+// 扁平化所有 leaf（供權限頁列表 + 路由守門 prefix 比對用）
+export const NAV_ENTRIES = Object.entries(groupNav).flatMap(([topKey, sections]) =>
+  (sections || []).flatMap(sec => (sec.children || []).map(c => ({
+    topKey, section: sec.label, path: c.path, label: c.label,
+  })))
+)

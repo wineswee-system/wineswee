@@ -16,15 +16,15 @@ const COLS = [
   { h: '到職日/復職日', group: null, always: true, txt: true, w: 13, get: (p, e) => (p.join_date || e?.join_date || '') },
   { h: '計薪方式', group: null, always: true, txt: true, w: 9, get: (p) => (p._is_hourly ? '時薪' : '月薪') },
   // ── 薪資結構 ──
-  { h: '基本薪資', group: '薪資結構', w: 10, get: (p) => n(p.base_salary) },
-  { h: '伙食費', group: '薪資結構', w: 8, get: (p) => n(p.meal_allowance) },
-  { h: '職務津貼', group: '薪資結構', w: 9, get: (p) => n(p.role_allowance) },
-  { h: '夜間津貼', group: '薪資結構', w: 9, get: (p) => n(p.night_allowance) },
-  { h: '跨店津貼', group: '薪資結構', w: 9, get: (p) => n(p.cross_store_allowance) },
+  { h: '底薪', group: '薪資結構', w: 10, get: (p) => n(p.base_salary) },
+  { h: '伙食津貼', group: '薪資結構', w: 8, get: (p) => n(p.meal_allowance) },
+  { h: '主管加給', group: '薪資結構', w: 9, get: (p) => n(p.role_allowance) },
+  { h: '夜班津貼', group: '薪資結構', w: 9, get: (p) => n(p.night_allowance) },
+  { h: '跨區津貼', group: '薪資結構', w: 9, get: (p) => n(p.cross_store_allowance) },
   { h: '交通津貼', group: '薪資結構', w: 9, get: (p) => n(p.transport_allowance) },
   // ── 薪資科目加項 ──
   { h: '免稅加班費', group: '薪資科目加項', w: 12, get: (p) => n(p.regular_overtime_pay) },
-  { h: '特休未休折抵費', group: '薪資科目加項', w: 15, get: (p) => n(p.unused_leave_payout) },
+  { h: '特休折現', group: '薪資科目加項', w: 15, get: (p) => n(p.unused_leave_payout) },
   { h: '資遣費', group: '薪資科目加項', w: 10, get: (p) => n(p.severance_amount) },              // 離職結算:資遣費(有值才出欄;原本漏欄→應發對不齊)
   { h: '預告工資', group: '薪資科目加項', w: 10, get: (p) => n(p.severance_notice_wage) },       // 離職結算:預告工資(同上)
   { h: '額外加班費', group: '薪資科目加項', w: 11, get: (p) => n(p.extra_overtime_pay) },
@@ -33,7 +33,6 @@ const COLS = [
   { h: '補休兌現', group: '薪資科目加項', w: 10, get: (p) => n(p.comp_time_settled_pay) },
   { h: '國定加給', group: '薪資科目加項', w: 9, get: (p) => n(p.holidayBonus) },
   { h: '其他津貼', group: '薪資科目加項', w: 10, get: (p) => n(p.other_custom_total) },
-  { h: '底薪', group: '薪資科目加項', w: 8, get: () => 0 },
   { h: '微調加項', group: '薪資科目加項', w: 10, get: (p) => n(p.manual_bonus) },            // 逐筆調整:補發/紅包等手動加項(有值才出欄)
   { h: '微調加項說明', group: '薪資科目加項', txt: true, noteCol: true, w: 18, get: (p) => p._adjust_note_add || '' },  // 加項側名目;有值才出欄
   // 對帳保險:各加項欄若加不回應發總額(有引擎算進 gross 但沒獨立欄的項目)→ 差額顯示在此,確保永不憑空消失。有值才出欄。
@@ -42,15 +41,15 @@ const COLS = [
     const g = Math.round((n(p.gross) + n(p.manual_bonus)) - shown); return g > 1 ? g : 0
   } },
   // ── 薪資科目扣項 ──
-  { h: '勞保費', group: '薪資科目扣項', w: 9, get: (p) => n(p.laborInsurance) },
-  { h: '健保費', group: '薪資科目扣項', w: 9, get: (p) => n(p.healthInsurance) },
-  { h: '勞退新制提繳', group: '薪資科目扣項', w: 12, get: (p) => n(p.pension) },
+  { h: '勞保自付', group: '薪資科目扣項', w: 9, get: (p) => n(p.laborInsurance) },
+  { h: '健保自付', group: '薪資科目扣項', w: 9, get: (p) => n(p.healthInsurance) },
+  { h: '勞退自提', group: '薪資科目扣項', w: 12, get: (p) => n(p.pension) },
   { h: '請假扣款(應稅)', group: '薪資科目扣項', w: 13, get: (p) => n(p.unpaidDeduction) },
   { h: '請假扣款(免稅)', group: '薪資科目扣項', w: 13, get: (p) => n(p.halfPayDeduction) },
-  { h: '法扣項目', group: '薪資科目扣項', w: 9, get: (p) => n(p.legal_deduction) },
-  { h: '遲到扣款', group: '薪資科目扣項', w: 9, get: (p) => n(p.lateDeduction) },
-  { h: '早退扣款', group: '薪資科目扣項', w: 9, get: (p) => n(p.earlyLeaveDeduction) },
-  { h: '曠職扣款', group: '薪資科目扣項', w: 9, get: (p) => n(p.awolDeduction) },
+  { h: '法定扣款', group: '薪資科目扣項', w: 9, get: (p) => n(p.legal_deduction) },
+  { h: '遲到扣', group: '薪資科目扣項', w: 9, get: (p) => n(p.lateDeduction) },
+  { h: '早退扣', group: '薪資科目扣項', w: 9, get: (p) => n(p.earlyLeaveDeduction) },
+  { h: '曠職扣', group: '薪資科目扣項', w: 9, get: (p) => n(p.awolDeduction) },
   { h: '補充保費', group: '薪資科目扣項', w: 9, get: (p) => n(p.nhi_supplementary) },
   { h: '微調扣款', group: '薪資科目扣項', w: 10, get: (p) => n(p.manual_deduction) },        // 逐筆調整:手動扣項
   { h: '微調扣款說明', group: '薪資科目扣項', txt: true, noteCol: true, w: 18, get: (p) => p._adjust_note_ded || '' },  // 扣款側名目(如「調整薪資差額」);有值才出欄
@@ -63,9 +62,9 @@ const COLS = [
   // ── 薪資總計(永遠顯示)──
   { h: '應稅所得', group: '薪資總計', always: true, w: 10, get: (p) => Math.max(0, n(p.gross) - n(p.regular_overtime_pay) - n(p.meal_allowance) - n(p.unused_leave_payout) - n(p.unpaidDeduction)) },
   // 應稅所得:依決策不因微調變動(補發/紅包不併入課稅基礎),維持引擎值
-  { h: '應發總額', group: '薪資總計', always: true, w: 10, get: (p) => n(p.gross) + n(p.manual_bonus) },
-  { h: '應減總額', group: '薪資總計', always: true, w: 10, get: (p) => n(p.totalDeductions) + n(p.manual_deduction) },
-  { h: '實發金額', group: '薪資總計', always: true, w: 11, get: (p) => n(p.netSalary) + n(p.manual_bonus) - n(p.manual_deduction) },
+  { h: '總薪資(應發)', group: '薪資總計', always: true, w: 10, get: (p) => n(p.gross) + n(p.manual_bonus) },
+  { h: '減項合計', group: '薪資總計', always: true, w: 10, get: (p) => n(p.totalDeductions) + n(p.manual_deduction) },
+  { h: '實領薪資', group: '薪資總計', always: true, w: 11, get: (p) => n(p.netSalary) + n(p.manual_bonus) - n(p.manual_deduction) },
   // ── 公司負擔(永遠顯示)──
   { h: '勞保費', group: '公司負擔', always: true, w: 9, get: (p) => n(p.laborEmployer) },
   { h: '健保費', group: '公司負擔', always: true, w: 9, get: (p) => n(p.healthEmployer) },

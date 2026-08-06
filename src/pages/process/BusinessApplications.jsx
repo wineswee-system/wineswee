@@ -1,7 +1,7 @@
 ﻿import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
-import { Wallet, Receipt, FileText, ClipboardList, Package, ShoppingCart, Building2, Banknote, Handshake } from 'lucide-react'
+import { Wallet, Receipt, FileText, ClipboardList, Package, ShoppingCart, Building2, Banknote } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -23,10 +23,9 @@ const FIXED_NON_EXPENSE = [
   { icon: Building2, name: '跨部門工單', desc: '請其他部門協助處理事項 → 受理排程 → 完成結案', action: '/process/work-orders', color: 'var(--accent-blue)', dim: 'var(--accent-blue-dim)', tag: '派工' },
 ]
 
-// 收款組（純記帳，不走簽核）— 訂金 + 加盟金
+// 收款組（純記帳，不走簽核）— 訂金 + 加盟金整合成單一入口（頁內分 tab）
 const FIXED_COLLECTION = [
-  { icon: Banknote, name: '訂金收款', desc: '固定 30 萬，分多筆記錄，加總滿額自動完成', action: '/process/collections?tab=deposit', color: 'var(--accent-cyan)', dim: 'var(--accent-cyan-dim)', tag: '記帳' },
-  { icon: Handshake, name: '加盟金收款', desc: '獨立單；多位投資人分攤總額、每人各自三期 45/45/10（投資人須先付訂金）', action: '/process/collections?tab=franchise', color: 'var(--accent-green)', dim: 'var(--accent-green-dim)', tag: '分攤·三期' },
+  { icon: Banknote, name: '收款', desc: '訂金（固定 30 萬）＋ 加盟金（多位投資人分攤、每人各自三期 45/45/10）收款記錄', action: '/process/collections', color: 'var(--accent-cyan)', dim: 'var(--accent-cyan-dim)', tag: '記帳' },
 ]
 
 const COLOR_MAP = {

@@ -630,7 +630,7 @@ export default function Salary() {
       const list = Array.isArray(rows) ? rows : []
       if (list.length === 0) { toast.error(`${month} 沒有可計薪的員工`); return }
       const [{ data: emps }, { data: org }] = await Promise.all([
-        supabase.from('employees').select('id, employee_number, join_date, store').eq('organization_id', orgId),
+        supabase.from('employees').select('id, employee_number, join_date, store, employment_type, salary_type').eq('organization_id', orgId),
         supabase.from('organizations').select('name').eq('id', orgId).maybeSingle(),
       ])
       const empMap = new Map((emps || []).map(e => [e.id, { ...e }]))

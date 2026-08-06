@@ -150,6 +150,33 @@ function buildSheet(storeName, rows, empMap, company, cols) {
   return ws
 }
 
+// 兼職 = employment_type「兼職」或(空 employment_type 且時薪);其餘(正職/全職/月薪)= 正職
+const isPT = (e) => !!e && (e.employment_type === '兼職' || (!e.employment_type && e.salary_type === 'hourly'))
+
+// 統整分頁:正職/兼職 人數 + 實領總額(實領=netSalary+微調加項−微調扣款,對齊「實領薪資」欄)
+function buildSummarySheet(rows, empMap, month, company) {
+  const ft = { c: 0, net: 0 }, pt = { c: 0, net: 0 }
+  for (const p of rows) {
+    const b = isPT(empMap.get(p.employee_id)) ? pt : ft
+    b.c++; b.net += n(p.netSalary) + n(p.manual_bonus) - n(p.manual_deduction)
+  }
+  const aoa = [
+    [cell(company, titleStyle), cell('', titleStyle), cell('', titleStyle)],
+    [cell(`薪資統整  ${month}`, subTitleStyle), cell('', subTitleStyle), cell('', subTitleStyle)],
+    [cell('類別', colHdrStyle), cell('人數', colHdrStyle), cell('實領總額', colHdrStyle)],
+    [cell('正職', cellTxt), cell(ft.c, cellNum), cell(Math.round(ft.net), cellNum)],
+    [cell('兼職', cellTxt), cell(pt.c, cellNum), cell(Math.round(pt.net), cellNum)],
+    [cell('合計', totalTxt), cell(ft.c + pt.c, totalNum), cell(Math.round(ft.net + pt.net), totalNum)],
+  ]
+  const ws = {}
+  for (let r = 0; r < aoa.length; r++) for (let c = 0; c < 3; c++) ws[XLSX.utils.encode_cell({ r, c })] = aoa[r][c]
+  ws['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: aoa.length - 1, c: 2 } })
+  ws['!cols'] = [{ wch: 10 }, { wch: 10 }, { wch: 16 }]
+  ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 2 } }, { s: { r: 1, c: 0 }, e: { r: 1, c: 2 } }]
+  ws['!rows'] = [{ hpt: 24 }, { hpt: 20 }, { hpt: 18 }]
+  return ws
+}
+
 /**
  * 產生薪資計算報表(多門市工作表,動態欄位)
  * @param rows   preview_payroll 回傳的引擎逐人明細陣列
@@ -170,6 +197,8 @@ export function exportPayrollRegister(rows, empMap, month, company = '') {
   const names = [...groups.keys()].sort((a, b) => (a === '總部' ? -1 : b === '總部' ? 1 : a.localeCompare(b, 'zh-Hant')))
 
   const wb = XLSX.utils.book_new()
+  // 第一頁:統整(正職/兼職 人數 + 實領總額)
+  XLSX.utils.book_append_sheet(wb, buildSummarySheet(rows, empMap, month, company), '統整')
   for (const name of names) {
     const ws = buildSheet(name, groups.get(name), empMap, company, cols)
     const safe = name.replace(/[\\/?*[\]:]/g, '').slice(0, 31)

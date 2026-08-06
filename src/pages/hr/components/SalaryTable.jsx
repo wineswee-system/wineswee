@@ -40,7 +40,7 @@ function buildFullItems(d, adjustments = []) {
 
   // ── 加項順序:底薪 → 津貼 → 加班費 → 其他加項(獎金/離職/微調/殘差) ──
   // 1) 津貼（往上，逐項）
-  ;[['主管加給', d.role_allowance], ['餐費津貼', d.meal_allowance], ['交通津貼', d.transport_allowance],
+  ;[['主管加給', d.role_allowance], ['伙食津貼', d.meal_allowance], ['交通津貼', d.transport_allowance],
     ['夜班津貼', d.night_allowance], ['跨區津貼', d.cross_store_allowance],
   ].forEach(([lbl, v]) => { if (n(v) > 0) push({ label: lbl, value: n(v), sign: '+', section: 'add', color: 'var(--accent-green)' }) })
   if (Array.isArray(d.custom_allowances)) {

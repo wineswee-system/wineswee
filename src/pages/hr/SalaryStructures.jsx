@@ -270,7 +270,7 @@ export default function SalaryStructures() {
           '主管加給': Number(s.supervisor_allowance) || 0,
           '夜班津貼': Number(s.night_shift_allowance) || 0,
           '跨區津貼': Number(s.cross_store_allowance) || 0,
-          '餐費津貼': Number(s.meal_allowance) || 0,
+          '伙食津貼': Number(s.meal_allowance) || 0,
           '交通津貼': Number(s.transport_allowance) || 0,
           '全勤獎金': Number(s.attendance_bonus) || 0,
           '其他自訂津貼': custom,
@@ -368,7 +368,7 @@ export default function SalaryStructures() {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-tertiary)' }}>
-                {['員工', '狀態', '部門', '門市', '薪資類型', '本薪', '主管/夜班/跨區', '餐費/交通', '全勤', '其他津貼', '總薪水', '生效日', '操作'].map(h => (
+                {['員工', '狀態', '部門', '門市', '薪資類型', '本薪', '主管/夜班/跨區', '伙食/交通', '全勤', '其他津貼', '總薪水', '生效日', '操作'].map(h => (
                   <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 600, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
@@ -529,7 +529,7 @@ export default function SalaryStructures() {
             <Field label="跨區津貼">
               <input className="form-input" type="number" value={form.cross_store_allowance} onChange={e => set('cross_store_allowance', e.target.value)} placeholder="0" />
             </Field>
-            <Field label="餐費津貼">
+            <Field label="伙食津貼">
               <input className="form-input" type="number" value={form.meal_allowance} onChange={e => set('meal_allowance', e.target.value)} placeholder="0" />
               <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>NT$ 3,000 以下免稅</div>
             </Field>

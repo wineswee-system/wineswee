@@ -61,7 +61,7 @@ export default function SalaryFormModal({
         <Field label="職務津貼">
           <input className="form-input" type="number" placeholder="0" value={form.role_allowance} onChange={e => set('role_allowance', e.target.value)} />
         </Field>
-        <Field label="餐費津貼">
+        <Field label="伙食津貼">
           <input className="form-input" type="number" placeholder="0" value={form.meal_allowance} onChange={e => set('meal_allowance', e.target.value)} />
         </Field>
         <Field label="交通津貼">

@@ -56,7 +56,8 @@ const TABS = [
 ]
 
 export default function Collections() {
-  const { profile } = useAuth()
+  const { profile, hasPermission } = useAuth()
+  const canUse = hasPermission('collection.manage')   // admin/super_admin 預設有；其餘在權限頁開
   const orgId = profile?.organization_id ?? getTenantOrgId()
   const [sp, setSp] = useSearchParams()
   const tab = TABS.some(t => t.key === sp.get('tab')) ? sp.get('tab') : 'deposit'
@@ -102,6 +103,13 @@ export default function Collections() {
     return data
   }
 
+  if (!canUse) return (
+    <div style={{ padding: 48, textAlign: 'center', color: 'var(--text-muted)' }}>
+      <div style={{ fontSize: 40, marginBottom: 12 }}>🔒</div>
+      <h3 style={{ color: 'var(--accent-red)' }}>權限不足</h3>
+      <p>收款功能僅限管理員或已開通「收款」權限的員工使用。</p>
+    </div>
+  )
   if (loading) return <LoadingSpinner />
 
   return (

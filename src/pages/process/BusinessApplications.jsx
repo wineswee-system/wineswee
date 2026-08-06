@@ -40,7 +40,7 @@ const COLOR_MAP = {
 
 export default function BusinessApplications() {
   const navigate = useNavigate()
-  const { profile } = useAuth()
+  const { profile, hasPermission } = useAuth()
   const [customExpense, setCustomExpense] = useState([])
   const [customNonExpense, setCustomNonExpense] = useState([])
   const [loading, setLoading] = useState(true)
@@ -83,6 +83,7 @@ export default function BusinessApplications() {
 
   const expenseGroup = [...FIXED_EXPENSE, ...customExpense]
   const nonExpenseGroup = [...FIXED_NON_EXPENSE, ...customNonExpense]
+  const collectionGroup = hasPermission('collection.manage') ? FIXED_COLLECTION : []
 
   return (
     <div className="fade-in">
@@ -97,7 +98,7 @@ export default function BusinessApplications() {
 
       <FormGroup title="💰 費用組" desc="會產生費用支出，需驗收" items={expenseGroup} navigate={navigate} />
       <FormGroup title="📋 非費用組" desc="純流程申請，不涉及驗收" items={nonExpenseGroup} navigate={navigate} />
-      <FormGroup title="💵 收款" desc="訂金 / 加盟金收款記錄（純記帳，加總滿額自動完成）" items={FIXED_COLLECTION} navigate={navigate} />
+      <FormGroup title="💵 收款" desc="訂金 / 加盟金收款記錄（純記帳，加總滿額自動完成）" items={collectionGroup} navigate={navigate} />
 
       {expenseGroup.length === 0 && nonExpenseGroup.length === 0 && (
         <div className="card" style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>

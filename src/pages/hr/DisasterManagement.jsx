@@ -129,15 +129,16 @@ export default function DisasterManagement() {
     const { start, end } = dRange(d)
     const [aRes, attRes] = await Promise.all([
       supabase.from('disaster_allowances').select('*').eq('organization_id', orgId).gte('date', start).lte('date', end),
-      supabase.from('attendance_records').select('employee, employee_id, clock_in, clock_out, store, total_hours, date')
+      // ★ attendance_records 是 store_id（沒有 store 文字欄）；select 錯欄位會整包 error 回空 →
+      //   前端誤判「全員沒打卡」→ 有來的人也被結成無薪假（見 20260806130000）。
+      supabase.from('attendance_records').select('employee, employee_id, clock_in, clock_out, store_id, total_hours, date')
         .gte('date', start).lte('date', end).not('clock_in', 'is', null),
     ])
     setAllowances(aRes.data || [])
-    // 若宣告限門市，出勤只留那幾家
+    // 若宣告限門市，出勤只留那幾家（用 store_id 比對）
     let att = attRes.data || []
     if (d.store_ids?.length) {
-      const names = d.store_ids.map(storeName)
-      att = att.filter(a => names.includes(a.store))
+      att = att.filter(a => d.store_ids.includes(a.store_id))
     }
     setAttendance(att)
   }
@@ -367,7 +368,7 @@ export default function DisasterManagement() {
                   <div style={{ maxHeight: 260, overflow: 'auto' }}>
                     {attendance.map((a, i) => (
                       <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 90px 90px 60px', gap: 8, padding: '5px 8px', fontSize: 12, borderBottom: '1px solid var(--border-subtle)' }}>
-                        <span><b>{a.employee}</b> <span style={{ color: 'var(--text-muted)' }}>{a.store || ''}</span></span>
+                        <span><b>{a.employee}</b> <span style={{ color: 'var(--text-muted)' }}>{a.store_id ? storeName(a.store_id) : ''}</span></span>
                         <span>{a.clock_in || '-'}</span>
                         <span>{a.clock_out || '-'}</span>
                         <span style={{ textAlign: 'right' }}>{a.total_hours ? `${a.total_hours}h` : '-'}</span>

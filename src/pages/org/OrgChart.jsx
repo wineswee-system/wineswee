@@ -95,12 +95,16 @@ export default function OrgChart() {
     return mgr ? labelOf(mgr) : (dept.head || '-')
   }
 
+  // 課督導 id 集合：這些人顯示在「課別樹」的督導位，不該再列進部門直屬成員/主管框（避免重複）
+  const sectionSupervisorIds = new Set((sections || []).filter(s => s.supervisor_id).map(s => s.supervisor_id))
+
   // Get sub-managers (is_manager but not the dept manager_id)
   const subManagers = (dept) =>
     employees.filter(e =>
       (e.department_id === dept.id || e.dept === dept.name)
       && e.is_manager
       && e.id !== dept.manager_id
+      && !sectionSupervisorIds.has(e.id)
     )
 
   // Get regular members (non-manager)
@@ -109,6 +113,7 @@ export default function OrgChart() {
       (e.department_id === dept.id || e.dept === dept.name)
       && !e.is_manager
       && e.id !== dept.manager_id
+      && !sectionSupervisorIds.has(e.id)
     )
 
   // Employees assigned to a store, with 店長 first
@@ -139,8 +144,8 @@ export default function OrgChart() {
   const deptStores = (dept) =>
     stores.filter(s => s.department_id === dept.id)
 
-  // Stores not assigned to any department
-  const unassignedStores = stores.filter(s => !s.department_id)
+  // Stores not assigned to any department（也要排除已掛「課別」的門市，否則掛課的門市會同時出現在課別樹與未分配）
+  const unassignedStores = stores.filter(s => !s.department_id && !s.section_id)
 
   // Sections (課) belonging to a department
   const deptSections = (dept) => sections.filter(sec => sec.department_id === dept.id)

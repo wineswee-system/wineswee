@@ -97,6 +97,9 @@ const FEATURES = [
   // 財務（未交付，super_admin 才看得到）
   { module: '財務', label: '財務查看', view: 'finance.view', edit: null },
   { module: '財務', label: '財務編輯', view: null,           edit: 'finance.edit' },
+  // 數據分析（tier 權限碼已存在，補進權限頁讓可逐人開通）
+  { module: '數據分析', label: '數據分析 · 基本（tier 1）', view: 'analytics.tier_1', edit: null },
+  { module: '數據分析', label: '數據分析 · 進階（tier 2）', view: 'analytics.tier_2', edit: null },
   // 導航顯示（sidebar 顯示控制，單一 toggle）
   { module: '導航顯示', label: 'CRM 群組顯示',          view: null, edit: 'nav.group.crm' },
   { module: '導航顯示', label: '供應鏈群組顯示',        view: null, edit: 'nav.group.supply' },

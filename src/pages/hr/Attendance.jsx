@@ -249,6 +249,23 @@ export default function Attendance() {
   }
 
   const today = todayTW()
+  const [statusFilter, setStatusFilter] = useState('')   // '' 全部 / normal / abnormal
+
+  // 一列是否「異常」（遲到 / 早退 / 缺下班 / 有排班卻未打卡）— 狀態篩選器與統計共用
+  const isRowAbnormal = (r) => {
+    if (r._rowType === 'overtime') return false           // 加班單不算
+    const isToday = r.date === today
+    if (r._rowType === 'notClocked') {
+      if (dayCtx.leave[`${r.employee}|${r.date}`]) return false      // 請假
+      const sv = dayCtx.sched[`${r.employee}|${r.date}`]
+      if (!sv || !/\d{1,2}:\d{2}/.test(sv)) return false             // 休/例假/無排班 → 不算異常
+      return true                                                    // 有排班卻沒打卡 = 未打卡
+    }
+    if (r.status === '請假') return false
+    const missingOut = !isToday && r.clock_in && !r.clock_out
+    const le = lateEarly(r)
+    return missingOut || (le && (le.late > 0 || le.early > 0)) || r.status === '遲到'
+  }
 
   const filtered = useMemo(() => records.filter(r =>
     (deptFilter === '' || getEmpDept(r.employee) === deptFilter) &&
@@ -351,13 +368,19 @@ export default function Attendance() {
     )
   }, [filtered, otRows, records, employees, dayLeaves, getEmpDept, getEmpStore, storeFilter, deptFilter, search, startDate, endDate, isStaff, isManager, profile, visibleStoreIds])
 
+  // 狀態篩選（正常 / 異常）
+  const viewRows = useMemo(
+    () => statusFilter === '' ? allRows
+        : allRows.filter(r => statusFilter === 'abnormal' ? isRowAbnormal(r) : !isRowAbnormal(r)),
+    [allRows, statusFilter]   // eslint-disable-line react-hooks/exhaustive-deps
+  )
   // 前端分頁：預設每頁 100 筆。篩選/區間/tab 改變時回第 1 頁。
-  useEffect(() => { setPage(1) }, [search, deptFilter, storeFilter, startDate, endDate, tab])
-  const totalPages = Math.max(1, Math.ceil(allRows.length / PAGE_SIZE))
+  useEffect(() => { setPage(1) }, [search, deptFilter, storeFilter, statusFilter, startDate, endDate, tab])
+  const totalPages = Math.max(1, Math.ceil(viewRows.length / PAGE_SIZE))
   const safePage = Math.min(page, totalPages)
   const pagedRows = useMemo(
-    () => allRows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
-    [allRows, safePage]
+    () => viewRows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
+    [viewRows, safePage]
   )
 
   if (loading) return <LoadingSpinner />
@@ -607,15 +630,22 @@ export default function Attendance() {
       <div className="card">
         <div className="card-header">
           <div className="card-title"><span className="card-title-icon">📋</span> 出勤紀錄</div>
-          <div className="search-bar">
-            <Search className="search-icon" />
-            <input type="text" placeholder="搜尋員工..." className="form-input" style={{ paddingLeft: 38 }}
-              value={search} onChange={e => setSearch(e.target.value)} />
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <select className="form-input" style={{ fontSize: 13, maxWidth: 120 }} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+              <option value="">全部狀態</option>
+              <option value="normal">正常</option>
+              <option value="abnormal">異常</option>
+            </select>
+            <div className="search-bar">
+              <Search className="search-icon" />
+              <input type="text" placeholder="搜尋員工..." className="form-input" style={{ paddingLeft: 38 }}
+                value={search} onChange={e => setSearch(e.target.value)} />
+            </div>
           </div>
         </div>
         <div>
-          {allRows.length === 0 && (
-            <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>尚無出勤紀錄</div>
+          {viewRows.length === 0 && (
+            <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>{statusFilter ? '無符合此狀態的紀錄' : '尚無出勤紀錄'}</div>
           )}
           {/* 橫向捲動容器:表頭 + 內容一起捲 */}
           <div style={{ overflowX: 'auto' }}>
@@ -728,10 +758,10 @@ export default function Attendance() {
            </div>
           </div>
           {/* 分頁 */}
-          {allRows.length > PAGE_SIZE && (
+          {viewRows.length > PAGE_SIZE && (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '12px 16px', borderTop: '1px solid var(--border-subtle)', flexWrap: 'wrap' }}>
               <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                顯示 {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, allRows.length)} / 共 {allRows.length} 筆
+                顯示 {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, viewRows.length)} / 共 {viewRows.length} 筆
               </span>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <button className="btn btn-secondary" style={{ fontSize: 12, padding: '4px 12px' }} disabled={safePage <= 1} onClick={() => goToPage(safePage - 1)}>← 上一頁</button>

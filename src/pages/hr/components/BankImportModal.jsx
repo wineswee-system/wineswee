@@ -30,13 +30,13 @@ export default function BankImportModal({ onClose }) {
   const [loadingRoster, setLoadingRoster] = useState(true)
   const [showFull, setShowFull] = useState(false)
 
-  // 撈在職員工 + 各自帳號（admin 才讀得到帳號;RLS 把關）
+  // 撈在職 + 離職員工 + 各自帳號（離職者最後月薪也要匯款,需帳號;admin 才讀得到帳號,RLS 把關）
   const loadRoster = useCallback(async () => {
     setLoadingRoster(true)
     let q = supabase
       .from('employees')
       .select('id, name, employee_number, status, employee_bank_accounts(bank_code, bank_branch, bank_account)')
-      .eq('status', '在職')
+      .in('status', ['在職', '離職'])
     if (profile?.organization_id) q = q.eq('organization_id', profile.organization_id)  // 只看本租戶（不混到 Demo org）
     const { data, error } = await q.order('name')
     if (error) { toast.error('讀取清單失敗：' + error.message); setRoster([]) }
@@ -125,7 +125,7 @@ export default function BankImportModal({ onClose }) {
             <div style={{ fontSize: 14, fontWeight: 700 }}>
               目前帳號狀態
               <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 500, color: 'var(--text-muted)' }}>
-                在職 {roster.length} 人 · 已建 {haveCount} · 缺 {roster.length - haveCount}
+                在職 {roster.filter(e => e.status === '在職').length} · 離職 {roster.filter(e => e.status === '離職').length} · 已建 {haveCount} · 缺 {roster.length - haveCount}
               </span>
             </div>
             <button className="btn btn-secondary" style={{ fontSize: 12, padding: '4px 10px' }} onClick={() => setShowFull(v => !v)}>
@@ -144,7 +144,7 @@ export default function BankImportModal({ onClose }) {
                     const missing = !b?.bank_account
                     return (
                       <tr key={e.id}>
-                        <td style={{ fontWeight: 600 }}>{e.name}</td>
+                        <td style={{ fontWeight: 600 }}>{e.name}{e.status === '離職' && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 600, padding: '1px 5px', borderRadius: 4, background: 'var(--accent-orange-dim)', color: 'var(--accent-orange)' }}>離職</span>}</td>
                         <td>{b?.bank_code || (missing ? <span style={{ color: 'var(--accent-red)' }}>—</span> : '')}</td>
                         <td>{b?.bank_branch || ''}</td>
                         <td style={{ fontFamily: 'monospace' }}>

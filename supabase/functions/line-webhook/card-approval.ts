@@ -331,7 +331,11 @@ function deriveFileName(url: string, idx: number): string {
   try {
     const u = new URL(url);
     const last = u.pathname.split("/").filter(Boolean).pop();
-    if (last) return decodeURIComponent(last);
+    if (last) {
+      const dec = decodeURIComponent(last);
+      // 去掉上傳時加的「單號-時間-」前綴,只留使用者原始檔名(新格式);舊格式維持原樣
+      return dec.replace(/^\d+-\d+-/, "") || dec;
+    }
   } catch { /* not a URL */ }
   return `附件 ${idx}`;
 }

@@ -272,7 +272,8 @@ export function validateSchedule(schedules, weekDates, shiftDefs = [], employees
   shiftDefs.forEach(d => {
     const start = _hm(d.start_time)
     const end = _hm(d.end_time)
-    if (start != null && end != null) shiftTimeMap[d.name] = { start, end }
+    // 帶上班別休息(手動休息如兩頭班/長休班),供淨工時計算 — 不然長休班會用 span 誤判超時
+    if (start != null && end != null) shiftTimeMap[d.name] = { start, end, manual_break: d.manual_break, break_minutes: d.break_minutes }
   })
 
   // 統一解析一筆班的上下班時間（小數小時，0–24）。優先序：
@@ -283,8 +284,8 @@ export function validateSchedule(schedules, weekDates, shiftDefs = [], employees
   const resolveShift = (s) => {
     let start = _hm(s.actual_start)
     let end = _hm(s.actual_end)
+    const def = shiftTimeMap[s.shift]
     if (start == null || end == null) {
-      const def = shiftTimeMap[s.shift]
       if (def) { start = def.start; end = def.end }
     }
     if (start == null || end == null) {
@@ -293,7 +294,13 @@ export function validateSchedule(schedules, weekDates, shiftDefs = [], employees
     }
     if (start == null || end == null) return null
     const hours = end > start ? end - start : (24 - start + end)
-    return { start, end, hours }
+    // 淨工時 = span − 休息(優先 schedule.rest_minutes → 班別 manual_break → 階梯公式),對齊計薪 net_work_hours
+    let restMin
+    if (s.rest_minutes != null) restMin = Math.max(0, Number(s.rest_minutes) || 0)
+    else if (def?.manual_break) restMin = Math.max(0, Number(def.break_minutes) || 0)
+    else restMin = hours < 5 ? 0 : hours < 9 ? 30 : 60
+    const netHours = Math.max(0, hours - restMin / 60)
+    return { start, end, hours, netHours }
   }
 
   // Group by employee
@@ -310,15 +317,15 @@ export function validateSchedule(schedules, weekDates, shiftDefs = [], employees
     // H10: 四週變形工時制不檢查每週休假（由月制 off_requests 控制）
     // 原規則：每週至少2天休息 (§36) — 已停用
 
-    // H2: 單日排班上限 — 最多 11h（10 工作 + 1 休息）
+    // H2: 單日淨工時上限 — 正常+延長 ≤ 12h（勞基法 §32）;讀班別休息,不用 span(長休班會誤判)
     for (const s of workDays) {
-      const hours = resolveShift(s)?.hours
-      if (hours && hours > DAILY_MAX_SPAN_HOURS) {
+      const net = resolveShift(s)?.netHours
+      if (net && net > DAILY_MAX_SPAN_HOURS) {
         errors.push({
           employee: emp,
           constraint: 'H2',
           law: '單日工時上限',
-          message: `${emp} ${s.date} 班次「${s.shift}」單日 ${hours.toFixed(1)}h 超過上限 ${DAILY_MAX_SPAN_HOURS}h（11 工作 + 1 休息）`,
+          message: `${emp} ${s.date} 班次「${s.shift}」單日淨工時 ${net.toFixed(1)}h 超過上限 ${DAILY_MAX_SPAN_HOURS}h（勞基法 §32）`,
           severity: 'error',
         })
       }

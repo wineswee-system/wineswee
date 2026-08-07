@@ -6,7 +6,7 @@
  */
 
 import {
-  parseTime, getShiftHours, getNetWorkHours, effectiveEndHour, isNightShift, isAbsence,
+  parseTime, getNetWorkHours, effectiveEndHour, isNightShift, isAbsence,
   getWorkSystemConstraints,
   DAILY_MAX_SPAN_HOURS, MAX_CONSECUTIVE_WORK_DAYS, MIN_SHIFT_INTERVAL, MIN_WEEKLY_REST_DAYS,
 } from './scheduleUtils'
@@ -43,10 +43,10 @@ export function validateShiftChange({
     return s?.shift || null
   }
 
-  // H2: 單日排班上限 12h（11 工作 + 1 休息，四週變形）
-  const hours = getShiftHours(shiftDef)
-  if (hours > DAILY_MAX_SPAN_HOURS) {
-    errors.push(`單日工時 ${hours.toFixed(1)}h 超過上限 ${DAILY_MAX_SPAN_HOURS}h（11 工作 + 1 休息）`)
+  // H2: 單日淨工時上限 ≤ 12h（§32 正常+延長）;讀班別休息(長休班/兩頭班),不用 span 免誤判
+  const netWork = getNetWorkHours(shiftDef)
+  if (netWork > DAILY_MAX_SPAN_HOURS) {
+    errors.push(`單日淨工時 ${netWork.toFixed(1)}h 超過上限 ${DAILY_MAX_SPAN_HOURS}h（勞基法 §32）`)
   }
 
   // H3: Consecutive work days ≤ 6

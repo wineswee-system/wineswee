@@ -74,8 +74,9 @@ export default function EmployeeFormModal({
       + (form.custom_allowances || []).reduce((s, c) => s + n(c.amount), 0)
     if (insuredBase <= 0) { toast.error('請先填「本薪 / 時薪」與津貼'); return }
     const labor = findLaborBracket(insBrackets.labor, insuredBase, { isPartTime: isPT })?.insured_salary
-    // 健保無 PT 例外:受僱者一律從第 1 級 29,500 起跳(對齊計薪引擎),不套 PT 11,100~29,500
-    const health = findHealthBracket(insBrackets.health, insuredBase)?.insured_salary
+    // 健保:一般受僱者依基數查表(最低 29,500);★兼職一律固定最低 29,500
+    //   (PT 投保基數是時薪×時數×4.33,weekly_hours 常灌水成 40 → 基數 >29,500 會抓到過高級距)
+    const health = findHealthBracket(insBrackets.health, isPT ? 0 : insuredBase)?.insured_salary
     // 三者法定投保上限不同,各自封頂(級距表最高到 313,000,不 clamp 會超投保)
     if (labor) {
       set('labor_ins_grade',        Math.min(labor, 45800))   // 勞保封頂 45,800

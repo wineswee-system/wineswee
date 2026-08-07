@@ -139,18 +139,28 @@ export function buildSalaryFullMessage(r: any): object {
   pA("主管加給", r.role_allowance);
   pA("伙食津貼", r.meal_allowance);
   pA("交通津貼", r.transport_allowance);
+  const customs: any[] = Array.isArray(r.custom_allowances) ? r.custom_allowances : [];
+  for (const c of customs) pA(c?.name || "自訂津貼", c?.amount);
   // allowance_legacy 是津貼合計欄:只有沒逐項時才用,避免重複計
-  if (N(r.role_allowance) + N(r.meal_allowance) + N(r.transport_allowance) === 0) pA("津貼", r.allowance_legacy);
+  const itemizedAllow = N(r.role_allowance) + N(r.meal_allowance) + N(r.transport_allowance)
+    + customs.reduce((s: number, c: any) => s + N(c?.amount), 0);
+  if (itemizedAllow === 0) pA("津貼", r.allowance_legacy);
   pA("加班費", r.overtime_pay);
   pA("全勤獎金", r.attendance_bonus);
   pA("獎金", r.bonus);
+  pA("特休折現", r.unused_leave_payout);
 
   // 減項
   const ded: Array<[string, number]> = [];
   const pD = (l: string, v: any) => { if (N(v) > 0) ded.push([l, Math.round(N(v))]); };
-  pD("勞健保自付", r.insurance);
+  if (N(r.labor_insurance) > 0 || N(r.health_insurance) > 0) {
+    pD("勞保自付", r.labor_insurance);
+    pD("健保自付", r.health_insurance);
+  } else pD("勞健保自付", r.insurance);
+  pD("勞退自提", r.pension_self);
   pD("無薪假", r.absence_deduction);
   pD("遲到", r.late_deduction);
+  pD("所得稅", r.income_tax);
   pD(r.other_deduction_note || "其他扣款", r.other_deduction);
 
   // 殘差吸收(讓「本薪+加項−減項 = 實領」;粗欄位算不齊的差額歸其他)

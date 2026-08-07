@@ -69,6 +69,37 @@ function buildPayslipFlex(
   const lateDed   = num(R.lateDeduction ?? R.late_deduction)
   const totalDed  = num(R.totalDeductions ?? R.total_deductions)
   const net       = num(R.netSalary ?? R.net_salary)
+  const customs   = Array.isArray((R as any).custom_allowances) ? (R as any).custom_allowances as Array<{ name?: string; amount?: unknown }> : []
+
+  // ── 對齊 LIFF 薪資袋:本薪獨立最上,加項/減項不含本薪(0 不顯示);殘差吸收讓「本薪+加項−減項=實領」──
+  const addItems: Array<[string, number]> = []
+  const pushA = (l: string, v: number) => { if (num(v) > 0) addItems.push([l, Math.round(num(v))]) }
+  pushA('主管加給', role); pushA('伙食津貼', meal); pushA('交通津貼', transport)
+  for (const c of customs) pushA(String(c?.name || '津貼'), num(c?.amount))
+  pushA('全勤獎金', attBonus); pushA('加班費', ot)
+  const addSub   = Math.round(gross - base)                                     // 加項小計 = 應發 − 本薪
+  const addResid = addSub - addItems.reduce((s, [, v]) => s + v, 0)
+  if (addResid > 1) addItems.push(['其他加項', addResid])
+
+  const dedItems: Array<[string, number]> = []
+  const pushD = (l: string, v: number) => { if (num(v) > 0) dedItems.push([l, Math.round(num(v))]) }
+  pushD('勞保自付', laborIns); pushD('健保自付', healthIns); pushD('勞退自提', pension)
+  pushD('請假', leaveDed); pushD('遲到', lateDed)
+  const dedResid = Math.round(totalDed) - dedItems.reduce((s, [, v]) => s + v, 0)
+  if (dedResid > 1) dedItems.push(['其他扣款', dedResid])
+
+  const aRow = ([l, v]: [string, number]) => ({
+    type: 'box', layout: 'horizontal', contents: [
+      { type: 'text', text: l, size: 'sm', color: '#555555', flex: 4 },
+      { type: 'text', text: `+$${fmt(v)}`, size: 'sm', color: '#16a34a', align: 'end', flex: 3 },
+    ],
+  })
+  const mRow = ([l, v]: [string, number]) => ({
+    type: 'box', layout: 'horizontal', contents: [
+      { type: 'text', text: l, size: 'sm', color: '#555555', flex: 4 },
+      { type: 'text', text: `-$${fmt(v)}`, size: 'sm', color: '#ef4444', align: 'end', flex: 3 },
+    ],
+  })
 
   return {
     type: 'flex',
@@ -90,80 +121,31 @@ function buildPayslipFlex(
         contents: [
           { type: 'text', text: `${employeeName} 您好`, weight: 'bold', size: 'md' },
           { type: 'separator', margin: 'md' },
-          // ── 收入 ──
-          { type: 'text', text: '＋ 加項', weight: 'bold', size: 'sm', color: '#22c55e', margin: 'md' },
-          {
-            type: 'box', layout: 'vertical', spacing: 'xs', margin: 'sm',
-            contents: [
-              { type: 'box', layout: 'horizontal', contents: [
-                { type: 'text', text: '本薪', size: 'sm', color: '#555555', flex: 4 },
-                { type: 'text', text: `$${fmt(base)}`, size: 'sm', align: 'end', flex: 3 },
-              ]},
-              { type: 'box', layout: 'horizontal', contents: [
-                { type: 'text', text: '主管加給', size: 'sm', color: '#555555', flex: 4 },
-                { type: 'text', text: `$${fmt(role)}`, size: 'sm', align: 'end', flex: 3 },
-              ]},
-              { type: 'box', layout: 'horizontal', contents: [
-                { type: 'text', text: '伙食津貼', size: 'sm', color: '#555555', flex: 4 },
-                { type: 'text', text: `$${fmt(meal)}`, size: 'sm', align: 'end', flex: 3 },
-              ]},
-              { type: 'box', layout: 'horizontal', contents: [
-                { type: 'text', text: '交通津貼', size: 'sm', color: '#555555', flex: 4 },
-                { type: 'text', text: `$${fmt(transport)}`, size: 'sm', align: 'end', flex: 3 },
-              ]},
-              { type: 'box', layout: 'horizontal', contents: [
-                { type: 'text', text: '全勤獎金', size: 'sm', color: '#555555', flex: 4 },
-                { type: 'text', text: `$${fmt(attBonus)}`, size: 'sm', align: 'end', flex: 3 },
-              ]},
-              { type: 'box', layout: 'horizontal', contents: [
-                { type: 'text', text: '加班費', size: 'sm', color: '#555555', flex: 4 },
-                { type: 'text', text: `$${fmt(ot)}`, size: 'sm', align: 'end', flex: 3 },
-              ]},
-              { type: 'box', layout: 'horizontal', contents: [
-                { type: 'text', text: '加項合計', size: 'sm', weight: 'bold', flex: 4 },
-                { type: 'text', text: `$${fmt(gross)}`, size: 'sm', weight: 'bold', align: 'end', flex: 3 },
-              ]},
-            ],
-          },
+          // ── 本薪（獨立最上，對齊薪資袋）──
+          { type: 'box', layout: 'horizontal', contents: [
+            { type: 'text', text: '本薪', size: 'sm', weight: 'bold', flex: 4 },
+            { type: 'text', text: `$${fmt(base)}`, size: 'sm', weight: 'bold', align: 'end', flex: 3 },
+          ]},
+          // ── ＋ 加項（不含本薪）──
+          { type: 'box', layout: 'horizontal', margin: 'md', contents: [
+            { type: 'text', text: '＋ 加項', weight: 'bold', size: 'sm', color: '#16a34a', flex: 4 },
+            { type: 'text', text: `+$${fmt(addSub)}`, weight: 'bold', size: 'sm', color: '#16a34a', align: 'end', flex: 3 },
+          ]},
+          { type: 'box', layout: 'vertical', spacing: 'xs', margin: 'sm', contents: addItems.map(aRow) },
+          // ── － 減項 ──
+          { type: 'box', layout: 'horizontal', margin: 'md', contents: [
+            { type: 'text', text: '－ 減項', weight: 'bold', size: 'sm', color: '#ef4444', flex: 4 },
+            { type: 'text', text: `-$${fmt(totalDed)}`, weight: 'bold', size: 'sm', color: '#ef4444', align: 'end', flex: 3 },
+          ]},
+          { type: 'box', layout: 'vertical', spacing: 'xs', margin: 'sm', contents: dedItems.map(mRow) },
           { type: 'separator', margin: 'md' },
-          // ── 扣除 ──
-          { type: 'text', text: '－ 減項', weight: 'bold', size: 'sm', color: '#ef4444', margin: 'md' },
+          // ── ＝ 實領 ──
           {
-            type: 'box', layout: 'vertical', spacing: 'xs', margin: 'sm',
+            type: 'box', layout: 'horizontal', margin: 'md', paddingAll: '10px',
+            backgroundColor: '#f0fdf4', cornerRadius: '8px',
             contents: [
-              { type: 'box', layout: 'horizontal', contents: [
-                { type: 'text', text: '勞保自付', size: 'sm', color: '#555555', flex: 4 },
-                { type: 'text', text: `-$${fmt(laborIns)}`, size: 'sm', color: '#ef4444', align: 'end', flex: 3 },
-              ]},
-              { type: 'box', layout: 'horizontal', contents: [
-                { type: 'text', text: '健保自付', size: 'sm', color: '#555555', flex: 4 },
-                { type: 'text', text: `-$${fmt(healthIns)}`, size: 'sm', color: '#ef4444', align: 'end', flex: 3 },
-              ]},
-              { type: 'box', layout: 'horizontal', contents: [
-                { type: 'text', text: '勞退自提', size: 'sm', color: '#555555', flex: 4 },
-                { type: 'text', text: `-$${fmt(pension)}`, size: 'sm', color: '#ef4444', align: 'end', flex: 3 },
-              ]},
-              { type: 'box', layout: 'horizontal', contents: [
-                { type: 'text', text: '請假', size: 'sm', color: '#555555', flex: 4 },
-                { type: 'text', text: `-$${fmt(leaveDed)}`, size: 'sm', color: '#ef4444', align: 'end', flex: 3 },
-              ]},
-              { type: 'box', layout: 'horizontal', contents: [
-                { type: 'text', text: '遲到', size: 'sm', color: '#555555', flex: 4 },
-                { type: 'text', text: `-$${fmt(lateDed)}`, size: 'sm', color: '#ef4444', align: 'end', flex: 3 },
-              ]},
-              { type: 'box', layout: 'horizontal', contents: [
-                { type: 'text', text: '減項合計', size: 'sm', weight: 'bold', flex: 4 },
-                { type: 'text', text: `-$${fmt(totalDed)}`, size: 'sm', weight: 'bold', color: '#ef4444', align: 'end', flex: 3 },
-              ]},
-            ],
-          },
-          { type: 'separator', margin: 'md' },
-          // ── 實發 ──
-          {
-            type: 'box', layout: 'horizontal', margin: 'md',
-            contents: [
-              { type: 'text', text: '實領', weight: 'bold', size: 'md', flex: 4 },
-              { type: 'text', text: `$${fmt(net)}`, weight: 'bold', size: 'md', color: '#22c55e', align: 'end', flex: 3 },
+              { type: 'text', text: '＝ 實領', weight: 'bold', size: 'md', color: '#16a34a', flex: 4 },
+              { type: 'text', text: `$${fmt(net)}`, weight: 'bold', size: 'md', color: '#16a34a', align: 'end', flex: 3 },
             ],
           },
         ],

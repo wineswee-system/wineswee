@@ -1,6 +1,6 @@
 -- HR 簽核卡附件:統一取附件 helper + 共用卡 _push_hr_chain_flex 加附件顯示 — 2026-08-07
 -- 所有 HR 簽核卡(請假/加班/出差/補打卡/離職/留停/異動/增補)附件顯示在卡片上:
---   圖片內嵌(縮圖,點開放大)、非圖片列「📄 檔名」(點開下載)。上限 4 個,超過提示看詳情。
+--   每個附件一列「📎 檔名」純連結,點開檔案(不內嵌圖片)。上限 6 個,超過提示看詳情。
 -- 附件來源:form_attachments(新式表單) ∪ 直接欄位(leave.attachments[]/resignation.attachment_url)。
 -- _push_hr_chain_flex dump live 定義,只加 DECLARE 變數 + 附件區塊,其餘逐字保留。
 -- ════════════════════════════════════════════════════════════════════════════
@@ -150,7 +150,7 @@ BEGIN
 
   v_rows := v_rows || COALESCE(p_extra_rows, '[]'::jsonb) || COALESCE(p_reason_block, '[]'::jsonb);
 
-  -- ── 附件:圖片內嵌、非圖片列 📎(所有 HR 簽核卡通用;來源統一 helper) ──
+  -- ── 附件:純連結(所有 HR 簽核卡通用;來源統一 helper);點檔名開附件 ──
   v_atts := public._hr_request_attachments(p_rt, p_id);
   IF v_atts IS NOT NULL AND jsonb_array_length(v_atts) > 0 THEN
     v_rows := v_rows || jsonb_build_array(
@@ -158,22 +158,16 @@ BEGIN
       jsonb_build_object('type','text','text','📎 附件 (' || jsonb_array_length(v_atts) || ')',
         'size','xs','color','#8A8A8A','weight','bold','margin','md')
     );
-    FOR v_i IN 0 .. LEAST(jsonb_array_length(v_atts), 4) - 1 LOOP
+    FOR v_i IN 0 .. LEAST(jsonb_array_length(v_atts), 6) - 1 LOOP
       v_url  := v_atts -> v_i ->> 'url';
       v_name := COALESCE(v_atts -> v_i ->> 'name', '附件');
-      IF v_url ~* '[.](jpe?g|png|gif|webp|heic|heif)([?]|$)' THEN
-        v_rows := v_rows || jsonb_build_array(jsonb_build_object(
-          'type','image','url',v_url,'size','full','aspectMode','cover','aspectRatio','20:13',
-          'margin','sm','action', jsonb_build_object('type','uri','uri',v_url)));
-      ELSE
-        v_rows := v_rows || jsonb_build_array(jsonb_build_object(
-          'type','text','text','📄 ' || v_name,'size','sm','color','#1E88E5','wrap',true,'margin','sm',
-          'action', jsonb_build_object('type','uri','uri',v_url)));
-      END IF;
-    END LOOP;
-    IF jsonb_array_length(v_atts) > 4 THEN
       v_rows := v_rows || jsonb_build_array(jsonb_build_object(
-        'type','text','text','⋯ 還有 ' || (jsonb_array_length(v_atts)-4) || ' 個,點詳情看',
+        'type','text','text','📎 ' || v_name,'size','sm','color','#1E88E5','wrap',true,'margin','sm',
+        'action', jsonb_build_object('type','uri','uri',v_url)));
+    END LOOP;
+    IF jsonb_array_length(v_atts) > 6 THEN
+      v_rows := v_rows || jsonb_build_array(jsonb_build_object(
+        'type','text','text','⋯ 還有 ' || (jsonb_array_length(v_atts)-6) || ' 個,點詳情看',
         'size','xxs','color','#AAAAAA','margin','sm'));
     END IF;
   END IF;

@@ -34,37 +34,38 @@ function createPdf(jsPDF, title, subtitle) {
 
 // Export attendance records — 改用 HTML + window.print（jsPDF 沒嵌中文字型會亂碼，
 // 比照 printSignOff 的做法，用系統中文字型，中文正常，讓使用者列印 / 另存 PDF）
+// records：已由 Attendance.jsx 解析好各欄的 plain rows（對齊畫面表格欄位）
 export function exportAttendancePdf(records, filters = {}) {
   const esc = (s) => s == null ? '' : String(s).replace(/[<>&"']/g, c => (
     { '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' }[c]
   ))
+  const cell = (v, c = true) => `<td${c ? ' class="c"' : ''}>${esc(v) || '-'}</td>`
   const normal = records.filter(r => r.status === '正常').length
-  const late = records.filter(r => r.status === '遲到').length
+  const abnormal = records.filter(r => /異常|遲到|早退|缺下班|未打卡/.test(r.status || '')).length
   const rows = records.map((r, i) => `
     <tr>
       <td class="c">${i + 1}</td>
-      <td>${esc(r.employee) || '-'}</td>
-      <td class="c">${esc(r.date) || '-'}</td>
-      <td class="c">${esc(r.clock_in) || '-'}</td>
-      <td class="c">${esc(r.clock_out) || '-'}</td>
-      <td class="c">${r.hours ? esc(r.hours) + 'h' : '-'}</td>
-      <td class="c">${esc(r.status) || '-'}</td>
+      ${cell(r.employee, false)}${cell(r.dept, false)}${cell(r.date)}${cell(r.shift)}
+      ${cell(r.clock_in)}${cell(r.clock_out)}${cell(r.hours)}${cell(r.ot)}${cell(r.leave)}
+      ${cell(r.location, false)}<td class="c gps">${esc(r.gps) || '-'}</td>${cell(r.status)}
     </tr>`).join('')
 
   const html = `<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8">
 <title>打卡追蹤報表</title>
 <style>
   * { box-sizing: border-box; }
-  body { font-family: "Microsoft JhengHei","PingFang TC","Noto Sans TC","Heiti TC",sans-serif; margin: 24px; color: #1a1a1a; }
-  h1 { font-size: 20px; margin: 0 0 4px; color: #0e7490; }
-  .sub { font-size: 13px; color: #666; margin-bottom: 16px; }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th { background: #0e7490; color: #fff; padding: 8px 10px; text-align: left; font-weight: 600; white-space: nowrap; }
-  td { padding: 6px 10px; border-bottom: 1px solid #e5e7eb; }
+  @page { size: A4 landscape; margin: 10mm; }
+  body { font-family: "Microsoft JhengHei","PingFang TC","Noto Sans TC","Heiti TC",sans-serif; margin: 20px; color: #1a1a1a; }
+  h1 { font-size: 18px; margin: 0 0 4px; color: #0e7490; }
+  .sub { font-size: 12px; color: #666; margin-bottom: 14px; }
+  table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  th { background: #0e7490; color: #fff; padding: 6px 6px; text-align: left; font-weight: 600; white-space: nowrap; }
+  td { padding: 5px 6px; border-bottom: 1px solid #e5e7eb; }
   td.c, th.c { text-align: center; }
+  td.gps { font-size: 9px; font-family: monospace; color: #555; white-space: nowrap; }
   tr:nth-child(even) td { background: #f5f7fa; }
-  .summary { margin-top: 16px; font-size: 13px; color: #333; font-weight: 600; }
-  .toolbar { margin-bottom: 16px; }
+  .summary { margin-top: 14px; font-size: 12px; color: #333; font-weight: 600; }
+  .toolbar { margin-bottom: 14px; }
   .toolbar button { padding: 8px 20px; border-radius: 6px; border: none; background: #0e7490; color: #fff; font-size: 14px; cursor: pointer; }
   @media print { .toolbar { display: none; } body { margin: 0; } }
 </style></head>
@@ -74,12 +75,13 @@ export function exportAttendancePdf(records, filters = {}) {
   <div class="sub">期間：${esc(filters.date || filters.month || '全部')}　｜　部門：${esc(filters.dept || '全部')}　｜　產生時間：${new Date().toLocaleString('zh-TW')}</div>
   <table>
     <thead><tr>
-      <th class="c">#</th><th>員工</th><th class="c">日期</th>
-      <th class="c">上班</th><th class="c">下班</th><th class="c">工時</th><th class="c">狀態</th>
+      <th class="c">#</th><th>員工</th><th>部門</th><th class="c">日期</th><th class="c">當天班表</th>
+      <th class="c">上班打卡</th><th class="c">下班打卡</th><th class="c">工時</th><th class="c">加班</th><th class="c">請假</th>
+      <th>打卡地點</th><th class="c">經緯度</th><th class="c">狀態</th>
     </tr></thead>
     <tbody>${rows}</tbody>
   </table>
-  <div class="summary">共 ${records.length} 筆　｜　正常 ${normal}　｜　遲到 ${late}</div>
+  <div class="summary">共 ${records.length} 筆　｜　正常 ${normal}　｜　異常/遲到/未打卡 ${abnormal}</div>
 </body></html>`
 
   const w = window.open('', '_blank', 'width=1000,height=1200')

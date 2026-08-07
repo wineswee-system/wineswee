@@ -387,6 +387,46 @@ export default function Attendance() {
     [viewRows, safePage]
   )
 
+  // 匯出 PDF：把顯示集(viewRows,未分頁)每列解析成各欄字串(對齊畫面表格欄位)
+  const buildExportRows = () => viewRows.map((r) => {
+    const isNotClocked = r._rowType === 'notClocked' || r._rowType === 'leave'
+    const isOvertime = r._rowType === 'overtime'
+    const sched = dayCtx.sched[`${r.employee}|${r.date}`] || ''
+    const o = dayCtx.ot[`${r.employee}|${r.date}`]
+    const lv = dayCtx.leave[`${r.employee}|${r.date}`]
+    const le = (isNotClocked || isOvertime) ? null : lateEarly(r)
+    const missingOut = !isOvertime && !isNotClocked && r.date !== today && r.clock_in && !r.clock_out
+    let status
+    if (isOvertime) status = '加班'
+    else if (isNotClocked) {
+      if (lv) status = lv.pending ? '請假(審)' : '請假'
+      else { const isWork = sched && /\d{1,2}:\d{2}/.test(sched); status = sched ? (isWork ? '未打卡' : sched) : '無排班' }
+    } else {
+      const abnormal = r.status === '正常' && ((le && (le.late > 0 || le.early > 0)) || missingOut)
+      status = abnormal ? '異常' : r.status
+      const extra = []
+      if (le?.late > 0) extra.push(`遲到${le.late}分`)
+      if (le?.early > 0) extra.push(`早退${le.early}分`)
+      if (missingOut) extra.push('缺下班')
+      if (extra.length) status += `（${extra.join('、')}）`
+    }
+    return {
+      employee: r.employee,
+      dept: (isNotClocked ? (r.dept || getEmpDept(r.employee)) : getEmpDept(r.employee)) || '',
+      date: r.date,
+      shift: sched,
+      clock_in: (!isNotClocked && r.clock_in) || '',
+      clock_out: (!isNotClocked && r.clock_out) || '',
+      hours: (!isNotClocked && r.hours > 0) ? `${r.hours}h` : '',
+      ot: (o?.h > 0) ? `${o.h}h${o.pending ? '(審)' : ''}` : '',
+      leave: lv ? `${lv.type}${lv.pending ? '(審)' : ''}` : '',
+      location: isOvertime ? '加班單' : (isNotClocked ? '' : (r.clock_in_location || '')),
+      gps: (!isNotClocked && r.clock_in_lat != null && r.clock_in_lng != null)
+        ? `${Number(r.clock_in_lat).toFixed(5)}, ${Number(r.clock_in_lng).toFixed(5)}` : '',
+      status,
+    }
+  })
+
   if (loading) return <LoadingSpinner />
   if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
@@ -551,7 +591,7 @@ export default function Attendance() {
             {canEditClock && (
               <button className="btn btn-primary" onClick={openBackfill}><Clock size={14} /> 補登打卡</button>
             )}
-            <button className="btn btn-secondary" onClick={() => exportAttendancePdf(filtered, { dept: deptFilter, date: `${startDate} ~ ${endDate}` })}><Download size={14} /> 匯出 PDF</button>
+            <button className="btn btn-secondary" onClick={() => exportAttendancePdf(buildExportRows(), { dept: deptFilter, date: `${startDate} ~ ${endDate}` })}><Download size={14} /> 匯出 PDF</button>
           </div>
         </div>
       </div>

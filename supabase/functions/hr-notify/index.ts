@@ -82,7 +82,7 @@ function row(label: string, value: string, valueColor = "#111111") {
 // ── 1. 請假提交 → 通知主管審核 ──────────────────────────────
 function buildLeaveSubmissionNotification(details: {
   leave_id?: number; requester_name: string; leave_type: string;
-  start_date: string; end_date: string; total_days: number; reason?: string;
+  start_date: string; end_date: string; total_days: number; total_hours?: number; reason?: string;
 }) {
   const leaveLabel = getLeaveLabel(details.leave_type);
   return {
@@ -102,7 +102,7 @@ function buildLeaveSubmissionNotification(details: {
           row("申請人", details.requester_name),
           row("假別", leaveLabel),
           row("日期", `${details.start_date} ~ ${details.end_date}`),
-          row("天數", `${details.total_days} 天`),
+          row("時數", `${details.total_hours != null ? details.total_hours : (details.total_days * 8)} 小時`),
           ...(details.reason ? [row("原因", details.reason)] : []),
         ],
       },
@@ -126,7 +126,7 @@ function buildLeaveSubmissionNotification(details: {
 // ── 2. 請假結果 → 通知申請人 ────────────────────────────────
 function buildLeaveNotification(type: "approved" | "rejected", details: {
   leave_type: string; start_date: string; end_date: string;
-  total_days: number; rejection_reason?: string; approver_name?: string;
+  total_days: number; total_hours?: number; rejection_reason?: string; approver_name?: string;
 }) {
   const leaveLabel = getLeaveLabel(details.leave_type);
   const isApproved = type === "approved";
@@ -148,7 +148,7 @@ function buildLeaveNotification(type: "approved" | "rejected", details: {
         contents: [
           row("假別", leaveLabel),
           row("日期", `${details.start_date} ~ ${details.end_date}`),
-          row("天數", `${details.total_days} 天`),
+          row("時數", `${details.total_hours != null ? details.total_hours : (details.total_days * 8)} 小時`),
           ...(details.approver_name ? [row("審核人", details.approver_name)] : []),
           ...(!isApproved && details.rejection_reason ? [row("原因", details.rejection_reason, "#C53030")] : []),
         ],
@@ -1527,8 +1527,16 @@ serve(async (req) => {
         .select("name, reporting_to").eq("id", employee_id).single();
       const requesterName = requester?.name || "員工";
 
+      // 顯示時數:整天假讀班表淨時數(與計薪/LIFF 一致);沒 leave_id 就退回 days×8
+      let leaveHours: number | null = null;
+      if (details?.leave_id != null) {
+        const { data: dh } = await db.rpc("leave_display_hours", { p_leave_id: details.leave_id });
+        if (dh != null) leaveHours = Number(dh);
+      }
+
       const message = buildLeaveSubmissionNotification({
         leave_id: details?.leave_id, requester_name: requesterName, ...details,
+        ...(leaveHours != null ? { total_hours: leaveHours } : {}),
       });
 
       // Dynamic routing: ≥3 days → admins, else → supervisor
@@ -1606,10 +1614,14 @@ serve(async (req) => {
 
     let message: object;
 
-    if (type === "leave_approved") {
-      message = buildLeaveNotification("approved", details);
-    } else if (type === "leave_rejected") {
-      message = buildLeaveNotification("rejected", details);
+    if (type === "leave_approved" || type === "leave_rejected") {
+      // 顯示時數:整天假讀班表淨時數;有 leave_id 才算,否則卡片自退回 days×8
+      let leaveDtl = details;
+      if (details?.leave_id != null && details.total_hours == null) {
+        const { data: dh } = await db.rpc("leave_display_hours", { p_leave_id: details.leave_id });
+        if (dh != null) leaveDtl = { ...details, total_hours: Number(dh) };
+      }
+      message = buildLeaveNotification(type === "leave_approved" ? "approved" : "rejected", leaveDtl);
     } else if (type === "ot_approved") {
       message = buildOtNotification("approved", details);
     } else if (type === "ot_rejected") {

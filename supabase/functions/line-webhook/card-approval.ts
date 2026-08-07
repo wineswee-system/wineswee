@@ -74,7 +74,9 @@ function rowsForLeave(rec: any): ApprovalCardData["rows"] {
   } else {
     pushIf(rows, "期間", fmtDateRange(rec.start_date, rec.end_date));
   }
-  pushIf(rows, "天數", rec.days != null ? `${rec.days} 天` : null);
+  // 時數為單位(整天假已讀班表淨時數);_disp_hours 由 fetchApprovalCard 算好
+  const dispH = rec._disp_hours != null ? rec._disp_hours : (rec.hours != null ? rec.hours : (rec.days != null ? rec.days * 8 : null));
+  pushIf(rows, "時數", dispH != null ? `${dispH} 小時` : null);
   pushIf(rows, "申請日", fmtDate(rec.created_at));
   pushIf(rows, "狀態", rec.status, { valueColor: statusColor(rec.status) });
   return rows;
@@ -207,6 +209,12 @@ export async function fetchApprovalCard(
 
   if (error) return { ok: false, reason: `DB_ERROR: ${error.message}` };
   if (!rec) return { ok: false, reason: "NOT_FOUND" };
+
+  // 請假：算「顯示時數」(整天假讀班表淨時數,與計薪/LIFF 一致)
+  if (type === "leave") {
+    const { data: dh } = await db.rpc("leave_display_hours", { p_leave_id: id });
+    if (dh != null) rec._disp_hours = Number(dh);
+  }
 
   // 2. 抓申請人（優先 employee_id FK，否則用 employee text 對名字）
   let applicantName = rec.employee ?? "—";

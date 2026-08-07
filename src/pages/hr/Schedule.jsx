@@ -64,8 +64,8 @@ export default function Schedule() {
   const canUseAISchedule = isAdmin || isSuperAdmin || hasPermission('schedule.algo')
   // 鎖定 / 解鎖班表：需 schedule.lock 權限（預設 admin/super_admin），或為「營運部」部門主管（自動跟隨）
   const canLockSchedule = isAdmin || isSuperAdmin || hasPermission('schedule.lock') || isOpsDeptManager
-  // 可排「全部門市」：admin/super_admin，或被授予 schedule.view_all（如營運部經理）
-  const canScheduleAllStores = isAdmin || isSuperAdmin || hasPermission('schedule.view_all')
+  // 可排「全部門市」：admin/super_admin、被授予 schedule.view_all，或營運部部門主管（自動跟隨,同鎖定;後端 _emp_sees_all_stores 已對其放行）
+  const canScheduleAllStores = isAdmin || isSuperAdmin || hasPermission('schedule.view_all') || isOpsDeptManager
 
   // 判定「我是不是營運部部門主管」→ 鎖/解按鈕顯示(後端 RPC 同款判定,真正把關在後端)
   useEffect(() => {
@@ -1905,7 +1905,7 @@ export default function Schedule() {
               setStoreFilter(v === '__ALL__' ? '' : v === '__PICK__' ? null : v)
             }}>
             {storeFilter === null && <option value="__PICK__" disabled>請選擇門市…</option>}
-            {isAdmin && <option value="__ALL__">全部門市</option>}
+            {canScheduleAllStores && <option value="__ALL__">全部門市</option>}
             {scopedLocations.map(l => <option key={l.id} value={l.name}>{l.name}</option>)}
           </select>
         </div>

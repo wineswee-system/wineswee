@@ -305,7 +305,10 @@ export default function Salary() {
       const adjs = adjByRecord[r.id] || []
       const addSum = adjs.filter(a => a.type === 'add').reduce((s, a) => s + nn(a.amount), 0)
       const dedSum = adjs.filter(a => a.type === 'deduct').reduce((s, a) => s + nn(a.amount), 0)
-      const allow = nn(comp.role_allowance) + nn(comp.meal_allowance) + nn(comp.transport_allowance) + nn(comp.attendance_bonus) + nn(comp.custom_allowances_total)
+      // 引擎把 夜班/跨區 抽進 night_allowance/cross_store_allowance,其餘自訂放 other_custom_total
+      // (對齊詳情 SalaryTable 與報表);原本只加不存在的 custom_allowances_total → 漏夜班/跨區
+      const allow = nn(comp.role_allowance) + nn(comp.meal_allowance) + nn(comp.transport_allowance) + nn(comp.attendance_bonus)
+        + nn(comp.night_allowance) + nn(comp.cross_store_allowance) + nn(comp.other_custom_total)
       return {
         ...r,
         base_salary:         nn(comp.base_salary),

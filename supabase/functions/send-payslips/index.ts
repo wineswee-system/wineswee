@@ -91,16 +91,16 @@ function buildPayslipFlex(
           { type: 'text', text: `${employeeName} 您好`, weight: 'bold', size: 'md' },
           { type: 'separator', margin: 'md' },
           // ── 收入 ──
-          { type: 'text', text: '【收入】', weight: 'bold', size: 'sm', color: '#22c55e', margin: 'md' },
+          { type: 'text', text: '＋ 加項', weight: 'bold', size: 'sm', color: '#22c55e', margin: 'md' },
           {
             type: 'box', layout: 'vertical', spacing: 'xs', margin: 'sm',
             contents: [
               { type: 'box', layout: 'horizontal', contents: [
-                { type: 'text', text: '底薪', size: 'sm', color: '#555555', flex: 4 },
+                { type: 'text', text: '本薪', size: 'sm', color: '#555555', flex: 4 },
                 { type: 'text', text: `$${fmt(base)}`, size: 'sm', align: 'end', flex: 3 },
               ]},
               { type: 'box', layout: 'horizontal', contents: [
-                { type: 'text', text: '職務加給', size: 'sm', color: '#555555', flex: 4 },
+                { type: 'text', text: '主管加給', size: 'sm', color: '#555555', flex: 4 },
                 { type: 'text', text: `$${fmt(role)}`, size: 'sm', align: 'end', flex: 3 },
               ]},
               { type: 'box', layout: 'horizontal', contents: [
@@ -120,23 +120,23 @@ function buildPayslipFlex(
                 { type: 'text', text: `$${fmt(ot)}`, size: 'sm', align: 'end', flex: 3 },
               ]},
               { type: 'box', layout: 'horizontal', contents: [
-                { type: 'text', text: '應發合計', size: 'sm', weight: 'bold', flex: 4 },
+                { type: 'text', text: '加項合計', size: 'sm', weight: 'bold', flex: 4 },
                 { type: 'text', text: `$${fmt(gross)}`, size: 'sm', weight: 'bold', align: 'end', flex: 3 },
               ]},
             ],
           },
           { type: 'separator', margin: 'md' },
           // ── 扣除 ──
-          { type: 'text', text: '【扣除】', weight: 'bold', size: 'sm', color: '#ef4444', margin: 'md' },
+          { type: 'text', text: '－ 減項', weight: 'bold', size: 'sm', color: '#ef4444', margin: 'md' },
           {
             type: 'box', layout: 'vertical', spacing: 'xs', margin: 'sm',
             contents: [
               { type: 'box', layout: 'horizontal', contents: [
-                { type: 'text', text: '勞保（個人）', size: 'sm', color: '#555555', flex: 4 },
+                { type: 'text', text: '勞保自付', size: 'sm', color: '#555555', flex: 4 },
                 { type: 'text', text: `-$${fmt(laborIns)}`, size: 'sm', color: '#ef4444', align: 'end', flex: 3 },
               ]},
               { type: 'box', layout: 'horizontal', contents: [
-                { type: 'text', text: '健保（個人）', size: 'sm', color: '#555555', flex: 4 },
+                { type: 'text', text: '健保自付', size: 'sm', color: '#555555', flex: 4 },
                 { type: 'text', text: `-$${fmt(healthIns)}`, size: 'sm', color: '#ef4444', align: 'end', flex: 3 },
               ]},
               { type: 'box', layout: 'horizontal', contents: [
@@ -144,15 +144,15 @@ function buildPayslipFlex(
                 { type: 'text', text: `-$${fmt(pension)}`, size: 'sm', color: '#ef4444', align: 'end', flex: 3 },
               ]},
               { type: 'box', layout: 'horizontal', contents: [
-                { type: 'text', text: '請假扣款', size: 'sm', color: '#555555', flex: 4 },
+                { type: 'text', text: '請假', size: 'sm', color: '#555555', flex: 4 },
                 { type: 'text', text: `-$${fmt(leaveDed)}`, size: 'sm', color: '#ef4444', align: 'end', flex: 3 },
               ]},
               { type: 'box', layout: 'horizontal', contents: [
-                { type: 'text', text: '遲到扣款', size: 'sm', color: '#555555', flex: 4 },
+                { type: 'text', text: '遲到', size: 'sm', color: '#555555', flex: 4 },
                 { type: 'text', text: `-$${fmt(lateDed)}`, size: 'sm', color: '#ef4444', align: 'end', flex: 3 },
               ]},
               { type: 'box', layout: 'horizontal', contents: [
-                { type: 'text', text: '扣除合計', size: 'sm', weight: 'bold', flex: 4 },
+                { type: 'text', text: '減項合計', size: 'sm', weight: 'bold', flex: 4 },
                 { type: 'text', text: `-$${fmt(totalDed)}`, size: 'sm', weight: 'bold', color: '#ef4444', align: 'end', flex: 3 },
               ]},
             ],
@@ -162,7 +162,7 @@ function buildPayslipFlex(
           {
             type: 'box', layout: 'horizontal', margin: 'md',
             contents: [
-              { type: 'text', text: '實發金額', weight: 'bold', size: 'md', flex: 4 },
+              { type: 'text', text: '實領', weight: 'bold', size: 'md', flex: 4 },
               { type: 'text', text: `$${fmt(net)}`, weight: 'bold', size: 'md', color: '#22c55e', align: 'end', flex: 3 },
             ],
           },

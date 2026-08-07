@@ -117,6 +117,10 @@ export async function buildSalaryBriefMessage(db: SupabaseClient, lineUserId: st
 
 // ── Full salary card (after PIN unlock) ──────────────────────────────────────
 
+// 薪資袋配色(Flex 需具體色碼,不可用 CSS 變數)
+const COLOR_ADD = "#16a34a";   // 加項 綠
+const COLOR_DED = "#dc2626";   // 減項 紅
+
 export function buildSalaryFullMessage(r: any): object {
   const empName = r.employee_name ?? "";
 
@@ -124,43 +128,65 @@ export function buildSalaryFullMessage(r: any): object {
     return flexResultErr({ title: "尚無薪資記錄", lines: [`${empName} 還沒有任何薪資記錄`] });
   }
 
-  // 計算各區塊總和
-  const allowanceTotal = Number(r.role_allowance ?? 0) + Number(r.meal_allowance ?? 0)
-    + Number(r.transport_allowance ?? 0) + Number(r.attendance_bonus ?? 0) + Number(r.allowance_legacy ?? 0);
-  const otherEarnings = Number(r.overtime_pay ?? 0) + Number(r.bonus ?? 0);
-  const deductionTotal = Number(r.absence_deduction ?? 0) + Number(r.late_deduction ?? 0)
-    + Number(r.other_deduction ?? 0) + Number(r.deductions_legacy ?? 0);
-  const insurance = Number(r.insurance ?? 0);
+  // ── 對齊薪資袋:本薪 → 加項 → 減項 → 實領;金額讀存的發布版,殘差吸收讓加得回實領 ──
+  const N = (v: any): number => { const n = Number(v ?? 0); return Number.isFinite(n) ? n : 0; };
+  const net  = Math.round(N(r.net_salary));
+  const base = Math.round(N(r.base_salary));
+
+  // 加項
+  const add: Array<[string, number]> = [];
+  const pA = (l: string, v: any) => { if (N(v) > 0) add.push([l, Math.round(N(v))]); };
+  pA("主管加給", r.role_allowance);
+  pA("伙食津貼", r.meal_allowance);
+  pA("交通津貼", r.transport_allowance);
+  // allowance_legacy 是津貼合計欄:只有沒逐項時才用,避免重複計
+  if (N(r.role_allowance) + N(r.meal_allowance) + N(r.transport_allowance) === 0) pA("津貼", r.allowance_legacy);
+  pA("加班費", r.overtime_pay);
+  pA("全勤獎金", r.attendance_bonus);
+  pA("獎金", r.bonus);
+
+  // 減項
+  const ded: Array<[string, number]> = [];
+  const pD = (l: string, v: any) => { if (N(v) > 0) ded.push([l, Math.round(N(v))]); };
+  pD("勞健保自付", r.insurance);
+  pD("無薪假", r.absence_deduction);
+  pD("遲到", r.late_deduction);
+  pD(r.other_deduction_note || "其他扣款", r.other_deduction);
+
+  // 殘差吸收(讓「本薪+加項−減項 = 實領」;粗欄位算不齊的差額歸其他)
+  const gap = net - (base + add.reduce((s, [, v]) => s + v, 0) - ded.reduce((s, [, v]) => s + v, 0));
+  if (gap > 1) add.push(["其他加項", gap]);
+  else if (gap < -1) ded.push(["其他扣款", -gap]);
+  const addTotal = add.reduce((s, [, v]) => s + v, 0);
+  const dedTotal = ded.reduce((s, [, v]) => s + v, 0);
 
   const body: any[] = [
     row("月份", r.month ?? "—", { bold: true }),
     { type: "separator", margin: "md" },
 
-    // 收入區
-    { type: "text", text: "💵 收入", size: "xxs", color: TEXT_LABEL, weight: "bold", margin: "md" },
-    row("基本薪資", fmtMoney(r.base_salary)),
-    ...(allowanceTotal > 0 ? [row("津貼合計", fmtMoney(allowanceTotal))] : []),
-    ...(Number(r.overtime_pay ?? 0) > 0 ? [row("加班費", fmtMoney(r.overtime_pay))] : []),
-    ...(Number(r.bonus ?? 0) > 0 ? [row("獎金", fmtMoney(r.bonus))] : []),
+    // 本薪
+    row("本薪", fmtMoney(base), { bold: true }),
 
-    // 扣款區
-    ...(deductionTotal > 0 || insurance > 0 ? [
-      { type: "separator", margin: "md" },
-      { type: "text", text: "🔻 扣款", size: "xxs", color: TEXT_LABEL, weight: "bold", margin: "md" },
-      ...(insurance > 0 ? [row("勞健保", `- ${fmtMoney(insurance).slice(2)}`)] : []),
-      ...(Number(r.absence_deduction ?? 0) > 0 ? [row("事假扣薪", `- ${fmtMoney(r.absence_deduction).slice(2)}`)] : []),
-      ...(Number(r.late_deduction ?? 0) > 0 ? [row("遲到扣薪", `- ${fmtMoney(r.late_deduction).slice(2)}`)] : []),
-      ...(Number(r.other_deduction ?? 0) > 0 ? [row(r.other_deduction_note || "其他扣款", `- ${fmtMoney(r.other_deduction).slice(2)}`)] : []),
+    // ＋ 加項
+    ...(add.length ? [
+      { type: "text", text: `＋ 加項  +${fmtMoney(addTotal).slice(2)}`, size: "xs", color: COLOR_ADD, weight: "bold", margin: "md" },
+      ...add.map(([l, v]) => row(l, `+ ${fmtMoney(v).slice(2)}`, { valueColor: COLOR_ADD })),
     ] : []),
 
-    // 實發
+    // － 減項
+    ...(ded.length ? [
+      { type: "text", text: `－ 減項  -${fmtMoney(dedTotal).slice(2)}`, size: "xs", color: COLOR_DED, weight: "bold", margin: "md" },
+      ...ded.map(([l, v]) => row(l, `- ${fmtMoney(v).slice(2)}`, { valueColor: COLOR_DED })),
+    ] : []),
+
+    // ＝ 實領
     { type: "separator", margin: "md" },
     {
       type: "box", layout: "horizontal", spacing: "sm", margin: "md", paddingAll: "10px",
       backgroundColor: "#FFFBEB", cornerRadius: "8px",
       contents: [
-        { type: "text", text: "✅ 實發", color: COLOR_GOLD, size: "sm", flex: 4, weight: "bold" },
-        { type: "text", text: fmtMoney(r.net_salary), color: COLOR_GOLD, size: "lg", flex: 5, weight: "bold", align: "end" },
+        { type: "text", text: "＝ 實領", color: COLOR_GOLD, size: "sm", flex: 4, weight: "bold" },
+        { type: "text", text: fmtMoney(net), color: COLOR_GOLD, size: "lg", flex: 5, weight: "bold", align: "end" },
       ],
     },
   ];

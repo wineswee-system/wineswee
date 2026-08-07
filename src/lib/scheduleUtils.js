@@ -775,15 +775,13 @@ export function validateLeisureQuota({ schedules, workHourSystem, anchorDate, st
     }
 
     if (workHourSystem === '4週變形' && anchorDate) {
-      // 4 週變形：每 cycle (4 週) 4+4，且每 2 週至少 1 例
+      // 4 週變形（§30-1 / §36-II）：每 4 週 ≥4 例 + ≥4 休；每 2 週內 ≥2 例（例假不過度集中）
       const cycles = listCyclesInRange(startDate, endDate, '4週變形', anchorDate)
       for (const c of cycles) {
-        // ★ 只檢查「資料完整涵蓋」的 cycle：月檢視只載當月,跨月的 cycle(如 06-10~07-07)
-        //   只有 7 月那半有資料 → 例假/休息會被少數成假違規。跨出載入窗的 partial cycle 跳過,
-        //   切到 Cycle 檢視(載整個 cycle)才做完整例休配額檢查。
+        // ★ 只檢查「資料完整涵蓋」的 cycle：月檢視只載當月,跨月 cycle 只半有資料會誤報 → 跳過
         if (c.start < startDate || c.end > endDate) continue
-        checkRange(c.start, c.end, `${c.start}~${c.end}`, 4, 4)  // ★ 訊息顯示日期區間(取代「Cycle #N」)
-        // 每 2 週子窗口 ≥1 例
+        checkRange(c.start, c.end, `${c.start}~${c.end}`, 4, 4)  // 每 4 週 4 例 + 4 休
+        // 每 2 週子窗口 ≥2 例（§36-II：每二週內至少 2 日例假）
         const cs = _toDate(c.start)
         for (let w = 0; w < 4; w += 2) {
           const subStart = _addDays(cs, w * 7)
@@ -791,12 +789,12 @@ export function validateLeisureQuota({ schedules, workHourSystem, anchorDate, st
           if (!fullyEmployed(empName, _isoDate(subStart), _isoDate(subEnd))) continue  // 未完整涵蓋 → 跳過
           const inSub = scheds.filter(s => s.date >= _isoDate(subStart) && s.date <= _isoDate(subEnd))
           const woInSub = inSub.filter(s => isWeeklyOff(s.shift)).length
-          if (woInSub < 1) {
+          if (woInSub < 2) {
             errors.push({
               employee: empName,
               constraint: 'H5',
               law: '勞基法 §36',
-              message: `${empName} ${_isoDate(subStart)}~${_isoDate(subEnd)} 2 週內缺例假`,
+              message: `${empName} ${_isoDate(subStart)}~${_isoDate(subEnd)} 2 週內例假 ${woInSub}/2 不足`,
               severity: 'error',
             })
           }

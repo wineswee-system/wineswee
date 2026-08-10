@@ -276,6 +276,8 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
                 </h4>
                 {cat.order.map(gName => {
                   const grp = cat.groups[gName]
+                  // 「其他」群組(input_type='other')不在此渲染,移到大項最後集中處理
+                  if (grp.items.some(i => i.input_type === 'other')) return null
                   const isBonusGroup = grp.items.some(i => i.input_type === 'bonus')
                   const gd = groupDeduct(grp)
                   const bonusPts = isBonusGroup ? grp.items.reduce((s, i) => s + (i.deduct_score || 0), 0) : 0
@@ -291,8 +293,8 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
                             </span>
                           )}
                       </div>
-                      {/* 群組說明（一組一個；加分群組不需要，它有自己的說明欄）*/}
-                      {!isBonusGroup && (isDraft ? (
+                      {/* 群組說明（舊單:一組一個;新範本改為大項底部集中,見下方）*/}
+                      {!isBonusGroup && !cat.groups['其他']?.items?.some(i => i.input_type === 'other') && (isDraft ? (
                         <input
                           className="form-input"
                           value={grp.items[0]?.group_note || ''}
@@ -315,6 +317,31 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
                     </div>
                   )
                 })}
+                {/* 其他（自由填寫,扣分計入本區）+ 大項集中說明 — 僅新範本(有 input_type='other')*/}
+                {(() => {
+                  const og = cat.groups['其他']
+                  const oItem = og?.items?.find(i => i.input_type === 'other')
+                  if (!oItem) return null
+                  return (
+                    <div style={{ marginTop: 4 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', padding: '4px 6px', background: 'var(--bg-secondary)', borderRadius: 4, marginBottom: 4 }}>其他（自由填寫，扣分計入本區）</div>
+                      {isDraft ? (
+                        <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 6 }}>
+                          <input className="form-input" value={oItem.item_text || ''} onChange={e => updateItem(oItem.id, { item_text: e.target.value })} placeholder="項目名稱（可自由填）" style={{ flex: 1, fontSize: 13 }} />
+                          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>扣</span>
+                          <input type="number" min="0" className="form-input" value={oItem.deduct_score || 0} onChange={e => updateItem(oItem.id, { deduct_score: Math.max(0, Number(e.target.value) || 0) })} style={{ width: 68, fontSize: 13, textAlign: 'right' }} />
+                        </div>
+                      ) : ((oItem.item_text || oItem.deduct_score > 0) && (
+                        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6, padding: '3px 8px', background: 'var(--bg-secondary)', borderRadius: 4 }}>{oItem.item_text || '其他'}{oItem.deduct_score > 0 ? ` — 扣 ${oItem.deduct_score}` : ''}</div>
+                      ))}
+                      {isDraft ? (
+                        <textarea className="form-input" value={oItem.group_note || ''} onChange={e => updateItem(oItem.id, { group_note: e.target.value })} placeholder="本大項集中說明（可留白）" style={{ width: '100%', fontSize: 12, minHeight: 46 }} />
+                      ) : (oItem.group_note && (
+                        <div style={{ fontSize: 12, color: 'var(--text-secondary)', padding: '3px 8px', background: 'var(--bg-secondary)', borderRadius: 4 }}>說明：{oItem.group_note}</div>
+                      ))}
+                    </div>
+                  )
+                })()}
               </div>
             ))}
 

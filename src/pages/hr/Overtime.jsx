@@ -514,9 +514,9 @@ export default function Overtime() {
         </div>
         <div className="data-table-wrapper">
           <table className="data-table">
-            <thead><tr><th style={{ width: 55 }}>單號</th><th>員工</th><th>部門</th><th>日期</th><th>時數</th><th>折算方式</th><th>原因</th><th>狀態</th><th>操作</th></tr></thead>
+            <thead><tr><th style={{ width: 55 }}>單號</th><th>員工</th><th>部門</th><th>日期</th><th>時段</th><th>時數</th><th>折算方式</th><th>原因</th><th>狀態</th><th>操作</th></tr></thead>
             <tbody>
-              {filtered.length === 0 && <tr><td colSpan={9} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>尚無加班紀錄</td></tr>}
+              {filtered.length === 0 && <tr><td colSpan={10} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>尚無加班紀錄</td></tr>}
               {filtered.map(o => (
                 <tr key={o.id} onClick={() => openDetail(o)} style={{ cursor: 'pointer' }}
                   onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-secondary)'}
@@ -525,6 +525,7 @@ export default function Overtime() {
                   <td style={{ fontWeight: 600 }}>{o.employee}</td>
                   <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{getEmpDept(o.employee) || '-'}</td>
                   <td>{o.date}</td>
+                  <td style={{ fontSize: 12, whiteSpace: 'nowrap' }}>{o.start_time ? `${o.start_time.slice(0, 5)}~${(o.end_time || '').slice(0, 5)}` : '-'}</td>
                   <td>{o.hours}h</td>
                   <td>
                     {(o.ot_type === 'comp_time' || o.is_comp_leave)

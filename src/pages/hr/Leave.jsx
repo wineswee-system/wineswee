@@ -636,8 +636,8 @@ export default function Leave() {
             <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>尚無假單</div>
           )}
           {/* Virtual table header */}
-          <div style={{ display: 'grid', gridTemplateColumns: '55px 110px 90px 90px 200px 90px 1fr 60px 110px 110px', background: 'var(--bg-tertiary)', borderBottom: '1px solid var(--border-medium)', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>
-            {['單號', '員工', '部門', '假別', '期間', '天數/時數', '事由', '附件', '狀態', '操作'].map(h => (
+          <div style={{ display: 'grid', gridTemplateColumns: '55px 110px 90px 90px 155px 95px 90px 1fr 60px 110px 110px', background: 'var(--bg-tertiary)', borderBottom: '1px solid var(--border-medium)', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>
+            {['單號', '員工', '部門', '假別', '期間', '時段', '天數/時數', '事由', '附件', '狀態', '操作'].map(h => (
               <div key={h} style={{ padding: '10px 8px' }}>{h}</div>
             ))}
           </div>
@@ -648,16 +648,15 @@ export default function Leave() {
                 <div key={l.id}
                   onClick={() => openDetail(l)}
                   title="點擊查看簽核明細"
-                  style={{ display: 'grid', gridTemplateColumns: '55px 110px 90px 90px 200px 90px 1fr 60px 110px 110px', alignItems: 'center', borderBottom: '1px solid var(--border-subtle)', cursor: 'pointer' }}>
+                  style={{ display: 'grid', gridTemplateColumns: '55px 110px 90px 90px 155px 95px 90px 1fr 60px 110px 110px', alignItems: 'center', borderBottom: '1px solid var(--border-subtle)', cursor: 'pointer' }}>
                   <div style={{ padding: '4px 8px', fontFamily: 'monospace', fontSize: 11, color: 'var(--text-muted)' }}>#{l.id}</div>
                   <div style={{ padding: '4px 8px', fontWeight: 600, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.employee}</div>
                   <div style={{ padding: '4px 8px', fontSize: 12, color: 'var(--text-muted)' }}>{getEmpDept(l.employee)}</div>
                   <div style={{ padding: '4px 8px' }}><span className="badge badge-info"><span className="badge-dot"></span>{getLeaveTypeInfo(l.type)?.shortName || l.type}</span></div>
                   <div style={{ padding: '4px 8px', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {l.start_date}{l.start_time ? ` ${l.start_time}` : ''}
-                    {l.end_date !== l.start_date ? ` ~ ${l.end_date}` : ''}
-                    {l.end_time ? ` ${l.end_time}` : ''}
+                    {l.start_date}{l.end_date && l.end_date !== l.start_date ? ` ~ ${l.end_date}` : ''}
                   </div>
+                  <div style={{ padding: '4px 8px', fontSize: 12, whiteSpace: 'nowrap' }}>{l.start_time ? `${l.start_time.slice(0, 5)}~${(l.end_time || '').slice(0, 5)}` : '-'}</div>
                   <div style={{ padding: '4px 8px', fontSize: 13 }}>{l.hours && l.hours < 8 ? `${l.hours}h` : `${l.days}天`}</div>
                   <div style={{ padding: '4px 8px', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.reason}</div>
                   <div style={{ padding: '4px 8px' }}>

@@ -135,7 +135,6 @@ BEGIN
       'ot_total_hours', COALESCE(v_ot_total,0),
       'leave', json_build_object('approved_days', v_leave_appr, 'pending_days', v_leave_pend, 'pending_count', v_leave_pend_cnt))
   );
-END $function$
-
+END $function$;
 
 NOTIFY pgrst, 'reload schema';

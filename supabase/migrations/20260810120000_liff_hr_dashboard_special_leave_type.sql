@@ -1,6 +1,6 @@
--- LIFF 人力儀表板「今日特殊狀態」卡片:加上實際假別(type)
--- 原本只回 name/status(病假/事假→sick,其餘→leave 通稱「休假」)。加 type 讓前端顯示特休/婚假/喪假…
--- 只動 v_special 區塊(每列多帶 ltype),其餘與線上定義逐字一致。
+-- LIFF 人力儀表板「今日特殊狀態」卡片:病假→sick、事假→personal、其餘→leave,並帶實際假別(type)
+-- 合併版(取代同日 _hr_dashboard_personal_leave):事假獨立 personal(前端📋圖示)+ type 讓前端顯示特休/婚假/喪假…
+-- 只動 v_special 區塊(status 三分 + 每列多帶 ltype),其餘與線上定義逐字一致。
 
 CREATE OR REPLACE FUNCTION public.liff_hr_dashboard(p_line_user_id text, p_store integer DEFAULT NULL::integer)
  RETURNS json
@@ -65,7 +65,7 @@ BEGIN
   SELECT json_agg(json_build_object('name', name, 'status', status, 'type', ltype) ORDER BY prio, name) INTO v_special
   FROM (
     SELECT DISTINCT ON (employee_id) employee_id, name, status, ltype, prio FROM (
-      SELECT l.employee_id, e.name, CASE WHEN l.type IN ('病假','事假') THEN 'sick' ELSE 'leave' END AS status, l.type AS ltype, 1 AS prio
+      SELECT l.employee_id, e.name, CASE WHEN l.type = '病假' THEN 'sick' WHEN l.type = '事假' THEN 'personal' ELSE 'leave' END AS status, l.type AS ltype, 1 AS prio
         FROM leave_requests l JOIN employees e ON e.id = l.employee_id
        WHERE l.status='已核准' AND l.employee_id = ANY(v_ids) AND l.deleted_at IS NULL
          AND l.start_date <= v_today AND COALESCE(l.end_date, l.start_date) >= v_today
@@ -77,7 +77,7 @@ BEGIN
       SELECT o.employee_id, e.name, 'overtime', NULL::text, 1 FROM overtime_requests o JOIN employees e ON e.id = o.employee_id
        WHERE o.status='已核准' AND o.employee_id = ANY(v_ids) AND o.deleted_at IS NULL AND (CASE WHEN o.start_time IS NOT NULL AND o.start_time < time '06:00' THEN o.date - 1 ELSE o.date END) = v_today
       UNION ALL
-      SELECT l.employee_id, e.name, CASE WHEN l.type IN ('病假','事假') THEN 'sick_pending' ELSE 'leave_pending' END, l.type, 2
+      SELECT l.employee_id, e.name, CASE WHEN l.type = '病假' THEN 'sick_pending' WHEN l.type = '事假' THEN 'personal_pending' ELSE 'leave_pending' END, l.type, 2
         FROM leave_requests l JOIN employees e ON e.id = l.employee_id
        WHERE l.status='待審核' AND l.employee_id = ANY(v_ids) AND l.deleted_at IS NULL
          AND l.start_date <= v_today AND COALESCE(l.end_date, l.start_date) >= v_today

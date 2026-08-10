@@ -131,7 +131,8 @@ function PendingRow({ item, onClick }) {
 const STATUS_META = {
   on:       { icon: '🟢', label: '在班',    color: C.green },
   leave:    { icon: '🌴', label: '休假中',  color: C.cyan },
-  sick:     { icon: '🏥', label: '請假中',  color: C.orange },
+  sick:     { icon: '🏥', label: '病假',    color: C.orange },
+  personal: { icon: '📋', label: '事假',    color: C.orange },
   overtime: { icon: '⚡', label: '加班中',  color: C.purple },
   trip:     { icon: '✈️', label: '出差中',  color: C.blue },
   late:     { icon: '🔴', label: '未打卡',  color: C.red },
@@ -139,7 +140,8 @@ const STATUS_META = {
   unknown:  { icon: '⚫', label: '未排班',  color: C.muted },
   // 申請中(待審)變體 — 尚未核准,卡片用虛線+「申請中」標記區隔
   leave_pending:    { icon: '🌴', label: '休假·申請中', color: C.cyan,   pending: true },
-  sick_pending:     { icon: '🏥', label: '請假·申請中', color: C.orange, pending: true },
+  sick_pending:     { icon: '🏥', label: '病假·申請中', color: C.orange, pending: true },
+  personal_pending: { icon: '📋', label: '事假·申請中', color: C.orange, pending: true },
   overtime_pending: { icon: '⚡', label: '加班·申請中', color: C.purple, pending: true },
   trip_pending:     { icon: '✈️', label: '出差·申請中', color: C.blue,   pending: true },
 }
@@ -148,7 +150,7 @@ function TeamMemberCard({ emp, status, leaveType }) {
   const meta = STATUS_META[status] || STATUS_META.unknown
   const initial = (emp.name || '?').charAt(0)
   // 請假/休假類:標實際假別(特休/事假/病假…),申請中補「·申請中」;其餘用通用標籤
-  const isLeave = ['leave', 'sick', 'leave_pending', 'sick_pending'].includes(status)
+  const isLeave = ['leave', 'sick', 'personal', 'leave_pending', 'sick_pending', 'personal_pending'].includes(status)
   const label = isLeave && leaveType
     ? (meta.pending ? `${leaveType}·申請中` : leaveType)
     : meta.label
@@ -745,9 +747,10 @@ export default function TeamDashboard() {
         setWfTasksMap({})
       }
 
-      // 進行中專案
+      // 進行中專案（限本 org — 不可只靠 RLS，projects_sel 的 is_admin() 未綁 org 會跨租戶）
       const { data: prjData } = await supabase.from('projects')
         .select('*')
+        .eq('organization_id', orgId)
         .eq('status', '進行中')
         .order('created_at', { ascending: false })
         .limit(20)
@@ -820,7 +823,7 @@ export default function TeamDashboard() {
       else if (leaveByEmp.has(emp.id)) {
         const t = leaveByEmp.get(emp.id).type
         leaveType = t
-        status = ['病假', '事假'].includes(t) ? 'sick' : 'leave'
+        status = t === '病假' ? 'sick' : t === '事假' ? 'personal' : 'leave'
       } else if (attByEmp.has(emp.id)) {
         const a = attByEmp.get(emp.id)
         if (a.clock_in && !a.clock_out) status = 'on'
@@ -833,12 +836,12 @@ export default function TeamDashboard() {
         status = 'late'
       }
       // 申請中(待審):沒有已核准的特殊狀態 → 今日有待審的假/加班/出差就標申請中
-      if (!['trip', 'leave', 'sick', 'overtime'].includes(status)) {
+      if (!['trip', 'leave', 'sick', 'personal', 'overtime'].includes(status)) {
         if (pTripByEmp.has(emp.id)) status = 'trip_pending'
         else if (pLeaveByEmp.has(emp.id)) {
           const t = pLeaveByEmp.get(emp.id).type
           leaveType = t
-          status = ['病假', '事假'].includes(t) ? 'sick_pending' : 'leave_pending'
+          status = t === '病假' ? 'sick_pending' : t === '事假' ? 'personal_pending' : 'leave_pending'
         } else if (pOtByEmp.has(emp.id)) status = 'overtime_pending'
       }
       return { emp, status, leaveType }
@@ -849,7 +852,7 @@ export default function TeamDashboard() {
   const kpi = useMemo(() => {
     const total = team.length
     const presentCount = teamWithStatus.filter(t => ['on', 'overtime'].includes(t.status)).length
-    const leaveCount = teamWithStatus.filter(t => ['leave', 'sick'].includes(t.status)).length
+    const leaveCount = teamWithStatus.filter(t => ['leave', 'sick', 'personal'].includes(t.status)).length
     const otCount = todayOvertimes.filter(o => otAttrDate(o) === todayStr()).length
     const tripCount = todayTrips.length
     const lateCount = teamWithStatus.filter(t => t.status === 'late').length
@@ -1421,7 +1424,7 @@ export default function TeamDashboard() {
         // 這邊只列「在班的特殊狀態」(休假/請假/加班中/出差)，避免 dashboard 被未打卡淹沒
         const visible = showAll
           ? teamWithStatus
-          : teamWithStatus.filter(t => ['leave', 'sick', 'overtime', 'trip', 'leave_pending', 'sick_pending', 'overtime_pending', 'trip_pending'].includes(t.status))
+          : teamWithStatus.filter(t => ['leave', 'sick', 'personal', 'overtime', 'trip', 'leave_pending', 'sick_pending', 'personal_pending', 'overtime_pending', 'trip_pending'].includes(t.status))
         const title = showAll ? '團隊狀態' : '今日特殊狀態'
         const countLabel = showAll ? `${team.length} 人` : `${visible.length} 人`
         return (
@@ -1434,8 +1437,8 @@ export default function TeamDashboard() {
               <div style={{ display: 'flex', gap: 12, fontSize: 11, color: C.muted, flexWrap: 'wrap' }}>
                 {Object.entries(STATUS_META)
                   .filter(([k]) => showAll
-                    ? ['on','leave','sick','overtime','trip','late'].includes(k)
-                    : ['leave','sick','overtime','trip'].includes(k))
+                    ? ['on','leave','sick','personal','overtime','trip','late'].includes(k)
+                    : ['leave','sick','personal','overtime','trip'].includes(k))
                   .map(([k, m]) => (
                     <span key={k} style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
                       <span>{m.icon}</span>{m.label}

@@ -1154,6 +1154,7 @@ function buildStoreAuditNotification(
     audit_id: number; store_name: string; audit_date: string;
     shift?: string | null; auditor_name?: string;
     failed_count?: number; total_deducted?: number;
+    avg_score?: number; categories?: { name: string; score: number }[];
     current_step_label?: string; current_step_index?: number; total_steps?: number;
     reject_reason?: string | null; approver?: string | null;
     liff_url?: string | null;
@@ -1185,6 +1186,17 @@ function buildStoreAuditNotification(
   }
   if (typeof details.total_deducted === "number" && details.total_deducted > 0) {
     bodyRows.push(row("扣分", `${details.total_deducted} 分`, "#dc2626"));
+  }
+  // 各大項分數 + 總平均
+  if (Array.isArray(details.categories) && details.categories.length) {
+    const sc = (n: number) => n >= 80 ? "#16a34a" : n >= 60 ? "#f59e0b" : "#dc2626";
+    bodyRows.push({ type: "separator", margin: "md" });
+    if (typeof details.avg_score === "number") {
+      bodyRows.push(row("總平均", `${details.avg_score}`, sc(details.avg_score)));
+    }
+    for (const c of details.categories) {
+      bodyRows.push(row(c.name, `${c.score}`, sc(c.score)));
+    }
   }
   if (variant === "step_assigned" && details.current_step_label) {
     bodyRows.push(row("關卡", `第 ${(details.current_step_index ?? 0) + 1}/${details.total_steps ?? "?"} 關 · ${details.current_step_label}`, "#0EA5E9"));

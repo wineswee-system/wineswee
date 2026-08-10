@@ -46,7 +46,8 @@ BEGIN
     WHERE (s.employee_id = v_employee_id OR s.employee = v_name)
       AND s.date BETWEEN v_start AND v_end
       AND s.actual_start IS NOT NULL
-      AND COALESCE(s.actual_end_2, s.actual_end) IS NOT NULL;
+      AND COALESCE(s.actual_end_2, s.actual_end) IS NOT NULL
+      AND s.absence_type IS NULL;   -- 只留真正上班班(排除 休/休息/例假/國定假 等即使掛了時間的列)
 END $$;
 
 GRANT EXECUTE ON FUNCTION public.liff_get_my_schedule_month(TEXT, TEXT)

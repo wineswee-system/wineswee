@@ -167,7 +167,10 @@ export function printExpenseSimpleSignOff(row, opts = {}) {
         ['是否有收據', row.receipt ? '有' : '無'],
         ['用途', row.description || ''],
       ],
-    }],
+    }, ...(Array.isArray(row.items) && row.items.filter(it => it?.name || Number(it?.subtotal) > 0).length ? [{
+      title: `品項明細（${row.items.length} 項）`,
+      rows: row.items.map(it => [it.name || '(未命名)', `${Number(it.qty || 1)} × ${fmtMoney(it.unit_price)} = ${fmtMoney(it.subtotal)}`]),
+    }] : [])],
     status: row.status || '',
     rejectReason: row.reject_reason || '',
     finalApprover: row.approver

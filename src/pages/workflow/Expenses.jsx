@@ -665,6 +665,13 @@ export default function Expenses() {
               { label: '會計科目', value: detailRow.category },
               { label: '發生日期', value: detailRow.date },
               { label: '金額', value: `NT$ ${Number(detailRow.amount || 0).toLocaleString()}` },
+              ...((Array.isArray(detailRow.items) && detailRow.items.filter(it => it?.name || Number(it?.subtotal) > 0).length) ? [{
+                label: `品項明細（${detailRow.items.length} 項）`,
+                value: detailRow.items.map(it =>
+                  `${it.name || '(未命名)'}　${Number(it.qty || 1)} × ${Number(it.unit_price || 0).toLocaleString()} = NT$ ${Number(it.subtotal || 0).toLocaleString()}`
+                ).join('\n'),
+                multiline: true,
+              }] : []),
               { label: '是否有收據', value: detailRow.receipt ? '有' : '無' },
               { label: '用途', value: detailRow.description, multiline: true },
               ...(detailRow.reject_reason ? [{ label: '駁回原因', value: detailRow.reject_reason, multiline: true }] : []),

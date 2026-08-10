@@ -347,12 +347,10 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
 
             {/* Notes */}
             <div style={{ marginTop: 20 }}>
-              <NoteField label="違反其他員工守則" value={audit.notes_violations} editable={isDraft}
-                onChange={v => updateAudit({ notes_violations: v })} />
-              <NoteField label="店內反饋事項" value={audit.notes_feedback} editable={isDraft}
-                onChange={v => updateAudit({ notes_feedback: v })} />
-              <NoteField label="公司建議 / 活動安排事項" value={audit.notes_suggestions} editable={isDraft}
+              <NoteField label="稽核人員建議" value={audit.notes_suggestions} editable={isDraft}
                 onChange={v => updateAudit({ notes_suggestions: v })} />
+              <NoteField label="門店同仁建議" value={audit.notes_feedback} editable={isDraft}
+                onChange={v => updateAudit({ notes_feedback: v })} />
             </div>
 
             {/* 整張稽核單共用照片（最多 20 張）*/}

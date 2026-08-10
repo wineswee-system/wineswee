@@ -229,7 +229,11 @@ export default function LeaveBalances() {
         _periodStartStr = `${_es.getFullYear()}-${_pad2s(_es.getMonth() + 1)}-${_pad2s(_es.getDate())}`
       } else _periodStartStr = `${yearFilter}-01-01`
       const notStarted     = _periodStartStr > _todayStr
-      const effectiveDays  = dbTotal > 0 ? dbTotal : computedDays       // 未生效不歸 0,照顯示額度
+      // 特休(annual):§38 RPC 為單一真相 → 一律用 RPC 算,不被 leave_balances 舊存量蓋
+      //   (存量半數已跟法規飄掉;carry_over 另計仍保留)。其餘假別維持「有存量用存量」。
+      const effectiveDays  = type === 'annual'
+        ? computedDays
+        : (dbTotal > 0 ? dbTotal : computedDays)       // 未生效不歸 0,照顯示額度
       const carryOverDays  = Number(dbBal?.carry_over_days || 0)
       // 補休：可休直接用 comp_time_ledger 加總（小時，不經 days 換算）
       const totalHours     = type === '補休' ? compTotal : daysToHours(effectiveDays + carryOverDays)

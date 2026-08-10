@@ -600,25 +600,35 @@ function AuditPhotos({ auditId, photos, editable, onChange }) {
         {editable && photos.length < 20 && (
           <label style={{ cursor: uploading ? 'default' : 'pointer', fontSize: 12, color: uploading ? 'var(--text-muted)' : 'var(--accent-cyan)' }}>
             {uploading ? '上傳中...' : '＋ 新增照片'}
-            <input type="file" multiple accept="image/*" style={{ display: 'none' }} onChange={handleFiles} disabled={uploading} />
+            <input type="file" multiple style={{ display: 'none' }} onChange={handleFiles} disabled={uploading} />
           </label>
         )}
       </div>
       {photos.length > 0 ? (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(84px, 1fr))', gap: 6 }}>
-          {photos.map((url, i) => (
+          {photos.map((url, i) => {
+            const isImg = /\.(jpe?g|png|webp|heic|heif|gif|bmp|svg)(\?|$)/i.test(url)
+            const ext = ((url.split('?')[0].split('.').pop() || '檔案').toUpperCase()).slice(0, 5)
+            return (
             <div key={url} style={{ position: 'relative', aspectRatio: '1', borderRadius: 6, overflow: 'hidden', background: 'var(--bg-secondary)' }}>
-              <img src={url} alt={`照片 ${i + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'pointer', display: 'block' }} onClick={() => window.open(url, '_blank')} />
+              {isImg ? (
+                <img src={url} alt={`照片 ${i + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'pointer', display: 'block' }} onClick={() => window.open(url, '_blank')} />
+              ) : (
+                <a href={url} target="_blank" rel="noreferrer" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', gap: 4, textDecoration: 'none', color: 'var(--accent-cyan)' }}>
+                  <Paperclip size={22} />
+                  <span style={{ fontSize: 10, fontWeight: 700 }}>{ext}</span>
+                </a>
+              )}
               {editable && (
                 <button onClick={() => removePhoto(url)} style={{ position: 'absolute', top: 2, right: 2, background: 'rgba(0,0,0,0.65)', border: 'none', borderRadius: '50%', width: 20, height: 20, color: '#fff', cursor: 'pointer', fontSize: 14, lineHeight: '20px', padding: 0 }}>×</button>
               )}
             </div>
-          ))}
+          )})}
         </div>
       ) : editable ? (
         <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, height: 56, border: '1px dashed var(--border)', borderRadius: 6, cursor: uploading ? 'default' : 'pointer', fontSize: 13, color: 'var(--text-muted)' }}>
-          <Paperclip size={15} /> {uploading ? '上傳中...' : '點此新增稽核照片（最多 20 張）'}
-          <input type="file" multiple accept="image/*" style={{ display: 'none' }} onChange={handleFiles} disabled={uploading} />
+          <Paperclip size={15} /> {uploading ? '上傳中...' : '點此新增稽核附件（照片/檔案，最多 20）'}
+          <input type="file" multiple style={{ display: 'none' }} onChange={handleFiles} disabled={uploading} />
         </label>
       ) : null}
     </div>

@@ -144,11 +144,16 @@ const STATUS_META = {
   trip_pending:     { icon: '✈️', label: '出差·申請中', color: C.blue,   pending: true },
 }
 
-function TeamMemberCard({ emp, status }) {
+function TeamMemberCard({ emp, status, leaveType }) {
   const meta = STATUS_META[status] || STATUS_META.unknown
   const initial = (emp.name || '?').charAt(0)
+  // 請假/休假類:標實際假別(特休/事假/病假…),申請中補「·申請中」;其餘用通用標籤
+  const isLeave = ['leave', 'sick', 'leave_pending', 'sick_pending'].includes(status)
+  const label = isLeave && leaveType
+    ? (meta.pending ? `${leaveType}·申請中` : leaveType)
+    : meta.label
   return (
-    <div title={`${emp.name} · ${meta.label}`} style={{
+    <div title={`${emp.name} · ${label}`} style={{
       display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
       padding: 10, borderRadius: 10, background: C.card,
       border: meta.pending ? `1.5px dashed ${meta.color}` : `1px solid ${C.borderSubtle}`,
@@ -170,7 +175,7 @@ function TeamMemberCard({ emp, status }) {
       <div style={{ fontSize: 12, fontWeight: 600, textAlign: 'center', whiteSpace: 'nowrap', maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis' }}>
         {emp.name}
       </div>
-      <div style={{ fontSize: 10, color: meta.color, fontWeight: 600 }}>{meta.label}</div>
+      <div style={{ fontSize: 10, color: meta.color, fontWeight: 600 }}>{label}</div>
     </div>
   )
 }
@@ -810,9 +815,11 @@ export default function TeamDashboard() {
 
     return team.map(emp => {
       let status = 'unknown'
+      let leaveType = null   // 實際假別(特休/事假/病假/婚假…)顯示用
       if (tripByEmp.has(emp.id)) status = 'trip'
       else if (leaveByEmp.has(emp.id)) {
         const t = leaveByEmp.get(emp.id).type
+        leaveType = t
         status = ['病假', '事假'].includes(t) ? 'sick' : 'leave'
       } else if (attByEmp.has(emp.id)) {
         const a = attByEmp.get(emp.id)
@@ -830,10 +837,11 @@ export default function TeamDashboard() {
         if (pTripByEmp.has(emp.id)) status = 'trip_pending'
         else if (pLeaveByEmp.has(emp.id)) {
           const t = pLeaveByEmp.get(emp.id).type
+          leaveType = t
           status = ['病假', '事假'].includes(t) ? 'sick_pending' : 'leave_pending'
         } else if (pOtByEmp.has(emp.id)) status = 'overtime_pending'
       }
-      return { emp, status }
+      return { emp, status, leaveType }
     })
   }, [team, attendance, todayLeaves, todayOvertimes, todayTrips, pendingLeaves, pendingOvertimes, pendingTrips])
 
@@ -1450,8 +1458,8 @@ export default function TeamDashboard() {
                 gridTemplateColumns: 'repeat(auto-fill, minmax(96px, 1fr))',
                 gap: 10,
               }}>
-                {visible.map(({ emp, status }) => (
-                  <TeamMemberCard key={emp.id} emp={emp} status={status} />
+                {visible.map(({ emp, status, leaveType }) => (
+                  <TeamMemberCard key={emp.id} emp={emp} status={status} leaveType={leaveType} />
                 ))}
               </div>
             )}

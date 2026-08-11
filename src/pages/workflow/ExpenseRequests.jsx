@@ -273,6 +273,7 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
       store: req.store || '',
       supplier: req.supplier || '',
       currency: req.currency || 'TWD',
+      settle_assignee_id: req.settle_assignee_id ? String(req.settle_assignee_id) : '',
       settle_department_id: req.settle_department_id ? String(req.settle_department_id) : '',
       settle_store_id: req.settle_store_id ? String(req.settle_store_id) : '',
       acceptance_units: Array.isArray(req.acceptance_units) ? req.acceptance_units : [],
@@ -300,13 +301,7 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
     // 非費用：只驗 申請人 + 主旨；費用：驗會計科目 + 品項合計 + 門市必填
     if (isExpense) {
       const validateForm = { ...form, _total: total }
-      if (!validateRequired(validateForm, ['employee', 'account_code', 'title', '_total', 'store', 'settle_department_id'], setErrors, { zeroInvalid: true })) return
-      // 驗收單位選「營運部」時，門市也必填
-      const selDept = departments.find(d => String(d.id) === String(form.settle_department_id))
-      if (selDept?.name === '營運部' && !form.settle_store_id) {
-        setErrors(prev => ({ ...prev, settle_store_id: true }))
-        return
-      }
+      if (!validateRequired(validateForm, ['employee', 'account_code', 'title', '_total', 'store', 'settle_assignee_id'], setErrors, { zeroInvalid: true })) return
     } else {
       if (!validateRequired(form, ['employee', 'title'], setErrors)) return
     }
@@ -334,10 +329,10 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
       store: isExpense ? (form.store || null) : null,
       currency: isExpense ? (form.currency || 'TWD') : 'TWD',
       acceptance_units: isExpense ? (form.acceptance_units || []) : [],
-      // 驗收單位 — 申請時指定，通過後 trigger 解析核銷人
-      settle_department_id: isExpense && form.settle_department_id ? Number(form.settle_department_id) : null,
-      // 營運部選「總部」(__HQ__) → 門市存 null，部門維持營運部 → trigger 解析成營運部經理
-      settle_store_id: isExpense && form.settle_store_id && form.settle_store_id !== '__HQ__' ? Number(form.settle_store_id) : null,
+      // 驗收人 — 申請時直接指定一位員工(可含自己);部門/門市改不再使用(留 null)
+      settle_assignee_id: isExpense && form.settle_assignee_id ? Number(form.settle_assignee_id) : null,
+      settle_department_id: null,
+      settle_store_id: null,
       organization_id: profile?.organization_id ?? null,
       doc_type: docType,
     }
@@ -1130,6 +1125,8 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
               ...(showDetail.description ? [{ label: '說明', value: showDetail.description, multiline: true }] : []),
             ]
           : (() => {
+              // 驗收人:新制直接存 settle_assignee_id(顯示人名);舊單無 assignee 時 fallback 舊部門/門市
+              const settleAssignee = showDetail.settle_assignee_id ? employees.find(e => e.id === showDetail.settle_assignee_id) : null
               const settleDept = departments.find(d => d.id === showDetail.settle_department_id)
               const settleStore = stores.find(s => s.id === showDetail.settle_store_id)
               const settleUnitLabel = settleDept
@@ -1141,7 +1138,9 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
                 { label: '門市', value: showDetail.store || '—' },
                 { label: '供應商', value: showDetail.supplier || '—' },
                 { label: '項目', value: showDetail.title || '—' },
-                ...(settleUnitLabel ? [{ label: verb('驗收單位', DOC), value: settleUnitLabel }] : []),
+                ...(settleAssignee
+                    ? [{ label: verb('驗收人', DOC), value: settleAssignee.name }]
+                    : settleUnitLabel ? [{ label: verb('驗收單位', DOC), value: settleUnitLabel }] : []),
                 ...(showDetail.acceptance_units?.length ? [{ label: '驗收單位（多選）', value: showDetail.acceptance_units.join('、') }] : []),
                 ...(showDetail.description ? [{ label: '說明', value: showDetail.description, multiline: true }] : []),
               ]
@@ -1240,11 +1239,12 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
             )
             const approverMap = {}
             detailChainSteps.forEach(s => { if (s.target_emp_id && s.name) approverMap[s.target_emp_id] = s.name })
+            const _settleAssignee = showDetail.settle_assignee_id ? employees.find(e => e.id === showDetail.settle_assignee_id) : null
             const _settleDept = departments.find(d => d.id === showDetail.settle_department_id)
             const _settleStore = stores.find(s => s.id === showDetail.settle_store_id)
-            const _settleUnitLabel = _settleDept
-              ? (_settleStore ? `${_settleDept.name}／${_settleStore.name}` : _settleDept.name)
-              : null
+            const _settleUnitLabel = _settleAssignee
+              ? _settleAssignee.name
+              : (_settleDept ? (_settleStore ? `${_settleDept.name}／${_settleStore.name}` : _settleDept.name) : null)
             exportExpenseRequestPdf(showDetail, {
               companyName: organization?.name,
               logoUrl: organization?.logo_url,

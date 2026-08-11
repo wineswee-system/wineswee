@@ -388,15 +388,6 @@ export default function ExpenseFormModal({
             </div>
           )}
 
-          {/* 驗收單位 — 費用/叫貨皆顯示，可多選門市 */}
-          {isExpense && (
-            <AcceptanceUnitsField
-              stores={stores || []}
-              selected={form.acceptance_units || []}
-              onChange={(v) => set('acceptance_units', v)}
-            />
-          )}
-
           {/* Line items — expense only.
               用 form-table（CSS grid + container query）取代 table，窄容器自動變兩排排版：
               品名 + [X] / 數量 × 單價 = 小計 */}

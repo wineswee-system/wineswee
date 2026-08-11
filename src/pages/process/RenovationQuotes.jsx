@@ -61,6 +61,21 @@ export default function RenovationQuotes() {
     return { mgmt, tax, total: cf + mgmt + tax }
   }, [form.construction_fee, form.mgmt_fee_pct, form.tax_pct])
 
+  // 總價變動 → 依各期 % 自動帶金額(手動改過的期不覆蓋)
+  useEffect(() => {
+    setForm(f => {
+      let changed = false
+      const payments = f.payments.map(p => {
+        if (p._manual || p.pct === '' || p.pct == null) return p
+        const amt = round0(calc.total * (Number(p.pct) || 0) / 100)
+        if (Number(p.amount) === amt) return p
+        changed = true
+        return { ...p, amount: amt }
+      })
+      return changed ? { ...f, payments } : f
+    })
+  }, [calc.total])
+
   const openNew = () => { setEditingId(null); setForm(emptyForm()); setShowForm(true) }
   const openEdit = (r) => {
     setEditingId(r.id)
@@ -76,11 +91,15 @@ export default function RenovationQuotes() {
     setShowForm(true)
   }
 
-  const setPay = (i, k, v) => setForm(f => ({ ...f, payments: f.payments.map((p, idx) => idx === i ? { ...p, [k]: v } : p) }))
+  const setPay = (i, k, v) => setForm(f => ({ ...f, payments: f.payments.map((p, idx) => {
+    if (idx !== i) return p
+    const np = { ...p, [k]: v }
+    if (k === 'amount') np._manual = true                                              // 手動改金額 → 不再被自動蓋
+    else if (k === 'pct' && !p._manual) np.amount = v === '' ? '' : round0(calc.total * (Number(v) || 0) / 100)  // 改% → 即時帶金額
+    return np
+  }) }))
   const addPay = () => setForm(f => ({ ...f, payments: [...f.payments, { label: '', pct: '', due_date: '', amount: '' }] }))
   const delPay = (i) => setForm(f => ({ ...f, payments: f.payments.filter((_, idx) => idx !== i) }))
-  // 依總價 + % 自動帶金額(可再手改)
-  const fillPayAmt = (i) => setForm(f => ({ ...f, payments: f.payments.map((p, idx) => idx === i ? { ...p, amount: round0(calc.total * (Number(p.pct) || 0) / 100) } : p) }))
 
   const save = async () => {
     if (!form.store_name.trim()) { toast.error('請填門市'); return }
@@ -246,14 +265,14 @@ export default function RenovationQuotes() {
                 {form.payments.map((p, i) => (
                   <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 70px 130px 1fr 28px', gap: 6, alignItems: 'center' }}>
                     <input style={{ ...inputStyle, padding: '6px 8px' }} placeholder={`第${i + 1}期名目`} value={p.label} onChange={e => setPay(i, 'label', e.target.value)} />
-                    <input type="number" style={{ ...inputStyle, padding: '6px 8px' }} placeholder="%" value={p.pct} onChange={e => setPay(i, 'pct', e.target.value)} onBlur={() => p.pct && !p.amount && fillPayAmt(i)} />
+                    <input type="number" style={{ ...inputStyle, padding: '6px 8px' }} placeholder="%" value={p.pct} onChange={e => setPay(i, 'pct', e.target.value)} />
                     <input type="date" style={{ ...inputStyle, padding: '6px 8px' }} value={p.due_date} onChange={e => setPay(i, 'due_date', e.target.value)} />
                     <input type="number" style={{ ...inputStyle, padding: '6px 8px' }} placeholder="金額" value={p.amount} onChange={e => setPay(i, 'amount', e.target.value)} />
                     <button onClick={() => delPay(i)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--accent-red)' }}><Trash2 size={14} /></button>
                   </div>
                 ))}
               </div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>填 % 後跳出欄位會依總價自動帶金額,可再手改。</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>填工程費算出總價後,各期依 % 自動帶金額;可再手改(手改後不會被自動蓋)。</div>
             </div>
 
             <div><label style={labelStyle}>備註</label><textarea style={{ ...inputStyle, minHeight: 60, resize: 'vertical' }} value={form.note} onChange={e => setForm(f => ({ ...f, note: e.target.value }))} /></div>

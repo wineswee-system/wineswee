@@ -6,6 +6,7 @@ import { getAttendance, serverClockIn, getDepartments, getStores } from '../../l
 import { exportAttendancePdf } from '../../lib/exportPdf'
 import { validateClockIn } from '../../lib/clockInValidator'
 import { getRestMinutes } from '../../lib/scheduleUtils'
+import { toast } from '../../lib/toast'
 
 // 由上下班時間算「淨工時」（扣休息：<5h=0、5~9h=30分、≥9h=60分；跨午夜 +24h）
 function computeNet(inStr, outStr, isAdmin = false) {
@@ -427,6 +428,33 @@ export default function Attendance() {
     }
   })
 
+  // 匯出 Excel：與 PDF 同一份顯示集(buildExportRows),欄位對齊畫面表格；按下才 lazy-load xlsx
+  const exportExcel = async () => {
+    const src = buildExportRows()
+    if (!src.length) { toast.warning('目前沒有可匯出的紀錄'); return }
+    const XLSX = await import('xlsx') // lazy-load：按下匯出才下載 xlsx
+    const rows = src.map(r => ({
+      '員工': r.employee,
+      '部門': r.dept,
+      '日期': r.date,
+      '當天班表': r.shift,
+      '上班打卡': r.clock_in,
+      '下班打卡': r.clock_out,
+      '工時': r.hours,
+      '加班': r.ot,
+      '請假': r.leave,
+      '打卡地點': r.location,
+      '經緯度': r.gps,
+      '狀態': r.status,
+    }))
+    const header = ['員工','部門','日期','當天班表','上班打卡','下班打卡','工時','加班','請假','打卡地點','經緯度','狀態']
+    const ws = XLSX.utils.json_to_sheet(rows, { header })
+    ws['!cols'] = [10,12,12,14,10,10,7,7,12,12,18,20].map(w => ({ wch: w }))
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, '出勤紀錄')
+    XLSX.writeFile(wb, `打卡追蹤_${startDate}_${endDate}.xlsx`)
+  }
+
   if (loading) return <LoadingSpinner />
   if (error) return <div style={{ padding: 32, color: 'var(--accent-red)', textAlign: 'center' }}><h3>{error}</h3><button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: 16 }}>重新載入</button></div>
 
@@ -592,6 +620,7 @@ export default function Attendance() {
               <button className="btn btn-primary" onClick={openBackfill}><Clock size={14} /> 補登打卡</button>
             )}
             <button className="btn btn-secondary" onClick={() => exportAttendancePdf(buildExportRows(), { dept: deptFilter, date: `${startDate} ~ ${endDate}` })}><Download size={14} /> 匯出 PDF</button>
+            <button className="btn btn-secondary" onClick={exportExcel}><Download size={14} /> 匯出 Excel</button>
           </div>
         </div>
       </div>

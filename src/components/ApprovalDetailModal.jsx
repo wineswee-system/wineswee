@@ -361,7 +361,7 @@ export default function ApprovalDetailModal({
                       {(otDay.schedule || []).length === 0
                         ? <span style={{ color: 'var(--text-muted)' }}>無排班</span>
                         : otDay.schedule.map((s, i) => (
-                            <div key={i}>{s.absence_type ? s.absence_type : (s.actual_start ? `${hhmm(s.actual_start)}–${hhmm(s.actual_end)}` : '—')}</div>
+                            <div key={i}>{s.absence_type ? s.absence_type : (s.actual_start ? `${hhmm(s.actual_start)}–${hhmm(s.actual_end)}` : (s.shift || '—'))}</div>
                           ))}
                     </div>
                   </div>

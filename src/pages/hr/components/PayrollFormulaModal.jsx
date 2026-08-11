@@ -335,10 +335,10 @@ export default function PayrollFormulaModal({ payroll, month, onClose }) {
               label="本薪"
               value={p.base_salary}
               formula={isHourly
-                ? `時薪 × 當月實際打卡工時${isProrated ? '（已含在職比例）' : ''}`
+                ? `時薪 × 排班工時（早到／晚走不計入；遲到／早退見下方減項；超時走加班另計）${isProrated ? '·已含在職比例' : ''}`
                 : `月薪設定值 × 在職天數 ÷ 30${isProrated ? '' : '（足月 = 1）'}`}
               vars={isHourly
-                ? [{ k: '時薪', v: hr }, { k: '當月工時', v: p.workHours }]
+                ? [{ k: '時薪', v: hr }, { k: '排班工時', v: p.workHours }]
                 : isProrated
                   ? [{ k: '月薪', v: Math.round(p.base_salary / _p) }, { k: '在職比例', v: `${p.salary_actual_wd}/${p.salary_total_wd} 曆日` }]
                   : [{ k: '月薪', v: p.base_salary }]

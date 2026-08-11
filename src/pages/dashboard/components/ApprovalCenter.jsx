@@ -245,7 +245,7 @@ function PendingApprovalsView() {
         const ids = pendingByTable[permKey] || []
         if (ids.length === 0) return Promise.resolve({ data: [] })
         return supabase.from(t.table)
-          .select('*')
+          .select(t.table === 'task_confirmations' ? '*, task:tasks(title, store, assignee)' : '*')
           .in('id', ids)
           .order('created_at', { ascending: false })
       })
@@ -325,7 +325,7 @@ function PendingApprovalsView() {
     const type = tabDef.key
     // 任務確認：不開簽核鏈 modal，直接開該任務的完整編輯頁(含簽核 tab 的核准/拒絕按鈕)
     if (type === 'task_confirmation') {
-      navigate(`/process/tasks?focus=${row.task_id || row.id}`)
+      navigate(`/process/tasks?focus=${row.task_id || row.id}&tab=approval`)
       return
     }
     if (!INPLACE[type]) {
@@ -743,8 +743,8 @@ function getRowDisplay(row, tabKey) {
       }
     case 'task_confirmation':
       return {
-        title: row.task_title || `任務 #${row.task_id || row.id}`,
-        subtitle: `第 ${(row.step_order ?? 0) + 1} 關`,
+        title: row.task?.title || row.task_title || `任務 #${row.task_id || row.id}`,
+        subtitle: `第 ${(row.step_order ?? 0) + 1} 關 · 任務 #${row.task_id || row.id}`,
       }
     case 'resignation':
       return {

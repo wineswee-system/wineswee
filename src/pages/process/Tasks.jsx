@@ -51,6 +51,7 @@ export default function Tasks() {
   const [showModal, setShowModal] = useState(false)
   const [formErrors, setFormErrors] = useState({})
   const [selectedTask, setSelectedTask] = useState(null)
+  const [focusTab, setFocusTab] = useState(null)  // ?tab= 帶進來時開在指定 tab(如 approval)
   const [searchParams, setSearchParams] = useSearchParams()
   const [search, setSearch] = useState('')
   const [filterAssignee, setFilterAssignee] = useState('')
@@ -135,7 +136,8 @@ export default function Tasks() {
     const t = tasks.find(x => x.id === Number(fid))
     if (t) {
       setSelectedTask(t)
-      setSearchParams(sp => { const x = new URLSearchParams(sp); x.delete('focus'); return x }, { replace: true })
+      setFocusTab(searchParams.get('tab') || null)
+      setSearchParams(sp => { const x = new URLSearchParams(sp); x.delete('focus'); x.delete('tab'); return x }, { replace: true })
     }
   }, [tasks, searchParams]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -641,12 +643,13 @@ export default function Tasks() {
       {selectedTask && (
         <TaskModal
           task={selectedTask}
+          initialTab={focusTab}
           employees={employees}
           stores={stores}
           approvalChains={approvalChains}
           categoryOptions={taskCategories.map(c => c.name)}
           currentUser={profile}
-          onClose={() => setSelectedTask(null)}
+          onClose={() => { setSelectedTask(null); setFocusTab(null) }}
           onChange={(updated) => {
             setTasks(prev => prev.map(x => x.id === updated.id ? updated : x))
             setSelectedTask(updated)

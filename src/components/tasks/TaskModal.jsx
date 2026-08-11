@@ -41,7 +41,7 @@ const normBucket = b => ({ General: '一般工作', Personal: '私人工作', Wo
 const CATEGORY_FALLBACK = ['一般', '緊急', '日常']
 
 export default function TaskModal({
-  task, employees = [], sections = [], stores = [],
+  task, initialTab, employees = [], sections = [], stores = [],
   approvalChains: approvalChainsProp = [],
   categoryOptions,
   currentUser, onClose, onChange, onDelete, onDuplicate,
@@ -63,7 +63,7 @@ export default function TaskModal({
   })
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState('')
-  const [activeTab, setActiveTab] = useState('basic')
+  const [activeTab, setActiveTab] = useState(initialTab || 'basic')
   const [isDirty, setIsDirty] = useState(false)
   const [saving, setSaving] = useState(false)
   const [activityRefresh, setActivityRefresh] = useState(0)

@@ -250,6 +250,10 @@ export default function LeaveBalances() {
         const ends   = comp.map(c => c.expires_at).filter(Boolean).sort()
         if (starts.length && ends.length) {
           rangeStr = `${starts[0].replace(/-/g, '/')} ～ ${ends[ends.length - 1].replace(/-/g, '/')}`
+          // 補休是滾動帳、不綁日曆年度:「假勤年/月/日」改印補休帳實際跨的年份(加班日年～到期年),
+          // 不再跟著分頁年度(${yearFilter})亂跑造成「歸到2027」的誤會
+          const y0 = starts[0].slice(0, 4), y1 = ends[ends.length - 1].slice(0, 4)
+          periodLabel = y0 === y1 ? `${y0} 年` : `${y0}～${y1} 年`
         }
       }
 

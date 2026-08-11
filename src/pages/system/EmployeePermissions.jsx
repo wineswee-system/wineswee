@@ -97,6 +97,7 @@ const FEATURES = [
   { module: '專案流程', label: '簽核鏈設定',   view: 'approval_chain.view',  edit: 'approval_chain.edit' },
   { module: '專案流程', label: '簽核代理設定', view: null,                   edit: 'approval.delegate_manage' },
   { module: '專案流程', label: '收款（訂金 / 加盟金）', view: null,          edit: 'collection.manage' },
+  { module: '專案流程', label: '裝潢報價',       view: null,                   edit: 'renovation.manage' },
   // 系統設定
   { module: '系統設定', label: '使用者管理',     view: 'system.user_view',       edit: 'system.user_manage' },
   { module: '系統設定', label: '員工個別權限',   view: 'system.permission_view', edit: 'system.permission_manage' },

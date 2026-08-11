@@ -104,7 +104,7 @@ export default function BusinessApplications() {
       <FormGroup title="💰 費用組" desc="會產生費用支出，需驗收" items={expenseGroup} navigate={navigate} />
       <FormGroup title="📋 非費用組" desc="純流程申請，不涉及驗收" items={nonExpenseGroup} navigate={navigate} />
       <FormGroup title="💵 收款" desc="訂金 / 加盟金收款記錄（純記帳，加總滿額自動完成）" items={collectionGroup} navigate={navigate} />
-      <FormGroup title="🔨 裝潢工程" desc="門市裝潢報價記錄（純記錄，含付款分期）" items={FIXED_RENOVATION} navigate={navigate} />
+      <FormGroup title="🔨 裝潢工程" desc="門市裝潢報價記錄（純記錄，含付款分期）" items={hasPermission('renovation.manage') ? FIXED_RENOVATION : []} navigate={navigate} />
 
       {expenseGroup.length === 0 && nonExpenseGroup.length === 0 && (
         <div className="card" style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>

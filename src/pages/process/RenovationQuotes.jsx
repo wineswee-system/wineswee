@@ -24,7 +24,8 @@ const emptyForm = () => ({
 })
 
 export default function RenovationQuotes() {
-  const { profile } = useAuth()
+  const { profile, hasPermission } = useAuth()
+  const canUse = hasPermission('renovation.manage')   // admin/super_admin 預設有;其餘在權限頁開
   const orgId = profile?.organization_id ?? getTenantOrgId()
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
@@ -126,6 +127,13 @@ export default function RenovationQuotes() {
 
   const inputStyle = { width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border-medium)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: 14 }
   const labelStyle = { fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4, display: 'block' }
+
+  if (!canUse) return (
+    <div style={{ padding: 48, textAlign: 'center', color: 'var(--text-muted)' }}>
+      <Hammer size={40} style={{ color: 'var(--text-muted)', marginBottom: 12 }} />
+      <div style={{ fontSize: 15 }}>沒有「裝潢報價」權限,請洽管理員在權限頁開啟。</div>
+    </div>
+  )
 
   return (
     <div style={{ padding: 24, maxWidth: 1200, margin: '0 auto' }}>

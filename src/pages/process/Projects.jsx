@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { useSearchParams } from 'react-router-dom'
 import { toast } from '../../lib/toast'
@@ -290,18 +290,35 @@ export default function Projects() {
   }
 
   // Stats
-  const getStats = (projectId) => {
-    const pWorkflows = workflows.filter(w => w.project_id === projectId)
-    const wfTasks = pWorkflows.flatMap(w => tasks.filter(t => t.workflow_instance_id === w.id))
-    const directTasks = tasks.filter(t => t.project_id === projectId && !t.workflow_instance_id)
-    const pTasks = [...wfTasks, ...directTasks]
-    const total = pTasks.length
-    const completed = pTasks.filter(t => t.status === '已完成').length
-    const inProgress = pTasks.filter(t => t.status === '進行中').length
-    const pending = total - completed - inProgress
-    const pct = total > 0 ? Math.round((completed / total) * 100) : 0
-    return { total, completed, inProgress, pending, pct, workflows: pWorkflows.length }
-  }
+  // 一次建好每個專案的統計(O(任務+流程),memo 起來;取代每張卡片各自 flatMap+filter 掃全表)
+  const statsByProject = useMemo(() => {
+    const wfProject = new Map()   // workflow_instance_id → project_id
+    const wfCount = new Map()     // project_id → 流程數
+    for (const w of workflows) {
+      wfProject.set(w.id, w.project_id)
+      if (w.project_id != null) wfCount.set(w.project_id, (wfCount.get(w.project_id) || 0) + 1)
+    }
+    const agg = new Map()         // project_id → {total, completed, inProgress}
+    const bump = (pid, t) => {
+      if (pid == null) return
+      let a = agg.get(pid); if (!a) { a = { total: 0, completed: 0, inProgress: 0 }; agg.set(pid, a) }
+      a.total++
+      if (t.status === '已完成') a.completed++
+      else if (t.status === '進行中') a.inProgress++
+    }
+    for (const t of tasks) {
+      if (t.workflow_instance_id) bump(wfProject.get(t.workflow_instance_id), t)  // 經流程歸屬(其 project_id)
+      else if (t.project_id != null) bump(t.project_id, t)                         // 直接掛專案
+    }
+    const out = new Map()
+    for (const p of projects) {
+      const a = agg.get(p.id) || { total: 0, completed: 0, inProgress: 0 }
+      const { total, completed, inProgress } = a
+      out.set(p.id, { total, completed, inProgress, pending: total - completed - inProgress, pct: total > 0 ? Math.round((completed / total) * 100) : 0, workflows: wfCount.get(p.id) || 0 })
+    }
+    return out
+  }, [projects, workflows, tasks])
+  const getStats = (projectId) => statsByProject.get(projectId) || { total: 0, completed: 0, inProgress: 0, pending: 0, pct: 0, workflows: 0 }
 
   const resetNewProjectState = () => {
     setPendingWfAttach([])

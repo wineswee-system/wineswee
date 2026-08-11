@@ -14,7 +14,13 @@ const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${Stri
 const emptyForm = () => ({
   store_name: '', address: '', vendor: '', contact_name: '', contact_phone: '',
   construction_fee: '', mgmt_fee_pct: 8, tax_pct: 5, quote_date: todayStr(), note: '',
-  payments: [{ label: '簽約金', pct: 40, due_date: '', amount: '' }],
+  // 預設常見 4 期(簽約金40 / 第二20 / 第三20 / 完工20),可再自由編輯/加/刪
+  payments: [
+    { label: '簽約金', pct: 40, due_date: '', amount: '' },
+    { label: '第二期', pct: 20, due_date: '', amount: '' },
+    { label: '第三期', pct: 20, due_date: '', amount: '' },
+    { label: '完工',   pct: 20, due_date: '', amount: '' },
+  ],
 })
 
 export default function RenovationQuotes() {

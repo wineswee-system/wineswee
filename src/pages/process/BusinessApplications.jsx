@@ -1,7 +1,7 @@
 ﻿import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
-import { Wallet, Receipt, FileText, ClipboardList, Package, ShoppingCart, Building2, Banknote } from 'lucide-react'
+import { Wallet, Receipt, FileText, ClipboardList, Package, ShoppingCart, Building2, Banknote, Hammer } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -26,6 +26,11 @@ const FIXED_NON_EXPENSE = [
 // 收款組（純記帳，不走簽核）— 訂金 + 加盟金整合成單一入口（頁內分 tab）
 const FIXED_COLLECTION = [
   { icon: Banknote, name: '收款', desc: '訂金（固定 30 萬）＋ 加盟金（多位投資人分攤、每人各自三期 45/45/10）收款記錄', action: '/process/collections', color: 'var(--accent-cyan)', dim: 'var(--accent-cyan-dim)', tag: '記帳' },
+]
+
+// 裝潢工程組（純記錄，不走簽核）
+const FIXED_RENOVATION = [
+  { icon: Hammer, name: '裝潢報價', desc: '門市裝潢工程報價記錄：廠商/負責人/電話 + 工程費/監工/稅金/總價 + 可自訂付款分期', action: '/process/renovation-quotes', color: 'var(--accent-orange)', dim: 'var(--accent-orange-dim)', tag: '記錄' },
 ]
 
 const COLOR_MAP = {
@@ -99,6 +104,7 @@ export default function BusinessApplications() {
       <FormGroup title="💰 費用組" desc="會產生費用支出，需驗收" items={expenseGroup} navigate={navigate} />
       <FormGroup title="📋 非費用組" desc="純流程申請，不涉及驗收" items={nonExpenseGroup} navigate={navigate} />
       <FormGroup title="💵 收款" desc="訂金 / 加盟金收款記錄（純記帳，加總滿額自動完成）" items={collectionGroup} navigate={navigate} />
+      <FormGroup title="🔨 裝潢工程" desc="門市裝潢報價記錄（純記錄，含付款分期）" items={FIXED_RENOVATION} navigate={navigate} />
 
       {expenseGroup.length === 0 && nonExpenseGroup.length === 0 && (
         <div className="card" style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>

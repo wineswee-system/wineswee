@@ -323,6 +323,11 @@ function PendingApprovalsView() {
 
   const openDetail = async (row, tabDef) => {
     const type = tabDef.key
+    // 任務確認：不開簽核鏈 modal，直接開該任務的完整編輯頁(含簽核 tab 的核准/拒絕按鈕)
+    if (type === 'task_confirmation') {
+      navigate(`/process/tasks?focus=${row.task_id || row.id}`)
+      return
+    }
     if (!INPLACE[type]) {
       // 複雜類型（費用/調撥/人事異動…）仍跳 HR 頁，帶 focus + returnTo
       navigate(`${tabDef.route}?focus=${row.id}&returnTo=/`)

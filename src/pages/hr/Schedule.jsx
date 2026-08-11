@@ -305,7 +305,7 @@ export default function Schedule() {
     setScheduleLoading(true)
     Promise.all([
       supabase.from('schedules').select('*').gte('date', activeStart).lte('date', activeEnd).abortSignal(signal),
-      supabase.from('off_requests').select('*').gte('date', activeStart).lte('date', activeEnd).is('deleted_at', null).abortSignal(signal),
+      supabase.from('off_requests').select('*').gte('date', activeStart).lte('date', activeEnd).is('deleted_at', null).neq('status', '已駁回').abortSignal(signal),
       supabase.from('leave_requests').select('employee, start_date, end_date')
         .in('status', ['待審核', '審核中'])
         .is('deleted_at', null)

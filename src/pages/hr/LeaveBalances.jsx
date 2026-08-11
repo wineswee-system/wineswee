@@ -228,7 +228,9 @@ export default function LeaveBalances() {
         else _es.setFullYear(yearFilter)
         _periodStartStr = `${_es.getFullYear()}-${_pad2s(_es.getMonth() + 1)}-${_pad2s(_es.getDate())}`
       } else _periodStartStr = `${yearFilter}-01-01`
-      const notStarted     = _periodStartStr > _todayStr
+      // 補休走 comp_time_ledger 滾動帳(生效日=加班日,非年度1/1),不套年度「未生效」判斷;
+      // 否則切到未來年度分頁會拿假的 ${yearFilter}-01-01 誤標「未生效」+可申請歸0(明明還能請)
+      const notStarted     = type !== '補休' && _periodStartStr > _todayStr
       // 特休(annual):§38 RPC 為單一真相 → 一律用 RPC 算,不被 leave_balances 舊存量蓋
       //   (存量半數已跟法規飄掉;carry_over 另計仍保留)。其餘假別維持「有存量用存量」。
       const effectiveDays  = type === 'annual'

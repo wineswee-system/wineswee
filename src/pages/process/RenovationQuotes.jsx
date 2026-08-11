@@ -13,7 +13,9 @@ const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${Stri
 
 const emptyForm = () => ({
   store_name: '', address: '', vendor: '', contact_name: '', contact_phone: '',
-  construction_fee: '', mgmt_fee_pct: 8, tax_pct: 5, quote_date: todayStr(), note: '',
+  // 工程項目明細:沒勾發票另開 → 進工程費小計(吃監工%/稅金%);勾了 → 含稅單獨加
+  items: [{ name: '', amount: '', invoice_separate: false }],
+  mgmt_fee_pct: 8, tax_pct: 5, quote_date: todayStr(), note: '',
   // 預設常見 4 期(簽約金40 / 第二20 / 第三20 / 完工20),可再自由編輯/加/刪
   payments: [
     { label: '簽約金', pct: 40, due_date: '', amount: '' },
@@ -42,24 +44,29 @@ export default function RenovationQuotes() {
     const { data: quotes, error } = await q
     if (error) { toast.error('載入失敗：' + error.message); setRows([]); setLoading(false); return }
     const ids = (quotes || []).map(r => r.id)
-    let payMap = {}
+    let payMap = {}, itemMap = {}
     if (ids.length) {
       const { data: pays } = await supabase.from('renovation_quote_payments').select('*').in('quote_id', ids).order('phase_no')
       for (const p of (pays || [])) (payMap[p.quote_id] ||= []).push(p)
+      const { data: its } = await supabase.from('renovation_quote_items').select('*').in('quote_id', ids).order('seq')
+      for (const it of (its || [])) (itemMap[it.quote_id] ||= []).push(it)
     }
-    setRows((quotes || []).map(r => ({ ...r, payments: payMap[r.id] || [] })))
+    setRows((quotes || []).map(r => ({ ...r, payments: payMap[r.id] || [], items: itemMap[r.id] || [] })))
     setLoading(false)
   }, [orgId])
 
   useEffect(() => { load() }, [load])
 
-  // 金額連動：監工管理費 = 工程費 × %;稅金 = (工程費 + 監工) × %;總價 = 三者相加(對齊報價單)
+  // 工程費小計 = 非發票另開項合計;監工 = 小計×%;稅金 = (小計+監工)×%;
+  // 發票另開項含稅、單獨加。總價 = 小計 + 監工 + 稅金 + 發票另開合計。
   const calc = useMemo(() => {
-    const cf = Number(form.construction_fee) || 0
+    const items = form.items || []
+    const cf  = items.filter(it => !it.invoice_separate).reduce((s, it) => s + (Number(it.amount) || 0), 0)
+    const sep = items.filter(it =>  it.invoice_separate).reduce((s, it) => s + (Number(it.amount) || 0), 0)
     const mgmt = round0(cf * (Number(form.mgmt_fee_pct) || 0) / 100)
-    const tax = round0((cf + mgmt) * (Number(form.tax_pct) || 0) / 100)
-    return { mgmt, tax, total: cf + mgmt + tax }
-  }, [form.construction_fee, form.mgmt_fee_pct, form.tax_pct])
+    const tax  = round0((cf + mgmt) * (Number(form.tax_pct) || 0) / 100)
+    return { cf, sep, mgmt, tax, total: cf + mgmt + tax + sep }
+  }, [form.items, form.mgmt_fee_pct, form.tax_pct])
 
   // 總價變動 → 依各期 % 自動帶金額(手動改過的期不覆蓋)
   useEffect(() => {
@@ -82,7 +89,10 @@ export default function RenovationQuotes() {
     setForm({
       store_name: r.store_name || '', address: r.address || '', vendor: r.vendor || '',
       contact_name: r.contact_name || '', contact_phone: r.contact_phone || '',
-      construction_fee: r.construction_fee ?? '', mgmt_fee_pct: r.mgmt_fee_pct ?? 8, tax_pct: r.tax_pct ?? 5,
+      items: (r.items || []).length
+        ? r.items.map(it => ({ name: it.name || '', amount: it.amount ?? '', invoice_separate: !!it.invoice_separate, note: it.note || '' }))
+        : [{ name: '', amount: '', invoice_separate: false }],
+      mgmt_fee_pct: r.mgmt_fee_pct ?? 8, tax_pct: r.tax_pct ?? 5,
       quote_date: r.quote_date || todayStr(), note: r.note || '',
       payments: (r.payments || []).length
         ? r.payments.map(p => ({ label: p.label || '', pct: p.pct ?? '', due_date: p.due_date || '', amount: p.amount ?? '' }))
@@ -101,6 +111,10 @@ export default function RenovationQuotes() {
   const addPay = () => setForm(f => ({ ...f, payments: [...f.payments, { label: '', pct: '', due_date: '', amount: '' }] }))
   const delPay = (i) => setForm(f => ({ ...f, payments: f.payments.filter((_, idx) => idx !== i) }))
 
+  const setItem = (i, k, v) => setForm(f => ({ ...f, items: f.items.map((it, idx) => idx === i ? { ...it, [k]: v } : it) }))
+  const addItem = () => setForm(f => ({ ...f, items: [...f.items, { name: '', amount: '', invoice_separate: false }] }))
+  const delItem = (i) => setForm(f => ({ ...f, items: f.items.filter((_, idx) => idx !== i) }))
+
   const save = async () => {
     if (!form.store_name.trim()) { toast.error('請填門市'); return }
     if (!orgId) { toast.error('找不到組織'); return }
@@ -108,8 +122,8 @@ export default function RenovationQuotes() {
     const header = {
       organization_id: orgId, store_name: form.store_name.trim(), address: form.address.trim() || null,
       vendor: form.vendor.trim() || null, contact_name: form.contact_name.trim() || null, contact_phone: form.contact_phone.trim() || null,
-      construction_fee: Number(form.construction_fee) || 0, mgmt_fee_pct: Number(form.mgmt_fee_pct) || 0, mgmt_fee: calc.mgmt,
-      tax_pct: Number(form.tax_pct) || 0, tax: calc.tax, total_amount: calc.total,
+      construction_fee: calc.cf, mgmt_fee_pct: Number(form.mgmt_fee_pct) || 0, mgmt_fee: calc.mgmt,
+      tax_pct: Number(form.tax_pct) || 0, tax: calc.tax, invoice_separate_total: calc.sep, total_amount: calc.total,
       quote_date: form.quote_date || null, note: form.note.trim() || null, created_by: profile?.name || null,
     }
     let quoteId = editingId
@@ -117,10 +131,22 @@ export default function RenovationQuotes() {
       const { error } = await supabase.from('renovation_quotes').update({ ...header, updated_at: new Date().toISOString() }).eq('id', editingId)
       if (error) { toast.error('儲存失敗：' + error.message); setSaving(false); return }
       await supabase.from('renovation_quote_payments').delete().eq('quote_id', editingId)  // 重寫分期
+      await supabase.from('renovation_quote_items').delete().eq('quote_id', editingId)      // 重寫明細
     } else {
       const { data, error } = await supabase.from('renovation_quotes').insert(header).select('id').single()
       if (error) { toast.error('儲存失敗：' + error.message); setSaving(false); return }
       quoteId = data.id
+    }
+    const items = (form.items || [])
+      .filter(it => (it.name && it.name.trim()) || Number(it.amount) > 0)
+      .map((it, idx) => ({
+        organization_id: orgId, quote_id: quoteId, seq: idx + 1,
+        name: it.name?.trim() || null, amount: Number(it.amount) || 0,
+        invoice_separate: !!it.invoice_separate, note: it.note?.trim() || null,
+      }))
+    if (items.length) {
+      const { error } = await supabase.from('renovation_quote_items').insert(items)
+      if (error) { toast.error('明細儲存失敗：' + error.message); setSaving(false); return }
     }
     const pays = form.payments
       .filter(p => p.label || p.pct || p.amount || p.due_date)
@@ -199,10 +225,23 @@ export default function RenovationQuotes() {
               </div>
               {expanded === r.id && (
                 <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border-subtle)' }}>
+                  {r.items?.length > 0 && (
+                    <div style={{ overflowX: 'auto', marginBottom: 10 }}>
+                      <table className="data-table" style={{ width: '100%', fontSize: 13 }}>
+                        <thead><tr><th>項次</th><th>施工項目</th><th style={{ textAlign: 'right' }}>報價</th><th>備註</th></tr></thead>
+                        <tbody>
+                          {r.items.map((it) => (
+                            <tr key={it.id}><td>{it.seq}</td><td>{it.name || '-'}</td><td style={{ textAlign: 'right', fontWeight: 600 }}>{fmt(it.amount)}</td><td>{it.invoice_separate ? '發票另開' : (it.note || '')}</td></tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                   <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', fontSize: 13, marginBottom: 10 }}>
-                    <span>工程費 <b>{fmt(r.construction_fee)}</b></span>
+                    <span>工程費小計 <b>{fmt(r.construction_fee)}</b></span>
                     <span>監工管理費 {r.mgmt_fee_pct}% <b>{fmt(r.mgmt_fee)}</b></span>
                     <span>稅金 {r.tax_pct}% <b>{fmt(r.tax)}</b></span>
+                    {Number(r.invoice_separate_total) > 0 && <span>發票另開 <b>{fmt(r.invoice_separate_total)}</b></span>}
                   </div>
                   {r.payments.length > 0 && (
                     <div style={{ overflowX: 'auto' }}>
@@ -241,16 +280,33 @@ export default function RenovationQuotes() {
               <div><label style={labelStyle}>電話</label><input style={inputStyle} value={form.contact_phone} onChange={e => setForm(f => ({ ...f, contact_phone: e.target.value }))} /></div>
             </div>
 
-            {/* 金額 */}
+            {/* 工程項目明細 */}
             <div style={{ background: 'var(--bg-secondary)', borderRadius: 8, padding: 12, marginBottom: 12 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
-                <div><label style={labelStyle}>工程費小計</label><input type="number" style={inputStyle} value={form.construction_fee} onChange={e => setForm(f => ({ ...f, construction_fee: e.target.value }))} /></div>
-                <div><label style={labelStyle}>監工管理費 %</label><input type="number" style={inputStyle} value={form.mgmt_fee_pct} onChange={e => setForm(f => ({ ...f, mgmt_fee_pct: e.target.value }))} /></div>
-                <div><label style={labelStyle}>稅金 %</label><input type="number" style={inputStyle} value={form.tax_pct} onChange={e => setForm(f => ({ ...f, tax_pct: e.target.value }))} /></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                <label style={{ ...labelStyle, marginBottom: 0 }}>工程項目明細</label>
+                <button className="btn btn-secondary" style={{ padding: '3px 10px', fontSize: 12 }} onClick={addItem}><Plus size={12} /> 加一項</button>
               </div>
-              <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', marginTop: 10, fontSize: 13 }}>
-                <span>監工管理費：<b>{fmt(calc.mgmt)}</b></span>
-                <span>稅金：<b>{fmt(calc.tax)}</b></span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {form.items.map((it, i) => (
+                  <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 130px auto 28px', gap: 6, alignItems: 'center' }}>
+                    <input style={{ ...inputStyle, padding: '6px 8px' }} placeholder={`項目 ${i + 1}（如 木作工程）`} value={it.name} onChange={e => setItem(i, 'name', e.target.value)} />
+                    <input type="number" style={{ ...inputStyle, padding: '6px 8px' }} placeholder="報價" value={it.amount} onChange={e => setItem(i, 'amount', e.target.value)} />
+                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap', cursor: 'pointer' }} title="含稅、不吃監工/稅金,單獨加到總價">
+                      <input type="checkbox" checked={!!it.invoice_separate} onChange={e => setItem(i, 'invoice_separate', e.target.checked)} /> 發票另開
+                    </label>
+                    <button onClick={() => delItem(i)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--accent-red)' }}><Trash2 size={14} /></button>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 10 }}>
+                <div><label style={labelStyle}>監工管理費 %（算在工程費小計上）</label><input type="number" style={inputStyle} value={form.mgmt_fee_pct} onChange={e => setForm(f => ({ ...f, mgmt_fee_pct: e.target.value }))} /></div>
+                <div><label style={labelStyle}>稅金 %（算在工程費+監工上）</label><input type="number" style={inputStyle} value={form.tax_pct} onChange={e => setForm(f => ({ ...f, tax_pct: e.target.value }))} /></div>
+              </div>
+              <div style={{ borderTop: '1px solid var(--border-subtle)', marginTop: 10, paddingTop: 8, display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 13 }}>
+                <span>工程費小計 <b>{fmt(calc.cf)}</b></span>
+                <span>監工 {form.mgmt_fee_pct}% <b>{fmt(calc.mgmt)}</b></span>
+                <span>稅金 {form.tax_pct}% <b>{fmt(calc.tax)}</b></span>
+                {calc.sep > 0 && <span>發票另開 <b>{fmt(calc.sep)}</b></span>}
                 <span style={{ marginLeft: 'auto', fontSize: 15 }}>總價：<b style={{ color: 'var(--accent-red)' }}>{fmt(calc.total)}</b></span>
               </div>
             </div>

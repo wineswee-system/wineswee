@@ -65,9 +65,7 @@ export default function ExpenseFormDraft({ initialDraft, onCapture, onClose, bus
     const total = validItems.length > 0 ? validItems.reduce((s, li) => s + (li.subtotal || 0), 0) : Number(form.estimated_amount)
 
     if (isExpense) {
-      if (!validateRequired({ ...form, _total: total }, ['employee', 'account_code', 'title', '_total', 'store', 'settle_department_id'], setErrors, { zeroInvalid: true })) return
-      const selDept = departments.find(d => String(d.id) === String(form.settle_department_id))
-      if (selDept?.name === '營運部' && !form.settle_store_id) { setErrors(prev => ({ ...prev, settle_store_id: true })); return }
+      if (!validateRequired({ ...form, _total: total }, ['employee', 'account_code', 'title', '_total', 'store', 'settle_assignee_id'], setErrors, { zeroInvalid: true })) return
     } else {
       if (!validateRequired(form, ['employee', 'title'], setErrors)) return
     }
@@ -94,9 +92,10 @@ export default function ExpenseFormDraft({ initialDraft, onCapture, onClose, bus
       items: isExpense ? validItems : null,
       store: isExpense ? (form.store || null) : null,
       currency: isExpense ? (form.currency || 'TWD') : 'TWD',
-      // 驗收單位:營運部選總部(__HQ__)→門市存 null、部門維持營運部
-      settle_department_id: isExpense && form.settle_department_id ? Number(form.settle_department_id) : null,
-      settle_store_id: isExpense && form.settle_store_id && form.settle_store_id !== '__HQ__' ? Number(form.settle_store_id) : null,
+      // 驗收人:直接指定一位員工(可含自己)。部門/門市改為不再使用(留 null,舊單仍可 fallback)。
+      settle_assignee_id: isExpense && form.settle_assignee_id ? Number(form.settle_assignee_id) : null,
+      settle_department_id: null,
+      settle_store_id: null,
       organization_id: orgId,
     }
     // _formState 供重填時還原表單；files 為記憶體內 File 物件，任務儲存時才真正上傳

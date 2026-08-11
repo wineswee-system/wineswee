@@ -59,49 +59,21 @@ function StoreSelect({ value, onChange, stores, error }) {
   )
 }
 
-// 驗收單位 — 級聯:選部門→部門主管;選營運部→再選門市→店長。
-// 解析出的核銷人即時預覽(實際核銷人由 DB trigger 在「已核准」時依 dept/store 重算寫入)。
-function SettleUnitField({ departments, stores, employees, deptId, storeId, onDept, onStore, errorDept, errorStore }) {
-  const dept = departments.find(d => String(d.id) === String(deptId))
-  const isOps = dept?.name === '營運部'
-  const isHQ = storeId === '__HQ__'  // 營運部→總部:落回營運部經理(營運部 dept manager)
-  const store = stores.find(s => String(s.id) === String(storeId))
-  // 營運部選總部 → 營運部經理(dept.manager_id);選門市 → 店長(store.manager_id);其他部門 → 部門主管
-  const managerId = isOps ? (isHQ ? dept?.manager_id : store?.manager_id) : dept?.manager_id
-  const managerName = managerId ? (employees.find(e => String(e.id) === String(managerId))?.name) : null
-  const selPicked = isOps ? !!storeId : !!deptId
-
+// 驗收人 — 直接指定一位員工(可含自己),存 settle_assignee_id。
+// (舊制「選部門→部門主管/營運部→門市店長」已改為直接選人;既有單仍由 trigger 走 dept/store fallback。)
+function SettleAssigneeField({ employees, assigneeId, onChange, error }) {
   return (
-    <div className={(errorDept || errorStore) ? 'field-error' : undefined}>
+    <div className={error ? 'field-error' : undefined}>
       <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>
-        驗收單位 <span style={{ color: 'var(--accent-red)' }}>*</span>
+        驗收人 <span style={{ color: 'var(--accent-red)' }}>*</span>
       </label>
-      <select
-        value={deptId || ''}
-        onChange={e => onDept(e.target.value)}
-        style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }}
-      >
-        <option value="">— 請選擇部門 —</option>
-        {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-      </select>
-      {isOps && (
-        <select
-          value={storeId || ''}
-          onChange={e => onStore(e.target.value)}
-          style={{ width: '100%', marginTop: 6, padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }}
-        >
-          <option value="">— 請選擇門市 —</option>
-          <option value="__HQ__">總部（營運部經理）</option>
-          {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-        </select>
-      )}
-      {/* 核銷人預覽 */}
-      {selPicked && (
-        managerName
-          ? <div style={{ fontSize: 12, color: 'var(--accent-cyan)', marginTop: 6 }}>→ 核銷人:{managerName}</div>
-          : <div style={{ fontSize: 12, color: 'var(--accent-orange)', marginTop: 6 }}>⚠ 此單位尚未設定主管，將無人收到核銷通知</div>
-      )}
-      {(errorDept || errorStore) && <div className="field-error-msg">⚠ 請選擇驗收單位{isOps ? '的門市' : ''}</div>}
+      <SearchableSelect
+        value={assigneeId ?? ''}
+        onChange={(v) => onChange(v || '')}
+        options={empOptions(employees, { keyBy: 'id' })}
+        placeholder="搜尋驗收人姓名/部門/門市...（可選自己）"
+      />
+      {error && <div className="field-error-msg">⚠ 請選擇驗收人</div>}
     </div>
   )
 }
@@ -405,13 +377,12 @@ export default function ExpenseFormModal({
                         .map(([code, name]) => <option key={code} value={code}>{code} — {name}</option>))}
                 </select>
               </div>
-              {departments.length > 0 && (
-                <SettleUnitField
-                  departments={departments} stores={stores} employees={employees}
-                  deptId={form.settle_department_id} storeId={form.settle_store_id}
-                  onDept={(v) => { set('settle_department_id', v); set('settle_store_id', ''); clearError('settle_department_id', setErrors) }}
-                  onStore={(v) => { set('settle_store_id', v); clearError('settle_store_id', setErrors) }}
-                  errorDept={errors.settle_department_id} errorStore={errors.settle_store_id}
+              {employees.length > 0 && (
+                <SettleAssigneeField
+                  employees={employees}
+                  assigneeId={form.settle_assignee_id}
+                  onChange={(v) => { set('settle_assignee_id', v); clearError('settle_assignee_id', setErrors) }}
+                  error={errors.settle_assignee_id}
                 />
               )}
             </div>

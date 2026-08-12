@@ -9,9 +9,9 @@ import SearchableSelect from '../../components/SearchableSelect'
 // 補休餘額管理
 // 列出每個員工目前 active comp_time_ledger 加總、最近到期、過期未結（理論上不存在，月結會自動清）
 export default function CompTimeBalance() {
-  const { profile, isManagerOrAbove } = useAuth()
-  // 權限對齊假別餘額:manager 以上(manager/admin/super_admin)看全部;office_staff/store_staff 只看自己
-  const isStaff = !isManagerOrAbove
+  const { profile, isAdmin } = useAuth()
+  // 權限對齊假別餘額:只有 admin/super_admin 看全部;其餘(含 manager)只看自己(唯讀)
+  const isStaff = !isAdmin
 
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])

@@ -37,10 +37,9 @@ const hoursToHours = (h) => Math.round(Number(h || 0) * 2) / 2
 const _todayStr = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` })()
 
 export default function LeaveBalances() {
-  const { profile, isAdmin, isManagerOrAbove } = useAuth()
-  // 假別餘額權限：manager 以上（manager/admin/super_admin）看全部（唯讀）；
-  //   admin/super_admin 額外可批次調整天數/特休結算/逐列調整；
-  //   office_staff / store_staff 只看自己。
+  const { profile, isAdmin } = useAuth()
+  // 假別餘額權限：只有 admin/super_admin 看全部 + 批次調整/結算/逐列調整；
+  //   其餘角色（含 manager、office_staff、store_staff）只看自己、唯讀。
   const currentYear = new Date().getFullYear()
 
   const [employees, setEmployees]     = useState([])
@@ -104,7 +103,7 @@ export default function LeaveBalances() {
         .select('id, name, employee_number, dept, store, status, employment_type, salary_type, join_date, weekly_hours, gender')
         .eq('organization_id', orgId).order('name')
       let emps = data || []
-      if (!isManagerOrAbove && profile?.id) {
+      if (!isAdmin && profile?.id) {
         emps = emps.filter(e => e.id === profile.id)
         setSelectedEmpId(profile.id)
       }

@@ -208,8 +208,9 @@ export default function WorkOrders() {
                     <td><span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: pr.dim, color: pr.color }}>{pr.label}</span></td>
                     <td style={{ fontSize: 11 }}>
                       <div>{o.expected_due_date}</div>
-                      {o.scheduled_due_date && o.scheduled_due_date !== o.expected_due_date &&
-                        <div style={{ color: 'var(--accent-blue)' }}>排 {o.scheduled_due_date}</div>}
+                      {o.scheduled_due_date
+                        ? <div style={{ color: 'var(--accent-blue)' }}>排 {o.scheduled_due_date}</div>
+                        : <div style={{ color: 'var(--text-muted)' }}>排 未定</div>}
                     </td>
                     <td><span style={{ fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 6, background: st.dim, color: st.color }}>{o.status}</span></td>
                   </tr>

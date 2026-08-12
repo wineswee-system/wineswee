@@ -36,7 +36,7 @@ function getGeoPosition(retryWithCache = false) {
         const code = err?.code
         // 錯誤碼分細:1=拒絕權限、2=定位服務關/抓不到、3=逾時
         const e = new Error(
-          code === 1 ? 'GPS 定位被拒絕，請允許位置存取權限'
+          code === 1 ? '無法定位：請確認①已允許此頁定位、②裝置定位服務已開啟'
           : code === 2 ? '無法取得定位，請開啟裝置定位服務'
           : code === 3 ? 'GPS 定位逾時，請重試'
           : 'GPS 定位失敗，請確認裝置已開啟定位')

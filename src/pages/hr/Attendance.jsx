@@ -968,8 +968,8 @@ export default function Attendance() {
 
       {tab === 'failures' && (() => {
         const REASON = {
-          permission_denied: { t: '拒絕定位權限（按了不允許）', c: 'var(--accent-red)' },
-          position_unavailable: { t: '定位服務沒開／抓不到', c: 'var(--accent-orange)' },
+          permission_denied: { t: '定位權限未開（按不允許 或 關定位服務）', c: 'var(--accent-red)' },
+          position_unavailable: { t: '定位服務沒開／抓不到（多為 Android）', c: 'var(--accent-orange)' },
           timeout: { t: '定位逾時', c: 'var(--accent-orange)' },
           weak_accuracy: { t: 'GPS 精度不足', c: 'var(--accent-blue)' },
           out_of_range: { t: '不在店範圍', c: 'var(--accent-purple)' },

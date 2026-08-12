@@ -89,7 +89,7 @@ export default function PortalHome() {
         },
         (err) => {
           const code = err?.code
-          setGpsError(code === 1 ? '你拒絕了定位權限，請到設定重新開啟'
+          setGpsError(code === 1 ? '無法定位：請確認①已允許此頁定位、②手機定位服務已開啟'
             : code === 2 ? '請開啟手機定位服務（抓不到位置）'
             : code === 3 ? '定位逾時，請重試' : '無法取得定位')
           const reason = code === 1 ? 'permission_denied' : code === 2 ? 'position_unavailable' : code === 3 ? 'timeout' : 'unknown'

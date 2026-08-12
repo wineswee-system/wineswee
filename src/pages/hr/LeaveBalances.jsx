@@ -309,11 +309,13 @@ export default function LeaveBalances() {
         && lr.start_date && lr.start_date >= annualStartStr && lr.start_date <= annualEndStr
       const sumH = (arr) => arr.reduce((s, lr) => s + (lr.hours ? hoursToHours(lr.hours) : daysToHours(lr.days)), 0)
       // 已休：補休→comp_time_ledger；有 104 leave_balance→讀 used_days；否則從請假單算
+      // 已休來源:補休→ledger;特休→leave_balances.used_days(104匯入,含舊系統已休);
+      //   其餘法定假別→一律從請假單算(那些的 used_days 未維護=0,不能讀)
       const usedH    = type === '補休'
         ? compUsed
-        : (dbBal
-          ? daysToHours(Number(dbBal.used_days || 0))
-          : ((type === 'annual' && annualStartStr) ? sumH(lrs.filter(inAnnual)) : (usedByType[type] || 0)))
+        : (type === 'annual'
+          ? (dbBal ? daysToHours(Number(dbBal.used_days || 0)) : (annualStartStr ? sumH(lrs.filter(inAnnual)) : (usedByType[type] || 0)))
+          : (usedByType[type] || 0))
       // 補休簽核中=comp_time_ledger 的 hours_reserved(軟扣/待審預留);其餘走請假單 pending
       const pendH    = type === '補休'
         ? compReserved

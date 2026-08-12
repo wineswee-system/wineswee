@@ -30,6 +30,8 @@ export default function StoreAudits() {
   const [filterStatus, setFilterStatus] = useState('all')
   const [filterStoreId, setFilterStoreId] = useState('')
   const [search, setSearch] = useState('')
+  const [dateFrom, setDateFrom] = useState('')   // 稽核日期範圍篩選(起)
+  const [dateTo, setDateTo] = useState('')       // 稽核日期範圍篩選(迄)
 
   const [showNew, setShowNew] = useState(false)
   const [detailId, setDetailId] = useState(null)
@@ -87,12 +89,14 @@ export default function StoreAudits() {
     let arr = list
     if (filterStatus !== 'all') arr = arr.filter(r => r.status === filterStatus)
     if (filterStoreId) arr = arr.filter(r => r.store_id === Number(filterStoreId))
+    if (dateFrom) arr = arr.filter(r => r.audit_date && r.audit_date >= dateFrom)
+    if (dateTo) arr = arr.filter(r => r.audit_date && r.audit_date <= dateTo)
     if (search.trim()) {
       const s = search.trim()
       arr = arr.filter(r => r.store_name?.includes(s) || r.auditor_name?.includes(s) || String(r.id).includes(s))
     }
     return arr
-  }, [list, filterStatus, filterStoreId, search])
+  }, [list, filterStatus, filterStoreId, search, dateFrom, dateTo])
 
   if (loading) return <LoadingSpinner />
 
@@ -145,6 +149,14 @@ export default function StoreAudits() {
           <option value="">全部門市</option>
           {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <input className="form-input" type="date" value={dateFrom} max={dateTo || undefined} onChange={e => setDateFrom(e.target.value)} style={{ width: 150 }} title="稽核日期（起）" />
+          <span style={{ color: 'var(--text-muted)' }}>~</span>
+          <input className="form-input" type="date" value={dateTo} min={dateFrom || undefined} onChange={e => setDateTo(e.target.value)} style={{ width: 150 }} title="稽核日期（迄）" />
+          {(dateFrom || dateTo) && (
+            <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => { setDateFrom(''); setDateTo('') }}>清除</button>
+          )}
+        </div>
         <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
           <Search size={14} style={{ position: 'absolute', top: '50%', left: 8, transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
           <input className="form-input" placeholder="搜尋門市/稽核員/單號" value={search} onChange={e => setSearch(e.target.value)} style={{ paddingLeft: 28 }} />

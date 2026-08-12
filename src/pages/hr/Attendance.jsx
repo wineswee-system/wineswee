@@ -93,8 +93,25 @@ export default function Attendance() {
   const [error, setError] = useState(null)
   const [clockingIn, setClockingIn] = useState(false)
   const [clockMsg, setClockMsg] = useState(null)
-  const [tab, setTab] = useState('records') // records | hours
+  const [tab, setTab] = useState('records') // records | hours | comparison | failures
   const [page, setPage] = useState(1)       // 打卡紀錄分頁（每頁 100 筆）
+  const [failures, setFailures] = useState([])   // 定位失敗記錄(clock_attempts)
+  const [failLoading, setFailLoading] = useState(false)
+
+  // 載入定位失敗記錄(切到「定位失敗」tab 才抓;RLS 已依組織過濾)
+  useEffect(() => {
+    if (tab !== 'failures') return
+    let cancelled = false
+    ;(async () => {
+      setFailLoading(true)
+      const { data } = await supabase.from('clock_attempts')
+        .select('created_at, employee, store, action, reason, geo_code, perm_state, accuracy, distance_m, ip, client, detail')
+        .gte('created_at', `${startDate}T00:00:00+08:00`).lte('created_at', `${endDate}T23:59:59+08:00`)
+        .order('created_at', { ascending: false }).limit(500)
+      if (!cancelled) { setFailures(data || []); setFailLoading(false) }
+    })()
+    return () => { cancelled = true }
+  }, [tab, startDate, endDate])
   const PAGE_SIZE = 100
   const goToPage = (p) => {
     setPage(p)
@@ -644,6 +661,7 @@ export default function Attendance() {
           { key: 'records', label: '📋 打卡紀錄' },
           { key: 'hours', label: '⏱️ 工時統整' },
           { key: 'comparison', label: '📊 排班比對' },
+          { key: 'failures', label: '📍 定位失敗' },
         ].map(t => (
           <button key={t.key} onClick={() => setTab(t.key)} style={{
             padding: '8px 20px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
@@ -947,6 +965,64 @@ export default function Attendance() {
       })()}
 
       {tab === 'comparison' && <ScheduleComparisonTab storeFilter={storeFilter} />}
+
+      {tab === 'failures' && (() => {
+        const REASON = {
+          permission_denied: { t: '拒絕定位權限（按了不允許）', c: 'var(--accent-red)' },
+          position_unavailable: { t: '定位服務沒開／抓不到', c: 'var(--accent-orange)' },
+          timeout: { t: '定位逾時', c: 'var(--accent-orange)' },
+          weak_accuracy: { t: 'GPS 精度不足', c: 'var(--accent-blue)' },
+          out_of_range: { t: '不在店範圍', c: 'var(--accent-purple)' },
+          no_ip: { t: '抓不到網路 IP', c: 'var(--accent-orange)' },
+          unknown: { t: '其他／未知', c: 'var(--text-muted)' },
+        }
+        const PERM = { denied: '拒絕', granted: '已允許', prompt: '未決定', unsupported: '不支援' }
+        const fmt = (ts) => { const d = new Date(ts); return `${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}` }
+        const failView = storeFilter
+          ? failures.filter(r => r.store === storeFilter)
+          : failures
+        return (
+          <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 10, overflow: 'hidden' }}>
+            <div style={{ padding: '10px 16px', fontSize: 13, color: 'var(--text-muted)', borderBottom: '1px solid var(--border-medium)' }}>
+              員工打卡定位失敗記錄 —— 分辨「按不允許／定位沒開／逾時／不在店／精度差」，不用再猜。共 {failView.length} 筆
+            </div>
+            {failLoading ? (
+              <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>載入中...</div>
+            ) : failView.length === 0 ? (
+              <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>此區間沒有定位失敗記錄 🎉</div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <thead><tr style={{ background: 'var(--bg-secondary)' }}>
+                    {['時間', '員工', '門市', '失敗原因', '定位權限', '距離/精度', '來源'].map(h => (
+                      <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 600, color: 'var(--text-muted)', whiteSpace: 'nowrap', borderBottom: '1px solid var(--border-medium)' }}>{h}</th>
+                    ))}
+                  </tr></thead>
+                  <tbody>
+                    {failView.map((r, i) => {
+                      const rc = REASON[r.reason] || REASON.unknown
+                      return (
+                        <tr key={i} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                          <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', color: 'var(--text-secondary)' }}>{fmt(r.created_at)}</td>
+                          <td style={{ padding: '8px 12px', fontWeight: 600, whiteSpace: 'nowrap' }}>{r.employee || '—'}</td>
+                          <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', color: 'var(--text-secondary)' }}>{r.store || '—'}</td>
+                          <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}>
+                            <span style={{ color: rc.c, fontWeight: 600 }}>{rc.t}</span>
+                            {r.geo_code ? <span style={{ color: 'var(--text-muted)', marginLeft: 6, fontSize: 12 }}>code {r.geo_code}</span> : null}
+                          </td>
+                          <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', color: r.perm_state === 'denied' ? 'var(--accent-red)' : 'var(--text-secondary)' }}>{PERM[r.perm_state] || r.perm_state || '—'}</td>
+                          <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', color: 'var(--text-secondary)' }}>{r.distance_m != null ? `${r.distance_m}m` : r.accuracy != null ? `±${r.accuracy}m` : '—'}</td>
+                          <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', color: 'var(--text-muted)' }}>{r.client === 'web' ? '網頁' : 'LINE'}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )
+      })()}
 
       {/* ── 改時間 Modal ── */}
       {backfillOpen && (

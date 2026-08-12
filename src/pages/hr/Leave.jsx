@@ -288,6 +288,33 @@ export default function Leave() {
       }
     }
 
+    // ── 特休:數量上限改吃 leave_balances(104匯入)餘額,不再硬用 §38 ──
+    //   (剩餘已是104淨值[扣過已休];只需確認 本次 + 待審核 ≤ 剩餘)
+    if ((form.type === 'annual' || form.type === '特休') && emp?.id) {
+      const todayStr = new Date().toISOString().slice(0, 10)
+      const { data: annBals } = await supabase.from('leave_balances')
+        .select('total_days, used_days, period_start, expires_at')
+        .eq('employee_id', emp.id).eq('leave_type', 'annual')
+      const curBal = (annBals || []).find(b =>
+        (!b.period_start || String(b.period_start).slice(0, 10) <= todayStr) &&
+        (!b.expires_at || String(b.expires_at).slice(0, 10) >= todayStr))
+      if (curBal) {
+        const remH = Math.max(0, (Number(curBal.total_days) - Number(curBal.used_days)) * 8)
+        const ps = String(curBal.period_start || '').slice(0, 10), ex = String(curBal.expires_at || '').slice(0, 10)
+        const pendH = leaves.filter(l =>
+          l.employee === form.employee && (l.type === '特休' || l.type === 'annual') &&
+          l.status === '待審核' && l.id !== editingId &&
+          (!ps || l.start_date >= ps) && (!ex || l.start_date <= ex))
+          .reduce((s, l) => s + (Number(l.hours) || (Number(l.days) || 0) * 8), 0)
+        const reqH = Number(hours) || (Number(days) || 0) * 8
+        const avail = remH - pendH
+        if (reqH > avail + 0.01) {
+          setValidationMsg(`特休餘額不足：目前剩 ${remH} 小時，待審核 ${pendH} 小時，可再申請 ${Math.max(0, avail)} 小時，本次要 ${reqH} 小時`)
+          return
+        }
+      }
+    }
+
     const result = validateLeaveRequest({
       type: form.type,
       days,
@@ -298,6 +325,7 @@ export default function Leave() {
       joinDate: emp?.join_date,
       isPartTime: isEmpPT,
       weeklyHours: empWeeklyHours,
+      skipAnnualQuota: true,   // 數量已由上方 leave_balances(104)把關;此處只留滿6個月閘門
     })
 
     if (!result.valid) {

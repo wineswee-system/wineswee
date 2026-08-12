@@ -344,7 +344,7 @@ export function getLeaveTypeInfo(code) {
 //  驗證請假規則
 // ══════════════════════════════════════
 
-export function validateLeaveRequest({ type, days, hours, usedDays, usedHours, gender, customPolicy, joinDate, isPartTime, weeklyHours }) {
+export function validateLeaveRequest({ type, days, hours, usedDays, usedHours, gender, customPolicy, joinDate, isPartTime, weeklyHours, skipAnnualQuota }) {
   const policy = getLeaveTypeInfo(type)
   if (!policy) return { valid: false, error: '無效的假別' }
 
@@ -368,7 +368,8 @@ export function validateLeaveRequest({ type, days, hours, usedDays, usedHours, g
       const requestHours = hours || ((days || 0) * (weeklyHours ? (weeklyHours / 5) : 8))
       const usedH = usedHours || 0
       const remaining = entitlementHours - usedH
-      if (usedH + requestHours > entitlementHours) {
+      // skipAnnualQuota:呼叫端已改用 leave_balances(104匯入)餘額自行把關數量,這裡只留滿6個月閘門
+      if (!skipAnnualQuota && usedH + requestHours > entitlementHours) {
         return {
           valid: false,
           error: `特休餘額不足：年度 ${entitlementHours}h（${entDays}天×比例），已用 ${usedH}h，剩餘 ${remaining}h，不足申請 ${requestHours}h`,
@@ -384,7 +385,7 @@ export function validateLeaveRequest({ type, days, hours, usedDays, usedHours, g
       const totalEntitlement = entitlement + extraDays
       const requestDays = days || (hours ? hours / 8 : 0)
       const used = usedDays || 0
-      if (used + requestDays > totalEntitlement) {
+      if (!skipAnnualQuota && used + requestDays > totalEntitlement) {
         const suffix = extraDays > 0 ? `（含加給 ${extraDays} 天）` : ''
         const remaining = totalEntitlement - used
         return {

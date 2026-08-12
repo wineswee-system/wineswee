@@ -142,8 +142,16 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
 
   // ─── 送出 ───
   const handleSubmit = async () => {
-    const bonusMissing = items.find(i => i.input_type === 'bonus' && (i.deduct_score || 0) > 0 && !i.remark?.trim())
-    if (bonusMissing) { toast.warning('有加分的項目需填「加分原因」'); return }
+    // 加分改整組一格說明:任一加分群組有加分(合計>0)就需填該組 group_note(存在該組第一列)
+    const bonusGroups = {}
+    for (const i of items.filter(i => i.input_type === 'bonus')) {
+      const k = `${i.category_code}|${i.relation_group}`
+      bonusGroups[k] = bonusGroups[k] || { pts: 0, note: '', firstId: i.id }
+      bonusGroups[k].pts += (i.deduct_score || 0)
+      if (i.group_note?.trim()) bonusGroups[k].note = i.group_note.trim()
+    }
+    const bonusMissing = Object.values(bonusGroups).some(g => g.pts > 0 && !g.note)
+    if (bonusMissing) { toast.warning('有加分時，需填該加分區的「加分原因」'); return }
     if (onDuty.length === 0) { toast.warning('請至少選 1 名當班人員'); return }
     const unsigned = onDuty.filter(d => !d.signature_data_url)
     if (unsigned.length > 0) {
@@ -314,6 +322,18 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
                           onChange={p => updateItem(item.id, p)}
                         />
                       ))}
+                      {/* 加分群組:整組一格說明(有加分才必填)*/}
+                      {isBonusGroup && (isDraft ? (
+                        <input
+                          className="form-input"
+                          value={grp.items[0]?.group_note || ''}
+                          onChange={e => updateItem(grp.items[0].id, { group_note: e.target.value })}
+                          placeholder="加分原因（有加分則必填，整組填一次即可）"
+                          style={{ width: '100%', fontSize: 12, marginTop: 6, background: 'var(--accent-green-dim)', border: (bonusPts > 0 && !grp.items[0]?.group_note?.trim()) ? '1px solid var(--accent-red)' : undefined }}
+                        />
+                      ) : (grp.items[0]?.group_note && (
+                        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 6, padding: '3px 8px', background: 'var(--accent-green-dim)', borderRadius: 4 }}>加分原因：{grp.items[0].group_note}</div>
+                      )))}
                     </div>
                   )
                 })}
@@ -547,18 +567,18 @@ function ItemRow({ item, editable, maxDeduct, onChange }) {
         )}
       </div>
 
-      {/* 打字題 / 加分列 顯示說明輸入（加分有分數則必填）*/}
-      {(item.input_type === 'text' || isBonus) && (
+      {/* 打字題(冒號填空)顯示填寫欄；加分列改為整組一格說明(見群組底部),不再逐列 */}
+      {item.input_type === 'text' && (
         editable ? (
           <input
             className="form-input"
             value={item.remark || ''}
             onChange={e => onChange({ remark: e.target.value })}
-            placeholder={isBonus ? '加分原因（有加分則必填）' : '請填寫抽查 / 內容'}
-            style={{ width: '100%', fontSize: 12, marginTop: 4, background: 'var(--bg-secondary)', border: needRemark ? '1px solid var(--accent-red)' : undefined }}
+            placeholder="請填寫抽查 / 內容"
+            style={{ width: '100%', fontSize: 12, marginTop: 4, background: 'var(--bg-secondary)' }}
           />
         ) : (
-          item.remark && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 3, padding: '3px 8px', background: 'var(--bg-secondary)', borderRadius: 4 }}>{isBonus ? '加分原因：' : ''}{item.remark}</div>
+          item.remark && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 3, padding: '3px 8px', background: 'var(--bg-secondary)', borderRadius: 4 }}>{item.remark}</div>
         )
       )}
     </div>

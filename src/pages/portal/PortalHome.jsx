@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Clock, MapPin, Wifi, Loader, AlertTriangle, CheckCircle, XCircle } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { useErrorHandler } from '../../hooks/useErrorHandler'
@@ -27,6 +27,7 @@ export default function PortalHome() {
   const [gpsRetrying, setGpsRetrying] = useState(false)     // 距離 151–1800m 時自動重抓一次
   const retriedRef = useRef(false)                          // 同次 mount 只重試 1 次
   const loggedFailRef = useRef(new Set())                   // 打卡失敗診斷:同原因每次進頁只記一次
+  const locCtxRef = useRef({})                              // 給 log 用的最新值(避 geolocation callback stale closure)
   const gpsTimestampRef = useRef(null)                      // 最後一次成功抓 GPS 的時間，給 validateClockIn 判 fresh
   const [clientIp, setClientIp] = useState(null)
   const [wifiMatch, setWifiMatch] = useState(null)          // null=checking, true/false
@@ -39,6 +40,31 @@ export default function PortalHome() {
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000)
     return () => clearInterval(t)
+  }, [])
+
+  // 保持 log 用的最新值(每次 render 更新;geolocation callback 讀 ref 才不會拿到舊值)
+  locCtxRef.current = { employeeId: profile?.id, storeName: store?.name || null, location: gpsLocation, accuracy: gpsAccuracy, ip: clientIp, distance }
+
+  // 打卡定位失敗診斷 log(web)——「定位失敗的當下」就記,不等按按鈕(員工看到不能打就不會按)。
+  // 與 LIFF 同一張 clock_attempts;同原因每次進頁只記一次。
+  const logLocFail = useCallback(async (reason, extra = {}) => {
+    try {
+      const c = locCtxRef.current
+      if (!c.employeeId || !reason) return
+      if (loggedFailRef.current.has(reason)) return
+      loggedFailRef.current.add(reason)
+      let perm = extra.perm
+      if (!perm) { try { perm = navigator.permissions?.query ? (await navigator.permissions.query({ name: 'geolocation' })).state : 'unsupported' } catch { perm = 'unsupported' } }
+      await supabase.rpc('liff_log_clock_attempt', {
+        p_employee_id: c.employeeId, p_line_user_id: null,
+        p_action: extra.action || 'clock_in', p_result: 'failed', p_reason: reason,
+        p_geo_code: extra.code ?? null, p_perm_state: perm,
+        p_lat: c.location?.lat ?? null, p_lng: c.location?.lng ?? null,
+        p_accuracy: c.accuracy ?? null, p_ip: c.ip || null,
+        p_distance: extra.distance ?? c.distance ?? null,
+        p_store: c.storeName || null, p_detail: extra.detail || null, p_client: 'web',
+      })
+    } catch { /* log 失敗絕不影響打卡 */ }
   }, [])
 
   // mount 時 poll 一次 GPS + IP
@@ -55,12 +81,20 @@ export default function PortalHome() {
           if (accuracy > GPS_ACCURACY_THRESHOLD) {
             setGpsWeak(true)
             setGpsError(`GPS 精確度不足（${Math.round(accuracy)}m），定位結果僅供參考`)
+            logLocFail('weak_accuracy', { detail: `GPS 精度 ${Math.round(accuracy)}m（門檻 ${GPS_ACCURACY_THRESHOLD}m）` })
           } else {
             setGpsWeak(false)
             setGpsError('')
           }
         },
-        (err) => setGpsError(err.code === 1 ? '請開啟定位權限' : '無法取得定位'),
+        (err) => {
+          const code = err?.code
+          setGpsError(code === 1 ? '你拒絕了定位權限，請到設定重新開啟'
+            : code === 2 ? '請開啟手機定位服務（抓不到位置）'
+            : code === 3 ? '定位逾時，請重試' : '無法取得定位')
+          const reason = code === 1 ? 'permission_denied' : code === 2 ? 'position_unavailable' : code === 3 ? 'timeout' : 'unknown'
+          logLocFail(reason, { code: code ?? null, detail: '進頁抓 GPS 失敗' })
+        },
         { enableHighAccuracy: true, timeout: 25000 }
       )
     } else {
@@ -76,6 +110,11 @@ export default function PortalHome() {
     if (!gpsLocation || !store?.lat || !store?.lng) return
     const d = Math.round(haversineMetres(gpsLocation.lat, gpsLocation.lng, store.lat, store.lng))
     setDistance(d)
+    // 人不在店:超出範圍且(明顯太遠 or 已重試過)→ 記 log(別在 151–1800m 首測就誤記,等重試定案)
+    const _radius = store.clock_radius || 150
+    if (d > _radius && (d > 1800 || retriedRef.current) && clockMode !== 'outing') {
+      logLocFail('out_of_range', { distance: d, detail: `距 ${store.name} ${d} 公尺（允許 ${_radius}m）` })
+    }
     if (d > 150 && d <= 1800 && !retriedRef.current && navigator.geolocation) {
       retriedRef.current = true
       setGpsRetrying(true)
@@ -99,7 +138,7 @@ export default function PortalHome() {
       }, 1500)
       return () => clearTimeout(timer)
     }
-  }, [gpsLocation, store])
+  }, [gpsLocation, store, clockMode, logLocFail])
 
   // 檢查 WiFi IP 是否在白名單
   useEffect(() => {
@@ -135,29 +174,20 @@ export default function PortalHome() {
       })
   }, [profileReady, profile?.id, today])
 
-  // 打卡失敗診斷 log(web)—— 與 LIFF 同一張 clock_attempts;分辨按不允許/定位沒開/太遠/精度差
-  const logWebClockFailure = async (err, action) => {
-    try {
-      const reason = err?.reason || (err?.code === 'VALIDATION_FAILED' ? 'unknown' : 'unknown')
-      if (loggedFailRef.current.has(reason)) return
-      loggedFailRef.current.add(reason)
-      let perm = 'unsupported'
-      try { if (navigator.permissions?.query) perm = (await navigator.permissions.query({ name: 'geolocation' })).state } catch { /* WebView 不支援 */ }
-      await supabase.rpc('liff_log_clock_attempt', {
-        p_employee_id: profile?.id, p_line_user_id: null,
-        p_action: action, p_result: 'failed', p_reason: reason,
-        p_geo_code: err?.geoCode ?? null, p_perm_state: perm,
-        p_lat: gpsLocation?.lat ?? null, p_lng: gpsLocation?.lng ?? null,
-        p_accuracy: gpsAccuracy ?? null, p_ip: clientIp || null,
-        p_distance: err?.distanceM ?? distance ?? null,
-        p_store: store?.name || null, p_detail: err?.message || null, p_client: 'web',
-      })
-    } catch { /* log 失敗絕不影響打卡 */ }
-  }
-
   const handleClock = async (confirmed = false) => {
     if (!profile?.name) return
     const action = (todayAttendance?.clock_in && !todayAttendance?.clock_out) ? 'clock_out' : 'clock_in'
+    // ★ 定位未通過(一般模式)→ 別讓他走到「確認」白按一場;直接提示怎麼辦 + 記 log。外出免驗證照舊。
+    if (clockMode !== 'outing' && !canClockByLocation && !gpsRetrying) {
+      const reason = gpsError.includes('拒絕') ? 'permission_denied'
+        : (gpsError.includes('定位服務') || gpsError.includes('抓不到')) ? 'position_unavailable'
+        : gpsError.includes('逾時') ? 'timeout'
+        : gpsWeak ? 'weak_accuracy'
+        : (distance != null && store?.lat) ? 'out_of_range' : 'unknown'
+      logLocFail(reason, { action, detail: gpsError || '定位未通過' })
+      setClockMsg({ type: 'error', text: '定位未通過，無法打卡：請開啟定位權限，或改用「外出」，不然請主管補登。' })
+      return
+    }
     // ★ 下班打卡 — 加 confirm 防誤觸
     if (action === 'clock_out' && !confirmed) {
       setConfirmOut(true)
@@ -206,7 +236,7 @@ export default function PortalHome() {
     } catch (err) {
       handleError(err, { component: 'PortalHome', errorCode: 'CLOCK_FAILED' })
       setClockMsg({ type: 'error', text: err.message })
-      logWebClockFailure(err, action)   // 記後台:分辨按不允許/定位沒開/太遠/精度差
+      logLocFail(err?.reason || 'unknown', { action, code: err?.geoCode, distance: err?.distanceM, detail: err?.message })   // server 端失敗也記
     }
     setClockingIn(false)
   }
@@ -239,6 +269,8 @@ export default function PortalHome() {
   const gpsOk = (isInRange || !store?.lat) && !gpsWeak
   const wifiOk = !hasWifiRule || wifiMatch === true
   const canClockByLocation = gpsLocation && (gpsOk || wifiOk)
+  // 一般模式且定位沒過(且不在重試中)→ 按鈕標「定位未通過」、外觀轉灰;仍可按(按了給提示+記log)
+  const locBlocked = clockMode === 'normal' && !canClockByLocation && !gpsRetrying
 
   return (
     <div className="fade-in">
@@ -324,15 +356,15 @@ export default function PortalHome() {
               disabled={clockingIn}
               style={{
                 padding: '12px 28px', borderRadius: 12, border: 'none',
-                background: btnBackground,
-                color: '#fff', fontSize: 15, fontWeight: 700, cursor: clockingIn ? 'not-allowed' : 'pointer',
+                background: locBlocked ? 'var(--bg-secondary)' : btnBackground,
+                color: locBlocked ? 'var(--text-muted)' : '#fff', fontSize: 15, fontWeight: 700, cursor: clockingIn ? 'not-allowed' : 'pointer',
                 display: 'flex', alignItems: 'center', gap: 8,
                 opacity: clockingIn ? 0.6 : 1, transition: 'all 0.2s',
-                boxShadow: btnShadow,
+                boxShadow: locBlocked ? 'none' : btnShadow,
               }}
             >
-              {clockingIn ? <Loader size={16} className="spin" /> : <Clock size={16} />}
-              {clockingIn ? '定位中...' : clockMode === 'normal' ? clockAction : `${modeMeta.label}${clockAction}`}
+              {clockingIn ? <Loader size={16} className="spin" /> : locBlocked ? <MapPin size={16} /> : <Clock size={16} />}
+              {clockingIn ? '定位中...' : locBlocked ? '定位未通過' : clockMode === 'normal' ? clockAction : `${modeMeta.label}${clockAction}`}
             </button>
           )}
         </div>

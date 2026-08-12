@@ -9,8 +9,9 @@ import SearchableSelect from '../../components/SearchableSelect'
 // 補休餘額管理
 // 列出每個員工目前 active comp_time_ledger 加總、最近到期、過期未結（理論上不存在，月結會自動清）
 export default function CompTimeBalance() {
-  const { profile, isStoreStaff, isManager } = useAuth()
-  const isStaff = isStoreStaff
+  const { profile, isManagerOrAbove } = useAuth()
+  // 權限對齊假別餘額:manager 以上(manager/admin/super_admin)看全部;office_staff/store_staff 只看自己
+  const isStaff = !isManagerOrAbove
 
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
@@ -48,11 +49,9 @@ export default function CompTimeBalance() {
       setVisibleStoreIds(visIds)
       let emps = eRes.data || []
       if (isStaff && profile?.name) {
-        emps = emps.filter(e => e.name === profile.name)
-      } else if (isManager && visIds) {
-        // manager/督導：看轄下所有可見門市(對齊 _can_see_store_for_emp,取代 additional_stores)
-        emps = emps.filter(e => visIds.includes(e.store_id))
+        emps = emps.filter(e => e.name === profile.name)   // 非主管以上 → 只看自己
       }
+      // manager 以上 → 不過濾，看全公司
       setEmployees(emps)
       const allLedgers = (lRes.data || []).filter(l => Number(l.hours) - Number(l.hours_used) > 0)
       setLedgers(allLedgers)
@@ -159,7 +158,7 @@ export default function CompTimeBalance() {
           <select className="form-input" style={{ fontSize: 13, minWidth: 160 }} value={storeFilter}
             onChange={e => setStoreFilter(e.target.value)}>
             <option value="">全部門市</option>
-            {stores.filter(s => !isManager || !visibleStoreIds || visibleStoreIds.includes(s.id)).map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+            {stores.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
           </select>
           <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>🏢 部門</span>
           <div style={{ minWidth: 200 }}>

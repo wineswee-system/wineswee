@@ -26,6 +26,7 @@ export default function PortalHome() {
   const [distance, setDistance] = useState(null)            // metres to store
   const [gpsRetrying, setGpsRetrying] = useState(false)     // 距離 151–1800m 時自動重抓一次
   const retriedRef = useRef(false)                          // 同次 mount 只重試 1 次
+  const loggedFailRef = useRef(new Set())                   // 打卡失敗診斷:同原因每次進頁只記一次
   const gpsTimestampRef = useRef(null)                      // 最後一次成功抓 GPS 的時間，給 validateClockIn 判 fresh
   const [clientIp, setClientIp] = useState(null)
   const [wifiMatch, setWifiMatch] = useState(null)          // null=checking, true/false
@@ -134,6 +135,26 @@ export default function PortalHome() {
       })
   }, [profileReady, profile?.id, today])
 
+  // 打卡失敗診斷 log(web)—— 與 LIFF 同一張 clock_attempts;分辨按不允許/定位沒開/太遠/精度差
+  const logWebClockFailure = async (err, action) => {
+    try {
+      const reason = err?.reason || (err?.code === 'VALIDATION_FAILED' ? 'unknown' : 'unknown')
+      if (loggedFailRef.current.has(reason)) return
+      loggedFailRef.current.add(reason)
+      let perm = 'unsupported'
+      try { if (navigator.permissions?.query) perm = (await navigator.permissions.query({ name: 'geolocation' })).state } catch { /* WebView 不支援 */ }
+      await supabase.rpc('liff_log_clock_attempt', {
+        p_employee_id: profile?.id, p_line_user_id: null,
+        p_action: action, p_result: 'failed', p_reason: reason,
+        p_geo_code: err?.geoCode ?? null, p_perm_state: perm,
+        p_lat: gpsLocation?.lat ?? null, p_lng: gpsLocation?.lng ?? null,
+        p_accuracy: gpsAccuracy ?? null, p_ip: clientIp || null,
+        p_distance: err?.distanceM ?? distance ?? null,
+        p_store: store?.name || null, p_detail: err?.message || null, p_client: 'web',
+      })
+    } catch { /* log 失敗絕不影響打卡 */ }
+  }
+
   const handleClock = async (confirmed = false) => {
     if (!profile?.name) return
     const action = (todayAttendance?.clock_in && !todayAttendance?.clock_out) ? 'clock_out' : 'clock_in'
@@ -185,6 +206,7 @@ export default function PortalHome() {
     } catch (err) {
       handleError(err, { component: 'PortalHome', errorCode: 'CLOCK_FAILED' })
       setClockMsg({ type: 'error', text: err.message })
+      logWebClockFailure(err, action)   // 記後台:分辨按不允許/定位沒開/太遠/精度差
     }
     setClockingIn(false)
   }

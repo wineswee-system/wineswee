@@ -32,7 +32,18 @@ function getGeoPosition(retryWithCache = false) {
         const weak = accuracy > GPS_ACCURACY_THRESHOLD
         resolve({ lat: latitude, lng: longitude, accuracy, weak })
       },
-      (err) => reject(new Error(err.code === 1 ? 'GPS 定位被拒絕，請允許位置存取權限' : 'GPS 定位失敗，請確認裝置已開啟定位')),
+      (err) => {
+        const code = err?.code
+        // 錯誤碼分細:1=拒絕權限、2=定位服務關/抓不到、3=逾時
+        const e = new Error(
+          code === 1 ? 'GPS 定位被拒絕，請允許位置存取權限'
+          : code === 2 ? '無法取得定位，請開啟裝置定位服務'
+          : code === 3 ? 'GPS 定位逾時，請重試'
+          : 'GPS 定位失敗，請確認裝置已開啟定位')
+        e.geoCode = code ?? null
+        e.reason = code === 1 ? 'permission_denied' : code === 2 ? 'position_unavailable' : code === 3 ? 'timeout' : 'unknown'
+        reject(e)
+      },
       options
     )
   })
@@ -112,6 +123,9 @@ export async function validateClockIn(store, prefetchedGeo = null) {
 
   let geo = null
   let geoError = null
+  let geoErrCode = null      // 保留 geolocation 錯誤碼(1/2/3)給失敗 log 分類
+  let geoErrReason = null    // permission_denied / position_unavailable / timeout
+  let distanceM = null       // 算出的離店距離(公尺)給失敗 log
   let publicIP = null
 
   if (usePrefetch) {
@@ -129,6 +143,8 @@ export async function validateClockIn(store, prefetchedGeo = null) {
     const [geoResult, ipResult] = await Promise.allSettled([getGeoPositionWithRetry(), getPublicIP()])
     geo = geoResult.status === 'fulfilled' ? geoResult.value : null
     geoError = geoResult.status === 'rejected' ? geoResult.reason.message : null
+    geoErrCode = geoResult.status === 'rejected' ? (geoResult.reason.geoCode ?? null) : null
+    geoErrReason = geoResult.status === 'rejected' ? (geoResult.reason.reason ?? null) : null
     publicIP = ipResult.status === 'fulfilled' ? ipResult.value : null
   }
 
@@ -166,6 +182,7 @@ export async function validateClockIn(store, prefetchedGeo = null) {
   if (hasGPSConfig) {
     if (geo && !geo.weak) {
       const dist = haversineMetres(geo.lat, geo.lng, store.lat, store.lng)
+      distanceM = Math.round(dist)
       const radius = store.clock_radius || 150
       gpsPass = dist <= radius
       if (!gpsPass) {
@@ -209,5 +226,14 @@ export async function validateClockIn(store, prefetchedGeo = null) {
   const error = new Error(`打卡失敗：位置驗證未通過\n${reasons.join('\n')}`)
   error.code = 'VALIDATION_FAILED'
   error.detail = { lat: geo?.lat || null, lng: geo?.lng || null, ip: publicIP, reasons }
+  // 給失敗 log 分類:geo 抓不到就用它的碼;有 geo 但太遠=out_of_range;精度差=weak;抓不到IP=no_ip
+  error.reason = geoErrReason
+    || (geo && geo.weak ? 'weak_accuracy'
+      : (gpsDetail && gpsDetail.includes('超出')) ? 'out_of_range'
+      : (wifiDetail && wifiDetail.includes('無法取得')) ? 'no_ip'
+      : (wifiDetail && wifiDetail.includes('白名單')) ? 'out_of_range'
+      : 'unknown')
+  error.geoCode = geoErrCode
+  error.distanceM = distanceM
   throw error
 }

@@ -59,6 +59,27 @@ export default function LeaveFormModal({
     return () => { cancelled = true }
   }, [form.employee, selectedPolicy?.code, employees])
 
+  // 特休:抓 leave_balances(104 匯入單一真相,對齊 create_leave_request/餘額頁);只有 annual 時抓,現在期且 total>0 才用
+  const [annualBal, setAnnualBal] = useState(null) // { total_days, used_days }
+  useEffect(() => {
+    if (!selectedPolicy || selectedPolicy.code !== 'annual' || !form.employee) { setAnnualBal(null); return }
+    const emp = employees.find(e => e.name === form.employee)
+    if (!emp?.id) { setAnnualBal(null); return }
+    let cancelled = false
+    const today = new Date().toISOString().slice(0, 10)
+    supabase.from('leave_balances').select('total_days, used_days, period_start, expires_at')
+      .eq('employee_id', emp.id).eq('leave_type', 'annual')
+      .then(({ data, error }) => {
+        if (cancelled) return
+        if (error) { setAnnualBal(null); return }
+        const cur = (data || []).find(b =>
+          (!b.period_start || String(b.period_start).slice(0, 10) <= today) &&
+          (!b.expires_at   || String(b.expires_at).slice(0, 10)   >= today))
+        setAnnualBal(cur && Number(cur.total_days) > 0 ? cur : null)
+      })
+    return () => { cancelled = true }
+  }, [form.employee, selectedPolicy?.code, employees])
+
   // 時數假即時預覽：抓「扣休息後」的淨時數(對齊送出後 trigger 存進去的值)
   const [netHours, setNetHours] = useState(null)
   useEffect(() => {
@@ -78,6 +99,11 @@ export default function LeaveFormModal({
   const balance = useMemo(() => {
     if (!selectedPolicy || !form.employee) return null
     const empFor = employees.find(em => em.name === form.employee)
+    // 特休:有 104 匯入的 leave_balances(現在期、total>0)→ 用它當單一真相(對齊送出閘門/餘額頁);否則 fallback §38
+    if (selectedPolicy.code === 'annual' && annualBal) {
+      const total = Number(annualBal.total_days || 0), used = Number(annualBal.used_days || 0)
+      return { total, used, remaining: Math.max(0, total - used) }
+    }
     let total = 0
     if (selectedPolicy.code === 'annual' && empFor?.join_date) {
       const yrs = (new Date() - new Date(empFor.join_date)) / (365.25 * 86400000)
@@ -91,7 +117,7 @@ export default function LeaveFormModal({
       .filter(l => l.type === form.type || l.type === selectedPolicy.shortName)
       .reduce((s, l) => s + (l.days || 0), 0)
     return { total, used, remaining: Math.max(0, total - used) }
-  }, [form.employee, form.type, selectedPolicy, employees, leaves])
+  }, [form.employee, form.type, selectedPolicy, employees, leaves, annualBal])
 
   if (!open) return null
 

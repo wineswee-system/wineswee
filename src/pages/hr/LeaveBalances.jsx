@@ -231,11 +231,10 @@ export default function LeaveBalances() {
       // 補休走 comp_time_ledger 滾動帳(生效日=加班日,非年度1/1),不套年度「未生效」判斷;
       // 否則切到未來年度分頁會拿假的 ${yearFilter}-01-01 誤標「未生效」+可申請歸0(明明還能請)
       const notStarted     = type !== '補休' && _periodStartStr > _todayStr
-      // 特休(annual):§38 RPC 為單一真相 → 一律用 RPC 算,不被 leave_balances 舊存量蓋
-      //   (存量半數已跟法規飄掉;carry_over 另計仍保留)。其餘假別維持「有存量用存量」。
-      const effectiveDays  = type === 'annual'
-        ? computedDays
-        : (dbTotal > 0 ? dbTotal : computedDays)       // 未生效不歸 0,照顯示額度
+      // 特休(annual)104對齊後:leave_balances 才是單一真相 → 有實際存量(>0)用存量、無才用 §38 RPC。
+      //   (楊學文80h/陳佩璇61.5h 等 104>§38 者顯示才對得上後端上限;離職/未匯入者 total=0 → fallback §38)
+      //   其餘假別同樣「有存量用存量」。carry_over 一律另計。
+      const effectiveDays  = dbTotal > 0 ? dbTotal : computedDays       // 未生效不歸 0,照顯示額度
       const carryOverDays  = Number(dbBal?.carry_over_days || 0)
       // 補休：可休直接用 comp_time_ledger 加總（小時，不經 days 換算）
       const totalHours     = type === '補休' ? compTotal : daysToHours(effectiveDays + carryOverDays)

@@ -357,7 +357,8 @@ export default function LeaveBalances() {
         pendingHours: pendH, canApplyHours: canApply,
         dbId: dbBal?.id, isManual: dbTotal > 0,
         notStarted, effectiveFrom: notStarted ? _periodStartStr : null,   // 未生效 + 生效日(給 UI 標註)
-        ptPaused: !!(type === 'annual' && annualEnt?.is_pt && annualEnt?.pt_paused),  // PT 實排折算暫停(待班表匯入)
+        // PT 實排折算暫停(待班表匯入)—— 但已有匯入剩餘值(dbTotal>0)就不顯示,那些是人資手算匯入的真值
+        ptPaused: !!(type === 'annual' && annualEnt?.is_pt && annualEnt?.pt_paused && !(dbTotal > 0)),
       })
     }
 

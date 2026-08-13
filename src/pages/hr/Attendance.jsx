@@ -1000,7 +1000,13 @@ export default function Attendance() {
                   </tr></thead>
                   <tbody>
                     {failView.map((r, i) => {
-                      const rc = REASON[r.reason] || REASON.unknown
+                      // permission_denied 再依「網頁定位權限」細分:granted 卻失敗多為系統定位服務未開
+                      //   (iOS 的 permissions API 有時會誤報 granted,故用詞保守);denied 則是沒按允許
+                      let rc = REASON[r.reason] || REASON.unknown
+                      if (r.reason === 'permission_denied') {
+                        if (r.perm_state === 'granted') rc = { t: '已允許網頁卻抓不到 → 多為手機「定位服務」未開（iOS 有時誤報已允許）', c: 'var(--accent-red)' }
+                        else if (r.perm_state === 'denied') rc = { t: '沒允許網頁定位（請按「允許」）', c: 'var(--accent-red)' }
+                      }
                       return (
                         <tr key={i} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                           <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', color: 'var(--text-secondary)' }}>{fmt(r.created_at)}</td>

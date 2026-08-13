@@ -220,8 +220,9 @@ export default function LeaveBalances() {
       if (type === 'paternity' && gender === '女') continue
 
       const dbBal  = balByType[type]
-      // 可休期間已過(expires_at < 今天)→ 不顯示(補休除外,走 comp_time_ledger)
-      if (type !== '補休' && dbBal?.expires_at && dbBal.expires_at < _todayStr) continue
+      // 可休期間已過(expires_at < 今天)→ 不顯示(補休除外,走 comp_time_ledger;
+      //   生理假除外:每月展開12列、額度非單一到期,若 dbBal 舊列只到某月會誤整批濾掉)
+      if (type !== '補休' && type !== 'menstrual' && dbBal?.expires_at && dbBal.expires_at < _todayStr) continue
       const dbTotal = Number(dbBal?.total_days || 0)
       let computedDays = 0
 

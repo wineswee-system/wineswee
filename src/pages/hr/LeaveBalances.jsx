@@ -212,8 +212,9 @@ export default function LeaveBalances() {
     const rows = []
 
     for (const type of ANNUAL_TYPES) {
-      if (type === 'menstrual' && gender === '男') continue
-      if (type === 'maternity' && gender === '男') continue
+      // 女性專屬假別(生理假/產假/產檢假/哺乳,leave_types.gender=female)男性不顯示
+      if (['menstrual', 'maternity', 'prenatal', 'nursing'].includes(type) && gender === '男') continue
+      // 男性專屬(陪產假)女性不顯示
       if (type === 'paternity' && gender === '女') continue
 
       const dbBal  = balByType[type]

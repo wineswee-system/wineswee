@@ -263,7 +263,8 @@ export default function Leave() {
     const annualLeaveRows = leaves.filter(l =>
       l.employee === form.employee &&
       (l.type === form.type || l.type === selectedPolicy?.shortName) &&
-      l.status !== '已拒絕'
+      // 排除被駁回/退回/取消的單(實際駁回狀態是「已退回」,原本只排「已拒絕」=不存在→被退回的假照樣算進已用→誤擋)
+      !['已退回', '已駁回', '已取消', '已拒絕'].includes(l.status)
     )
     const usedThisYear = annualLeaveRows.reduce((s, l) => s + (l.days || 0), 0)
     // PT 以小時加總已用特休
@@ -699,7 +700,7 @@ export default function Leave() {
                     ) : <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>—</span>}
                   </div>
                   <div style={{ padding: '4px 8px' }}>
-                    <span className={`badge ${l.status === '已核准' ? 'badge-success' : l.status === '已拒絕' ? 'badge-danger' : 'badge-warning'}`}>
+                    <span className={`badge ${l.status === '已核准' ? 'badge-success' : ['已退回', '已駁回', '已拒絕'].includes(l.status) ? 'badge-danger' : 'badge-warning'}`}>
                       <span className="badge-dot"></span>{l.status}
                     </span>
                     {l.reject_reason && <div style={{ fontSize: 11, color: 'var(--accent-red)', marginTop: 2 }}>原因：{l.reject_reason}</div>}

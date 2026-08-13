@@ -52,7 +52,7 @@ export default function LaborInspection() {
       supabase.from('employees').select('*').eq('status', '在職').eq('organization_id', orgId).order('name'),
       supabase.from('attendance_records').select('*').eq('organization_id', orgId).gte('date', since90).order('date', { ascending: false }).limit(2000),
       supabase.from('overtime_records').select('*').eq('organization_id', orgId).gte('date', since90).order('date', { ascending: false }).limit(1000),
-      supabase.from('leave_records').select('*').eq('organization_id', orgId).gte('start_date', since90).order('start_date', { ascending: false }).limit(1000),
+      supabase.from('leave_requests').select('*').eq('organization_id', orgId).is('deleted_at', null).gte('start_date', since90).order('start_date', { ascending: false }).limit(1000),
       supabase.from('salary_records').select('*').eq('organization_id', orgId).order('month', { ascending: false }).limit(1000),
       supabase.from('schedules').select('*').eq('organization_id', orgId).gte('date', since90).order('date', { ascending: false }).limit(1000),
     ]).then(([emp, att, ot, lv, sal, sch]) => {

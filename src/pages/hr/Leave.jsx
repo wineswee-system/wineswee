@@ -322,6 +322,7 @@ export default function Leave() {
       hours,
       usedDays: usedThisYear,
       usedHours: usedHoursThisYear,
+      gender: emp?.gender,   // 女性專屬假別(產假等)男性擋下(原本漏傳→前端不擋,只靠 DB 兜底)
       customPolicy,
       joinDate: emp?.join_date,
       isPartTime: isEmpPT,

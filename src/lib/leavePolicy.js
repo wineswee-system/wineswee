@@ -348,8 +348,8 @@ export function validateLeaveRequest({ type, days, hours, usedDays, usedHours, g
   const policy = getLeaveTypeInfo(type)
   if (!policy) return { valid: false, error: '無效的假別' }
 
-  // 性別限制
-  if (policy.gender === 'female' && gender === 'male') {
+  // 性別限制(gender 實際存中文「男」/「女」,原本只認 'male' → 永遠不擋;一併認中英文)
+  if (policy.gender === 'female' && (gender === 'male' || gender === '男')) {
     return { valid: false, error: `${policy.name}僅限女性員工申請` }
   }
 

@@ -1043,7 +1043,11 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
                           ✏️ {verb('編輯驗收', DOC)}
                         </button>
                       )}
-                      {['申請中','待審','已駁回','已退回'].includes(r.status) && r.employee === profile?.name && (
+                      {/* 編輯:駁回/退回可改重送;申請中/待審只有「還沒人簽(current_step=0)」才給編。
+                          簽過就不能改(後端 trg_block_edit_after_signed_expense 亦擋),要改先請簽核人退回。 */}
+                      {r.employee === profile?.name
+                        && (['已駁回','已退回'].includes(r.status)
+                            || (['申請中','待審'].includes(r.status) && (r.current_step || 0) === 0)) && (
                         <button className="btn btn-primary" style={{ padding: '4px 8px', fontSize: 11, background: 'var(--accent-orange)' }} onClick={() => openEditResubmit(r)}>
                           ✏️ {(r.status === '已駁回' || r.status === '已退回') ? '編輯重送' : '編輯'}
                         </button>

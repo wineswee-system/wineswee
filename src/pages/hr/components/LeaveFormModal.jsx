@@ -87,7 +87,7 @@ export default function LeaveFormModal({
     }
     if (total === 0) return null
     const used = (leaves || [])
-      .filter(l => l.employee === form.employee && l.status !== '已拒絕')
+      .filter(l => l.employee === form.employee && !['已退回', '已駁回', '已取消', '已拒絕'].includes(l.status))
       .filter(l => l.type === form.type || l.type === selectedPolicy.shortName)
       .reduce((s, l) => s + (l.days || 0), 0)
     return { total, used, remaining: Math.max(0, total - used) }

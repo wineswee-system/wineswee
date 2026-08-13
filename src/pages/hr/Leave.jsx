@@ -644,7 +644,7 @@ export default function Leave() {
         </div>
         <div className="stat-card" style={{ '--card-accent': 'var(--accent-cyan)', '--card-accent-dim': 'var(--accent-cyan-dim)' }}>
           <div className="stat-card-label">本月天數</div>
-          <div className="stat-card-value">{Math.round(filtered.reduce((s, l) => s + (l.days || 0), 0) * 100) / 100}</div>
+          <div className="stat-card-value">{Math.round(filtered.filter(l => !['已退回', '已駁回', '已取消', '已拒絕'].includes(l.status)).reduce((s, l) => s + (l.days || 0), 0) * 100) / 100}</div>
         </div>
         <div className="stat-card" style={{ '--card-accent': 'var(--accent-purple)', '--card-accent-dim': 'var(--accent-purple-dim)' }}>
           <div className="stat-card-label">假別數</div>
@@ -701,7 +701,7 @@ export default function Leave() {
                     ) : <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>—</span>}
                   </div>
                   <div style={{ padding: '4px 8px' }}>
-                    <span className={`badge ${l.status === '已核准' ? 'badge-success' : ['已退回', '已駁回', '已拒絕'].includes(l.status) ? 'badge-danger' : 'badge-warning'}`}>
+                    <span className={`badge ${l.status === '已核准' ? 'badge-success' : ['已退回', '已駁回', '已拒絕', '已取消'].includes(l.status) ? 'badge-danger' : 'badge-warning'}`}>
                       <span className="badge-dot"></span>{l.status}
                     </span>
                     {l.reject_reason && <div style={{ fontSize: 11, color: 'var(--accent-red)', marginTop: 2 }}>原因：{l.reject_reason}</div>}

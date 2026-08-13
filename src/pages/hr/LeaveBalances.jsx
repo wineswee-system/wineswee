@@ -113,6 +113,27 @@ export default function LeaveBalances() {
     if (profile?.organization_id) load()
   }, [profile?.organization_id])
 
+  // ── 換員工時,年份 tab 自動落在「特休現在期(週年期含今天)」所在年份 ──
+  //   (週年月在下半年者現在期存前一年 year;之後 HR 仍可自由切 tab,故只依賴 selectedEmpId)
+  useEffect(() => {
+    if (!selectedEmpId) return
+    let cancelled = false
+    ;(async () => {
+      const todayStr = new Date().toISOString().slice(0, 10)
+      const { data } = await supabase
+        .from('leave_balances')
+        .select('year, period_start, expires_at')
+        .eq('employee_id', selectedEmpId)
+        .eq('leave_type', 'annual')
+      if (cancelled || !Array.isArray(data)) return
+      const cur = data.find(b =>
+        (!b.period_start || String(b.period_start).slice(0, 10) <= todayStr) &&
+        (!b.expires_at   || String(b.expires_at).slice(0, 10)   >= todayStr))
+      if (cur && cur.year) setYearFilter(cur.year)
+    })()
+    return () => { cancelled = true }
+  }, [selectedEmpId])
+
   // ── load data when employee or year changes ───────────────────────────────
   useEffect(() => {
     if (!selectedEmpId) { setTableRows([]); return }

@@ -92,6 +92,7 @@ export default function Schedule() {
   const [offRequests, setOffRequests] = useState([])
   const [pendingLeaves, setPendingLeaves] = useState([]) // 待審核/審核中請假（橘點提示用）
   const [partialLeaves, setPartialLeaves] = useState([]) // 已核准「部分假」(days<1，如半天特休)—格子疊標記用
+  const [fullDayLeaves, setFullDayLeaves] = useState([]) // 已核准「整天假」—整天格顯示全名用(補休結算等)
   const [holidays, setHolidays] = useState([]) // ['2026-04-04', ...]
   const [storeEvents, setStoreEvents] = useState([]) // [{ id, store_id, date, title, color, category, pay_class }]
   const [disasters, setDisasters] = useState([]) // 天災宣告(該門市、本月區間) → 顯示在行事曆
@@ -322,12 +323,22 @@ export default function Schedule() {
         .eq('unit', 'day')
         .lt('days', 1)
         .abortSignal(signal),
-    ]).then(([s, o, pl, apl]) => {
+      // 已核准「整天假」：拿假別原名，讓整天格顯示全名(補休結算等)；底層 schedules.shift 功能碼不動
+      supabase.from('leave_requests').select('employee, start_date, end_date, type')
+        .eq('status', '已核准')
+        .is('deleted_at', null)
+        .lte('start_date', activeEnd)
+        .gte('end_date', activeStart)
+        .eq('unit', 'day')
+        .gte('days', 1)
+        .abortSignal(signal),
+    ]).then(([s, o, pl, apl, afl]) => {
       if (signal.aborted) return
       setSchedules(s.data || [])
       setOffRequests(o.data || [])
       setPendingLeaves(pl.data || [])
       setPartialLeaves(apl.data || [])
+      setFullDayLeaves(afl.data || [])
     }).catch(err => {
       if (!signal.aborted) console.error('Failed to load schedule data:', err)
     }).finally(() => {
@@ -911,6 +922,25 @@ export default function Schedule() {
     return map
   })()
 
+  // 假別顯示名:拿掉匯入前綴(舊人資系統補休結算 → 補休結算),其餘原樣
+  const cleanLeaveName = (t) => (t ? String(t).replace(/^舊人資系統/, '') : t)
+
+  // 已核准「整天假」→ empName → { dateStr → 假別全名 }（整天格顯示全名用；底層 shift 功能碼不動)
+  const fullDayLeaveMap = (() => {
+    const _iso = (d) => d.toISOString().slice(0, 10)
+    const map = {}
+    for (const lr of fullDayLeaves) {
+      if (!lr.employee || !lr.start_date || !lr.end_date) continue
+      const name = cleanLeaveName(lr.type)
+      if (!name) continue
+      if (!map[lr.employee]) map[lr.employee] = {}
+      let d = new Date(lr.start_date + 'T00:00:00Z')
+      const end = new Date(lr.end_date + 'T00:00:00Z')
+      while (d <= end) { map[lr.employee][_iso(d)] = name; d.setUTCDate(d.getUTCDate() + 1) }
+    }
+    return map
+  })()
+
   // 已核准「部分假」→ empName → { dateStr → {code, time} }（格子疊標記；班別保留不覆蓋）
   const partialLeaveMap = (() => {
     const _iso = (d) => d.toISOString().slice(0, 10)
@@ -922,7 +952,7 @@ export default function Schedule() {
     const map = {}
     for (const lr of partialLeaves) {
       if (!lr.employee || !lr.start_date || !lr.end_date) continue
-      const code = CODE[lr.type] || lr.type || '假'
+      const code = CODE[lr.type] || cleanLeaveName(lr.type) || '假'
       const time = (lr.start_time && lr.end_time)
         ? `${String(lr.start_time).slice(0, 5)}~${String(lr.end_time).slice(0, 5)}` : ''
       if (!map[lr.employee]) map[lr.employee] = {}
@@ -2038,6 +2068,7 @@ export default function Schedule() {
           weekSepDates={weekSepDates}
           pendingLeaveMap={pendingLeaveMap}
           partialLeaveMap={partialLeaveMap}
+          fullDayLeaveMap={fullDayLeaveMap}
           dailyHours={dailyHours}
           empHours={empActiveHours}
           dailyRevenue={dailyRevenue}

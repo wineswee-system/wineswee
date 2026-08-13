@@ -33,6 +33,7 @@ export default function MonthScheduleTable({
   weekSepDates = new Set(),  // Set<'YYYY-MM-DD'> — 四週變形每週第一天，畫週分隔線
   pendingLeaveMap = {},  // empName → Set<dateStr>（待審核/審核中請假）
   partialLeaveMap = {},  // empName → { dateStr → {code, time} }（已核准部分假，如半天特休）
+  fullDayLeaveMap = {},  // empName → { dateStr → 假別全名 }（已核准整天假；讓整天格顯示全名，底層 shift 功能碼不動）
   dailyHours = {},       // dateStr → 當日總工時
   empHours = {},         // empName → 整月/整循環淨工時(已扣休息)
   dailyRevenue = {},     // dateStr → 預估業績
@@ -208,6 +209,7 @@ export default function MonthScheduleTable({
                       weekSepDates={weekSepDates}
                       pendingLeaveMap={pendingLeaveMap}
                       partialLeaveMap={partialLeaveMap}
+                      fullDayLeaveMap={fullDayLeaveMap}
                       schedules={schedules}
                       violationsByEmp={violationsByEmp}
                       onClickEmployeeBadge={onClickEmployeeBadge}
@@ -248,6 +250,7 @@ export default function MonthScheduleTable({
                     weekSepDates={weekSepDates}
                     pendingLeaveMap={pendingLeaveMap}
                     partialLeaveMap={partialLeaveMap}
+                    fullDayLeaveMap={fullDayLeaveMap}
                     schedules={schedules}
                     violationsByEmp={violationsByEmp}
                     onClickEmployeeBadge={onClickEmployeeBadge}
@@ -341,7 +344,7 @@ function EmployeeRow({
   handleSetShift, handleDeleteShift,
   canEditSchedule, SHIFT_TYPES, getStoreShifts, storeFilter, holidaySet, storeSettings,
   weekSepDates = new Set(),
-  pendingLeaveMap = {}, partialLeaveMap = {}, schedules = [],
+  pendingLeaveMap = {}, partialLeaveMap = {}, fullDayLeaveMap = {}, schedules = [],
   violationsByEmp = {}, onClickEmployeeBadge,
   lockedDates = new Set(),
   lockedStoreMonths = new Set(),  // Set<`${store_id}|${YYYY-MM}`> — 全門市模式:依本列員工的店該月是否鎖定
@@ -513,7 +516,8 @@ function EmployeeRow({
                 color: absenceCfg?.color || 'var(--text-muted)',
                 background: (absenceCfg?.color || '#6b7280') + '15',
               }}>
-                {shift}
+                {/* 顯示全名:整天假別優先讀請假單全名(補休結算等)→ 否則 config 全名(病→病假)→ 最後原碼。底層 shift 功能碼不動 */}
+                {fullDayLeaveMap[emp.name]?.[date] || getAbsenceConfig(shift)?.label || shift}
               </span>
             ) : shift ? (
               // Normalise format; resolve to HH:MM~HH:MM via SHIFT_TYPES then actual_start/actual_end

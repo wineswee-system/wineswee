@@ -152,7 +152,7 @@ export default function LeaveBalances() {
         supabase.from('leave_requests').select('employee_id,type,days,hours,start_date,status')
           .eq('organization_id', orgId).eq('employee_id', selectedEmpId)
           .is('deleted_at', null)
-          .eq('status', '申請中').gte('start_date', yearStart).lt('start_date', yearEnd),
+          .in('status', ['待審核', '審核中']).gte('start_date', yearStart).lt('start_date', yearEnd),
         // 補休：改讀 comp_time_ledger（與補休管理 tab / 104 同源，不用 leave_balances 那套髒的）
         // 可休/已休要算「賺過的全部」(active 未用完 + exhausted 已用完),不能只算 active,
         // 否則已用完的 11 筆被排除→可休/已休失真(只剩餘正確)。排除 settled(已折現非休)。
@@ -338,8 +338,10 @@ export default function LeaveBalances() {
           ? (dbBal ? daysToHours(Number(dbBal.used_days || 0)) : (annualStartStr ? sumH(lrs.filter(inAnnual)) : (usedByType[type] || 0)))
           : (usedByType[type] || 0))
       // 補休簽核中=comp_time_ledger 的 hours_reserved(軟扣/待審預留);其餘走請假單 pending
+      // 補休簽核中：正常補休走「補休帳預留」(compReserved);補休結算等匯入型不走預留→從待審請假單補加。
+      //   精確排除純補休/comp_time(那些已在 compReserved),避免重複計算。
       const pendH    = type === '補休'
-        ? compReserved
+        ? compReserved + sumH(pending.filter(lr => { const t = lr.type || ''; return t.includes('補休') && t !== '補休' && t !== 'comp_time' }))
         : ((type === 'annual' && annualStartStr) ? sumH(pending.filter(inAnnual)) : (pendByType[type] || 0))
       const remH     = totalHours - usedH
       const canApply = notStarted ? 0 : Math.max(0, remH - pendH)   // 未生效→現在不可申請

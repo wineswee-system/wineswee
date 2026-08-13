@@ -8,7 +8,8 @@ import { logger } from './logger'
 
 // 記錄單一操作
 export async function logAudit({ user, action, target, targetTable, targetId, fieldName, oldValue, newValue, ip, orgId }) {
-  const { data, error } = await supabase.from('audit_logs').insert({
+  // 走 SECURITY DEFINER RPC(繞 audit_logs 的 admin-only INSERT RLS,非admin使用者稽核才記得到)
+  const { data, error } = await supabase.rpc('log_audit', { p_entries: [{
     user,
     action,
     target,
@@ -19,7 +20,7 @@ export async function logAudit({ user, action, target, targetTable, targetId, fi
     new_value: newValue != null ? String(newValue) : null,
     ip: ip || null,
     organization_id: orgId || null,
-  })
+  }] })
   if (error) return { data: null, error: error.message }
   return { data, error: null }
 }
@@ -55,7 +56,7 @@ export async function logChanges({ user, action, target, targetTable, targetId, 
   }
 
   if (changes.length > 0) {
-    const { data, error } = await supabase.from('audit_logs').insert(changes)
+    const { data, error } = await supabase.rpc('log_audit', { p_entries: changes })
     if (error) return { data: null, error: error.message }
     return { data, error: null }
   }

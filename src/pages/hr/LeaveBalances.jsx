@@ -544,8 +544,9 @@ export default function LeaveBalances() {
     return true
   })
 
-  const annualRows = tableRows.filter(r => r.type !== 'comp')
-  const compRows   = tableRows.filter(r => r.type === 'comp')
+  // 補休列的 type 是 '補休'(非 'comp')→ 篩 'comp' 會永遠空、補休列誤跑年度tab
+  const annualRows = tableRows.filter(r => r.type !== '補休')
+  const compRows   = tableRows.filter(r => r.type === '補休')
 
   if (empLoading) return <LoadingSpinner />
 

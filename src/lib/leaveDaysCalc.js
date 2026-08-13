@@ -81,7 +81,7 @@ export function findDateOverlap(form, records, editingId = null) {
   const formHourly = form.unit === 'hour' && (!form.end_date || form.end_date === form.start_date)
   return records.find(r => {
     if (r.id === editingId) return false
-    if (r.status === '已拒絕' || r.status === '已取消') return false
+    if (['已拒絕', '已駁回', '已退回', '已取消'].includes(r.status)) return false  // 實際駁回是「已退回」,原本漏跳→被退回的假擋住同日期重新申請
     const rStart = new Date(r.start_date)
     const rEnd = new Date(r.end_date || r.start_date)
     if (!(startD <= rEnd && endD >= rStart)) return false   // 日期段沒交集 → 一定不衝突

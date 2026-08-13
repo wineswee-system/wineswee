@@ -469,17 +469,8 @@ export default function Leave() {
           end_date: leave.end_date || leave.start_date,
           approver: profile?.name || '',
         })
-        if (leave.start_date && leave.days) {
-          const totalDays = Math.ceil(leave.days)
-          for (let i = 0; i < totalDays; i++) {
-            const d = new Date(leave.start_date)
-            d.setDate(d.getDate() + i)
-            await supabase.from('schedules').upsert(
-              { employee: leave.employee, date: d.toISOString().slice(0, 10), shift: '休', organization_id: profile?.organization_id || null },
-              { onConflict: 'employee,date' }
-            )
-          }
-        }
+        // 排班蓋假別由 DB trigger _trg_leave_approval_sync_schedule 處理(用正確假別名 + 部分假只掛標記)。
+        //   原本這裡 client 又 upsert shift:'休' + ceil(days) → 蓋掉 trigger 正確結果、2h假變整天休 → 已移除。
       }
       setLeaves(prev => prev.map(l => l.id === id ? { ...l, status: result.status } : l))
     } catch (err) {

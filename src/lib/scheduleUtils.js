@@ -701,7 +701,7 @@ export function validateLeisureQuota({ schedules, workHourSystem, anchorDate, st
 
   const isWeeklyOff = s => s === '例假'
   const isRestDay = s => s === '休息' || s === '休' // legacy 休 算休息
-  const isAbsenceShift = s => !s || isWeeklyOff(s) || isRestDay(s) || ['補休', '特休', '病', '會議', '產', '事'].includes(s)
+  const isAbsenceShift = s => !s || isAbsence(s)   // 用單一來源 isAbsence(含所有假別);原本只列6種→婚/公/喪/生/工傷/陪產/家/產檢/育嬰/國定被當上班誤報
 
   // 班別 → 工時 對照（沒設定的當 8h 估）
   const hoursMap = {}
@@ -910,12 +910,12 @@ export function validateHolidayWork({ schedules, holidaySet }) {
   const warnings = []
   if (!schedules?.length || !holidaySet || holidaySet.size === 0) return { errors, warnings }
 
-  const ABSENCES = new Set(['例假', '休息', '休', '補休', '特休', '病', '會議', '產', '事'])
+  // 假別判斷用單一來源 isAbsence(含所有假別);原本只列9種→婚/公/喪/生/工傷/陪產/家/產檢/育嬰/國定被當上班
 
   // 按員工 + 月份累計
   const byEmpMonth = {}
   for (const s of schedules) {
-    if (!s.shift || ABSENCES.has(s.shift)) continue
+    if (!s.shift || isAbsence(s.shift)) continue
     if (!holidaySet.has(s.date)) continue
     const ym = (s.date || '').slice(0, 7)
     if (!ym) continue
@@ -963,7 +963,7 @@ export function validateMonthlyOvertime({ schedules, shiftDefs = [] }) {
   const byEmpMonth = {}
   for (const s of schedules) {
     if (!s.shift) continue
-    if (['例假', '休息', '休', '補休', '特休', '病', '會議', '產', '事'].includes(s.shift)) continue
+    if (isAbsence(s.shift)) continue   // 單一來源 isAbsence(含所有假別)
     const ym = (s.date || '').slice(0, 7)
     if (!ym) continue
     const key = `${s.employee}|${ym}`

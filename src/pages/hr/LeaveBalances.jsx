@@ -87,12 +87,9 @@ export default function LeaveBalances() {
   // 特休 §38 額度已收斂到後端 leave_annual_entitlement RPC(唯一真相,含第一年滿6月=3天修正)。
   // 前端不再自算階梯 → 原 calcStatutoryLeave 已移除,改由 load() 呼叫 RPC 帶入 annualEnt。
 
-  const calcMaternityDays = (emp) => {
-    if (!emp?.join_date) return 56
-    const now = new Date(), join = new Date(emp.join_date)
-    const months = (now.getFullYear() - join.getFullYear()) * 12 + (now.getMonth() - join.getMonth())
-    return months >= 6 ? 56 : 28
-  }
+  // 產假天數一律 56(分娩8週,§50)—— 年資只影響「薪資」(≥6月全薪/<6月半薪,在計薪引擎處理),不影響天數。
+  //   (28 天是妊娠3個月以上「流產」,非分娩,不套在這)
+  const calcMaternityDays = () => 56
 
   // ── load employee list ────────────────────────────────────────────────────
   useEffect(() => {

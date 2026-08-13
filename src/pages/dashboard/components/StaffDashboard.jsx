@@ -23,7 +23,7 @@ export default function StaffDashboard({ profile }) {
       supabase.from('schedules').select('date, shift').eq('employee', empName).gte('date', monthStart).order('date'),
       supabase.from('attendance_records').select('date, clock_in, clock_out, status, hours').eq('employee', empName).gte('date', monthStart).order('date', { ascending: false }),
       supabase.from('leave_requests').select('id, type, start_date, end_date, status').eq('employee', empName).is('deleted_at', null).order('created_at', { ascending: false }).limit(5),
-      supabase.from('workflow_instances').select('id, template_name, status, created_at').eq('started_by', empName).order('created_at', { ascending: false }).limit(5),
+      supabase.from('workflow_instances').select('id, template_name, status, started_at').eq('started_by', empName).order('started_at', { ascending: false }).limit(5),
     ]).then(([s, a, l, f]) => {
       setSchedules(s.data || [])
       setAttendance(a.data || [])
@@ -231,7 +231,7 @@ export default function StaffDashboard({ profile }) {
                 <span style={{ fontSize: 18 }}>📋</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 600 }}>{f.template_name}</div>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{f.created_at?.slice(0, 10)}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{f.started_at?.slice(0, 10)}</div>
                 </div>
                 <span style={{
                   padding: '2px 8px', borderRadius: 6, fontSize: 10, fontWeight: 600,

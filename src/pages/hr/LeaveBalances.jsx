@@ -338,10 +338,9 @@ export default function LeaveBalances() {
           ? (dbBal ? daysToHours(Number(dbBal.used_days || 0)) : (annualStartStr ? sumH(lrs.filter(inAnnual)) : (usedByType[type] || 0)))
           : (usedByType[type] || 0))
       // 補休簽核中=comp_time_ledger 的 hours_reserved(軟扣/待審預留);其餘走請假單 pending
-      // 補休簽核中：正常補休走「補休帳預留」(compReserved);補休結算等匯入型不走預留→從待審請假單補加。
-      //   精確排除純補休/comp_time(那些已在 compReserved),避免重複計算。
+      // 補休簽核中=comp_time_ledger 的 hours_reserved(軟扣/待審預留);其餘走請假單 pending
       const pendH    = type === '補休'
-        ? compReserved + sumH(pending.filter(lr => { const t = lr.type || ''; return t.includes('補休') && t !== '補休' && t !== 'comp_time' }))
+        ? compReserved
         : ((type === 'annual' && annualStartStr) ? sumH(pending.filter(inAnnual)) : (pendByType[type] || 0))
       const remH     = totalHours - usedH
       const canApply = notStarted ? 0 : Math.max(0, remH - pendH)   // 未生效→現在不可申請
@@ -380,7 +379,8 @@ export default function LeaveBalances() {
         period: `${yearFilter} 年`,
         range: rng,
         totalHours: total, usedHours: used, remainingHours: total - used,
-        pendingHours: 0, canApplyHours: Math.max(0, total - used),
+        // 簽核中=該假別的待審核請假單(如舊人資系統補休結算 待審核)→ 顯示在自己這列
+        pendingHours: pendByType[lt] || 0, canApplyHours: Math.max(0, total - used - (pendByType[lt] || 0)),
         dbId: b.id, isManual: true,
       })
     }

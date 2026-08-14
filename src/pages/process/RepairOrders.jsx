@@ -262,10 +262,17 @@ function DetailModal({ ro, me, profile, expenses, onClose, onChanged }) {
   }
 
   const cancel = async () => {
-    if (!await confirm({ message: '確定作廢這張維修單？' })) return
+    if (!await confirm({ message: '確定作廢這張維修單？（保留紀錄，標記為已取消）' })) return
     const { data, error } = await supabase.rpc('cancel_repair_order', { p_id: ro.id })
     if (error || !data?.ok) { toast.error('作廢失敗：' + (data?.error || error?.message || '')); return }
     toast.success('已作廢'); onClose(); onChanged()
+  }
+
+  const remove = async () => {
+    if (!await confirm({ message: `確定刪除維修單 #${ro.id}？會從清單移除（可由後台救回）。`, confirmLabel: '刪除', danger: true })) return
+    const { data, error } = await supabase.rpc('delete_repair_order', { p_id: ro.id })
+    if (error || !data?.ok) { toast.error('刪除失敗：' + (data?.error || error?.message || '')); return }
+    toast.success('已刪除'); onClose(); onChanged()
   }
 
   return (
@@ -320,8 +327,10 @@ function DetailModal({ ro, me, profile, expenses, onClose, onChanged }) {
               title={hasPendingExpense ? '費用單尚未核准,無法回報完工' : ''}>✅ 回報完工</button>
           )}
           {ro.status !== '已完工' && ro.status !== '已取消' && (
-            <button className="btn btn-ghost" onClick={cancel} style={{ marginLeft: 'auto', color: 'var(--accent-red)' }}>作廢</button>
+            <button className="btn btn-ghost" onClick={cancel} style={{ marginLeft: 'auto', color: 'var(--text-secondary)' }}>作廢</button>
           )}
+          <button className="btn btn-ghost" onClick={remove}
+            style={{ marginLeft: (ro.status !== '已完工' && ro.status !== '已取消') ? 0 : 'auto', color: 'var(--accent-red)' }}>刪除</button>
         </div>
         {hasPendingExpense && <div style={{ fontSize: 12, color: 'var(--accent-orange)', marginTop: 8 }}>⚠ 有費用單還在「申請中」,核准後才能回報完工。</div>}
       </Modal>

@@ -227,6 +227,7 @@ function CreateModal({ orgId, stores, workOrders, onClose, onDone }) {
             <option value="">— 不關聯 —</option>
             {workOrders.map(w => <option key={w.id} value={w.id}>#{w.id} {w.title}（{w.status}）</option>)}
           </select>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>僅在維修單這邊記錄關聯,不會改動那張工單（工單仍由工單系統各自受理/完成）。</div>
         </Field>
       )}
       {handlerType === 'vendor' && (

@@ -21,6 +21,10 @@ const FIXED_EXPENSE = [
 const FIXED_NON_EXPENSE = [
   { icon: Package, name: '商品調撥', desc: '總倉 ↔ 門市 / 跨門市調貨 → 申請審核 + 驗收兩階段', action: '/process/transfer-requests', color: 'var(--accent-orange)', dim: 'var(--accent-orange-dim)', tag: '兩階段' },
   { icon: Building2, name: '跨部門工單', desc: '請其他部門協助處理事項 → 受理排程 → 完成結案', action: '/process/work-orders', color: 'var(--accent-blue)', dim: 'var(--accent-blue-dim)', tag: '派工' },
+]
+
+// 維修單:鎖 repair_order.manage(admin 以上預設有,權限頁逐人開)
+const FIXED_REPAIR = [
   { icon: Wrench, name: '維修單', desc: '工務處理維修:自己修 / 找廠商 → 需採購串費用申請 → 回報完工上傳', action: '/process/repair-orders', color: 'var(--accent-cyan)', dim: 'var(--accent-cyan-dim)', tag: '工務' },
 ]
 
@@ -88,7 +92,7 @@ export default function BusinessApplications() {
   if (loading) return <LoadingSpinner />
 
   const expenseGroup = [...FIXED_EXPENSE, ...customExpense]
-  const nonExpenseGroup = [...FIXED_NON_EXPENSE, ...customNonExpense]
+  const nonExpenseGroup = [...FIXED_NON_EXPENSE, ...(hasPermission('repair_order.manage') ? FIXED_REPAIR : []), ...customNonExpense]
   const collectionGroup = hasPermission('collection.manage') ? FIXED_COLLECTION : []
 
   return (

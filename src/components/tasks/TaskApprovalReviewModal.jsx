@@ -53,6 +53,8 @@ export default function TaskApprovalReviewModal({ taskId, confId, onClose, onDon
   const [comments, setComments] = useState([])
   const [confs, setConfs] = useState([])
   const [wf, setWf] = useState([])
+  const [hasChain, setHasChain] = useState(false)
+  const [err, setErr] = useState(null)
   const [busy, setBusy] = useState(false)
   const [showReject, setShowReject] = useState(false)
   const [reason, setReason] = useState('')
@@ -60,24 +62,26 @@ export default function TaskApprovalReviewModal({ taskId, confId, onClose, onDon
   useEffect(() => {
     let alive = true
     ;(async () => {
-      setLoading(true)
-      const { data: t } = await supabase.from('tasks').select('*').eq('id', taskId).maybeSingle()
+      setLoading(true); setErr(null)
+      // 走 SECURITY DEFINER RPC:繞過 tasks 只給 admin 的 RLS,用「你是簽核人」授權撈完整內容
+      const { data, error } = await supabase.rpc('web_get_task_approval_detail', { p_task_id: taskId })
       if (!alive) return
-      setTask(t)
-      const jobs = []
-      const push = (p, set) => jobs.push(p.then(r => { if (alive) set(r.data || (Array.isArray(r.data) ? [] : null)) }).catch(() => {}))
-      if (t?.project_id) {
-        push(supabase.from('projects').select('*').eq('id', t.project_id).maybeSingle(), setProject)
-        push(supabase.from('tasks').select('id,title,status').eq('project_id', t.project_id).is('parent_task_id', null).order('id'), setProjectTasks)
+      if (error || !data?.ok) {
+        setErr(error?.message || data?.error || '讀取失敗')
+        setLoading(false)
+        return
       }
-      push(supabase.from('tasks').select('id,title,status').eq('parent_task_id', taskId).order('id'), setSubtasks)
-      push(supabase.from('task_checklist_items').select('*').eq('task_id', taskId).order('sort_order'), setChecklist)
-      push(supabase.from('task_attachments').select('*').eq('task_id', taskId).order('created_at'), setAttachments)
-      push(supabase.from('task_comments').select('*').eq('task_id', taskId).order('created_at'), setComments)
-      push(supabase.from('task_confirmations').select('*').eq('task_id', taskId).order('step_order').order('id'), setConfs)
-      push(supabase.from('workflow_instances').select('id,template_name,status,started_at').eq('triggered_by_task_id', taskId).order('started_at', { ascending: false }), setWf)
-      await Promise.allSettled(jobs)
-      if (alive) setLoading(false)
+      setTask(data.task || null)
+      setProject(data.project || null)
+      setProjectTasks(data.project_tasks || [])
+      setSubtasks(data.subtasks || [])
+      setChecklist(data.checklist || [])
+      setAttachments(data.attachments || [])
+      setComments(data.comments || [])
+      setConfs(data.confirmations || [])
+      setWf(data.workflow || [])
+      setHasChain(!!data.has_chain)
+      setLoading(false)
     })()
     return () => { alive = false }
   }, [taskId])
@@ -140,6 +144,8 @@ export default function TaskApprovalReviewModal({ taskId, confId, onClose, onDon
         <div style={{ padding: 16, overflowY: 'auto', flex: 1 }}>
           {loading ? (
             <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: 24, textAlign: 'center' }}>載入內容中…</div>
+          ) : err ? (
+            <div style={{ color: 'var(--accent-red)', fontSize: 13, padding: 24, textAlign: 'center' }}>讀取失敗:{err}</div>
           ) : (
             <>
               {/* ① 任務詳情 */}
@@ -226,13 +232,13 @@ export default function TaskApprovalReviewModal({ taskId, confId, onClose, onDon
 
               {/* ③ 流程 / 簽核 */}
               <div style={card}>
-                <div style={secLabel}><GitBranch size={15} /> 流程 / 簽核</div>
+                <div style={secLabel}><GitBranch size={15} /> {hasChain ? '簽核流程' : '簽核'}</div>
                 {confs.length === 0 && wf.length === 0 && (
                   <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>—</div>
                 )}
                 {confs.map((c, i) => (
                   <div key={c.id} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, padding: '4px 0', borderBottom: i < confs.length - 1 ? '1px dashed var(--border-subtle)' : 'none' }}>
-                    <span style={{ width: 52, color: 'var(--text-muted)', fontSize: 12 }}>第 {(c.step_order ?? 0) + 1} 關</span>
+                    {hasChain && <span style={{ width: 52, color: 'var(--text-muted)', fontSize: 12 }}>第 {(c.step_order ?? 0) + 1} 關</span>}
                     <span style={{ flex: 1, color: 'var(--text-primary)' }}>
                       {c.approver || '—'}{c.id === confId ? '（你）' : ''}
                     </span>

@@ -5,6 +5,7 @@ import { useAuth } from '../../../contexts/AuthContext'
 import { usePendingApprovals } from '../../../lib/usePendingApprovals'
 import LoadingSpinner from '../../../components/LoadingSpinner'
 import ApprovalDetailModal from '../../../components/ApprovalDetailModal'
+import TaskApprovalReviewModal from '../../../components/tasks/TaskApprovalReviewModal'
 import { buildFormChainSteps } from '../../../lib/buildChainSteps'
 import { toast } from '../../../lib/toast'
 import { confirm } from '../../../lib/confirm'
@@ -318,6 +319,7 @@ function PendingApprovalsView() {
   // ── 就地開明細 modal（leave/overtime/trip/correction）；其餘仍跳 HR 頁 ──
   const [detail, setDetail] = useState(null)        // { type, row, emp }
   const [detailChain, setDetailChain] = useState([])
+  const [taskReview, setTaskReview] = useState(null)   // { taskId, confId } 任務唯讀簽核視窗
   const [loadingChain, setLoadingChain] = useState(false)
   const detailIdRef = useRef(null)
 
@@ -325,7 +327,8 @@ function PendingApprovalsView() {
     const type = tabDef.key
     // 任務確認：不開簽核鏈 modal，直接開該任務的完整編輯頁(含簽核 tab 的核准/拒絕按鈕)
     if (type === 'task_confirmation') {
-      navigate(`/process/tasks?focus=${row.task_id || row.id}&tab=approval`)
+      // 不跳「任務管理頁」(可能未開放);改開唯讀簽核視窗:任務詳情 + 專案 + 流程 + 通過/退回
+      setTaskReview({ taskId: row.task_id || row.id, confId: row.id })
       return
     }
     if (!INPLACE[type]) {
@@ -670,6 +673,20 @@ function PendingApprovalsView() {
             removeFromData(detail.type, detail.row.id)
           },
           onChanged: () => { closeDetail(); reloadPending(); loadExtras() },
+        }}
+      />
+    )}
+
+    {/* ─── 任務確認:唯讀簽核視窗（任務詳情 + 專案 + 流程 + 通過/退回，不跳任務頁）─── */}
+    {taskReview && (
+      <TaskApprovalReviewModal
+        taskId={taskReview.taskId}
+        confId={taskReview.confId}
+        onClose={() => setTaskReview(null)}
+        onDone={() => {
+          removeFromData('task_confirmation', taskReview.confId)
+          setTaskReview(null)
+          reloadPending()
         }}
       />
     )}

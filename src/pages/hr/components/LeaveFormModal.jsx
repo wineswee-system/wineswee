@@ -170,6 +170,27 @@ export default function LeaveFormModal({
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
             依《性別平等工作法》，不同情形有不同天數上限；超過上限送出會被擋下。
           </div>
+          {/* 產假薪資：依到職滿6個月與否（§50，同計薪引擎判斷：起始日 < 到職+6月 → 半薪） */}
+          {(() => {
+            const empMat = employees.find(e => e.name === form.employee)
+            if (!empMat?.join_date) return null
+            const ref = new Date(form.start_date || new Date().toISOString().slice(0, 10))
+            const sixMo = new Date(empMat.join_date); sixMo.setMonth(sixMo.getMonth() + 6)
+            const half = ref < sixMo
+            return (
+              <div style={{
+                marginTop: 6, fontSize: 12, fontWeight: 600,
+                color: half ? 'var(--accent-orange)' : 'var(--accent-green)',
+              }}>
+                產假薪資：{half ? '半薪（到職未滿 6 個月，§50 減半發給）' : '全薪（到職滿 6 個月，工資照給）'}
+                {!form.start_date && (
+                  <span style={{ fontWeight: 400, color: 'var(--text-muted)', marginLeft: 4 }}>
+                    （以今日估算，實際依產假起始日）
+                  </span>
+                )}
+              </div>
+            )
+          })()}
         </Field>
       )}
       {/* Policy info */}

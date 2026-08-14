@@ -41,6 +41,8 @@ BEGIN
   END IF;
 
   v_unit := CASE WHEN NULLIF(p_payload->>'start_time','') IS NOT NULL THEN 'hour' ELSE 'day' END;
+  -- 產假一律整天制:忽略時數,強制整天(前端時數鈕就算按了送來也當整天,不會壞資料)
+  IF v_code = 'maternity' THEN v_unit := 'day'; END IF;
 
   IF v_code IS NOT NULL THEN
     SELECT step, unit INTO v_step, v_step_unit

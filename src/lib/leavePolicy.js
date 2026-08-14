@@ -120,7 +120,7 @@ export const LEAVE_TYPES = [
     paid: true,
     unit: 'day',
     minUnit: 1,
-    allowHourly: true,
+    allowHourly: false, // 產假法律以「日」計(含例假曆日),只能整天請,不出時數切換
     gender: 'female',
     conditions: [
       { desc: '分娩（任職滿6個月）', days: 56, salary: '8週全薪' },

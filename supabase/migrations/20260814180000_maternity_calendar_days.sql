@@ -1,4 +1,4 @@
--- 2026-08-14 產假改曆日計(含例假)v_days=起訖含頭尾;上限56/28/7/5對齊曆日
+-- 2026-08-14 產假:曆日計+情形上限+一律整天制(忽略時數,前端關時數+此後端保險)
 DROP FUNCTION IF EXISTS public.create_leave_request(integer, text, text, date, date, time without time zone, time without time zone, text, integer, text);
 
 CREATE OR REPLACE FUNCTION public.create_leave_request(p_employee_id integer, p_type_code text, p_unit text, p_start_date date, p_end_date date, p_start_time time without time zone, p_end_time time without time zone, p_reason text DEFAULT NULL::text, p_attachment_count integer DEFAULT 0, p_maternity_type text DEFAULT NULL::text)
@@ -62,6 +62,11 @@ BEGIN
      LIMIT 1;
   END IF;
   IF v_step IS NULL THEN v_step := v_lt.min_unit; v_step_unit := v_lt.unit; END IF;
+
+  -- 產假一律整天制(法律以日計,含例假曆日):忽略前端送的時數,強制整天(前端已關時數,這是保險)
+  IF p_type_code = 'maternity' THEN
+    p_unit := 'day'; p_start_time := NULL; p_end_time := NULL;
+  END IF;
 
   -- 算天數/時數(單一來源)
   v_calc  := public.leave_calc_days_hours(p_unit, p_start_date, p_end_date, p_start_time, p_end_time, v_step, v_step_unit);

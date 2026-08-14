@@ -9,6 +9,14 @@ import CarriedAttachments from '../../../components/CarriedAttachments'
 import { countWorkDays, snapToStep, diffHours } from '../../../lib/leaveDaysCalc'
 import { supabase } from '../../../lib/supabase'
 
+// 產假情形（對齊後端 maternity_max_days：56/28/7/5）
+const MATERNITY_SITUATIONS = [
+  { code: 'childbirth', label: '分娩', days: 56 },
+  { code: 'miscarriage_ge3m', label: '妊娠滿3個月以上流產', days: 28 },
+  { code: 'miscarriage_2to3m', label: '妊娠2個月以上未滿3個月流產', days: 7 },
+  { code: 'miscarriage_lt2m', label: '妊娠未滿2個月流產', days: 5 },
+]
+
 // Props: open, onClose, form, setForm, employees, departments, stepSettings,
 //        onSubmit, errors, setErrors, editingId, attachFiles, onFileSelect,
 //        removeAttach, validationMsg, uploading, leaves, holidays
@@ -146,6 +154,24 @@ export default function LeaveFormModal({
             ))}
         </select>
       </Field>
+      {/* 產假:情形選擇（分娩/流產週數）→ 決定上限 56/28/7/5（性平法）。後端 create_leave_request 會依此擋超額。 */}
+      {selectedPolicy?.code === 'maternity' && (
+        <Field label="產假情形" required>
+          <select
+            className="form-input"
+            style={{ width: '100%' }}
+            value={form.maternity_type || 'childbirth'}
+            onChange={e => set('maternity_type', e.target.value)}
+          >
+            {MATERNITY_SITUATIONS.map(m => (
+              <option key={m.code} value={m.code}>{m.label}（上限 {m.days} 天）</option>
+            ))}
+          </select>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+            依《性別平等工作法》，不同情形有不同天數上限；超過上限送出會被擋下。
+          </div>
+        </Field>
+      )}
       {/* Policy info */}
       {selectedPolicy && (
         <div style={{
@@ -272,7 +298,12 @@ export default function LeaveFormModal({
           }
         } else {
           if (!form.start_date) preview = null
-          else {
+          else if (selectedPolicy?.code === 'maternity') {
+            // 產假法定以「曆日」計(含例假),對齊後端;不扣週末國假、不套 step
+            const s = new Date(form.start_date), e = new Date(form.end_date || form.start_date)
+            const cal = Math.round((e - s) / 86400000) + 1
+            preview = { value: cal, unit: '天', calendar: true }
+          } else {
             const wd = countWorkDays(form.start_date, form.end_date || form.start_date, holidays)
             const snapped = cfg.unit === 'day' ? snapToStep(wd, cfg.step) : wd
             preview = { value: snapped, unit: '天' }
@@ -291,7 +322,9 @@ export default function LeaveFormModal({
             </div>
             {form.unit === 'day' && preview && (
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-                已扣除週末 + 國定假日 · 最小單位 {cfg.step} {cfg.unit === 'day' ? '天' : '小時'}
+                {preview.calendar
+                  ? '產假以曆日計（含例假／國定假日）'
+                  : `已扣除週末 + 國定假日 · 最小單位 ${cfg.step} ${cfg.unit === 'day' ? '天' : '小時'}`}
               </div>
             )}
             {form.unit === 'hour' && preview?.hasBreak && (

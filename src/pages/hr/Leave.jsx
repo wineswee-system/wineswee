@@ -397,6 +397,7 @@ export default function Leave() {
       p_end_time: form.unit === 'hour' ? form.end_time : null,
       p_reason: form.reason,
       p_attachment_count: attachFiles.length + cloneSourceAtts.length,  // 後端證明必附守門用
+      p_maternity_type: form.type === 'maternity' ? (form.maternity_type || 'childbirth') : null,  // 產假情形→上限56/28/7/5
     })
     if (createErr) { setValidationMsg(createErr.message); return }
     if (data) {

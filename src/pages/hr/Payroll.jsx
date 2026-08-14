@@ -92,6 +92,18 @@ export default function Payroll() {
     const exists = runs.find(r => r.pay_period === newPeriod)
     if (exists) return toast.error('該月份的薪資作業已存在')
     try {
+      // Guard:計薪前先擋「還卡在簽核中」的假單 —— HR 應先過/駁回,否則餘額/到期折現可能不準
+      const { data: pend } = await supabase.rpc('payroll_pending_leaves', {
+        p_org: profile?.organization_id, p_year_month: newPeriod,
+      })
+      const pendCount = pend?.pending_count ?? 0
+      if (pendCount > 0) {
+        const names = (pend?.items || []).slice(0, 8).map(i => `${i.employee}(${i.type})`).join('、')
+        const proceed = await confirm({
+          message: `⚠️ 有 ${pendCount} 筆假單還在「簽核中」(${names}${pendCount > 8 ? ' …等' : ''})。\n\n建議先在簽核中心把它們過或駁回再結薪,否則餘額/到期折現可能不準確。\n\n仍要繼續結薪嗎?`,
+        })
+        if (!proceed) return
+      }
       // Call Postgres function to generate payroll run + records
       const { data, error } = await supabase.rpc('generate_payroll', {
         p_pay_period: newPeriod,

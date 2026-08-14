@@ -102,11 +102,11 @@ export const LEAVE_TYPES = [
     shortName: '謀職假',
     law: '勞基法 §16',
     paid: true,
-    unit: 'day',
+    unit: 'hour',
     minUnit: 0.5,
     allowHourly: true,
     salary: '照給',
-    description: '資遣預告期間為另謀工作得請謀職假（每星期不得超過二日之工作時間，工資照給）',
+    description: '資遣預告期間為另謀工作得請謀職假（每星期不得超過二日之工作時間，工資照給），以小時計',
   },
 
   // ── 天然災害停止上班 ──

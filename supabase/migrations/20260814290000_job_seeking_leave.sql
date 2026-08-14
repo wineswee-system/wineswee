@@ -4,11 +4,11 @@
 INSERT INTO public.leave_types
   (code, name, short_name, law, paid, unit, min_unit, allow_hourly, max_days, gender, require_balance, salary_note, description, sort_order, is_active)
 VALUES
-  ('job_seeking', '謀職假', '謀職假', '勞基法 §16', true, 'day', 0.5, true, NULL, NULL, false, '照給',
-   '資遣預告期間為另謀工作得請謀職假;每星期不得超過二日之工作時間,工資照給。', 90, true)
+  ('job_seeking', '謀職假', '謀職假', '勞基法 §16', true, 'hour', 0.5, true, NULL, NULL, false, '照給',
+   '資遣預告期間為另謀工作得請謀職假;每星期不得超過二日之工作時間,工資照給;以小時計。', 90, true)
 ON CONFLICT (code) DO UPDATE SET
   name = EXCLUDED.name, short_name = EXCLUDED.short_name, law = EXCLUDED.law, paid = EXCLUDED.paid,
-  unit = EXCLUDED.unit, allow_hourly = EXCLUDED.allow_hourly, salary_note = EXCLUDED.salary_note,
+  unit = EXCLUDED.unit, min_unit = EXCLUDED.min_unit, allow_hourly = EXCLUDED.allow_hourly, salary_note = EXCLUDED.salary_note,
   description = EXCLUDED.description, is_active = true;
 
 -- 核准後蓋班表:加謀職假對應(對應不到會靜默不蓋→工時多算,見既有教訓)

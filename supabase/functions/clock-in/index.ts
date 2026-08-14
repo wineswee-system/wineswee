@@ -397,13 +397,17 @@ serve(async (req: Request) => {
       if (workedMinutes < 0) workedMinutes += 1440
       const netHours = await computeNetHours(supabase, emp.id, clockOutRecord.date, clockOutRecord.clock_in as string, timeStr, workedMinutes, isAdminEmp)
 
+      // 上下班同一時間(in==out)也視為異常(工時=0 的明確壞紀錄,如跨午夜忘打上班卡後亂打的)
+      const isZeroWork = netHours <= 0 || clockOutRecord.clock_in === timeStr
       const updatePayload: Record<string, unknown> = {
         clock_out:       timeStr,
         clock_out_time:  now.toISOString(),
         total_hours:     netHours,
         clock_out_mode:  clockMode,
-        // outing 下班才覆寫 status，normal 不動 clock_in 寫入的 status
-        ...(clockMode === 'outing' ? { status: '外出' } : {}),
+        // 狀態:outing→外出;normal 工時<=0 → 標「異常」讓後台看得見(不再一律偽裝正常);其餘不動(維持 clock_in 寫入的正常)
+        ...(clockMode === 'outing'
+          ? { status: '外出' }
+          : (isZeroWork ? { status: '異常' } : {})),
       }
 
       const { data, error } = await supabase.from('attendance_records')

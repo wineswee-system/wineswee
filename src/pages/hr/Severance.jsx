@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
-import { Plus, Calculator, X, AlertCircle, Check, FileText } from 'lucide-react'
+import { Plus, Calculator, X, AlertCircle, Check, FileText, Search } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -30,6 +31,7 @@ const LEGAL_REASONS = [
 ]
 
 export default function Severance() {
+  const navigate = useNavigate()
   const { profile, hasPermission } = useAuth()
   const canExecute = hasPermission('severance.execute')
   const [records, setRecords] = useState([])
@@ -269,7 +271,7 @@ export default function Severance() {
                     <td style={{ textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: 'var(--accent-cyan)' }}>{fmt(r.total_amount)}</td>
                     <td><span style={{ padding: '3px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700, background: sb.bg, color: sb.color }}>{sb.text}</span></td>
                     <td>
-                      <div style={{ display: 'flex', gap: 4 }}>
+                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                         {canExecute && r.status === 'pending' && (
                           <>
                             <AsyncButton className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px', color: 'var(--accent-green)' }} onClick={() => handleMarkPaid(r)} busyLabel="處理中…">
@@ -279,6 +281,14 @@ export default function Severance() {
                               <X size={11} /> 取消
                             </AsyncButton>
                           </>
+                        )}
+                        {/* 資遣預告期謀職假(§16)捷徑:帶此員工+謀職假(小時)跳請假表單 */}
+                        {r.status !== 'cancelled' && (
+                          <button className="btn btn-sm btn-secondary" title="開謀職假(§16,資遣預告期)"
+                            style={{ fontSize: 11, padding: '3px 8px', color: 'var(--accent-cyan)' }}
+                            onClick={() => navigate(`/hr/leave?new=1&emp=${encodeURIComponent(r.employee_name_snapshot || '')}&type=job_seeking`)}>
+                            <Search size={11} /> 開謀職假
+                          </button>
                         )}
                         {r.status === 'paid' && r.paid_at && (
                           <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{new Date(r.paid_at).toLocaleDateString('zh-TW')}</span>

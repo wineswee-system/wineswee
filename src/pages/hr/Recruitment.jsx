@@ -688,7 +688,10 @@ export default function Recruitment() {
       stage_history:   [{ stage: '投遞', changed_at: new Date().toISOString() }],
     })
     if (data) {
-      setCandidates(prev => [...prev, data])
+      // addCandidate 不含 recruitment_jobs 內嵌 → 自己補職缺標題(對齊編輯),否則新卡片吃不到職缺、要重載/再編輯才出現
+      const jobObj = data.job_id ? jobs.find(j => j.id === data.job_id) : null
+      const merged = { ...data, recruitment_jobs: jobObj ? { title: jobObj.title } : null }
+      setCandidates(prev => [...prev, merged])
       setShowCandModal(false)
       setCandForm({ name: '', email: '', phone: '', source: '主動投遞', job_id: '', notes: '', resume_url: '', resume_filename: '', tags: [] })
       setTagInput('')

@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom'
 import Modal, { Field } from '../../../components/Modal'
 
 /**
@@ -23,6 +24,7 @@ export default function ResignRehireModal({
   resignReason, setResignReason,
   onSubmit,
 }) {
+  const navigate = useNavigate()
   if (!open || !employee) return null
 
   if (mode === 'resign') {
@@ -53,6 +55,17 @@ export default function ResignRehireModal({
             onChange={e => setResignReason(e.target.value)}
           />
         </Field>
+        {/* 資遣預告期謀職假(§16)捷徑:跳到請假表單並帶好此員工+謀職假(小時制) */}
+        <div style={{ marginTop: 8, padding: '10px 14px', borderRadius: 10, background: 'var(--accent-cyan-dim)', border: '1px solid rgba(34,211,238,0.15)' }}>
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>
+            資遣預告期間,員工得請<b>謀職假</b>(勞基法 §16,每星期不超過 2 日之工作時間,工資照給,以小時計)。
+          </div>
+          <button type="button"
+            onClick={() => navigate(`/hr/leave?new=1&emp=${encodeURIComponent(employee.name)}&type=job_seeking`)}
+            style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid var(--accent-cyan)', background: 'var(--bg-card)', color: 'var(--accent-cyan)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+            🔎 開謀職假
+          </button>
+        </div>
       </Modal>
     )
   }

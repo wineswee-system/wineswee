@@ -82,6 +82,16 @@ export default function Leave() {
     }
   }, [leaves, searchParams]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // 從資遣設定「開謀職假」捷徑跳來:?new=1&emp=<name>&type=<code> → 預開新增假單、帶好員工+假別
+  useEffect(() => {
+    if (searchParams.get('new') !== '1') return
+    const emp = searchParams.get('emp') || ''
+    const type = searchParams.get('type') || 'annual'
+    setForm(f => ({ ...f, employee: emp, type, unit: type === 'job_seeking' ? 'hour' : f.unit }))
+    setShowModal(true)
+    setSearchParams(sp => { const x = new URLSearchParams(sp); x.delete('new'); x.delete('emp'); x.delete('type'); return x }, { replace: true })
+  }, [searchParams]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleFileSelect = (e) => {
     const files = Array.from(e.target.files || [])
     const newFiles = files.map(f => ({ file: f, preview: URL.createObjectURL(f) }))

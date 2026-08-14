@@ -149,6 +149,12 @@ export default function LeaveFormModal({
           {LEAVE_TYPES
             // 女性專屬假別(產假/生理假/產檢假/哺乳)男性看不到;性別未知(null)不限制。男性對應的是陪產假(不分性別)
             .filter(t => !(t.gender === 'female' && employees.find(e => e.name === form.employee)?.gender === '男'))
+            // 謀職假(§16):只有資遣預告期(involuntary + resign_date 未到)的員工才顯示
+            .filter(t => {
+              if (t.code !== 'job_seeking') return true
+              const e = employees.find(x => x.name === form.employee)
+              return e?.resign_type === 'involuntary' && e?.resign_date && String(e.resign_date).slice(0, 10) >= new Date().toISOString().slice(0, 10)
+            })
             .map(t => (
               <option key={t.code} value={t.code}>{t.shortName}（{t.law}）</option>
             ))}

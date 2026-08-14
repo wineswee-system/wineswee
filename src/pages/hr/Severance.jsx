@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
-import { Plus, Calculator, X, AlertCircle, Check, FileText, Search } from 'lucide-react'
+import { Plus, Calculator, X, AlertCircle, Check, FileText } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -31,7 +30,6 @@ const LEGAL_REASONS = [
 ]
 
 export default function Severance() {
-  const navigate = useNavigate()
   const { profile, hasPermission } = useAuth()
   const canExecute = hasPermission('severance.execute')
   const [records, setRecords] = useState([])
@@ -281,14 +279,6 @@ export default function Severance() {
                               <X size={11} /> 取消
                             </AsyncButton>
                           </>
-                        )}
-                        {/* 資遣預告期謀職假(§16)捷徑:帶此員工+謀職假(小時)跳請假表單 */}
-                        {r.status !== 'cancelled' && (
-                          <button className="btn btn-sm btn-secondary" title="開謀職假(§16,資遣預告期)"
-                            style={{ fontSize: 11, padding: '3px 8px', color: 'var(--accent-cyan)' }}
-                            onClick={() => navigate(`/hr/leave?new=1&emp=${encodeURIComponent(r.employee_name_snapshot || '')}&type=job_seeking`)}>
-                            <Search size={11} /> 開謀職假
-                          </button>
                         )}
                         {r.status === 'paid' && r.paid_at && (
                           <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{new Date(r.paid_at).toLocaleDateString('zh-TW')}</span>

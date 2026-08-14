@@ -23,7 +23,9 @@ const LEGAL_LIMITS = {
   paternity: 7, prenatal: 7,  // 產檢假 2022 修法 5→7 天（性平法 §15）
 }
 // 這些假別沒有固定年度天數，只在有資料時才顯示
-const EVENT_BASED = new Set(['official', 'maternity', 'parental', 'occupational', 'unpaid'])
+//   產假(maternity)移出:女性要能看到額度(分娩56天上限);男性由性別過濾擋掉(line 216)。
+//   實際天數依情形(分娩8週56/妊娠3月以上流產4週28/2~3月1週7/未滿2月5天),申請時依日期取,56為上限。
+const EVENT_BASED = new Set(['official', 'parental', 'occupational', 'unpaid'])
 
 const ANNUAL_TYPES = [
   'annual', '補休', 'sick', 'personal', 'menstrual',

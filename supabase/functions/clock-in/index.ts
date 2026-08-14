@@ -57,6 +57,54 @@ async function computeNetHours(
   return parseFloat((Math.max(0, workedMinutes - getRestMinutes(workedMinutes / 60, isAdmin)) / 60).toFixed(2))
 }
 
+// ── B: 清晨打卡歸「昨天的跨午夜班」───────────────────────────
+//   忘打上班卡的夜班,午夜後才打卡 → 現有邏輯(找昨天已開卡)接不到 → 會開成錯天的孤兒紀錄。
+//   規則(用班表當裁判,對齊「11小時班距→午夜後不會有新班上班」):
+//     凌晨(hours24 < dayBoundary) + 今天沒排清晨班(actual_start < dayBoundary,世足這種例外)
+//     + 昨天有排跨午夜班(actual_end <= actual_start,收在午夜或之後) + 昨天完全沒打卡紀錄
+//   → 在昨天建一筆:clock_out=現在、clock_in 空、status='異常'(缺上班卡),回 { record, yStr };不符回 null。
+async function tryYesterdayNightClockOut(
+  supabase: any, emp: any, taiwanNow: Date, dayBoundary: number,
+  hours24: number, timeStr: string, now: Date,
+  location: any, lat: number | null, lng: number | null, resolvedIP: string | null, clockMode: string,
+): Promise<{ record: any; yStr: string } | null> {
+  if (hours24 >= dayBoundary) return null
+  const todayStr = taiwanNow.toISOString().slice(0, 10)
+  const yStr = new Date(taiwanNow.getTime() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+  const boundStr = `${String(dayBoundary).padStart(2, '0')}:00:00`
+  // 今天有排清晨班(start < dayBoundary)→ 世足這種,當今天的打卡,不歸昨天
+  const { data: todayEarly } = await supabase.from('schedules')
+    .select('id').eq('employee_id', emp.id).eq('date', todayStr)
+    .not('actual_start', 'is', null).lt('actual_start', boundStr).limit(1).maybeSingle()
+  if (todayEarly) return null
+  // 昨天有排跨午夜班(結束 <= 開始,收在午夜或之後)
+  const { data: ySched } = await supabase.from('schedules')
+    .select('actual_start, actual_end').eq('employee_id', emp.id).eq('date', yStr)
+    .not('actual_start', 'is', null).not('actual_end', 'is', null).limit(1).maybeSingle()
+  if (!ySched || !(ySched.actual_end <= ySched.actual_start)) return null
+  // 昨天完全沒打卡紀錄(有紀錄就別亂建第二筆,交給現有邏輯/人工)
+  const { data: yAny } = await supabase.from('attendance_records')
+    .select('id').eq('employee_id', emp.id).eq('date', yStr).limit(1).maybeSingle()
+  if (yAny) return null
+  // 建昨天的下班紀錄:缺上班卡 → status 異常,提醒補上班卡
+  const { data: yNew, error } = await supabase.from('attendance_records').insert({
+    employee_id:     emp.id,
+    store_id:        location?.id ?? emp.store_id ?? null,
+    date:            yStr,
+    clock_out:       timeStr,
+    clock_out_time:  now.toISOString(),
+    status:          '異常',
+    total_hours:     0,
+    clock_out_mode:  clockMode,
+    clock_out_lat:   lat ?? null,
+    clock_out_lng:   lng ?? null,
+    clock_out_ip:    resolvedIP ?? null,
+    organization_id: emp.organization_id ?? null,
+  }).select().single()
+  if (error) throw error
+  return { record: yNew, yStr }
+}
+
 function haversineMetres(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371000
   const toRad = (d: number) => (d * Math.PI) / 180
@@ -278,6 +326,16 @@ serve(async (req: Request) => {
       .from('attendance_records').select('*')
       .eq('employee_id', emp.id).eq('date', dateStr).maybeSingle()
 
+    // 換天時間(dayBoundary,浮動):讀 organizations.settings.day_boundary_hour(預設 6,0~12)。
+    //   clock_in 跨午夜容錯 + clock_out/清晨打卡歸昨天(B) 都用它 → 提到分支前統一計算。
+    let dayBoundary = 6
+    {
+      const { data: orgRow } = await supabase.from('organizations')
+        .select('settings').eq('id', (emp as any).organization_id).maybeSingle()
+      const b = parseInt((orgRow?.settings as any)?.day_boundary_hour, 10)
+      if (!isNaN(b) && b >= 0 && b <= 12) dayBoundary = b
+    }
+
     // ── status 規則（2026-05-28 簡化：不查班表、不檢查時段）──
     //   normal → '正常'
     //   outing → '外出'
@@ -298,14 +356,7 @@ serve(async (req: Request) => {
       //   ★★ 關鍵守衛：只在「凌晨換日線之前」才這樣做（對齊補打卡的換天時間設定）。
       //   換天點後打卡 = 新的一天上班，絕不能誤轉成昨天下班 —— 否則「昨天忘打下班、
       //   今天早上正常上班」的人會被吃掉今天的上班、工時還算成 0/24h。
-      //   換天時間(浮動)：讀 organizations.settings.day_boundary_hour(預設 6，0~12)。
-      let dayBoundary = 6
-      {
-        const { data: orgRow } = await supabase.from('organizations')
-          .select('settings').eq('id', (emp as any).organization_id).maybeSingle()
-        const b = parseInt((orgRow?.settings as any)?.day_boundary_hour, 10)
-        if (!isNaN(b) && b >= 0 && b <= 12) dayBoundary = b
-      }
+      //   換天時間(dayBoundary)已於分支前統一計算。
       const yesterdayStr0 = new Date(taiwanNow.getTime() - 24 * 60 * 60 * 1000)
         .toISOString().slice(0, 10)
       const { data: yOpen } = hours24 < dayBoundary
@@ -343,6 +394,16 @@ serve(async (req: Request) => {
             reminder: `偵測到 ${yesterdayStr0} 尚未打下班，已為你補打下班（${timeStr}）`,
           })
         }
+      }
+
+      // B: 昨天有排跨午夜班卻完全沒打卡(忘打上班卡)→ 這次清晨打卡歸昨天(補記下班,缺上班卡),不開今天的新上班
+      const yNight = await tryYesterdayNightClockOut(supabase, emp, taiwanNow, dayBoundary, hours24, timeStr, now, location, lat, lng, resolvedIP, clockMode)
+      if (yNight) {
+        return jsonResp({
+          success: true,
+          record: yNight.record,
+          reminder: `偵測到你昨天(${yNight.yStr})的夜班沒打上班卡,已記下這次為那班的下班(${timeStr}),請補打上班卡。`,
+        })
       }
 
       const { data, error } = await supabase.from('attendance_records').insert({
@@ -388,7 +449,18 @@ serve(async (req: Request) => {
         if (yRec?.clock_in && !yRec.clock_out) clockOutRecord = yRec
       }
 
-      if (!clockOutRecord?.clock_in) return jsonResp({ error: '尚未打上班卡' }, 409)
+      if (!clockOutRecord?.clock_in) {
+        // B: 昨天有排跨午夜班卻完全沒打卡 → 這次清晨下班打卡歸昨天(補記下班,缺上班卡)
+        const yNight = await tryYesterdayNightClockOut(supabase, emp, taiwanNow, dayBoundary, hours24, timeStr, now, location, lat, lng, resolvedIP, clockMode)
+        if (yNight) {
+          return jsonResp({
+            success: true,
+            record: yNight.record,
+            reminder: `偵測到你昨天(${yNight.yStr})的夜班沒打上班卡,已記下這次為那班的下班(${timeStr}),請補打上班卡。`,
+          })
+        }
+        return jsonResp({ error: '尚未打上班卡' }, 409)
+      }
       if (clockOutRecord.clock_out)  return jsonResp({ error: '今日已打過下班卡' }, 409)
 
       // 工時計算（跨午夜處理 + 自動扣休息）

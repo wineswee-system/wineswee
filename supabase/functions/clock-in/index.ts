@@ -341,6 +341,31 @@ serve(async (req: Request) => {
     //   outing → '外出'
     const statusForMode = clockMode === 'outing' ? '外出' : '正常'
 
+    // ── 防呆(一般人會狂按):清晨時,今天沒上班卡、但昨天已有「只有下班、缺上班卡」的紀錄 ──
+    //   (多半是剛剛 B 幫你把夜班下班記到昨天了)→ 再按上班/下班都只提示「去補上班卡」,
+    //   不重複建、不噴「尚未打上班卡」這種難懂的錯,也不會亂生今天的空上班。
+    if (hours24 < dayBoundary && !existingRecord?.clock_in) {
+      // 今天有排清晨班(世足這種 start<換天時間)→ 是今天的正常打卡,不套防呆(免誤擋)
+      const { data: todayEarlyGuard } = await supabase.from('schedules')
+        .select('id').eq('employee_id', emp.id).eq('date', dateStr)
+        .not('actual_start', 'is', null)
+        .lt('actual_start', `${String(dayBoundary).padStart(2, '0')}:00:00`)
+        .limit(1).maybeSingle()
+      if (!todayEarlyGuard) {
+        const yGhostStr = new Date(taiwanNow.getTime() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+        const { data: yGhost } = await supabase.from('attendance_records')
+          .select('*').eq('employee_id', emp.id).eq('date', yGhostStr)
+          .is('clock_in', null).not('clock_out', 'is', null).limit(1).maybeSingle()
+        if (yGhost) {
+          return jsonResp({
+            success: true,
+            record: yGhost,
+            reminder: `你昨天(${yGhostStr})那班的下班已經記錄了(${yGhost.clock_out}),只差上班卡 → 請去「補打卡」補上班卡,不用再打卡囉。`,
+          })
+        }
+      }
+    }
+
     // ──────────────────────────────────────────────────────
     //   CLOCK-IN
     // ──────────────────────────────────────────────────────

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { useSearchParams, useNavigate } from 'react-router-dom'
-import { Plus, Search, X as XIcon, Send, Inbox, List, Flag, Building2 } from 'lucide-react'
+import { Plus, Search, X as XIcon, Send, Inbox, List, Flag, Building2, Paperclip } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -11,6 +11,9 @@ import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
 import { postBindingFillDone } from '../../lib/embeddedBinding'
+import { uploadFormAttachments, listFormAttachments, getAttachmentSignedUrl } from '../../lib/formAttachments'
+
+const WO_ATTACH_ACCEPT = 'image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.txt'
 
 const PRIORITY = {
   high:   { label: '高', color: 'var(--accent-red)',    dim: 'var(--accent-red-dim)' },
@@ -44,6 +47,7 @@ export default function WorkOrders() {
 
   const emptyForm = { target_department_id: '', assignee_id: '', title: '', description: '', priority: 'medium', expected_due_date: '', store_id: '' }
   const [form, setForm] = useState(emptyForm)
+  const [createFiles, setCreateFiles] = useState([])
 
   const load = async () => {
     if (!orgId) return
@@ -128,9 +132,14 @@ export default function WorkOrders() {
     })
     if (error) { toast.error('開單失敗：' + error.message); return false }
     if (!data?.ok) { toast.error('開單失敗：' + (data?.error || '未知')); return false }
+    if (data?.id && createFiles.length) {
+      try {
+        await uploadFormAttachments({ formType: 'work_order', formId: data.id, files: createFiles.map(f => ({ file: f })), organizationId: orgId, uploaderEmpId: me?.id, uploaderName: profile?.name })
+      } catch (err) { toast.warning('工單已建立,但附件上傳失敗：' + (err.message || '')) }
+    }
     toast.success('工單已送出')
     setShowCreate(false)
-    setForm(emptyForm)
+    setForm(emptyForm); setCreateFiles([])
     load()
   }
 
@@ -270,6 +279,20 @@ export default function WorkOrders() {
               </select>
             </Field>
           </div>
+          <Field label="附件（選填）">
+            <input type="file" multiple accept={WO_ATTACH_ACCEPT} onChange={e => setCreateFiles(Array.from(e.target.files || []))} style={{ fontSize: 12 }} />
+            {createFiles.length > 0 && (
+              <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                {createFiles.map((f, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-secondary)' }}>
+                    <Paperclip size={11} /> {f.name}
+                    <button type="button" onClick={() => setCreateFiles(createFiles.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-red)' }}><XIcon size={12} /></button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>可上傳照片、PDF、Word、Excel 等</div>
+          </Field>
         </Modal>
       )}
 
@@ -290,6 +313,12 @@ function WorkOrderDetail({ order: o, me, isAdmin, employees, storeName, onClose,
   const navigate = useNavigate()
   const [accepting, setAccepting] = useState(false)
   const [acceptForm, setAcceptForm] = useState({ assignee_id: o.assignee_id ? String(o.assignee_id) : '', scheduled_due_date: o.scheduled_due_date || o.expected_due_date || '' })
+  const [atts, setAtts] = useState([])
+  useEffect(() => { listFormAttachments('work_order', o.id).then(setAtts).catch(() => setAtts([])) }, [o.id])
+  const openAtt = async (a) => {
+    const url = await getAttachmentSignedUrl({ bucket: a.storage_bucket || 'attachments', path: a.storage_path })
+    if (url) window.open(url, '_blank')
+  }
 
   const myId = me?.id, myDept = me?.department_id
   const isRequester = o.requester_id === myId
@@ -354,6 +383,16 @@ function WorkOrderDetail({ order: o, me, isAdmin, employees, storeName, onClose,
       {o.linked_type && <Row label="執行方式">已轉{o.linked_type === 'project' ? '專案' : '流程'}{(o.linked_project_id || o.linked_workflow_instance_id) ? ` #${o.linked_project_id || o.linked_workflow_instance_id}` : ''}（完成由裡面任務決定）</Row>}
       <Row label="說明"><span style={{ whiteSpace: 'pre-wrap' }}>{o.description || '—'}</span></Row>
       {o.reject_reason && <Row label="退回原因"><span style={{ color: 'var(--accent-red)' }}>{o.reject_reason}</span></Row>}
+      {atts.length > 0 && (
+        <div style={{ marginTop: 10 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 6 }}>附件</div>
+          {atts.map(a => (
+            <button key={a.id} onClick={() => openAtt(a)} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, padding: '5px 8px', background: 'var(--bg-secondary)', borderRadius: 6, border: 'none', cursor: 'pointer', color: 'var(--accent-cyan)', marginBottom: 4, width: '100%', textAlign: 'left' }}>
+              <Paperclip size={12} /> {a.file_name}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* ── 動作區（依狀態 + 角色）── */}
       <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>

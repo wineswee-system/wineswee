@@ -1,7 +1,7 @@
 ﻿import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
-import { Wallet, Receipt, FileText, ClipboardList, Package, ShoppingCart, Building2, Banknote, Hammer } from 'lucide-react'
+import { Wallet, Receipt, FileText, ClipboardList, Package, ShoppingCart, Building2, Banknote, Hammer, Wrench } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -21,6 +21,7 @@ const FIXED_EXPENSE = [
 const FIXED_NON_EXPENSE = [
   { icon: Package, name: '商品調撥', desc: '總倉 ↔ 門市 / 跨門市調貨 → 申請審核 + 驗收兩階段', action: '/process/transfer-requests', color: 'var(--accent-orange)', dim: 'var(--accent-orange-dim)', tag: '兩階段' },
   { icon: Building2, name: '跨部門工單', desc: '請其他部門協助處理事項 → 受理排程 → 完成結案', action: '/process/work-orders', color: 'var(--accent-blue)', dim: 'var(--accent-blue-dim)', tag: '派工' },
+  { icon: Wrench, name: '維修單', desc: '工務處理維修:自己修 / 找廠商 → 需採購串費用申請 → 回報完工上傳', action: '/process/repair-orders', color: 'var(--accent-cyan)', dim: 'var(--accent-cyan-dim)', tag: '工務' },
 ]
 
 // 收款組（純記帳，不走簽核）— 訂金 + 加盟金整合成單一入口（頁內分 tab）

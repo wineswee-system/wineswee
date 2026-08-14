@@ -24,6 +24,7 @@ import Collections from '../pages/process/Collections'
 import RenovationQuotes from '../pages/process/RenovationQuotes'
 import TransferRequests from '../pages/process/TransferRequests'
 import WorkOrders from '../pages/process/WorkOrders'
+import RepairOrders from '../pages/process/RepairOrders'
 import StoreAudits from '../pages/workflow/StoreAudits'
 import ExpenseRequests from '../pages/workflow/ExpenseRequests'
 import Expenses from '../pages/workflow/Expenses'
@@ -77,6 +78,7 @@ export default function ProcessModule() {
       <Route path="renovation-quotes" element={<RenovationQuotes />} />
       <Route path="transfer-requests" element={<TransferRequests />} />
       <Route path="work-orders" element={<WorkOrders />} />
+      <Route path="repair-orders" element={<RepairOrders />} />
       <Route path="store-audits" element={<StoreAudits />} />
       {/* 業務表單 alias 路由 — 讓頂部 tab 維持「專案流程」 */}
       <Route path="expense-requests" element={<ExpenseRequests />} />

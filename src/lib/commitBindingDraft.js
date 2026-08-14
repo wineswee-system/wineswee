@@ -45,11 +45,13 @@ async function uploadExpenseFiles(requestId, fileList, employeeName) {
 }
 
 // ── 費用申請 draft：{ payload, files }（payload 已含 organization_id / employee / items…）──
-export async function commitExpenseDraft(bindingId, draft, _profile) {
+//   opts.repairOrderId：維修單自動綁定（把費用單反向連到維修單，維修單完工閘門讀它）
+export async function commitExpenseDraft(bindingId, draft, _profile, opts = {}) {
   const payload = {
     ...draft.payload,
     status: '申請中',
     linked_binding_id: bindingId ? Number(bindingId) : null,
+    ...(opts.repairOrderId ? { repair_order_id: Number(opts.repairOrderId) } : {}),
   }
   const { data, error } = await supabase.from('expense_requests').insert(payload).select().single()
   if (error) throw error

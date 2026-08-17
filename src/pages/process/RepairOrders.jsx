@@ -53,7 +53,7 @@ export default function RepairOrders() {
     setMe(emp || { id: profile?.id, name: profile?.name, department_id: profile?.department_id })
     let q = supabase.from('repair_orders').select('*').is('deleted_at', null).order('created_at', { ascending: false })
     if (orgId) q = q.eq('organization_id', orgId)
-    let vq = supabase.from('repair_vendors').select('id, name, specialty, contact_person, phone, note, status').order('name')
+    let vq = supabase.from('repair_vendors').select('id, name, category_id, contact_person, phone, note, status').order('name')
     let cq = supabase.from('repair_categories').select('id, name, sort_order').order('sort_order').order('id')
     if (orgId) { vq = vq.eq('organization_id', orgId); cq = cq.eq('organization_id', orgId) }
     const [{ data: ros }, { data: st }, { data: wos }, { data: vs }, { data: cs }] = await Promise.all([
@@ -192,17 +192,17 @@ function CreateModal({ orgId, stores, workOrders, vendors, categories, onVendors
   })
   const set = (k, v) => setF(p => ({ ...p, [k]: v }))
   const [addingVendor, setAddingVendor] = useState(false)
-  const [newVendor, setNewVendor] = useState({ name: '', specialty: '', phone: '' })
+  const [newVendor, setNewVendor] = useState({ name: '', category_id: '', phone: '' })
 
   const saveNewVendor = async () => {
     if (!newVendor.name.trim()) { toast.error('請填廠商名稱'); return }
     const { data, error } = await supabase.from('repair_vendors')
-      .insert({ name: newVendor.name.trim(), specialty: newVendor.specialty || null, phone: newVendor.phone || null, organization_id: orgId || null })
+      .insert({ name: newVendor.name.trim(), category_id: newVendor.category_id ? Number(newVendor.category_id) : null, phone: newVendor.phone || null, organization_id: orgId || null })
       .select().single()
     if (error || !data) { toast.error('新增廠商失敗：' + (error?.message || '')); return }
     toast.success('已新增廠商')
     set('repair_vendor_id', String(data.id))
-    setAddingVendor(false); setNewVendor({ name: '', specialty: '', phone: '' })
+    setAddingVendor(false); setNewVendor({ name: '', category_id: '', phone: '' })
     onVendorsChanged?.()
   }
 
@@ -280,15 +280,19 @@ function CreateModal({ orgId, stores, workOrders, vendors, categories, onVendors
                   onChange={e => e.target.value === '__add__' ? setAddingVendor(true) : set('repair_vendor_id', e.target.value)}
                   style={{ width: '100%' }}>
                   <option value="">— 選擇廠商 —</option>
-                  {vendors.filter(v => v.status !== '停用').map(v => (
-                    <option key={v.id} value={v.id}>{v.name}{v.specialty ? `（${v.specialty}）` : ''}</option>
-                  ))}
+                  {vendors.filter(v => v.status !== '停用').map(v => {
+                    const vc = categories.find(c => c.id === v.category_id)?.name
+                    return <option key={v.id} value={v.id}>{v.name}{vc ? `（${vc}）` : ''}</option>
+                  })}
                   <option value="__add__">＋ 新增廠商…</option>
                 </select>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 8, borderRadius: 8, background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)' }}>
                   <input className="form-input" placeholder="廠商名稱 *" value={newVendor.name} onChange={e => setNewVendor(v => ({ ...v, name: e.target.value }))} />
-                  <input className="form-input" placeholder="專長（水電/冷氣…）" value={newVendor.specialty} onChange={e => setNewVendor(v => ({ ...v, specialty: e.target.value }))} />
+                  <select className="form-input" value={newVendor.category_id} onChange={e => setNewVendor(v => ({ ...v, category_id: e.target.value }))}>
+                    <option value="">— 類別 —</option>
+                    {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
                   <input className="form-input" placeholder="電話" value={newVendor.phone} onChange={e => setNewVendor(v => ({ ...v, phone: e.target.value }))} />
                   <div style={{ display: 'flex', gap: 6 }}>
                     <button type="button" className="btn btn-primary" style={{ flex: 1, fontSize: 12 }} onClick={saveNewVendor}>儲存廠商</button>
@@ -320,20 +324,21 @@ function CreateModal({ orgId, stores, workOrders, vendors, categories, onVendors
 // ── 管理廠商 / 類別 ──
 function ManageModal({ orgId, vendors, categories, onClose, onChanged }) {
   const [seg, setSeg] = useState('vendor')   // vendor | category
-  const [vForm, setVForm] = useState({ name: '', specialty: '', contact_person: '', phone: '', note: '' })
+  const [vForm, setVForm] = useState({ name: '', category_id: '', contact_person: '', phone: '', note: '' })
   const [cName, setCName] = useState('')
   const [busy, setBusy] = useState(false)
+  const catName = (id) => categories.find(c => c.id === id)?.name
 
   const addVendor = async () => {
     if (!vForm.name.trim()) { toast.error('請填廠商名稱'); return }
     setBusy(true)
     const { error } = await supabase.from('repair_vendors').insert({
-      name: vForm.name.trim(), specialty: vForm.specialty || null, contact_person: vForm.contact_person || null,
+      name: vForm.name.trim(), category_id: vForm.category_id ? Number(vForm.category_id) : null, contact_person: vForm.contact_person || null,
       phone: vForm.phone || null, note: vForm.note || null, organization_id: orgId || null,
     })
     setBusy(false)
     if (error) { toast.error('新增失敗：' + error.message); return }
-    setVForm({ name: '', specialty: '', contact_person: '', phone: '', note: '' })
+    setVForm({ name: '', category_id: '', contact_person: '', phone: '', note: '' })
     onChanged?.()
   }
   const toggleVendor = async (v) => {
@@ -379,7 +384,10 @@ function ManageModal({ orgId, vendors, categories, onClose, onChanged }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             <input className="form-input" placeholder="廠商名稱 *" value={vForm.name} onChange={e => setVForm(v => ({ ...v, name: e.target.value }))} />
-            <input className="form-input" placeholder="專長（水電/冷氣…）" value={vForm.specialty} onChange={e => setVForm(v => ({ ...v, specialty: e.target.value }))} />
+            <select className="form-input" value={vForm.category_id} onChange={e => setVForm(v => ({ ...v, category_id: e.target.value }))}>
+              <option value="">— 類別 —</option>
+              {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
             <input className="form-input" placeholder="聯絡人" value={vForm.contact_person} onChange={e => setVForm(v => ({ ...v, contact_person: e.target.value }))} />
             <input className="form-input" placeholder="電話" value={vForm.phone} onChange={e => setVForm(v => ({ ...v, phone: e.target.value }))} />
           </div>
@@ -390,7 +398,7 @@ function ManageModal({ orgId, vendors, categories, onClose, onChanged }) {
             {vendors.map(v => (
               <div key={v.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 8, background: 'var(--bg-card)', opacity: v.status === '停用' ? 0.5 : 1 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, fontSize: 13 }}>{v.name}{v.specialty ? <span style={{ color: 'var(--accent-cyan)', fontWeight: 400 }}>　{v.specialty}</span> : ''}</div>
+                  <div style={{ fontWeight: 600, fontSize: 13 }}>{v.name}{catName(v.category_id) ? <span style={{ color: 'var(--accent-cyan)', fontWeight: 400 }}>　{catName(v.category_id)}</span> : ''}</div>
                   <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{[v.contact_person, v.phone].filter(Boolean).join(' · ') || '—'}</div>
                 </div>
                 <button type="button" className="btn btn-secondary" style={{ fontSize: 12 }} onClick={() => toggleVendor(v)}>{v.status === '停用' ? '啟用' : '停用'}</button>

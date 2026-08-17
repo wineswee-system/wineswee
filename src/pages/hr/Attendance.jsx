@@ -266,6 +266,24 @@ export default function Attendance() {
     return (late > 0 || early > 0) ? { late, early } : null
   }
 
+  // 打卡時段與班表時段「完全無交集」= 在錯的時間打卡(非遲到/早退,例:排15:00-02:00卻打11:00-13:01)→ 異常。
+  // 只在有完整上下班卡時判斷(缺卡另有標記);對齊跨午夜(打卡窗試 +0 / +1440 兩種位置)。
+  const clockOffSchedule = (r) => {
+    if (r._rowType === 'overtime' || r._rowType === 'notClocked' || r._rowType === 'leave') return false
+    if (r.status === '加班' || r.clock_in_mode === 'overtime') return false
+    if (r.clock_in_mode === 'outing' || r.status === '外出' || r.status === '請假') return false
+    const sv = dayCtx.sched[`${r.employee}|${r.date}`]
+    const mm = sv && sv.match(/^(\d{1,2}:\d{2})-(\d{1,2}:\d{2})$/)
+    if (!mm) return false
+    const ci = toMin(r.clock_in), co = toMin(r.clock_out)
+    if (ci == null || co == null) return false
+    let start = toMin(mm[1]), end = toMin(mm[2]); if (end <= start) end += 1440
+    let cs = ci, ce = co; if (ce < cs) ce += 1440   // 打卡跨午夜
+    const ov = (a1, a2, b1, b2) => a1 < b2 && a2 > b1
+    const overlap = ov(cs, ce, start, end) || ov(cs + 1440, ce + 1440, start, end)  // +1440:午夜後打卡對到跨午夜班後半段
+    return !overlap
+  }
+
   const today = todayTW()
   const [statusFilter, setStatusFilter] = useState('')   // '' 全部 / normal / abnormal
 
@@ -282,7 +300,7 @@ export default function Attendance() {
     if (r.status === '請假') return false
     const missingOut = !isToday && r.clock_in && !r.clock_out
     const le = lateEarly(r)
-    return missingOut || (le && (le.late > 0 || le.early > 0)) || r.status === '遲到'
+    return missingOut || (le && (le.late > 0 || le.early > 0)) || r.status === '遲到' || clockOffSchedule(r)
   }
 
   const filtered = useMemo(() => records.filter(r =>
@@ -420,12 +438,14 @@ export default function Attendance() {
       if (lv) status = lv.pending ? '請假(審)' : '請假'
       else { const isWork = sched && /\d{1,2}:\d{2}/.test(sched); status = sched ? (isWork ? '未打卡' : sched) : '無排班' }
     } else {
-      const abnormal = r.status === '正常' && ((le && (le.late > 0 || le.early > 0)) || missingOut)
+      const offSched = clockOffSchedule(r)
+      const abnormal = r.status === '正常' && ((le && (le.late > 0 || le.early > 0)) || missingOut || offSched)
       status = abnormal ? '異常' : r.status
       const extra = []
       if (le?.late > 0) extra.push(`遲到${le.late}分`)
       if (le?.early > 0) extra.push(`早退${le.early}分`)
       if (missingOut) extra.push('缺下班')
+      if (offSched && !(le?.late > 0) && !(le?.early > 0)) extra.push('時段不符班表')
       if (extra.length) status += `（${extra.join('、')}）`
     }
     return {
@@ -808,17 +828,19 @@ export default function Attendance() {
                             //   今天在途中(還沒下班)不算;加班單另計
                             const missingOut = !isToday && !isOvertime && r.clock_in && !r.clock_out
                             const le = lateEarly(r)
-                            // DB 狀態「正常」但實際有遲到/早退/缺下班 → 顯示「異常」（狀態欄與旁邊細項一致）
-                            const abnormal = r.status === '正常' && ((le && (le.late > 0 || le.early > 0)) || missingOut)
+                            const offSched = clockOffSchedule(r)
+                            // DB 狀態「正常」但實際有遲到/早退/缺下班/打卡時段不符班表 → 顯示「異常」（狀態欄與旁邊細項一致）
+                            const abnormal = r.status === '正常' && ((le && (le.late > 0 || le.early > 0)) || missingOut || offSched)
                             return (
                               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
                                 {abnormal
-                                  ? <span className="badge badge-danger" title="有遲到／早退／缺下班"><span className="badge-dot"></span>異常</span>
+                                  ? <span className="badge badge-danger" title="有遲到／早退／缺下班／打卡時段不符班表"><span className="badge-dot"></span>異常</span>
                                   : <span className={`badge ${r.status === '正常' ? 'badge-success' : r.status === '遲到' ? 'badge-warning' : r.status === '加班' ? 'badge-purple' : r.status === '請假' ? 'badge-info' : r.status === '外出' ? 'badge-success' : 'badge-danger'}`}><span className="badge-dot"></span>{r.status}</span>}
                                 {le && (<>
                                   {le.late > 0 && <span className="badge badge-warning" title={`上班晚於班表 ${le.late} 分鐘`}><span className="badge-dot"></span>遲到 {le.late} 分</span>}
                                   {le.early > 0 && <span className="badge badge-danger" title={`下班早於班表 ${le.early} 分鐘`}><span className="badge-dot"></span>早退 {le.early} 分</span>}
                                 </>)}
+                                {offSched && !(le?.late > 0) && !(le?.early > 0) && <span className="badge badge-danger" title="打卡時段與當天班表完全不符（在錯的時間打卡）"><span className="badge-dot"></span>時段不符</span>}
                                 {missingOut && <span className="badge badge-danger" title="有上班打卡但沒有下班打卡,請補登下班時間"><span className="badge-dot"></span>缺下班</span>}
                               </div>
                             )

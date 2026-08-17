@@ -12,7 +12,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
 import { geocodeAddress } from '../../lib/geocoding'
-const EMPTY_FORM = { name: '', company: '', company_id: '', address: '', phone: '', manager: '', manager_id: '', status: '營運中', store_code: '', store_type: 'retail', city: '', lat: '', lng: '', clock_radius: 150, allowed_wifi: '', late_tolerance_minutes: 5, early_clock_minutes: 30, clock_in_method: 'any', section_id: '' }
+const EMPTY_FORM = { name: '', company: '', company_id: '', address: '', phone: '', manager: '', manager_id: '', status: '營運中', store_code: '', store_type: 'retail', city: '', lat: '', lng: '', clock_radius: 150, allowed_wifi: '', late_tolerance_minutes: 5, clock_in_method: 'any', section_id: '' }
 
 export default function Locations() {
   const { hasPermission, profile } = useAuth()
@@ -67,7 +67,6 @@ export default function Locations() {
       clock_radius: s.clock_radius ?? 150,
       allowed_wifi: Array.isArray(s.allowed_wifi) ? s.allowed_wifi.join(', ') : '',
       late_tolerance_minutes: s.late_tolerance_minutes ?? 5,
-      early_clock_minutes: s.early_clock_minutes ?? 30,
       clock_in_method: s.clock_in_method || 'any',
     })
     setShowModal(true)
@@ -103,7 +102,6 @@ export default function Locations() {
       allowed_wifi: form.allowed_wifi ? form.allowed_wifi.split(',').map(s => s.trim()).filter(Boolean) : null,
       // 0 是合法值（無寬限）→ 不能用 || 5（0 falsy 會被吃成 5）；空字串才給預設
       late_tolerance_minutes: Number.isNaN(parseInt(form.late_tolerance_minutes, 10)) ? 5 : parseInt(form.late_tolerance_minutes, 10),
-      early_clock_minutes: Number.isNaN(parseInt(form.early_clock_minutes, 10)) ? 30 : parseInt(form.early_clock_minutes, 10),
       clock_in_method: form.clock_in_method || 'any',
       section_id: form.section_id ? parseInt(form.section_id) : null,
     }
@@ -333,19 +331,12 @@ export default function Locations() {
           </div>
           <div style={{ borderTop: '1px solid var(--border-subtle)', margin: '8px 0', paddingTop: 12 }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 10 }}>⏱️ 遲到判定設定</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12 }}>
               <Field label="遲到容許（分鐘）">
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <input className="form-input" type="number" min={0} max={60} style={{ width: 80, textAlign: 'center' }}
                     value={form.late_tolerance_minutes} onChange={e => set('late_tolerance_minutes', e.target.value)} />
                   <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>分鐘內不算遲到</span>
-                </div>
-              </Field>
-              <Field label="提前打卡容許（分鐘）">
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <input className="form-input" type="number" min={0} max={120} style={{ width: 80, textAlign: 'center' }}
-                    value={form.early_clock_minutes} onChange={e => set('early_clock_minutes', e.target.value)} />
-                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>分鐘前可打卡</span>
                 </div>
               </Field>
             </div>

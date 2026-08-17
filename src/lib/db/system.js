@@ -167,16 +167,17 @@ export const getUserActivity = ({ limit = 200, offset = 0, tenantId, orgId, user
   return q.order('created_at', { ascending: false }).range(offset, offset + limit - 1)
 }
 
+// 回收桶備份：走 SECURITY DEFINER RPC(deletion_drain RLS 限 admin,非 admin 直插會 42501)。
 export const drainEntity = ({ entityType, entityId, entityName, payload, relatedData, deletedBy, organizationId }) =>
-  supabase.from('deletion_drain').insert({
-    entity_type:     entityType,
-    entity_id:       entityId,
-    entity_name:     entityName,
-    payload,
-    related_data:    relatedData || null,
-    deleted_by:      deletedBy,
-    organization_id: organizationId || null,
-  }).select().single()
+  supabase.rpc('drain_deletion', {
+    p_entity_type:      entityType,
+    p_entity_id:        entityId,
+    p_entity_name:      entityName ?? null,
+    p_payload:          payload ?? {},
+    p_related_data:     relatedData ?? null,
+    p_deleted_by:       deletedBy ?? '系統',
+    p_organization_id:  organizationId ?? null,
+  })
 
 export const getDeletionDrain = (orgId) => {
   let q = supabase.from('deletion_drain').select('*').order('deleted_at', { ascending: false })

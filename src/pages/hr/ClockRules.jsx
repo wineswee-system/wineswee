@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Pencil, MapPin, Wifi, Clock, Building2, User, Users, Briefcase, Hash, Save } from 'lucide-react'
+import { Pencil, MapPin, Wifi, Building2, User, Users, Briefcase, Hash, Save } from 'lucide-react'
 import { getStores, updateStore } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -19,7 +19,7 @@ const CATS = [
 ]
 
 const EMPTY_RULES = {
-  clock_in_method: 'any', lat: '', lng: '', clock_radius: 150, allowed_wifi: '', early_clock_minutes: 30,
+  clock_in_method: 'any', lat: '', lng: '', clock_radius: 150, allowed_wifi: '',
 }
 const METHOD_LABELS = { any: 'GPS 或 WiFi 擇一', gps_required: '僅限 GPS', gps_or_wifi: 'GPS 或 WiFi 擇一' }
 const toHHMM = (t) => (t ? String(t).slice(0, 5) : '')
@@ -92,7 +92,6 @@ export default function ClockRules() {
       lat: store.lat ?? '', lng: store.lng ?? '',
       clock_radius: store.clock_radius ?? 150,
       allowed_wifi: Array.isArray(store.allowed_wifi) ? store.allowed_wifi.join(', ') : '',
-      early_clock_minutes: store.early_clock_minutes ?? 30,
     })
   }
 
@@ -118,7 +117,6 @@ export default function ClockRules() {
       lat: latVal, lng: lngVal,
       clock_radius: parseInt(form.clock_radius) || 150,
       allowed_wifi: form.allowed_wifi ? form.allowed_wifi.split(',').map(s => s.trim()).filter(Boolean) : null,
-      early_clock_minutes: Number.isNaN(parseInt(form.early_clock_minutes, 10)) ? 30 : parseInt(form.early_clock_minutes, 10),
     }
     try {
       const { data, error } = await updateStore(editingStore.id, payload)
@@ -205,7 +203,6 @@ export default function ClockRules() {
                 <th>驗證方式</th>
                 <th style={{ minWidth: 140 }}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><MapPin size={12} /> GPS 範圍</span></th>
                 <th style={{ minWidth: 140 }}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Wifi size={12} /> WiFi 白名單</span></th>
-                <th style={{ textAlign: 'center' }}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Clock size={12} /> 提前打卡</span></th>
                 <th>位置狀態</th>
                 <th>操作</th>
               </tr>
@@ -238,10 +235,6 @@ export default function ClockRules() {
                           <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 3, maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={store.allowed_wifi.join(', ')}>{store.allowed_wifi.join(', ')}</div>
                         </div>
                       ) : <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>未設定</span>}
-                    </td>
-                    <td style={{ textAlign: 'center' }}>
-                      <span style={{ fontWeight: 600, fontSize: 15 }}>{store.early_clock_minutes ?? 30}</span>
-                      <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 2 }}>分</span>
                     </td>
                     <td>
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 10px', borderRadius: 20, background: meta.dim, color: meta.color, fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap' }}>{meta.label}</span>
@@ -284,20 +277,11 @@ export default function ClockRules() {
               {editingStore.address ? <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{editingStore.address}</span> : <span style={{ fontSize: 11, color: 'var(--accent-orange)' }}>⚠ 此門市尚未設定地址</span>}
             </div>
           </div>
-          <div style={{ borderBottom: '1px solid var(--border-subtle)', paddingBottom: 14, marginBottom: 4 }}>
+          <div>
             <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 10 }}>📶 WiFi IP 白名單</div>
             <Field label="允許的 IP 位址（逗號分隔）"><input className="form-input" type="text" style={{ width: '100%' }} placeholder="203.69.180.0/24, 61.220.45.0/24" value={form.allowed_wifi} onChange={e => set('allowed_wifi', e.target.value)} /></Field>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>填此據點對外公共 IP 或網段(支援 CIDR)。連上此 WiFi 且 IP 符合即可打卡,與 GPS 擇一通過。</div>
-          </div>
-          <div>
-            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 10 }}>⏱️ 提前打卡容許</div>
-            <Field label="提前打卡容許（分鐘）">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <input className="form-input" type="number" min={0} max={120} style={{ width: 80, textAlign: 'center' }} value={form.early_clock_minutes} onChange={e => set('early_clock_minutes', e.target.value)} />
-                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>分鐘前可打卡</span>
-              </div>
-            </Field>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>💡 遲到早退/辦公時間規則已移到上方「員工身分工時規則」,依身分套用。</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border-subtle)' }}>💡 遲到早退/辦公時間規則已移到上方「員工身分工時規則」,依身分套用。</div>
           </div>
         </Modal>
       )}

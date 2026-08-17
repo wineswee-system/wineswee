@@ -143,7 +143,7 @@ export default function RepairOrders() {
           onClose={() => setShowCreate(false)} onDone={() => { setShowCreate(false); load() }} />
       )}
       {detailRow && (
-        <DetailModal ro={detailRow} me={me} profile={profile}
+        <DetailModal ro={detailRow} me={me} profile={profile} stores={stores}
           expenses={expensesByRO[detailRow.id] || []}
           onClose={() => setDetail(null)} onChanged={load} />
       )}
@@ -238,7 +238,8 @@ function CreateModal({ orgId, stores, workOrders, onClose, onDone }) {
 }
 
 // ── 詳情 + 動作 ──
-function DetailModal({ ro, me, profile, expenses, onClose, onChanged }) {
+function DetailModal({ ro, me, profile, stores, expenses, onClose, onChanged }) {
+  const storeName = (stores || []).find(s => s.id === ro.store_id)?.name || null
   const [showExpense, setShowExpense] = useState(false)
   const [showComplete, setShowComplete] = useState(false)
   const [atts, setAtts] = useState([])
@@ -285,6 +286,7 @@ function DetailModal({ ro, me, profile, expenses, onClose, onChanged }) {
         </div>
         <DetailRow label="標題" value={ro.title || '—'} />
         <DetailRow label="時間" value={ro.occur_time ? new Date(ro.occur_time).toLocaleString('zh-TW') : '—'} />
+        <DetailRow label="門市" value={storeName || '—'} />
         <DetailRow label="地點" value={ro.location || '—'} />
         <DetailRow label="怎麼處理 / 描述" value={ro.description} />
         {ro.handler_type === 'vendor' && <DetailRow label="廠商 / 報價" value={`${ro.supplier || '—'}${ro.quote_amount != null ? ` / $${ro.quote_amount}` : ''}`} />}

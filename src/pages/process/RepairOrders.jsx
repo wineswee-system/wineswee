@@ -43,9 +43,10 @@ export default function RepairOrders() {
 
   const load = async () => {
     setLoading(true)
-    const { data: emp } = await supabase.from('employees')
-      .select('id, name, department_id').eq('auth_user_id', profile?.auth_user_id || '').maybeSingle()
-    setMe(emp || { id: profile?.id, department_id: profile?.department_id })
+    const { data: emp } = profile?.id
+      ? await supabase.from('employees').select('id, name, department_id').eq('id', profile.id).maybeSingle()
+      : { data: null }
+    setMe(emp || { id: profile?.id, name: profile?.name, department_id: profile?.department_id })
     let q = supabase.from('repair_orders').select('*').is('deleted_at', null).order('created_at', { ascending: false })
     if (orgId) q = q.eq('organization_id', orgId)
     const [{ data: ros }, { data: st }, { data: wos }] = await Promise.all([

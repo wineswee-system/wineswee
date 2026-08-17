@@ -343,8 +343,8 @@ export default function Leave() {
       employee_id: empRow?.id || null,
       type: selectedPolicy?.shortName || form.type,
       start_date: form.start_date,
-      // 時數假是「一個班」→ 不跨天(跨午夜也收在 start_date),避免日曆/天數看起來像兩天
-      end_date: form.unit === 'hour' ? form.start_date : (form.end_date || form.start_date),
+      // 時數假=一個班不跨天;整天假 days<=1 也收回 start_date(夜班跨午夜請1天別橫跨2日期)
+      end_date: (form.unit === 'hour' || days <= 1) ? form.start_date : (form.end_date || form.start_date),
       start_time: form.unit === 'hour' ? form.start_time : null,
       end_time: form.unit === 'hour' ? form.end_time : null,
       days,
@@ -393,7 +393,7 @@ export default function Leave() {
       p_type_code: form.type,
       p_unit: form.unit,
       p_start_date: form.start_date,
-      p_end_date: form.unit === 'hour' ? form.start_date : (form.end_date || form.start_date),
+      p_end_date: (form.unit === 'hour' || days <= 1) ? form.start_date : (form.end_date || form.start_date),
       p_start_time: form.unit === 'hour' ? form.start_time : null,
       p_end_time: form.unit === 'hour' ? form.end_time : null,
       p_reason: form.reason,

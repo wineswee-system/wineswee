@@ -345,7 +345,7 @@ function PendingApprovalsView() {
 
     // 申請人卡片資料（頭像/職位/在職狀態/員編）
     const { data: emp } = await supabase.from('employees')
-      .select('id, name, name_en, position, status, employee_no, avatar_url')
+      .select('id, name, name_en, position, status, employee_number, avatar_url')
       .eq('id', row.employee_id).maybeSingle()
     if (detailIdRef.current === row.id) {
       setDetail(d => (d && d.row.id === row.id ? { ...d, emp } : d))
@@ -646,7 +646,7 @@ function PendingApprovalsView() {
           name_en: detail.emp?.name_en,
           position: detail.emp?.position,
           status: detail.emp?.status,
-          employee_no: detail.emp?.employee_no || (detail.row.employee_id ? `ID ${detail.row.employee_id}` : undefined),
+          employee_no: detail.emp?.employee_number || (detail.row.employee_id ? `ID ${detail.row.employee_id}` : undefined),
           avatar_url: detail.emp?.avatar_url,
         }}
         fields={buildDetailFields(detail.type, detail.row)}

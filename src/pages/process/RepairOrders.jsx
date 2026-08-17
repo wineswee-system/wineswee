@@ -35,10 +35,14 @@ export default function RepairOrders() {
   const [expensesByRO, setExpensesByRO] = useState({})   // repair_order_id -> [expense]
   const [stores, setStores] = useState([])
   const [workOrders, setWorkOrders] = useState([])
+  const [vendors, setVendors] = useState([])           // 維修廠商庫
+  const [categories, setCategories] = useState([])     // 維修類別
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState('open')       // open | done | all
   const [search, setSearch] = useState('')
+  const [catFilter, setCatFilter] = useState('')       // 類別篩選(category_id)
   const [showCreate, setShowCreate] = useState(false)
+  const [showManage, setShowManage] = useState(false)  // 管理廠商/類別
   const [detail, setDetail] = useState(null)   // 目前開的維修單
 
   const load = async () => {
@@ -49,15 +53,22 @@ export default function RepairOrders() {
     setMe(emp || { id: profile?.id, name: profile?.name, department_id: profile?.department_id })
     let q = supabase.from('repair_orders').select('*').is('deleted_at', null).order('created_at', { ascending: false })
     if (orgId) q = q.eq('organization_id', orgId)
-    const [{ data: ros }, { data: st }, { data: wos }] = await Promise.all([
+    let vq = supabase.from('repair_vendors').select('id, name, specialty, contact_person, phone, note, status').order('name')
+    let cq = supabase.from('repair_categories').select('id, name, sort_order').order('sort_order').order('id')
+    if (orgId) { vq = vq.eq('organization_id', orgId); cq = cq.eq('organization_id', orgId) }
+    const [{ data: ros }, { data: st }, { data: wos }, { data: vs }, { data: cs }] = await Promise.all([
       q,
       supabase.from('stores').select('id, name').order('name'),
       supabase.from('work_orders').select('id, title, status').is('deleted_at', null).in('status', ['待受理', '處理中']).order('created_at', { ascending: false }),
+      vq,
+      cq,
     ])
     const list = ros || []
     setOrders(list)
     setStores(st || [])
     setWorkOrders(wos || [])
+    setVendors(vs || [])
+    setCategories(cs || [])
     // 連結費用單
     const ids = list.map(r => r.id)
     if (ids.length) {
@@ -77,12 +88,13 @@ export default function RepairOrders() {
   const filtered = useMemo(() => orders.filter(o => {
     if (tab === 'open' && !['進行中', '待費用核准'].includes(o.status)) return false
     if (tab === 'done' && o.status !== '已完工') return false
+    if (catFilter && o.category_id !== Number(catFilter)) return false
     if (search) {
       const s = search.toLowerCase()
       if (!(`${o.title || ''} ${o.description || ''} ${o.location || ''} ${o.supplier || ''}`.toLowerCase().includes(s))) return false
     }
     return true
-  }), [orders, tab, search])
+  }), [orders, tab, search, catFilter])
 
   return (
     <div style={{ padding: '20px 24px', maxWidth: 1100, margin: '0 auto' }}>
@@ -90,9 +102,14 @@ export default function RepairOrders() {
         <h1 style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 20, fontWeight: 700, color: 'var(--text-primary)' }}>
           <Wrench size={20} /> 維修單
         </h1>
-        <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
-          <Plus size={16} /> 開維修單
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-secondary" onClick={() => setShowManage(true)}>
+            <Building2 size={16} /> 管理廠商/類別
+          </button>
+          <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
+            <Plus size={16} /> 開維修單
+          </button>
+        </div>
       </div>
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
@@ -104,6 +121,11 @@ export default function RepairOrders() {
             color: tab === t.k ? '#fff' : 'var(--text-secondary)',
           }}>{t.l}</button>
         ))}
+        <select className="form-input" value={catFilter} onChange={e => setCatFilter(e.target.value)}
+          style={{ width: 'auto', minWidth: 120 }}>
+          <option value="">全部類別</option>
+          {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
         <div style={{ position: 'relative', flex: 1, minWidth: 180, maxWidth: 320 }}>
           <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
           <input className="form-input" placeholder="搜尋標題/地點/廠商…" value={search} onChange={e => setSearch(e.target.value)}
@@ -117,6 +139,7 @@ export default function RepairOrders() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {filtered.map(o => {
             const stc = STATUS[o.status] || STATUS['進行中']
+            const catName = categories.find(c => c.id === o.category_id)?.name
             return (
               <div key={o.id} onClick={() => setDetail(o)} style={{
                 padding: 14, borderRadius: 12, background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', cursor: 'pointer',
@@ -130,6 +153,7 @@ export default function RepairOrders() {
                   <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)' }}>#{o.id}</span>
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 6 }}>
+                  {catName && <span style={{ color: 'var(--accent-cyan)' }}>🏷 {catName} · </span>}
                   {o.location && <span>📍 {o.location} · </span>}
                   {o.requester_name} · {new Date(o.created_at).toLocaleDateString('zh-TW')}
                 </div>
@@ -141,10 +165,16 @@ export default function RepairOrders() {
 
       {showCreate && (
         <CreateModal orgId={orgId} stores={stores} workOrders={workOrders}
+          vendors={vendors} categories={categories} onVendorsChanged={load}
           onClose={() => setShowCreate(false)} onDone={() => { setShowCreate(false); load() }} />
+      )}
+      {showManage && (
+        <ManageModal orgId={orgId} vendors={vendors} categories={categories}
+          onClose={() => setShowManage(false)} onChanged={load} />
       )}
       {detailRow && (
         <DetailModal ro={detailRow} me={me} profile={profile} stores={stores}
+          vendors={vendors} categories={categories}
           expenses={expensesByRO[detailRow.id] || []}
           onClose={() => setDetail(null)} onChanged={load} />
       )}
@@ -153,13 +183,28 @@ export default function RepairOrders() {
 }
 
 // ── 開單 ──
-function CreateModal({ orgId, stores, workOrders, onClose, onDone }) {
+function CreateModal({ orgId, stores, workOrders, vendors, categories, onVendorsChanged, onClose, onDone }) {
   const [handlerType, setHandlerType] = useState('self')
   const [f, setF] = useState({
     occur_time: new Date().toISOString().slice(0, 16), location: '', store_id: '', title: '',
     description: '', need_purchase: false, supplier: '', quote_amount: '', linked_work_order_id: '',
+    category_id: '', repair_vendor_id: '',
   })
   const set = (k, v) => setF(p => ({ ...p, [k]: v }))
+  const [addingVendor, setAddingVendor] = useState(false)
+  const [newVendor, setNewVendor] = useState({ name: '', specialty: '', phone: '' })
+
+  const saveNewVendor = async () => {
+    if (!newVendor.name.trim()) { toast.error('請填廠商名稱'); return }
+    const { data, error } = await supabase.from('repair_vendors')
+      .insert({ name: newVendor.name.trim(), specialty: newVendor.specialty || null, phone: newVendor.phone || null, organization_id: orgId || null })
+      .select().single()
+    if (error || !data) { toast.error('新增廠商失敗：' + (error?.message || '')); return }
+    toast.success('已新增廠商')
+    set('repair_vendor_id', String(data.id))
+    setAddingVendor(false); setNewVendor({ name: '', specialty: '', phone: '' })
+    onVendorsChanged?.()
+  }
 
   const submit = async () => {
     if (!f.description.trim()) { toast.error('請填「怎麼處理 / 問題描述」'); return }
@@ -174,6 +219,8 @@ function CreateModal({ orgId, stores, workOrders, onClose, onDone }) {
       p_supplier: handlerType === 'vendor' ? (f.supplier || null) : null,
       p_quote_amount: handlerType === 'vendor' && f.quote_amount ? Number(f.quote_amount) : null,
       p_linked_work_order_id: f.linked_work_order_id ? Number(f.linked_work_order_id) : null,
+      p_category_id: f.category_id ? Number(f.category_id) : null,
+      p_repair_vendor_id: handlerType === 'vendor' && f.repair_vendor_id ? Number(f.repair_vendor_id) : null,
     })
     if (error || !data?.ok) { toast.error('開單失敗：' + (data?.error || error?.message || '')); return }
     toast.success('維修單已建立')
@@ -205,7 +252,15 @@ function CreateModal({ orgId, stores, workOrders, onClose, onDone }) {
         </Field>
       </div>
       <Field label="地點"><input className="form-input" placeholder="例:一樓廁所、後場冰箱" value={f.location} onChange={e => set('location', e.target.value)} style={{ width: '100%' }} /></Field>
-      <Field label="標題（可選）"><input className="form-input" value={f.title} onChange={e => set('title', e.target.value)} style={{ width: '100%' }} /></Field>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <Field label="標題（可選）"><input className="form-input" value={f.title} onChange={e => set('title', e.target.value)} style={{ width: '100%' }} /></Field>
+        <Field label="類別">
+          <select className="form-input" value={f.category_id} onChange={e => set('category_id', e.target.value)} style={{ width: '100%' }}>
+            <option value="">— 未分類 —</option>
+            {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </Field>
+      </div>
       <Field label="怎麼處理 / 問題描述" required><textarea className="form-input" rows={3} value={f.description} onChange={e => set('description', e.target.value)} style={{ width: '100%' }} /></Field>
 
       {handlerType === 'self' && (
@@ -217,10 +272,34 @@ function CreateModal({ orgId, stores, workOrders, onClose, onDone }) {
         </Field>
       )}
       {handlerType === 'vendor' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <Field label="廠商"><input className="form-input" value={f.supplier} onChange={e => set('supplier', e.target.value)} style={{ width: '100%' }} /></Field>
-          <Field label="報價金額"><input className="form-input" type="number" value={f.quote_amount} onChange={e => set('quote_amount', e.target.value)} style={{ width: '100%' }} /></Field>
-        </div>
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <Field label="廠商">
+              {!addingVendor ? (
+                <select className="form-input" value={f.repair_vendor_id}
+                  onChange={e => e.target.value === '__add__' ? setAddingVendor(true) : set('repair_vendor_id', e.target.value)}
+                  style={{ width: '100%' }}>
+                  <option value="">— 選擇廠商 —</option>
+                  {vendors.filter(v => v.status !== '停用').map(v => (
+                    <option key={v.id} value={v.id}>{v.name}{v.specialty ? `（${v.specialty}）` : ''}</option>
+                  ))}
+                  <option value="__add__">＋ 新增廠商…</option>
+                </select>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 8, borderRadius: 8, background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)' }}>
+                  <input className="form-input" placeholder="廠商名稱 *" value={newVendor.name} onChange={e => setNewVendor(v => ({ ...v, name: e.target.value }))} />
+                  <input className="form-input" placeholder="專長（水電/冷氣…）" value={newVendor.specialty} onChange={e => setNewVendor(v => ({ ...v, specialty: e.target.value }))} />
+                  <input className="form-input" placeholder="電話" value={newVendor.phone} onChange={e => setNewVendor(v => ({ ...v, phone: e.target.value }))} />
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button type="button" className="btn btn-primary" style={{ flex: 1, fontSize: 12 }} onClick={saveNewVendor}>儲存廠商</button>
+                    <button type="button" className="btn btn-secondary" style={{ fontSize: 12 }} onClick={() => setAddingVendor(false)}>取消</button>
+                  </div>
+                </div>
+              )}
+            </Field>
+            <Field label="報價金額"><input className="form-input" type="number" value={f.quote_amount} onChange={e => set('quote_amount', e.target.value)} style={{ width: '100%' }} /></Field>
+          </div>
+        </>
       )}
       {workOrders.length > 0 && (
         <Field label="關聯跨部門工單（可選）">
@@ -238,9 +317,116 @@ function CreateModal({ orgId, stores, workOrders, onClose, onDone }) {
   )
 }
 
+// ── 管理廠商 / 類別 ──
+function ManageModal({ orgId, vendors, categories, onClose, onChanged }) {
+  const [seg, setSeg] = useState('vendor')   // vendor | category
+  const [vForm, setVForm] = useState({ name: '', specialty: '', contact_person: '', phone: '', note: '' })
+  const [cName, setCName] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  const addVendor = async () => {
+    if (!vForm.name.trim()) { toast.error('請填廠商名稱'); return }
+    setBusy(true)
+    const { error } = await supabase.from('repair_vendors').insert({
+      name: vForm.name.trim(), specialty: vForm.specialty || null, contact_person: vForm.contact_person || null,
+      phone: vForm.phone || null, note: vForm.note || null, organization_id: orgId || null,
+    })
+    setBusy(false)
+    if (error) { toast.error('新增失敗：' + error.message); return }
+    setVForm({ name: '', specialty: '', contact_person: '', phone: '', note: '' })
+    onChanged?.()
+  }
+  const toggleVendor = async (v) => {
+    const next = v.status === '停用' ? '啟用' : '停用'
+    const { error } = await supabase.from('repair_vendors').update({ status: next }).eq('id', v.id)
+    if (error) { toast.error('更新失敗：' + error.message); return }
+    onChanged?.()
+  }
+  const addCategory = async () => {
+    if (!cName.trim()) { toast.error('請填類別名稱'); return }
+    setBusy(true)
+    const maxSort = Math.max(0, ...categories.map(c => c.sort_order || 0))
+    const { error } = await supabase.from('repair_categories').insert({ name: cName.trim(), sort_order: maxSort + 1, organization_id: orgId || null })
+    setBusy(false)
+    if (error) { toast.error('新增失敗：' + error.message); return }
+    setCName('')
+    onChanged?.()
+  }
+  const delCategory = async (c) => {
+    if (!await confirm({ message: `刪除類別「${c.name}」？（已使用此類別的維修單會變成未分類）` })) return
+    const { error } = await supabase.from('repair_categories').delete().eq('id', c.id)
+    if (error) { toast.error('刪除失敗：' + error.message); return }
+    onChanged?.()
+  }
+
+  const segBtn = (k, l) => (
+    <button type="button" onClick={() => setSeg(k)} style={{
+      flex: 1, padding: 8, borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+      border: `1px solid ${seg === k ? 'var(--accent-cyan)' : 'var(--border-medium)'}`,
+      background: seg === k ? 'var(--accent-cyan)' : 'var(--bg-card)',
+      color: seg === k ? '#fff' : 'var(--text-secondary)',
+    }}>{l}</button>
+  )
+
+  return (
+    <Modal title="管理廠商 / 類別" onClose={onClose}>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+        {segBtn('vendor', `維修廠商（${vendors.length}）`)}
+        {segBtn('category', `類別（${categories.length}）`)}
+      </div>
+
+      {seg === 'vendor' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <input className="form-input" placeholder="廠商名稱 *" value={vForm.name} onChange={e => setVForm(v => ({ ...v, name: e.target.value }))} />
+            <input className="form-input" placeholder="專長（水電/冷氣…）" value={vForm.specialty} onChange={e => setVForm(v => ({ ...v, specialty: e.target.value }))} />
+            <input className="form-input" placeholder="聯絡人" value={vForm.contact_person} onChange={e => setVForm(v => ({ ...v, contact_person: e.target.value }))} />
+            <input className="form-input" placeholder="電話" value={vForm.phone} onChange={e => setVForm(v => ({ ...v, phone: e.target.value }))} />
+          </div>
+          <input className="form-input" placeholder="備註" value={vForm.note} onChange={e => setVForm(v => ({ ...v, note: e.target.value }))} />
+          <button type="button" className="btn btn-primary" disabled={busy} onClick={addVendor}><Plus size={14} /> 新增廠商</button>
+          <div style={{ borderTop: '1px solid var(--border-subtle)', marginTop: 4, paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 260, overflowY: 'auto' }}>
+            {vendors.length === 0 && <div style={{ color: 'var(--text-muted)', fontSize: 13, textAlign: 'center', padding: 12 }}>還沒有廠商</div>}
+            {vendors.map(v => (
+              <div key={v.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 8, background: 'var(--bg-card)', opacity: v.status === '停用' ? 0.5 : 1 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: 13 }}>{v.name}{v.specialty ? <span style={{ color: 'var(--accent-cyan)', fontWeight: 400 }}>　{v.specialty}</span> : ''}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{[v.contact_person, v.phone].filter(Boolean).join(' · ') || '—'}</div>
+                </div>
+                <button type="button" className="btn btn-secondary" style={{ fontSize: 12 }} onClick={() => toggleVendor(v)}>{v.status === '停用' ? '啟用' : '停用'}</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {seg === 'category' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input className="form-input" placeholder="新類別名稱" value={cName} onChange={e => setCName(e.target.value)} style={{ flex: 1 }}
+              onKeyDown={e => e.key === 'Enter' && addCategory()} />
+            <button type="button" className="btn btn-primary" disabled={busy} onClick={addCategory}><Plus size={14} /> 新增</button>
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 4 }}>
+            {categories.length === 0 && <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>還沒有類別</div>}
+            {categories.map(c => (
+              <span key={c.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 999, background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)', fontSize: 13 }}>
+                {c.name}
+                <button type="button" onClick={() => delCategory(c)} style={{ display: 'inline-flex', border: 'none', background: 'transparent', color: 'var(--accent-cyan)', cursor: 'pointer', padding: 0 }} aria-label="刪除"><XIcon size={13} /></button>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </Modal>
+  )
+}
+
 // ── 詳情 + 動作 ──
-function DetailModal({ ro, me, profile, stores, expenses, onClose, onChanged }) {
+function DetailModal({ ro, me, profile, stores, vendors, categories, expenses, onClose, onChanged }) {
   const storeName = (stores || []).find(s => s.id === ro.store_id)?.name || null
+  const catName = (categories || []).find(c => c.id === ro.category_id)?.name || null
+  const vendor = (vendors || []).find(v => v.id === ro.repair_vendor_id) || null
   const [showExpense, setShowExpense] = useState(false)
   const [showComplete, setShowComplete] = useState(false)
   const [atts, setAtts] = useState([])
@@ -288,9 +474,16 @@ function DetailModal({ ro, me, profile, stores, expenses, onClose, onChanged }) 
         <DetailRow label="標題" value={ro.title || '—'} />
         <DetailRow label="時間" value={ro.occur_time ? new Date(ro.occur_time).toLocaleString('zh-TW') : '—'} />
         <DetailRow label="門市" value={storeName || '—'} />
+        <DetailRow label="類別" value={catName || '—'} />
         <DetailRow label="地點" value={ro.location || '—'} />
         <DetailRow label="怎麼處理 / 描述" value={ro.description} />
-        {ro.handler_type === 'vendor' && <DetailRow label="廠商 / 報價" value={`${ro.supplier || '—'}${ro.quote_amount != null ? ` / $${ro.quote_amount}` : ''}`} />}
+        {ro.handler_type === 'vendor' && (
+          <DetailRow label="廠商 / 報價" value={
+            `${vendor?.name || ro.supplier || '—'}`
+            + `${vendor?.phone ? `　☎ ${vendor.phone}` : ''}`
+            + `${ro.quote_amount != null ? ` / $${ro.quote_amount}` : ''}`
+          } />
+        )}
         {ro.handler_type === 'self' && <DetailRow label="需要採購" value={ro.need_purchase ? '是' : '否'} />}
         {ro.completed_at && <DetailRow label="完工時間" value={new Date(ro.completed_at).toLocaleString('zh-TW')} />}
         {ro.completion_note && <DetailRow label="完工備註" value={ro.completion_note} />}

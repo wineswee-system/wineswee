@@ -79,6 +79,8 @@ export default function Attendance() {
   const [overtimes, setOvertimes] = useState([])   // 已核准加班單 → 打卡追蹤獨立加班列
   const [daySchedules, setDaySchedules] = useState([])  // 當天班表對照
   const [dayLeaves, setDayLeaves] = useState([])        // 已核准請假對照
+  const [salaryCats, setSalaryCats] = useState([])      // [{employee_id, employment_category}] 判斷行政/正職
+  const [catWorkRules, setCatWorkRules] = useState([])  // employment_category_work_rules（行政固定辦公時間）
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
   const [stores, setStores] = useState([])
@@ -172,7 +174,12 @@ export default function Attendance() {
       // 換日線設定(day_boundary_hour):凌晨加班歸前一天用
       supabase.from('organizations').select('settings').eq('id', orgId).maybeSingle(),
       supabase.rpc('web_my_visible_store_ids'),  // 跨店主管/督導可見門市(_can_see_store_for_emp)
-    ]).then(([r, e, d, s, ot, sch, lv, orgRes, visRes]) => {
+      // 員工身分（行政 admin 走固定辦公時間、其他走班表）+ 各身分工時規則
+      supabase.from('salary_structures').select('employee_id, employment_category'),
+      supabase.from('employment_category_work_rules')
+        .select('category, work_start, work_end, grace_minutes')
+        .eq('organization_id', orgId).eq('is_active', true),
+    ]).then(([r, e, d, s, ot, sch, lv, orgRes, visRes, salRes, ecwrRes]) => {
       const boundaryHour = parseInt(orgRes?.data?.settings?.day_boundary_hour, 10) || 6
       const boundaryStr = `${String(boundaryHour).padStart(2, '0')}:00:00`
       const visIds = Array.isArray(visRes?.data) ? visRes.data : null
@@ -196,6 +203,8 @@ export default function Attendance() {
       setOvertimes(ots)
       setDaySchedules(sch.data || [])
       setDayLeaves(lv.data || [])
+      setSalaryCats(salRes?.data || [])
+      setCatWorkRules(ecwrRes?.data || [])
       setEmployees(e.data || [])
       setDepartments(d.data || [])
       setStores(s.data || [])
@@ -251,18 +260,54 @@ export default function Attendance() {
   // 遲到/早退:拿當天班表時間段(HH:MM-HH:MM)跟打卡比。上班晚於班表=遲到、下班早於班表=早退(分鐘)。
   //   只在「有排班時間段」且真的遲到/早退才回值;跨午夜班(end<=start)自動 +1440。
   const toMin = (t) => { if (!t) return null; const [h, m] = String(t).split(':'); return Number(h) * 60 + Number(m) }
+
+  // 姓名 → employment_category（行政 admin 用固定辦公時間判遲到/早退,不靠班表）
+  const empCatByName = useMemo(() => {
+    const idToCat = {}
+    for (const sc of salaryCats) if (sc.employee_id != null && sc.employment_category) idToCat[sc.employee_id] = sc.employment_category
+    const m = {}
+    for (const e of employees) if (idToCat[e.id]) m[e.name] = idToCat[e.id]
+    return m
+  }, [salaryCats, employees])
+
+  // 行政固定辦公時間規則(分鐘);沒載到 → fallback 09:00–18:00 grace 30(跟計薪引擎同預設)
+  const adminRule = useMemo(() => {
+    const a = catWorkRules.find(c => c.category === 'admin')
+    return {
+      ws: a?.work_start ? toMin(String(a.work_start).slice(0, 5)) : 540,
+      we: a?.work_end ? toMin(String(a.work_end).slice(0, 5)) : 1080,
+      grace: a?.grace_minutes != null ? Number(a.grace_minutes) : 30,
+    }
+  }, [catWorkRules])   // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 遲到/早退:有排班就比班表;行政(admin)沒排班 → 固定辦公時間 + 浮動制(跟計薪引擎同一套規則)。
+  //   上班晚於「基準−寬限」=遲到;下班早於「應下班」=早退。
+  //   行政應下班 = clamp(上班打卡 + 工時span, 下班−寬限, 下班+寬限)（早進早走、晚進晚走）。
   const lateEarly = (r) => {
-    // 加班列(加班單)的打卡是加班時段,非正常班,別拿去比班表標遲到/早退
+    // 加班列(加班單)的打卡是加班時段,非正常班,別拿去比標遲到/早退
     if (r._rowType === 'overtime' || r.status === '加班' || r.clock_in_mode === 'overtime') return null
+    const ci = toMin(r.clock_in), coRaw = toMin(r.clock_out)
     const sv = dayCtx.sched[`${r.employee}|${r.date}`]
     const mm = sv && sv.match(/^(\d{1,2}:\d{2})-(\d{1,2}:\d{2})$/)
-    if (!mm) return null
-    let start = toMin(mm[1]), end = toMin(mm[2])
-    if (end <= start) end += 1440
-    const ci = toMin(r.clock_in), coRaw = toMin(r.clock_out)
+    const isAdmin = empCatByName[r.employee] === 'admin'
+    let start, end, grace = 0
+    if (mm) {
+      // 有排班時間段 → 照班表(行政也吃遲到寬限)
+      start = toMin(mm[1]); end = toMin(mm[2]); if (end <= start) end += 1440
+      grace = isAdmin ? adminRule.grace : 0
+    } else if (isAdmin) {
+      // 行政沒排班 → 固定辦公時間;週末沒正常班不判(對齊引擎)
+      const dow = new Date(r.date + 'T00:00:00').getDay()
+      if (dow === 0 || dow === 6) return null
+      start = adminRule.ws; grace = adminRule.grace
+      const span = adminRule.we - adminRule.ws
+      end = ci != null ? Math.min(Math.max(ci + span, adminRule.we - grace), adminRule.we + grace) : adminRule.we
+    } else {
+      return null
+    }
     let late = 0, early = 0
-    if (ci != null && ci > start) late = ci - start
-    if (coRaw != null) { let co = coRaw; if (co < start) co += 1440; if (co < end) early = end - co }
+    if (ci != null && start != null) late = Math.max(0, ci - start - grace)
+    if (coRaw != null && end != null) { let co = coRaw; if (co < start) co += 1440; if (co < end) early = end - co }
     return (late > 0 || early > 0) ? { late, early } : null
   }
 

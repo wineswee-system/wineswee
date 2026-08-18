@@ -81,6 +81,7 @@ export default function Attendance() {
   const [dayLeaves, setDayLeaves] = useState([])        // 已核准請假對照
   const [salaryCats, setSalaryCats] = useState([])      // [{employee_id, employment_category}] 判斷行政/正職
   const [catWorkRules, setCatWorkRules] = useState([])  // employment_category_work_rules（行政固定辦公時間）
+  const [clockCorrections, setClockCorrections] = useState([])  // 補打卡申請（顯示「有沒有申請補打卡」欄）
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
   const [stores, setStores] = useState([])
@@ -179,7 +180,13 @@ export default function Attendance() {
       supabase.from('employment_category_work_rules')
         .select('category, work_start, work_end, grace_minutes')
         .eq('organization_id', orgId).eq('is_active', true),
-    ]).then(([r, e, d, s, ot, sch, lv, orgRes, visRes, salRes, ecwrRes]) => {
+      // 補打卡申請（待審核 / 已核准 / 已駁回）→ 出勤紀錄「補打卡」欄對照
+      supabase.from('clock_corrections')
+        .select('employee, date, type, correction_time, status')
+        .eq('organization_id', orgId).is('deleted_at', null)
+        .in('status', ['待審核', '已核准', '已駁回'])
+        .gte('date', startDate).lte('date', endDate),
+    ]).then(([r, e, d, s, ot, sch, lv, orgRes, visRes, salRes, ecwrRes, ccRes]) => {
       const boundaryHour = parseInt(orgRes?.data?.settings?.day_boundary_hour, 10) || 6
       const boundaryStr = `${String(boundaryHour).padStart(2, '0')}:00:00`
       const visIds = Array.isArray(visRes?.data) ? visRes.data : null
@@ -205,6 +212,11 @@ export default function Attendance() {
       setDayLeaves(lv.data || [])
       setSalaryCats(salRes?.data || [])
       setCatWorkRules(ecwrRes?.data || [])
+      // 補打卡:套跟出勤一樣的可見性（店員只看自己、主管看可見門市）
+      let ccs = ccRes?.data || []
+      if (isStaff && profile?.name) ccs = ccs.filter(c => c.employee === profile.name)
+      if (isManager && visIds) ccs = ccs.filter(c => visIds.includes(empStoreId(c.employee)))
+      setClockCorrections(ccs)
       setEmployees(e.data || [])
       setDepartments(d.data || [])
       setStores(s.data || [])
@@ -254,8 +266,18 @@ export default function Attendance() {
         d.setUTCDate(d.getUTCDate() + 1)
       }
     }
-    return { sched, ot, leave }
-  }, [daySchedules, overtimes, dayLeaves])
+    // 補打卡:key=姓名|日期 → 是否有申請 + 狀態（一天可能補上班+補下班兩筆）
+    const corr = {}
+    for (const c of clockCorrections) {
+      const k = `${c.employee}|${c.date}`
+      if (!corr[k]) corr[k] = { pending: false, approved: false, rejected: false, types: [] }
+      if (c.status === '待審核') corr[k].pending = true
+      else if (c.status === '已核准') corr[k].approved = true
+      else if (c.status === '已駁回') corr[k].rejected = true
+      corr[k].types.push(c.type === 'clock_in' ? '補上班' : c.type === 'clock_out' ? '補下班' : '補卡')
+    }
+    return { sched, ot, leave, corr }
+  }, [daySchedules, overtimes, dayLeaves, clockCorrections])
 
   // 遲到/早退:拿當天班表時間段(HH:MM-HH:MM)跟打卡比。上班晚於班表=遲到、下班早於班表=早退(分鐘)。
   //   只在「有排班時間段」且真的遲到/早退才回值;跨午夜班(end<=start)自動 +1440。
@@ -503,6 +525,7 @@ export default function Attendance() {
       hours: (!isNotClocked && r.hours > 0) ? `${r.hours}h` : '',
       ot: (o?.h > 0) ? `${o.h}h${o.pending ? '(審)' : ''}` : '',
       leave: lv ? `${lv.type}${lv.pending ? '(審)' : ''}` : '',
+      correction: (() => { const c = dayCtx.corr[`${r.employee}|${r.date}`]; if (!c) return ''; const label = [...new Set(c.types)].join('/'); return c.pending ? `待審(${label})` : c.approved ? `已補(${label})` : c.rejected ? '駁回' : '' })(),
       location: isOvertime ? '加班單' : (isNotClocked ? '' : (r.clock_in_location || '')),
       gps: (!isNotClocked && r.clock_in_lat != null && r.clock_in_lng != null)
         ? `${Number(r.clock_in_lat).toFixed(5)}, ${Number(r.clock_in_lng).toFixed(5)}` : '',
@@ -525,13 +548,14 @@ export default function Attendance() {
       '工時': r.hours,
       '加班': r.ot,
       '請假': r.leave,
+      '補打卡': r.correction,
       '打卡地點': r.location,
       '經緯度': r.gps,
       '狀態': r.status,
     }))
-    const header = ['員工','部門','日期','當天班表','上班打卡','下班打卡','工時','加班','請假','打卡地點','經緯度','狀態']
+    const header = ['員工','部門','日期','當天班表','上班打卡','下班打卡','工時','加班','請假','補打卡','打卡地點','經緯度','狀態']
     const ws = XLSX.utils.json_to_sheet(rows, { header })
-    ws['!cols'] = [10,12,12,14,10,10,7,7,12,12,18,20].map(w => ({ wch: w }))
+    ws['!cols'] = [10,12,12,14,10,10,7,7,12,12,12,18,20].map(w => ({ wch: w }))
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, '出勤紀錄')
     XLSX.writeFile(wb, `打卡追蹤_${startDate}_${endDate}.xlsx`)
@@ -809,10 +833,10 @@ export default function Attendance() {
           )}
           {/* 橫向捲動容器:表頭 + 內容一起捲 */}
           <div style={{ overflowX: 'auto' }}>
-           <div style={{ minWidth: 1420 }}>
+           <div style={{ minWidth: 1500 }}>
           {/* Virtual table header */}
-          <div style={{ display: 'grid', gridTemplateColumns: '140px 100px 100px 110px 85px 85px 60px 60px 80px 120px 145px 85px 110px 1fr', background: 'var(--bg-tertiary)', borderBottom: '1px solid var(--border-medium)', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>
-            {['員工', '部門', '日期', '當天班表', '上班打卡', '下班打卡', '工時', '加班', '請假', '打卡地點', '經緯度', '狀態', '模式', '操作'].map(h => (
+          <div style={{ display: 'grid', gridTemplateColumns: '140px 100px 100px 110px 85px 85px 60px 60px 80px 78px 120px 145px 85px 110px 1fr', background: 'var(--bg-tertiary)', borderBottom: '1px solid var(--border-medium)', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>
+            {['員工', '部門', '日期', '當天班表', '上班打卡', '下班打卡', '工時', '加班', '請假', '補打卡', '打卡地點', '經緯度', '狀態', '模式', '操作'].map(h => (
               <div key={h} style={{ padding: '10px 8px' }}>{h}</div>
             ))}
           </div>
@@ -826,7 +850,7 @@ export default function Attendance() {
                 const canClockOut = !isNotClocked && !isOvertime && isToday && r.clock_in && !r.clock_out
                 const canClockIn = !isNotClocked && !isOvertime && isToday && !r.clock_in
                 return (
-                  <div key={r.id} style={{ display: 'grid', gridTemplateColumns: '140px 100px 100px 110px 85px 85px 60px 60px 80px 120px 145px 85px 110px 1fr', alignItems: 'center', borderBottom: '1px solid var(--border-subtle)', opacity: isNotClocked ? 0.75 : 1, background: isOvertime ? 'var(--accent-orange-dim)' : undefined }}>
+                  <div key={r.id} style={{ display: 'grid', gridTemplateColumns: '140px 100px 100px 110px 85px 85px 60px 60px 80px 78px 120px 145px 85px 110px 1fr', alignItems: 'center', borderBottom: '1px solid var(--border-subtle)', opacity: isNotClocked ? 0.75 : 1, background: isOvertime ? 'var(--accent-orange-dim)' : undefined }}>
                     <div style={{ padding: '4px 8px', fontWeight: 600, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.employee}</div>
                     <div style={{ padding: '4px 8px', fontSize: 12, color: 'var(--text-muted)' }}>{isNotClocked ? (r.dept || '-') : (getEmpDept(r.employee) || '-')}</div>
                     <div style={{ padding: '4px 8px', fontSize: 13 }}>{r.date}</div>
@@ -838,6 +862,16 @@ export default function Attendance() {
                     {/* 加班 / 請假 */}
                     <div style={{ padding: '4px 8px', fontSize: 12 }}>{(() => { const o = dayCtx.ot[`${r.employee}|${r.date}`]; return o?.h > 0 ? <span style={{ color: o.pending ? 'var(--accent-orange)' : 'var(--accent-purple)' }}>{o.h}h{o.pending ? ' 審' : ''}</span> : <span style={{ color: 'var(--text-muted)' }}>-</span> })()}</div>
                     <div style={{ padding: '4px 8px', fontSize: 12 }}>{(() => { const lv = dayCtx.leave[`${r.employee}|${r.date}`]; return lv ? <span style={{ color: lv.pending ? 'var(--accent-orange)' : 'var(--accent-blue)' }}>{lv.type}{lv.pending ? '(審)' : ''}</span> : <span style={{ color: 'var(--text-muted)' }}>-</span> })()}</div>
+                    {/* 補打卡：該員工當天有沒有申請補打卡 + 狀態 */}
+                    <div style={{ padding: '4px 8px', fontSize: 12 }}>{(() => {
+                      const c = dayCtx.corr[`${r.employee}|${r.date}`]
+                      if (!c) return <span style={{ color: 'var(--text-muted)' }}>-</span>
+                      const label = [...new Set(c.types)].join('/')
+                      if (c.pending) return <span className="badge badge-warning" title={`補打卡待審核（${label}）`}><span className="badge-dot"></span>待審</span>
+                      if (c.approved) return <span className="badge badge-success" title={`補打卡已核准（${label}）`}><span className="badge-dot"></span>已補</span>
+                      if (c.rejected) return <span className="badge badge-danger" title="補打卡已駁回"><span className="badge-dot"></span>駁回</span>
+                      return <span style={{ color: 'var(--text-muted)' }}>-</span>
+                    })()}</div>
                     <div style={{ padding: '4px 8px' }}>{isNotClocked || isOvertime ? <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{isOvertime ? '加班單' : '-'}</span> : locationBadge(r)}</div>
                     <div style={{ padding: '4px 8px', fontSize: 10, fontFamily: 'monospace', color: 'var(--text-secondary)' }}>
                       {!isNotClocked && r.clock_in_lat != null && r.clock_in_lng != null ? (

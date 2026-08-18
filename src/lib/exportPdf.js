@@ -46,7 +46,7 @@ export function exportAttendancePdf(records, filters = {}) {
     <tr>
       <td class="c">${i + 1}</td>
       ${cell(r.employee, false)}${cell(r.dept, false)}${cell(r.date)}${cell(r.shift)}
-      ${cell(r.clock_in)}${cell(r.clock_out)}${cell(r.hours)}${cell(r.ot)}${cell(r.leave)}
+      ${cell(r.clock_in)}${cell(r.clock_out)}${cell(r.hours)}${cell(r.ot)}${cell(r.leave)}${cell(r.correction)}
       ${cell(r.location, false)}<td class="c gps">${esc(r.gps) || '-'}</td>${cell(r.status)}
     </tr>`).join('')
 
@@ -76,7 +76,7 @@ export function exportAttendancePdf(records, filters = {}) {
   <table>
     <thead><tr>
       <th class="c">#</th><th>員工</th><th>部門</th><th class="c">日期</th><th class="c">當天班表</th>
-      <th class="c">上班打卡</th><th class="c">下班打卡</th><th class="c">工時</th><th class="c">加班</th><th class="c">請假</th>
+      <th class="c">上班打卡</th><th class="c">下班打卡</th><th class="c">工時</th><th class="c">加班</th><th class="c">請假</th><th class="c">補打卡</th>
       <th>打卡地點</th><th class="c">經緯度</th><th class="c">狀態</th>
     </tr></thead>
     <tbody>${rows}</tbody>

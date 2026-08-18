@@ -336,6 +336,24 @@ serve(async (req: Request) => {
       }
     }
 
+    // ── 保險關:送出前再撈一次即時狀態,只送「進行中」的任務卡 ──
+    // 防呆:殘留佇列 / 手動觸發 / query 與 send 之間的時間差,都不會把
+    // 已完成 / 已取消 的任務誤發逾期或提醒卡(純減法,只會多跳過不會多送)。
+    const queuedTaskIds = [...new Set(
+      [...assigneeQueue.values()].flat()
+        .map((i) => i.task?.id)
+        .filter((x): x is number => typeof x === "number")
+    )];
+    if (queuedTaskIds.length) {
+      const { data: liveRows } = await sb.from("tasks").select("id, status").in("id", queuedTaskIds);
+      const alive = new Set((liveRows || []).filter((r: any) => r.status === "進行中").map((r: any) => r.id));
+      for (const assigneeId of [...assigneeQueue.keys()]) {
+        const kept = assigneeQueue.get(assigneeId)!.filter((i) => alive.has(i.task?.id));
+        if (kept.length) assigneeQueue.set(assigneeId, kept);
+        else assigneeQueue.delete(assigneeId);
+      }
+    }
+
     // ── Send: one carousel push per assignee (all types combined) ──
     let reminderCount = 0;
     let overdueCount = 0;

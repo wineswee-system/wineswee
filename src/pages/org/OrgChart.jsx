@@ -118,6 +118,8 @@ export default function OrgChart() {
 
   // Employees assigned to a store, with 店長 first
   const isStoreLead = (e) => (e.position || '').includes('店長') && !(e.position || '').includes('副店長')
+  // 儲備幹部：組織圖上獨立一層,掛在店長底下(位階在店長與一般門市人員之間)
+  const isReserve = (e) => (e.position || '').includes('儲備')
   const storeEmployees = (store) =>
     employees
       .filter(e => e.store_id === store.id)
@@ -561,7 +563,9 @@ export default function OrgChart() {
                             <div style={{ display: 'flex', flexDirection: 'row', gap: 8, alignItems: 'flex-start' }}>
                               {secStores.map((s) => {
                                 const mgr = storeManagerOf(s)
-                                const staff = storeStaffExcludingManager(s)
+                                const allStaff = storeStaffExcludingManager(s)
+                                const reserves = allStaff.filter(isReserve)
+                                const staff = allStaff.filter(e => !isReserve(e))
                                 return (
                                   <div key={s.id} style={{
                                     display: 'flex',
@@ -600,6 +604,30 @@ export default function OrgChart() {
                                           textAlign: 'center',
                                         }}>
                                           {mgr.position ? `${mgr.position} ` : ''}{labelOf(mgr)}
+                                        </div>
+                                      </>
+                                    )}
+                                    {/* 儲備幹部 tier — 掛在店長底下,獨立一層 */}
+                                    {reserves.length > 0 && (
+                                      <>
+                                        <div style={{ width: 1, height: 8, background: 'var(--border-subtle)' }} />
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 80 }}>
+                                          {reserves.map(emp => (
+                                            <div key={emp.id} style={{
+                                              fontSize: 11,
+                                              background: 'var(--accent-purple-dim)',
+                                              border: `1px solid var(--accent-purple)`,
+                                              borderRadius: 5,
+                                              padding: '3px 8px',
+                                              textAlign: 'center',
+                                              color: 'var(--accent-purple)',
+                                              fontWeight: 600,
+                                              lineHeight: 1.3,
+                                            }}>
+                                              {labelOf(emp)}
+                                              <div style={{ fontSize: 9, fontWeight: 500, opacity: 0.9 }}>儲備幹部</div>
+                                            </div>
+                                          ))}
                                         </div>
                                       </>
                                     )}

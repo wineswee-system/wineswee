@@ -234,7 +234,6 @@ export const groupNav = {
         { icon: BarChart3, label: '成本中心', path: '/finance/cost-centers' },
         { icon: BarChart3, label: '部門損益表', path: '/finance/profit-loss-by-dept' },
         { icon: Package, label: '固定資產', path: '/finance/fixed-assets' },
-        { icon: ArrowRightLeft, label: '匯率管理', path: '/finance/exchange-rates' },
         { icon: FileText, label: '期間關帳', path: '/finance/period-close' },
         { icon: BookText, label: '過帳規則', path: '/finance/posting-rules' },
       ]

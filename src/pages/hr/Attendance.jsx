@@ -833,9 +833,9 @@ export default function Attendance() {
           )}
           {/* 橫向捲動容器:表頭 + 內容一起捲 */}
           <div style={{ overflowX: 'auto' }}>
-           <div style={{ minWidth: 1500 }}>
+           <div style={{ minWidth: 1520 }}>
           {/* Virtual table header */}
-          <div style={{ display: 'grid', gridTemplateColumns: '140px 100px 100px 110px 85px 85px 60px 60px 80px 78px 120px 145px 85px 110px 1fr', background: 'var(--bg-tertiary)', borderBottom: '1px solid var(--border-medium)', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '140px 100px 100px 110px 85px 85px 60px 60px 80px 96px 120px 145px 85px 110px 1fr', background: 'var(--bg-tertiary)', borderBottom: '1px solid var(--border-medium)', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>
             {['員工', '部門', '日期', '當天班表', '上班打卡', '下班打卡', '工時', '加班', '請假', '補打卡', '打卡地點', '經緯度', '狀態', '模式', '操作'].map(h => (
               <div key={h} style={{ padding: '10px 8px' }}>{h}</div>
             ))}
@@ -850,7 +850,7 @@ export default function Attendance() {
                 const canClockOut = !isNotClocked && !isOvertime && isToday && r.clock_in && !r.clock_out
                 const canClockIn = !isNotClocked && !isOvertime && isToday && !r.clock_in
                 return (
-                  <div key={r.id} style={{ display: 'grid', gridTemplateColumns: '140px 100px 100px 110px 85px 85px 60px 60px 80px 78px 120px 145px 85px 110px 1fr', alignItems: 'center', borderBottom: '1px solid var(--border-subtle)', opacity: isNotClocked ? 0.75 : 1, background: isOvertime ? 'var(--accent-orange-dim)' : undefined }}>
+                  <div key={r.id} style={{ display: 'grid', gridTemplateColumns: '140px 100px 100px 110px 85px 85px 60px 60px 80px 96px 120px 145px 85px 110px 1fr', alignItems: 'center', borderBottom: '1px solid var(--border-subtle)', opacity: isNotClocked ? 0.75 : 1, background: isOvertime ? 'var(--accent-orange-dim)' : undefined }}>
                     <div style={{ padding: '4px 8px', fontWeight: 600, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.employee}</div>
                     <div style={{ padding: '4px 8px', fontSize: 12, color: 'var(--text-muted)' }}>{isNotClocked ? (r.dept || '-') : (getEmpDept(r.employee) || '-')}</div>
                     <div style={{ padding: '4px 8px', fontSize: 13 }}>{r.date}</div>
@@ -862,15 +862,17 @@ export default function Attendance() {
                     {/* 加班 / 請假 */}
                     <div style={{ padding: '4px 8px', fontSize: 12 }}>{(() => { const o = dayCtx.ot[`${r.employee}|${r.date}`]; return o?.h > 0 ? <span style={{ color: o.pending ? 'var(--accent-orange)' : 'var(--accent-purple)' }}>{o.h}h{o.pending ? ' 審' : ''}</span> : <span style={{ color: 'var(--text-muted)' }}>-</span> })()}</div>
                     <div style={{ padding: '4px 8px', fontSize: 12 }}>{(() => { const lv = dayCtx.leave[`${r.employee}|${r.date}`]; return lv ? <span style={{ color: lv.pending ? 'var(--accent-orange)' : 'var(--accent-blue)' }}>{lv.type}{lv.pending ? '(審)' : ''}</span> : <span style={{ color: 'var(--text-muted)' }}>-</span> })()}</div>
-                    {/* 補打卡：該員工當天有沒有申請補打卡 + 狀態 */}
+                    {/* 補打卡：該員工當天有沒有申請補打卡 + 補上班/補下班 + 狀態 */}
                     <div style={{ padding: '4px 8px', fontSize: 12 }}>{(() => {
                       const c = dayCtx.corr[`${r.employee}|${r.date}`]
                       if (!c) return <span style={{ color: 'var(--text-muted)' }}>-</span>
                       const label = [...new Set(c.types)].join('/')
-                      if (c.pending) return <span className="badge badge-warning" title={`補打卡待審核（${label}）`}><span className="badge-dot"></span>待審</span>
-                      if (c.approved) return <span className="badge badge-success" title={`補打卡已核准（${label}）`}><span className="badge-dot"></span>已補</span>
-                      if (c.rejected) return <span className="badge badge-danger" title="補打卡已駁回"><span className="badge-dot"></span>駁回</span>
-                      return <span style={{ color: 'var(--text-muted)' }}>-</span>
+                      const badge = c.pending ? <span className="badge badge-warning"><span className="badge-dot"></span>待審</span>
+                        : c.approved ? <span className="badge badge-success"><span className="badge-dot"></span>已補</span>
+                        : c.rejected ? <span className="badge badge-danger"><span className="badge-dot"></span>駁回</span>
+                        : null
+                      if (!badge) return <span style={{ color: 'var(--text-muted)' }}>-</span>
+                      return <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'flex-start' }} title={`補打卡 · ${label}`}>{badge}<span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>{label}</span></div>
                     })()}</div>
                     <div style={{ padding: '4px 8px' }}>{isNotClocked || isOvertime ? <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{isOvertime ? '加班單' : '-'}</span> : locationBadge(r)}</div>
                     <div style={{ padding: '4px 8px', fontSize: 10, fontFamily: 'monospace', color: 'var(--text-secondary)' }}>

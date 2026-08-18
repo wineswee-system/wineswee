@@ -367,7 +367,10 @@ export default function Attendance() {
     if (r.status === '請假') return false
     const missingOut = !isToday && r.clock_in && !r.clock_out
     const le = lateEarly(r)
-    return missingOut || (le && (le.late > 0 || le.early > 0)) || r.status === '遲到' || clockOffSchedule(r)
+    // 當天有已核准請假 → 不把遲到/早退算異常(對齊計薪引擎守門:請假時段不重複罰;例後 2h 請假打卡到接近假開始)
+    const lv = dayCtx.leave[`${r.employee}|${r.date}`]
+    const hasApprovedLeave = lv && !lv.pending
+    return missingOut || clockOffSchedule(r) || (!hasApprovedLeave && ((le && (le.late > 0 || le.early > 0)) || r.status === '遲到'))
   }
 
   const filtered = useMemo(() => records.filter(r =>
@@ -506,11 +509,13 @@ export default function Attendance() {
       else { const isWork = sched && /\d{1,2}:\d{2}/.test(sched); status = sched ? (isWork ? '未打卡' : sched) : '無排班' }
     } else {
       const offSched = clockOffSchedule(r)
-      const abnormal = r.status === '正常' && ((le && (le.late > 0 || le.early > 0)) || missingOut || offSched)
+      const hasApprovedLeave = lv && !lv.pending   // 已核准請假 → 不標遲到/早退(對齊計薪守門)
+      const showLE = le && !hasApprovedLeave
+      const abnormal = r.status === '正常' && ((showLE && (le.late > 0 || le.early > 0)) || missingOut || offSched)
       status = abnormal ? '異常' : r.status
       const extra = []
-      if (le?.late > 0) extra.push(`遲到${le.late}分`)
-      if (le?.early > 0) extra.push(`早退${le.early}分`)
+      if (showLE && le.late > 0) extra.push(`遲到${le.late}分`)
+      if (showLE && le.early > 0) extra.push(`早退${le.early}分`)
       if (missingOut) extra.push('缺下班')
       if (offSched && !(le?.late > 0) && !(le?.early > 0)) extra.push('時段不符班表')
       if (extra.length) status += `（${extra.join('、')}）`

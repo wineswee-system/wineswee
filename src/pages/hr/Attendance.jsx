@@ -308,6 +308,10 @@ export default function Attendance() {
   const lateEarly = (r) => {
     // 加班列(加班單)的打卡是加班時段,非正常班,別拿去比標遲到/早退
     if (r._rowType === 'overtime' || r.status === '加班' || r.clock_in_mode === 'overtime') return null
+    // 有「核准」請假的日子不判遲到/早退:請假的提早走/晚到不該再算(對齊計薪引擎,避免跟請假重複)。
+    //   例:排 11-20、特休 18-20 已核准,18:16 下班不是早退 104 分,是請假時段。待審核不算(還沒核准)。
+    const lvDay = dayCtx.leave[`${r.employee}|${r.date}`]
+    if (lvDay && !lvDay.pending) return null
     const ci = toMin(r.clock_in), coRaw = toMin(r.clock_out)
     const sv = dayCtx.sched[`${r.employee}|${r.date}`]
     const mm = sv && sv.match(/^(\d{1,2}:\d{2})-(\d{1,2}:\d{2})$/)

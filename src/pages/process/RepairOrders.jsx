@@ -256,6 +256,15 @@ function CreateModal({ orgId, stores, workOrders, vendors, categories, onVendors
     onDone()
   }
 
+  // 刪除草稿(soft-delete)
+  const deleteDraft = async () => {
+    if (!editDraft || !window.confirm('確定刪除這張草稿？')) return
+    const { data, error } = await supabase.rpc('delete_repair_order', { p_id: editDraft.id })
+    if (error || !data?.ok) { toast.error('刪除失敗：' + (data?.error || error?.message || '')); return }
+    toast.success('草稿已刪除')
+    onDone()
+  }
+
   return (
     <Modal title={editDraft ? '📝 編輯草稿' : '🔧 開維修單'} onClose={onClose} onSubmit={submit} submitLabel={editDraft ? '送出' : '建立維修單'}>
       <Field label="處理方式" required>
@@ -351,6 +360,12 @@ function CreateModal({ orgId, stores, workOrders, vendors, categories, onVendors
         style={{ width: '100%', marginTop: 12 }}>
         💾 存草稿（先存不送，只有你看得到）
       </button>
+      {editDraft && (
+        <button type="button" className="btn btn-secondary" onClick={deleteDraft}
+          style={{ width: '100%', marginTop: 8, color: 'var(--accent-red)' }}>
+          🗑 刪除草稿
+        </button>
+      )}
     </Modal>
   )
 }

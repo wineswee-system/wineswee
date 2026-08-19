@@ -484,9 +484,8 @@ export default function OrgChart() {
             const color = colors[visibleDepts.indexOf(dept) % colors.length]
             const dim = dims[visibleDepts.indexOf(dept) % dims.length]
             const secs = deptSections(dept)
-            // 直接掛部門(無課)的門市 → 併一個「直屬部門」欄,不然「無課」的門市會從圖上消失
+            // 直接掛部門(無課)的門市 → 圖上獨立一列「直屬部門」置中顯示(不然「無課」門市會消失)
             const directStores = deptStores(dept).filter(s => !s.section_id)
-            const secsPlus = directStores.length > 0 ? [...secs, { id: '__direct__', name: '直屬部門', __direct: true }] : secs
             return (
               <div key={`sec-${dept.id}`} style={{ marginTop: 24 }}>
                 {/* connector */}
@@ -519,10 +518,9 @@ export default function OrgChart() {
                   justifyContent: 'flex-start',
                   paddingBottom: 8,
                 }}>
-                  {secsPlus.map((sec) => {
-                    const isDirect = sec.__direct
-                    const supe = isDirect ? null : supervisorOf(sec)
-                    const secStores = isDirect ? directStores : sectionStores(sec)
+                  {secs.map((sec) => {
+                    const supe = supervisorOf(sec)
+                    const secStores = sectionStores(sec)
                     return (
                       <div key={sec.id} style={{
                         display: 'flex',
@@ -543,7 +541,7 @@ export default function OrgChart() {
                         }}>
                           <div style={{ fontWeight: 700, color, fontSize: 13 }}>
                             {sec.name}
-                            <span style={{ fontSize: 10, fontWeight: 600, opacity: 0.85, marginLeft: 6 }}>· {isDirect ? secStores.reduce((n, s) => n + storeEmployees(s).length, 0) : sectionHeadcount(sec)} 人</span>
+                            <span style={{ fontSize: 10, fontWeight: 600, opacity: 0.85, marginLeft: 6 }}>· {sectionHeadcount(sec)} 人</span>
                           </div>
                           {supe && (
                             <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>
@@ -668,6 +666,35 @@ export default function OrgChart() {
                     )
                   })}
                 </div>
+
+                {/* 直屬部門(未分課)的門市 — 獨立一列、置中,不塞進課別列避免歪掉 */}
+                {directStores.length > 0 && (
+                  <div style={{ marginTop: 20 }}>
+                    <div style={{ display: 'flex', justifyContent: 'center' }}><div style={{ width: 1, height: 14, background: 'var(--border-strong)' }} /></div>
+                    <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}>
+                      <div style={{ fontSize: 12, color, fontWeight: 700, border: `1px dashed ${color}`, borderRadius: 6, padding: '4px 14px', background: 'var(--glass-light)' }}>
+                        直屬部門（未分課）· {directStores.length} 間
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 16, justifyContent: 'center', flexWrap: 'wrap', alignItems: 'flex-start' }}>
+                      {directStores.map((s) => {
+                        const mgr = storeManagerOf(s)
+                        const staff = storeStaffExcludingManager(s)
+                        return (
+                          <div key={s.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                            <div style={{ background: 'var(--glass-light)', border: '1.5px solid var(--border-strong)', borderRadius: 6, padding: '6px 12px', minWidth: 100, textAlign: 'center' }}>
+                              <div style={{ fontSize: 12, fontWeight: 700 }}>{s.name}</div>
+                            </div>
+                            {mgr && <div style={{ fontSize: 11, color, fontWeight: 600, border: `1px dashed ${color}`, borderRadius: 6, padding: '3px 8px', background: 'var(--glass-light)' }}>{mgr.position ? `${mgr.position} ` : ''}{labelOf(mgr)}</div>}
+                            {staff.map((e) => (
+                              <div key={e.id} style={{ fontSize: 11, background: 'var(--glass-light)', border: '1px solid var(--border-subtle)', borderRadius: 5, padding: '3px 8px', color: e.employment_type === '兼職' ? 'var(--accent-orange)' : 'var(--text-secondary)' }}>{labelOf(e)}</div>
+                            ))}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             )
           })}

@@ -16,6 +16,7 @@ const ATTACH_ACCEPT = 'image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.txt'
 const FORM_TYPE = 'repair_order'
 
 const STATUS = {
+  草稿:       { color: 'var(--text-muted)',    dim: 'var(--bg-secondary)' },
   進行中:     { color: 'var(--accent-blue)',   dim: 'var(--accent-blue-dim)' },
   待費用核准: { color: 'var(--accent-orange)', dim: 'var(--accent-orange-dim)' },
   已完工:     { color: 'var(--accent-green)',  dim: 'var(--accent-green-dim)' },
@@ -44,6 +45,7 @@ export default function RepairOrders() {
   const [showCreate, setShowCreate] = useState(false)
   const [showManage, setShowManage] = useState(false)  // 管理廠商/類別
   const [detail, setDetail] = useState(null)   // 目前開的維修單
+  const [editDraft, setEditDraft] = useState(null)  // 正在編輯的草稿
 
   const load = async () => {
     setLoading(true)
@@ -53,6 +55,8 @@ export default function RepairOrders() {
     setMe(emp || { id: profile?.id, name: profile?.name, department_id: profile?.department_id })
     let q = supabase.from('repair_orders').select('*').is('deleted_at', null).order('created_at', { ascending: false })
     if (orgId) q = q.eq('organization_id', orgId)
+    // 草稿只有申請人本人看得到(非草稿 or 自己的草稿)
+    if (emp?.id) q = q.or(`status.neq.草稿,requester_id.eq.${emp.id}`)
     let vq = supabase.from('repair_vendors').select('id, name, category_id, contact_person, phone, note, status').order('name')
     let cq = supabase.from('repair_categories').select('id, name, sort_order').order('sort_order').order('id')
     if (orgId) { vq = vq.eq('organization_id', orgId); cq = cq.eq('organization_id', orgId) }
@@ -85,7 +89,10 @@ export default function RepairOrders() {
   // detail 開著時同步最新資料
   const detailRow = useMemo(() => (detail ? orders.find(o => o.id === detail.id) || detail : null), [detail, orders])
 
+  const draftCount = useMemo(() => orders.filter(o => o.status === '草稿').length, [orders])
   const filtered = useMemo(() => orders.filter(o => {
+    if (o.status === '草稿' && tab !== 'draft') return false   // 草稿只在「草稿」分頁出現
+    if (tab === 'draft' && o.status !== '草稿') return false
     if (tab === 'open' && !['進行中', '待費用核准'].includes(o.status)) return false
     if (tab === 'done' && o.status !== '已完工') return false
     if (catFilter && o.category_id !== Number(catFilter)) return false
@@ -113,7 +120,7 @@ export default function RepairOrders() {
       </div>
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
-        {[{ k: 'open', l: '進行中' }, { k: 'done', l: '已完工' }, { k: 'all', l: '全部' }].map(t => (
+        {[{ k: 'open', l: '進行中' }, { k: 'done', l: '已完工' }, { k: 'all', l: '全部' }, { k: 'draft', l: draftCount ? `草稿 ${draftCount}` : '草稿' }].map(t => (
           <button key={t.k} onClick={() => setTab(t.k)} style={{
             padding: '6px 14px', borderRadius: 999, fontSize: 13, fontWeight: 600, cursor: 'pointer',
             border: `1px solid ${tab === t.k ? 'var(--accent-cyan)' : 'var(--border-medium)'}`,
@@ -141,7 +148,7 @@ export default function RepairOrders() {
             const stc = STATUS[o.status] || STATUS['進行中']
             const catName = categories.find(c => c.id === o.category_id)?.name
             return (
-              <div key={o.id} onClick={() => setDetail(o)} style={{
+              <div key={o.id} onClick={() => o.status === '草稿' ? setEditDraft(o) : setDetail(o)} style={{
                 padding: 14, borderRadius: 12, background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', cursor: 'pointer',
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -163,10 +170,11 @@ export default function RepairOrders() {
         </div>
       )}
 
-      {showCreate && (
+      {(showCreate || editDraft) && (
         <CreateModal orgId={orgId} stores={stores} workOrders={workOrders}
-          vendors={vendors} categories={categories} onVendorsChanged={load}
-          onClose={() => setShowCreate(false)} onDone={() => { setShowCreate(false); load() }} />
+          vendors={vendors} categories={categories} onVendorsChanged={load} editDraft={editDraft}
+          onClose={() => { setShowCreate(false); setEditDraft(null) }}
+          onDone={() => { setShowCreate(false); setEditDraft(null); load() }} />
       )}
       {showManage && (
         <ManageModal orgId={orgId} vendors={vendors} categories={categories}
@@ -182,13 +190,18 @@ export default function RepairOrders() {
   )
 }
 
-// ── 開單 ──
-function CreateModal({ orgId, stores, workOrders, vendors, categories, onVendorsChanged, onClose, onDone }) {
-  const [handlerType, setHandlerType] = useState('self')
+// ── 開單 / 編輯草稿 ──
+function CreateModal({ orgId, stores, workOrders, vendors, categories, onVendorsChanged, onClose, onDone, editDraft }) {
+  const [handlerType, setHandlerType] = useState(editDraft?.handler_type || 'self')
   const [f, setF] = useState({
-    occur_time: new Date().toISOString().slice(0, 16), location: '', store_id: '', title: '',
-    description: '', need_purchase: false, supplier: '', quote_amount: '', linked_work_order_id: '',
-    category_id: '', repair_vendor_id: '',
+    occur_time: editDraft?.occur_time ? new Date(editDraft.occur_time).toISOString().slice(0, 16) : new Date().toISOString().slice(0, 16),
+    location: editDraft?.location || '', store_id: editDraft?.store_id ? String(editDraft.store_id) : '',
+    title: editDraft?.title || '', description: editDraft?.description || '',
+    need_purchase: !!editDraft?.need_purchase, supplier: editDraft?.supplier || '',
+    quote_amount: editDraft?.quote_amount != null ? String(editDraft.quote_amount) : '',
+    linked_work_order_id: editDraft?.linked_work_order_id ? String(editDraft.linked_work_order_id) : '',
+    category_id: editDraft?.category_id ? String(editDraft.category_id) : '',
+    repair_vendor_id: editDraft?.repair_vendor_id ? String(editDraft.repair_vendor_id) : '',
   })
   const set = (k, v) => setF(p => ({ ...p, [k]: v }))
   const [addingVendor, setAddingVendor] = useState(false)
@@ -206,29 +219,45 @@ function CreateModal({ orgId, stores, workOrders, vendors, categories, onVendors
     onVendorsChanged?.()
   }
 
+  // 共用欄位 payload
+  const payload = () => ({
+    p_handler_type: handlerType,
+    p_occur_time: f.occur_time ? new Date(f.occur_time).toISOString() : null,
+    p_location: f.location || null,
+    p_store_id: f.store_id ? Number(f.store_id) : null,
+    p_title: f.title || null,
+    p_description: f.description,
+    p_need_purchase: handlerType === 'self' ? !!f.need_purchase : true, // 廠商一定要走報價/費用
+    p_supplier: handlerType === 'vendor' ? (f.supplier || null) : null,
+    p_quote_amount: handlerType === 'vendor' && f.quote_amount ? Number(f.quote_amount) : null,
+    p_linked_work_order_id: f.linked_work_order_id ? Number(f.linked_work_order_id) : null,
+    p_category_id: f.category_id ? Number(f.category_id) : null,
+    p_repair_vendor_id: handlerType === 'vendor' && f.repair_vendor_id ? Number(f.repair_vendor_id) : null,
+  })
+
+  // 正式送出 / 建立(描述必填)
   const submit = async () => {
     if (!f.description.trim()) { toast.error('請填「怎麼處理 / 問題描述」'); return }
-    const { data, error } = await supabase.rpc('create_repair_order', {
-      p_handler_type: handlerType,
-      p_occur_time: f.occur_time ? new Date(f.occur_time).toISOString() : null,
-      p_location: f.location || null,
-      p_store_id: f.store_id ? Number(f.store_id) : null,
-      p_title: f.title || null,
-      p_description: f.description,
-      p_need_purchase: handlerType === 'self' ? !!f.need_purchase : true, // 廠商一定要走報價/費用
-      p_supplier: handlerType === 'vendor' ? (f.supplier || null) : null,
-      p_quote_amount: handlerType === 'vendor' && f.quote_amount ? Number(f.quote_amount) : null,
-      p_linked_work_order_id: f.linked_work_order_id ? Number(f.linked_work_order_id) : null,
-      p_category_id: f.category_id ? Number(f.category_id) : null,
-      p_repair_vendor_id: handlerType === 'vendor' && f.repair_vendor_id ? Number(f.repair_vendor_id) : null,
-    })
-    if (error || !data?.ok) { toast.error('開單失敗：' + (data?.error || error?.message || '')); return }
-    toast.success('維修單已建立')
+    const { data, error } = editDraft
+      ? await supabase.rpc('update_repair_order_draft', { p_id: editDraft.id, ...payload(), p_submit: true })
+      : await supabase.rpc('create_repair_order', { ...payload(), p_is_draft: false })
+    if (error || !data?.ok) { toast.error((editDraft ? '送出' : '開單') + '失敗：' + (data?.error || error?.message || '')); return }
+    toast.success(editDraft ? '維修單已送出' : '維修單已建立')
+    onDone()
+  }
+
+  // 存草稿(描述可留白,純暫存)
+  const saveDraft = async () => {
+    const { data, error } = editDraft
+      ? await supabase.rpc('update_repair_order_draft', { p_id: editDraft.id, ...payload(), p_submit: false })
+      : await supabase.rpc('create_repair_order', { ...payload(), p_is_draft: true })
+    if (error || !data?.ok) { toast.error('存草稿失敗：' + (data?.error || error?.message || '')); return }
+    toast.success('已存草稿')
     onDone()
   }
 
   return (
-    <Modal title="🔧 開維修單" onClose={onClose} onSubmit={submit}>
+    <Modal title={editDraft ? '📝 編輯草稿' : '🔧 開維修單'} onClose={onClose} onSubmit={submit} submitLabel={editDraft ? '送出' : '建立維修單'}>
       <Field label="處理方式" required>
         <div style={{ display: 'flex', gap: 8 }}>
           {[{ v: 'self', l: '自己處理', icon: <User size={14} /> }, { v: 'vendor', l: '找廠商', icon: <Building2 size={14} /> }].map(h => (
@@ -317,6 +346,11 @@ function CreateModal({ orgId, stores, workOrders, vendors, categories, onVendors
       {handlerType === 'vendor' && (
         <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>找廠商:建立後在單內「去申請費用」送報價 → 費用核准後才能回報完工。</div>
       )}
+      {/* 存草稿:純暫存,描述可留白,只有你自己看得到 */}
+      <button type="button" className="btn btn-secondary" onClick={saveDraft}
+        style={{ width: '100%', marginTop: 12 }}>
+        💾 存草稿（先存不送，只有你看得到）
+      </button>
     </Modal>
   )
 }

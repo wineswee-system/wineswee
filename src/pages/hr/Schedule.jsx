@@ -1501,6 +1501,42 @@ export default function Schedule() {
     return m
   })()
 
+  // 匯出班表 Excel（格子版:員工×日期）。時段一律用「~」(11:30~20:00),不用「-」→ 避免被 Excel 吃成日期。
+  const exportGridXlsx = async () => {
+    if (!filtered.length || !activeDates.length) { toast.error('沒有可匯出的排班資料'); return }
+    const XLSX = await import('xlsx')
+    const schedMap = {}
+    for (const s of schedules) schedMap[`${s.employee}|${s.date}`] = s
+    const cellText = (empName, date) => {
+      const s = schedMap[`${empName}|${date}`]
+      if (!s || !s.shift) return ''
+      if (isAbsence(s.shift)) return s.shift                                  // 休息/例假/特休…原樣
+      if (s.actual_start && s.actual_end) return `${String(s.actual_start).slice(0, 5)}~${String(s.actual_end).slice(0, 5)}`
+      const def = shiftDefs.find(d => d.name === s.shift)
+      if (def?.start_time && def?.end_time) return `${String(def.start_time).slice(0, 5)}~${String(def.end_time).slice(0, 5)}`
+      return String(s.shift).replace(/-/g, '~')                              // 保底:殘留的「-」換「~」
+    }
+    const WD = ['日', '一', '二', '三', '四', '五', '六']
+    const header = ['門市', '員工', ...activeDates.map(d => { const dt = new Date(`${d}T00:00:00`); return `${dt.getMonth() + 1}/${dt.getDate()}(${WD[dt.getDay()]})` }), '工時']
+    const rows = [...filtered]
+      .sort((a, b) => (a.store || '').localeCompare(b.store || '') || (a.name || '').localeCompare(b.name || ''))
+      .map(emp => [emp.store || '', emp.name, ...activeDates.map(d => cellText(emp.name, d)), `${(empActiveHours[emp.name] || 0).toFixed(1)}h`])
+    const ws = XLSX.utils.aoa_to_sheet([header, ...rows])
+    // 全欄位強制文字,徹底避免時段/日期被 Excel 自動解析
+    const range = XLSX.utils.decode_range(ws['!ref'])
+    for (let R = range.s.r; R <= range.e.r; R++) {
+      for (let C = range.s.c; C <= range.e.c; C++) {
+        const cell = ws[XLSX.utils.encode_cell({ r: R, c: C })]
+        if (cell && cell.v != null) { cell.t = 's'; cell.v = String(cell.v) }
+      }
+    }
+    ws['!cols'] = header.map((h, i) => (i < 2 ? { wch: 12 } : i === header.length - 1 ? { wch: 8 } : { wch: 11 }))
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, '班表')
+    XLSX.writeFile(wb, `班表_${storeFilter || '全部門市'}_${selectedMonth}.xlsx`)
+    toast.success('已匯出 Excel')
+  }
+
   // 拖拉調整同店員工顯示順序 → 寫回 schedule_sort（store/課管理者才可）
   const reorderEmployees = async (draggedId, targetId) => {
     if (!draggedId || !targetId || draggedId === targetId) return
@@ -1680,6 +1716,9 @@ export default function Schedule() {
               })
             }}>
               📅 月曆 PDF
+            </button>
+            <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 16px' }} onClick={exportGridXlsx}>
+              📊 輸出 Excel
             </button>
             {/* 排班檢查按鈕：依 compliance state 顯示狀態 */}
             <button

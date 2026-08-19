@@ -267,9 +267,19 @@ export default function Attendance() {
       }
     }
     // 補打卡:key=姓名|日期 → 是否有申請 + 狀態（一天可能補上班+補下班兩筆）
+    //   ★ 6 點換天:凌晨(6點前)的補打卡歸「前一天」的班,對齊核准時 _apply_correction_to_attendance,
+    //     否則跨午夜夜班的補卡會掛到隔天、跟實際生效那天對不上。
+    const corrDay = (c) => {
+      const h = c.correction_time ? Number(String(c.correction_time).slice(0, 2)) : null
+      if (h != null && h < 6 && c.date) {
+        const d = new Date(`${c.date}T00:00:00Z`); d.setUTCDate(d.getUTCDate() - 1)
+        return d.toISOString().slice(0, 10)
+      }
+      return c.date
+    }
     const corr = {}
     for (const c of clockCorrections) {
-      const k = `${c.employee}|${c.date}`
+      const k = `${c.employee}|${corrDay(c)}`
       if (!corr[k]) corr[k] = { pending: false, approved: false, rejected: false, types: [] }
       if (c.status === '待審核') corr[k].pending = true
       else if (c.status === '已核准') corr[k].approved = true

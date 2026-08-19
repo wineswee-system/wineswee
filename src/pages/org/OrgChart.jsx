@@ -484,6 +484,9 @@ export default function OrgChart() {
             const color = colors[visibleDepts.indexOf(dept) % colors.length]
             const dim = dims[visibleDepts.indexOf(dept) % dims.length]
             const secs = deptSections(dept)
+            // 直接掛部門(無課)的門市 → 併一個「直屬部門」欄,不然「無課」的門市會從圖上消失
+            const directStores = deptStores(dept).filter(s => !s.section_id)
+            const secsPlus = directStores.length > 0 ? [...secs, { id: '__direct__', name: '直屬部門', __direct: true }] : secs
             return (
               <div key={`sec-${dept.id}`} style={{ marginTop: 24 }}>
                 {/* connector */}
@@ -516,9 +519,10 @@ export default function OrgChart() {
                   justifyContent: 'flex-start',
                   paddingBottom: 8,
                 }}>
-                  {secs.map((sec) => {
-                    const supe = supervisorOf(sec)
-                    const secStores = sectionStores(sec)
+                  {secsPlus.map((sec) => {
+                    const isDirect = sec.__direct
+                    const supe = isDirect ? null : supervisorOf(sec)
+                    const secStores = isDirect ? directStores : sectionStores(sec)
                     return (
                       <div key={sec.id} style={{
                         display: 'flex',
@@ -539,7 +543,7 @@ export default function OrgChart() {
                         }}>
                           <div style={{ fontWeight: 700, color, fontSize: 13 }}>
                             {sec.name}
-                            <span style={{ fontSize: 10, fontWeight: 600, opacity: 0.85, marginLeft: 6 }}>· {sectionHeadcount(sec)} 人</span>
+                            <span style={{ fontSize: 10, fontWeight: 600, opacity: 0.85, marginLeft: 6 }}>· {isDirect ? secStores.reduce((n, s) => n + storeEmployees(s).length, 0) : sectionHeadcount(sec)} 人</span>
                           </div>
                           {supe && (
                             <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>

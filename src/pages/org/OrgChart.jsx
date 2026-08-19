@@ -96,7 +96,14 @@ export default function OrgChart() {
   }
 
   // 課督導 id 集合：這些人顯示在「課別樹」的督導位，不該再列進部門直屬成員/主管框（避免重複）
-  const sectionSupervisorIds = new Set((sections || []).filter(s => s.supervisor_id).map(s => s.supervisor_id))
+  //   只算「有啟用課級」的部門;關閉課級的部門其督導改回一般 sub-manager,不排除
+  const sectionSupervisorIds = new Set(
+    (sections || []).filter(s => {
+      if (!s.supervisor_id) return false
+      const d = departments.find(x => x.id === s.department_id)
+      return d && d.use_sections !== false
+    }).map(s => s.supervisor_id)
+  )
 
   // Get sub-managers (is_manager but not the dept manager_id)
   const subManagers = (dept) =>
@@ -151,6 +158,8 @@ export default function OrgChart() {
 
   // Sections (課) belonging to a department
   const deptSections = (dept) => sections.filter(sec => sec.department_id === dept.id)
+  // 部門可關閉「課級(督導層)」:use_sections=false → 當作沒課,門市直接攤平掛部門(不畫課/督導)
+  const hasSectionLayer = (dept) => dept.use_sections !== false && deptSections(dept).length > 0
   const sectionStores = (sec) => stores.filter(s => s.section_id === sec.id)
   const supervisorOf = (sec) => sec.supervisor_id ? employees.find(e => e.id === sec.supervisor_id) : null
   const storeManagerOf = (s) => s.manager_id ? employees.find(e => e.id === s.manager_id) : null
@@ -163,9 +172,9 @@ export default function OrgChart() {
   // 但 sections-bearing dept (例如營運部) 走 section-tree，不走 fan-out
   const BIG_STORE_THRESHOLD = 3
   const bigStoreDepts = departments.filter(d =>
-    deptStores(d).length > BIG_STORE_THRESHOLD && deptSections(d).length === 0
+    deptStores(d).length > BIG_STORE_THRESHOLD && !hasSectionLayer(d)
   )
-  const sectionedDepts = departments.filter(d => deptSections(d).length > 0)
+  const sectionedDepts = departments.filter(d => hasSectionLayer(d))
 
   // 部門總人數：含主管 + 副主管 + 部門員工 + 部門 / 課別下所有門市員工（去重）
   // 含「掛名主管」— 即使該主管的主部門不是這個部門，只要 dept.manager_id 指向他就算
@@ -314,7 +323,8 @@ export default function OrgChart() {
               const dim = dims[i % dims.length]
               const head = managerName(dept)
               // sectioned dept (例如 營運部)：subManagers 會在課別 tree 顯示，不放在 dept 主管框
-              const hasSecs = deptSections(dept).length > 0
+              //   關閉課級(use_sections=false)→ 當作沒課,督導改回一般 sub-manager 顯示
+              const hasSecs = hasSectionLayer(dept)
               const subs = hasSecs ? [] : subManagers(dept)
               const mems = deptMembersExcludingStoreStaff(dept)
               const dStores = deptStores(dept)

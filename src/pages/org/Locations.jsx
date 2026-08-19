@@ -260,20 +260,23 @@ export default function Locations() {
                 {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
               </select>
             </Field>
-            <Field label="所屬課別（選填）">
-              <select className="form-input" style={{ width: '100%' }} value={form.section_id}
-                onChange={e => {
-                  const sid = e.target.value
-                  const sec = sections.find(s => String(s.id) === String(sid))
-                  // 選了課 → 自動帶出該課的部門(門市可只掛部門、不掛課)
-                  setForm(f => ({ ...f, section_id: sid, department_id: sec ? String(sec.department_id) : f.department_id }))
-                }}>
-                <option value="">無（直接掛部門）</option>
-                {sections
-                  .filter(sec => !form.department_id || String(sec.department_id) === String(form.department_id))
-                  .map(sec => <option key={sec.id} value={sec.id}>{sec.name}</option>)}
-              </select>
-            </Field>
+            {/* 該部門有啟用課級(督導層)才顯示「課別」;關閉的部門門市一律直接掛部門 */}
+            {(departments.find(d => String(d.id) === String(form.department_id))?.use_sections !== false) && (
+              <Field label="所屬課別（選填）">
+                <select className="form-input" style={{ width: '100%' }} value={form.section_id}
+                  onChange={e => {
+                    const sid = e.target.value
+                    const sec = sections.find(s => String(s.id) === String(sid))
+                    // 選了課 → 自動帶出該課的部門(門市可只掛部門、不掛課)
+                    setForm(f => ({ ...f, section_id: sid, department_id: sec ? String(sec.department_id) : f.department_id }))
+                  }}>
+                  <option value="">無（直接掛部門）</option>
+                  {sections
+                    .filter(sec => !form.department_id || String(sec.department_id) === String(form.department_id))
+                    .map(sec => <option key={sec.id} value={sec.id}>{sec.name}</option>)}
+                </select>
+              </Field>
+            )}
             <Field label="城市">
               <input className="form-input" type="text" style={{ width: '100%' }} placeholder="台北市" value={form.city} onChange={e => set('city', e.target.value)} />
             </Field>

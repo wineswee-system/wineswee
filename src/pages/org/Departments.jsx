@@ -52,7 +52,7 @@ export default function Departments() {
 
   const openCreate = () => {
     setEditingDept(null)
-    setForm({ name: '', manager_id: '', description: '', level: '部', parent_department_id: '' })
+    setForm({ name: '', manager_id: '', description: '', level: '部', parent_department_id: '', use_sections: true })
     setShowModal(true)
   }
 
@@ -64,6 +64,7 @@ export default function Departments() {
       description: d.description || '',
       level: d.level || '部',
       parent_department_id: d.parent_department_id || '',
+      use_sections: d.use_sections !== false,
     })
     setShowModal(true)
   }
@@ -86,6 +87,7 @@ export default function Departments() {
       description: form.description,
       level: form.level,
       parent_department_id: form.parent_department_id ? parseInt(form.parent_department_id) : null,
+      use_sections: !!form.use_sections,
     }
     // 新增時自動帶 organization_id（避免新部門被多租戶 filter 擋掉）
     if (!editingDept && profile?.organization_id) {
@@ -280,6 +282,16 @@ export default function Departments() {
           </div>
           <Field label="部門描述">
             <textarea className="form-input" style={{ width: '100%', height: 80, resize: 'vertical' }} placeholder="部門職責說明" value={form.description} onChange={e => set('description', e.target.value)} />
+          </Field>
+          <Field label="組織層級">
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+              <input type="checkbox" checked={!!form.use_sections} onChange={e => set('use_sections', e.target.checked)} />
+              <span style={{ fontWeight: 600 }}>啟用課級（督導層）</span>
+            </label>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4, lineHeight: 1.6 }}>
+              <b>開</b>：門市掛「課」、由督導管，組織圖畫出課／督導那層。<br />
+              <b>關</b>：門市直接掛本部門、組織圖把門市攤平（不畫督導層）—— 適合沒有分層的公司。
+            </div>
           </Field>
         </Modal>
       )}

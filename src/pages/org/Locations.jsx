@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { Plus, Pencil, Trash2, MapPin } from 'lucide-react'
 import { getStores, createStore, updateStore, deleteStore, getEmployees, getCompanies } from '../../lib/db'
-import { getDepartmentSectionsAll } from '../../lib/db/org'
+import { getDepartmentSectionsAll, getDepartments } from '../../lib/db/org'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import { empLabel } from '../../lib/empLabel'
@@ -12,7 +12,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
 import { geocodeAddress } from '../../lib/geocoding'
-const EMPTY_FORM = { name: '', company: '', company_id: '', address: '', phone: '', manager: '', manager_id: '', status: '營運中', store_code: '', store_type: 'retail', city: '', lat: '', lng: '', clock_radius: 150, allowed_wifi: '', late_tolerance_minutes: 5, clock_in_method: 'any', section_id: '' }
+const EMPTY_FORM = { name: '', company: '', company_id: '', address: '', phone: '', manager: '', manager_id: '', status: '營運中', store_code: '', store_type: 'retail', city: '', lat: '', lng: '', clock_radius: 150, allowed_wifi: '', late_tolerance_minutes: 5, clock_in_method: 'any', department_id: '', section_id: '' }
 
 export default function Locations() {
   const { hasPermission, profile } = useAuth()
@@ -21,6 +21,7 @@ export default function Locations() {
   const [employees, setEmployees] = useState([])
   const [companies, setCompanies] = useState([])
   const [sections, setSections] = useState([])
+  const [departments, setDepartments] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [showModal, setShowModal] = useState(false)
@@ -30,11 +31,12 @@ export default function Locations() {
 
   useEffect(() => {
     const orgId = profile?.organization_id ?? getTenantOrgId()
-    Promise.all([getStores(orgId), getEmployees(orgId), getCompanies(orgId), getDepartmentSectionsAll(orgId)]).then(([s, e, c, sec]) => {
+    Promise.all([getStores(orgId), getEmployees(orgId), getCompanies(orgId), getDepartmentSectionsAll(orgId), getDepartments(orgId)]).then(([s, e, c, sec, d]) => {
       setStores(s.data || [])
       setEmployees(e.data || [])
       setCompanies(c.data || [])
       setSections(sec.data || [])
+      setDepartments(d.data || [])
     }).catch(err => {
       console.error('Failed to load data:', err)
       setError('資料載入失敗，請重新整理頁面')
@@ -57,6 +59,7 @@ export default function Locations() {
       address: s.address || '',
       phone: s.phone || '',
       manager_id: s.manager_id || '',
+      department_id: s.department_id || '',
       section_id: s.section_id || '',
       status: s.status || '營運中',
       store_code: s.store_code || '',
@@ -103,6 +106,7 @@ export default function Locations() {
       // 0 是合法值（無寬限）→ 不能用 || 5（0 falsy 會被吃成 5）；空字串才給預設
       late_tolerance_minutes: Number.isNaN(parseInt(form.late_tolerance_minutes, 10)) ? 5 : parseInt(form.late_tolerance_minutes, 10),
       clock_in_method: form.clock_in_method || 'any',
+      department_id: form.department_id ? parseInt(form.department_id) : null,
       section_id: form.section_id ? parseInt(form.section_id) : null,
     }
     try {
@@ -241,10 +245,33 @@ export default function Locations() {
                 {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </Field>
-            <Field label="所屬課別">
-              <select className="form-input" style={{ width: '100%' }} value={form.section_id} onChange={e => set('section_id', e.target.value)}>
+            <Field label="所屬部門">
+              <select className="form-input" style={{ width: '100%' }} value={form.department_id}
+                onChange={e => {
+                  const did = e.target.value
+                  setForm(f => {
+                    // 換部門後,原本的課若不屬於新部門 → 清掉
+                    const secOk = sections.find(s => String(s.id) === String(f.section_id))
+                    const keepSec = secOk && String(secOk.department_id) === String(did)
+                    return { ...f, department_id: did, section_id: keepSec ? f.section_id : '' }
+                  })
+                }}>
                 <option value="">無</option>
-                {sections.map(sec => <option key={sec.id} value={sec.id}>{sec.name}</option>)}
+                {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+              </select>
+            </Field>
+            <Field label="所屬課別（選填）">
+              <select className="form-input" style={{ width: '100%' }} value={form.section_id}
+                onChange={e => {
+                  const sid = e.target.value
+                  const sec = sections.find(s => String(s.id) === String(sid))
+                  // 選了課 → 自動帶出該課的部門(門市可只掛部門、不掛課)
+                  setForm(f => ({ ...f, section_id: sid, department_id: sec ? String(sec.department_id) : f.department_id }))
+                }}>
+                <option value="">無（直接掛部門）</option>
+                {sections
+                  .filter(sec => !form.department_id || String(sec.department_id) === String(form.department_id))
+                  .map(sec => <option key={sec.id} value={sec.id}>{sec.name}</option>)}
               </select>
             </Field>
             <Field label="城市">

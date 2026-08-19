@@ -1507,10 +1507,21 @@ export default function Schedule() {
     const XLSX = await import('xlsx')
     const schedMap = {}
     for (const s of schedules) schedMap[`${s.employee}|${s.date}`] = s
+    // 兩頭班:名稱本身就編了兩段(如「11-15、20-24」)。展開成 11:00~15:00、20:00~24:00。
+    //   token: 1~2位=時、3位=H:MM(如 930→9:30)、4位=HH:MM(如 1730→17:30)。「-」一律換「~」。
+    const tok = (t) => {
+      t = String(t).trim()
+      if (!/^\d{1,4}$/.test(t)) return t
+      if (t.length <= 2) return `${t.padStart(2, '0')}:00`
+      if (t.length === 3) return `0${t[0]}:${t.slice(1)}`
+      return `${t.slice(0, 2)}:${t.slice(2)}`
+    }
+    const fmtSplit = (name) => String(name).split('、').map(seg => seg.split('-').map(tok).join('~')).join('、')
     const cellText = (empName, date) => {
       const s = schedMap[`${empName}|${date}`]
       if (!s || !s.shift) return ''
       if (isAbsence(s.shift)) return s.shift                                  // 休息/例假/特休…原樣
+      if (String(s.shift).includes('、')) return fmtSplit(s.shift)            // ★兩頭班:顯示兩段
       if (s.actual_start && s.actual_end) return `${String(s.actual_start).slice(0, 5)}~${String(s.actual_end).slice(0, 5)}`
       const def = shiftDefs.find(d => d.name === s.shift)
       if (def?.start_time && def?.end_time) return `${String(def.start_time).slice(0, 5)}~${String(def.end_time).slice(0, 5)}`

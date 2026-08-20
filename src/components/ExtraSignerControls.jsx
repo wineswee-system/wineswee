@@ -109,15 +109,20 @@ export default function ExtraSignerControls({
   const processExtra = async (action) => {
     if (!pendingExtra) return
     let reason = null
+    let note = null
     if (action === 'reject') {
       reason = prompt('退回加簽原因（必填）：')
       if (!reason || !reason.trim()) { toast.error('必須填寫退回原因'); return }
+    } else {
+      // 核准加簽：選填備註，發起加簽的下一關簽核人會看到（取消/留空都照樣核准）
+      note = prompt('核准備註（選填，發起加簽的人會看到）：')
     }
     const { error } = await supabase.rpc('process_extra_signer', {
       p_extra_step_id: pendingExtra.id,
       p_processor_id: me,
       p_action: action,
       p_reject_reason: reason?.trim() || null,
+      p_note: note?.trim() || null,
     })
     if (error) { toast.error(`${action === 'approve' ? '核准' : '退回'}失敗：${error.message}`); return }
     toast.success(action === 'approve' ? '已核准加簽' : '已退回加簽，整單已退回')

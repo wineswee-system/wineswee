@@ -419,6 +419,7 @@ export default function Overtime() {
   }
 
   const filtered = records.filter(r =>
+    !r.is_exception &&   // 匯入的額外加班不在此頁列出/計入統計(它在「加班補登」頁管理);計薪照算不受影響
     (deptFilter === '' || getEmpDept(r.employee) === deptFilter) &&
     (storeFilter === '' || r.store === storeFilter) &&
     (!search.trim() || [String(r.id), r.employee, r.reason, r.store].some(f => (f||'').toLowerCase().includes(search.trim().toLowerCase())))

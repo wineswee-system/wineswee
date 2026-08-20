@@ -256,7 +256,9 @@ export default function Schedule() {
       supabase.from('shift_definitions').select('*').order('sort_order'),
       supabase.from('holidays').select('date'),
       supabase.from('user_stores').select('employee_id, store_id, is_primary'),
-      supabase.from('salary_structures').select('employee_id, employment_category'),
+      // employment_category 走 DEFINER RPC(繞薪資表 RLS)—— 否則督導只讀得到自己下屬的分類,
+      //   讀不到的人 category=null → 排除「行政」失效 → 督導會看到全店的人(含固定時間行政)。
+      supabase.rpc('list_employment_categories'),
     ]).then(([e, d, l, sd, hd, us, ss]) => {
       // Enrich employees with user_stores data
       const userStoresMap = {}

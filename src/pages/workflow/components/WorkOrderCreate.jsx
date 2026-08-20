@@ -20,7 +20,8 @@ export default function WorkOrderCreate({ bindingId, onClose, onDone }) {
     if (!orgId) return
     Promise.all([
       supabase.from('departments').select('id, name').eq('organization_id', orgId).order('name'),
-      supabase.from('employees').select('id, name, department_id, position').eq('organization_id', orgId).eq('status', '在職').order('name'),
+      // 承辦人改吃 DEFINER RPC 繞過 employees SELECT RLS(manager/店員只看自己門市會撈不到目標部門的人)
+      supabase.rpc('list_org_active_employees'),
       supabase.from('stores').select('id, name').eq('organization_id', orgId).order('name'),
     ]).then(([d, e, s]) => { setDepartments(d.data || []); setEmployees(e.data || []); setStores(s.data || []) })
   }, [orgId])

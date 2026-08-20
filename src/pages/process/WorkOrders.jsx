@@ -55,7 +55,8 @@ export default function WorkOrders() {
       supabase.from('employees').select('id, department_id').eq('id', profile?.id).maybeSingle(),
       supabase.from('work_orders').select('*').is('deleted_at', null).order('id', { ascending: false }),
       supabase.from('departments').select('id, name').eq('organization_id', orgId).order('name'),
-      supabase.from('employees').select('id, name, department_id, position').eq('organization_id', orgId).eq('status', '在職').order('name'),
+      // 承辦人來源改吃 DEFINER RPC:繞過 employees 的 SELECT RLS(manager/store_staff 只看自己門市 → 撈不到 HR 等總部部門的人),讓任何角色都能挑到目標部門的承辦人
+      supabase.rpc('list_org_active_employees'),
       supabase.from('stores').select('id, name').eq('organization_id', orgId).order('name'),
     ])
     setMe(meRes.data || null)
@@ -134,7 +135,11 @@ export default function WorkOrders() {
     if (!data?.ok) { toast.error('開單失敗：' + (data?.error || '未知')); return false }
     if (data?.id && createFiles.length) {
       try {
-        await uploadFormAttachments({ formType: 'work_order', formId: data.id, files: createFiles.map(f => ({ file: f })), organizationId: orgId, uploaderEmpId: me?.id, uploaderName: profile?.name })
+        const res = await uploadFormAttachments({ formType: 'work_order', formId: data.id, files: createFiles.map(f => ({ file: f })), organizationId: orgId, uploaderEmpId: me?.id, uploaderName: profile?.name })
+        // uploadFormAttachments 不會 throw：失敗都收在 res.errors，要主動檢查才不會靜默吞掉
+        if (res?.errors?.length) {
+          toast.warning(`工單已建立,但 ${res.errors.length} 個附件上傳失敗：${res.errors.map(e => e.error).join('；')}`)
+        }
       } catch (err) { toast.warning('工單已建立,但附件上傳失敗：' + (err.message || '')) }
     }
     toast.success('工單已送出')

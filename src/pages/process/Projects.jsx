@@ -863,7 +863,15 @@ export default function Projects() {
   if (selected) {
     const p = selected
     const stats = getStats(p.id)
+    // 已完成(100%)的流程一律排到最下面(其餘維持原本 project_order / sort_order)
+    const wfIsComplete = (w) => {
+      if (w.status === '已完成') return true
+      const wt = tasks.filter(t => t.workflow_instance_id === w.id)
+      return wt.length > 0 && wt.every(t => t.status === '已完成')
+    }
     const pWorkflows = workflows.filter(w => w.project_id === p.id).sort((a, b) => {
+      const ca = wfIsComplete(a), cb = wfIsComplete(b)
+      if (ca !== cb) return ca ? 1 : -1
       if (a.project_order != null && b.project_order != null) return a.project_order - b.project_order
       if (a.project_order != null) return -1
       if (b.project_order != null) return 1

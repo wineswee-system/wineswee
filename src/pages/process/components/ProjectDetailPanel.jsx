@@ -548,7 +548,10 @@ export default function ProjectDetailPanel({
         const wPct = wTotal > 0 ? Math.round((wDone / wTotal) * 100) : 0
         const wColor = w.status === '已完成' ? 'var(--accent-green)' : w.status === '已退回' ? 'var(--accent-red)' : 'var(--accent-cyan)'
         const wColorBg = w.status === '已完成' ? 'var(--accent-green-dim)' : w.status === '已退回' ? 'var(--accent-red-dim)' : 'var(--accent-cyan-dim)'
-        const wCollapsed = collapsedWfIds.has(w.id)
+        // 100% / 已完成的流程 → 預設收折(並由父層排到最下面)。collapsedWfIds 當「使用者手動翻轉過」的集合:
+        //   未翻轉時吃預設(完成=收、未完成=展),點一下才翻轉 → 使用者仍可展開已完成的看內容。
+        const wIsComplete = wPct === 100 || w.status === '已完成'
+        const wCollapsed = collapsedWfIds.has(w.id) ? !wIsComplete : wIsComplete
 
         return (
           <div key={w.id} className="card"

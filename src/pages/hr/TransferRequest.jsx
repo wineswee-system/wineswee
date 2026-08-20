@@ -75,6 +75,7 @@ export default function TransferRequest() {
       rejectReason: row.reject_reason,
       requestType: 'transfer',
       requestId: row.id,
+      sourceTable: 'personnel_transfer_requests',  // 讓簽呈也 merge 加簽關,跟簽核中心詳情對齊
       currentStep: row.current_step,
     })
   }

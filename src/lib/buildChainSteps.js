@@ -402,7 +402,7 @@ export async function buildFormChainSteps({
   formType, organizationId, applicantName, applicantId, applicantCreatedAt, recordStatus,
   approverName, approvedAt, rejectReason,
   fallbackTail = ['人資核章'],
-  requestType = null, requestId = null, currentStep = null,
+  requestType = null, requestId = null, currentStep = null, sourceTable = null,
 }) {
   const cleanApprover = (approverName && approverName !== '-' && approverName !== '—') ? approverName : ''
   const applicantStep = {
@@ -447,7 +447,11 @@ export async function buildFormChainSteps({
             rejectReason: status === 'rejected' ? rejectReason : '',
           }
         })
-        return [applicantStep, ...finalSteps]
+        const withApplicant = [applicantStep, ...finalSteps]
+        // 簽呈也 merge 加簽（approval_extra_steps）→ 跟 ApprovalDetailModal 對齊(有傳 sourceTable 才撈)
+        return (sourceTable && requestId)
+          ? await mergeExtraSteps(withApplicant, sourceTable, requestId, {})
+          : withApplicant
       }
     } catch (e) {
       console.warn('[buildFormChainSteps] snapshot RPC failed, fallback to live:', e)

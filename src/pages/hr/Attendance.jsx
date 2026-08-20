@@ -157,7 +157,7 @@ export default function Attendance() {
       getDepartments(orgId),
       getStores(orgId),
       supabase.from('overtime_requests')
-        .select('id, employee, date, start_time, end_time, ot_hours, hours, ot_category, store, status, organization_id')
+        .select('id, employee, date, start_time, end_time, ot_hours, hours, ot_category, store, status, is_exception, organization_id')
         .eq('organization_id', orgId).in('status', ['已核准', '待審核'])
         .is('deleted_at', null)
         .gte('date', startDate).lte('date', endDate),
@@ -408,6 +408,7 @@ export default function Attendance() {
   const otRows = useMemo(() => overtimes
     .filter(o =>
       o.status === '已核准' &&   // 獨立加班列只顯示已核准(待審核只在「加班」欄呈現)
+      !o.is_exception &&         // 批次匯入的「額外加班」不拉獨立列(它是補登/計薪用,非實際打卡);加班費照算不受影響
       (deptFilter === '' || getEmpDept(o.employee) === deptFilter) &&
       (storeFilter === '' || getEmpStore(o.employee) === storeFilter) &&
       (search === '' || o.employee?.includes(search))

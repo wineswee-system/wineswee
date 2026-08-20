@@ -63,7 +63,7 @@ export default function TransferRequest() {
 
   // ★ 改走 buildFormChainSteps：讀 form_chain_configs（admin 在異動頁面設定的 chain）
   const buildAndResolveChain = async (row) => {
-    return buildFormChainSteps({
+    const steps = await buildFormChainSteps({
       formType: 'transfer',
       organizationId: profile?.organization_id,
       applicantName: row.employee?.name || '',
@@ -78,6 +78,8 @@ export default function TransferRequest() {
       sourceTable: 'personnel_transfer_requests',  // 讓簽呈也 merge 加簽關,跟簽核中心詳情對齊
       currentStep: row.current_step,
     })
+    // 補各關簽核時間/停留(跟表單查詢/簽核中心對齊);會跳過申請人與加簽關不覆蓋
+    return await mergeStepSignTimes('transfer', row.id, steps)
   }
 
   const printWithChain = async (row) => {

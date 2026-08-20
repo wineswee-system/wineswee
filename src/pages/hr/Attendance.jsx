@@ -176,7 +176,9 @@ export default function Attendance() {
       supabase.from('organizations').select('settings').eq('id', orgId).maybeSingle(),
       supabase.rpc('web_my_visible_store_ids'),  // 跨店主管/督導可見門市(_can_see_store_for_emp)
       // 員工身分（行政 admin 走固定辦公時間、其他走班表）+ 各身分工時規則
-      supabase.from('salary_structures').select('employee_id, employment_category'),
+      // ★走 DEFINER RPC：salary_structures 的 SELECT 只給團隊(can_see_request)，督導直讀會拿不到別人的分類
+      //   → 工時/遲到早退規則套錯。RPC 只回 {employee_id, employment_category} 不含薪資。
+      supabase.rpc('list_employment_categories'),
       supabase.from('employment_category_work_rules')
         .select('category, work_start, work_end, grace_minutes')
         .eq('organization_id', orgId).eq('is_active', true),
@@ -662,10 +664,12 @@ export default function Attendance() {
       })
       let net = nwh != null ? Number(nwh) : null
       if (net == null) {
-        const { data: ssCat } = await supabase.from('salary_structures')
-          .select('employment_category').eq('employee_id', r.employee_id).maybeSingle()
-        net = computeNet(editClockIn, editClockOut, ssCat?.employment_category === 'admin')
+        // 走 DEFINER RPC(salary_structures RLS 只給團隊，督導直讀拿不到)
+        const { data: cats } = await supabase.rpc('list_employment_categories')
+        const cat = (cats || []).find(c => c.employee_id === r.employee_id)?.employment_category
+        net = computeNet(editClockIn, editClockOut, cat === 'admin')
       }
+
       if (net > 0) { payload.total_hours = net; payload.hours = net }
     }
     const { error } = await supabase.from('attendance_records').update(payload).eq('id', r.id)

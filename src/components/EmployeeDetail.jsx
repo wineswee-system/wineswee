@@ -275,18 +275,9 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
     if (data) {
       onUpdate(data); setIsDirty(false)
       if (storeChanged) {
-        // ★ 換門市不再「靜默清除未來排班」— 督導/跨店人員會被整批誤刪(見 20260806140000)。
-        //   改成先問:單店員工轉店可選「是」清掉舊班;督導/跨店選「否」保留。
-        const clear = await confirm({
-          message: `已將主要門市改為「${form.store}」。\n\n要一併清除 ${form.name || '該員工'} 今天以後的排班嗎？\n（單店員工轉店可清；督導 / 跨店人員請選「否」，避免誤刪跨店班表）`,
-        })
-        if (clear) {
-          const today = new Date().toISOString().slice(0, 10)
-          await supabase.from('schedules').delete().eq('employee_id', data.id).gt('date', today)
-          toast.success(`已調至${form.store}，未來排班已清除，請重新排班`)
-        } else {
-          toast.success(`已調至${form.store}（未來排班保留）`)
-        }
+        // ★ 換門市「不刪」未來排班 — 班表跟著人走,留著(督導/跨店/一般都不誤刪)。
+        //   要清舊班請到排班頁自行處理,不在換門市時連動刪除。
+        toast.success(`已調至${form.store}（未來排班保留,不刪除）`)
       }
     }
 
@@ -357,10 +348,7 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
       if (error) toast.error('其他欄位儲存失敗，請重新儲存')
       if (data) {
         onUpdate(data); setIsDirty(false)
-        if (storeChanged) {
-          const today = new Date().toISOString().slice(0, 10)
-          await supabase.from('schedules').delete().eq('employee_id', data.id).gt('date', today)
-        }
+        // ★ 換門市不刪未來排班(班表留著跟著人走)
       }
     }
   }

@@ -543,30 +543,24 @@ export async function notifyProjectMember(assigneeName, project, taskTitles) {
 }
 
 /**
- * 專案成員通知（聚合）：專案內每個被指派任務的人各發一則彙總，一人一則、去重。
- * 聚合+去重+站內通知由 RPC notify_project_members(SECURITY DEFINER)處理（繞 RLS），
- * 此處只依回傳名單逐人發 LINE 彙總卡。
- * @param {object} project - { id, name, store }
+ * 專案成員通知（聚合）：專案內每個被指派任務的人各發一則彙總卡。
+ * ★ 全部走後端 Edge Function notify-project-members(service role)：寫站內通知(RPC)+ 發 LINE。
+ *   原本在前端逐人 push,7/18 多租戶 RLS 上線後前端讀不到別人的 line 綁定 → 靜默失敗(站內有、LINE 沒發)。
+ *   改後端 service role 繞 RLS,對齊 task-reminder 的可靠路徑。
+ * @param {object} project - { id }
  * @param {object} [opts]  - { force } force=true 強制重發（手動按鈕用）
  */
 export async function notifyProjectMembers(project, { force = false } = {}) {
   if (!project?.id) return { notified: 0, reason: 'no_project' }
-  // 撈專案發起人（owner）一次，附到彙總卡上顯示
-  let owner = project.owner
-  if (!owner) {
-    const { data: p } = await supabase.from('projects').select('owner').eq('id', project.id).maybeSingle()
-    owner = p?.owner || null
+  try {
+    const { data, error } = await supabase.functions.invoke('notify-project-members', {
+      body: { project_id: project.id, force },
+    })
+    if (error) return { notified: 0, error }
+    return data || { notified: 0 }
+  } catch (err) {
+    return { notified: 0, error: err?.message }
   }
-  const projectWithOwner = { ...project, owner }
-  const { data, error } = await supabase.rpc('notify_project_members', {
-    p_project_id: project.id, p_force: force,
-  })
-  if (error || !Array.isArray(data)) return { notified: 0, error }
-  // 站內通知已由 RPC 寫入；逐人發 LINE 彙總卡（列出所有任務名稱）
-  for (const row of data) {
-    await notifyProjectMember(row.employee_name, projectWithOwner, row.task_titles).catch(() => {})
-  }
-  return { notified: data.length }
 }
 
 /**

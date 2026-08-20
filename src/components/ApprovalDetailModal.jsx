@@ -212,6 +212,7 @@ export default function ApprovalDetailModal({
       status: ex.status === 'approved' ? 'completed' : ex.status === 'rejected' ? 'rejected' : 'current',
       completedAt: ex.approved_at, rejectReason: ex.reject_reason || '',
       extraReason: ex.reason || '', extraRequesterName: ex.requester_name || '',
+      processorNote: ex.processor_note || '',   // 加簽人核准/退回時留的備註 → 顯示給發起加簽的下一關
     })
     const byBefore = {}
     for (const ex of extraSteps) (byBefore[ex.insert_before_step] ||= []).push(ex)
@@ -622,6 +623,26 @@ function TimelineDot({ step, index, isLast }) {
           background: 'rgba(239,68,68,0.08)',
         }}>
           {step.rejectReason}
+        </div>
+      )}
+      {/* 加簽回覆卡:發起原因 + 加簽人核准時留的備註（讓發起加簽的下一關看到判斷）*/}
+      {step.kind === 'extra' && (step.extraReason || step.processorNote) && (
+        <div style={{
+          marginTop: 8, padding: '10px 12px', borderRadius: 8,
+          border: '1px solid var(--border-subtle)', background: 'var(--bg-card)',
+          display: 'flex', flexDirection: 'column', gap: 6,
+        }}>
+          {step.extraReason && (
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.4 }}>
+              🪶 {step.extraRequesterName ? `${step.extraRequesterName} 發起加簽：` : '加簽原因：'}{step.extraReason}
+            </div>
+          )}
+          {step.status === 'completed' && step.processorNote && (
+            <div style={{ fontSize: 13, display: 'flex', gap: 6, alignItems: 'flex-start' }}>
+              <span style={{ flexShrink: 0, color: 'var(--accent-green)', fontWeight: 600 }}>✅ 核准回覆</span>
+              <span style={{ color: 'var(--text-primary)', lineHeight: 1.4 }}>{step.processorNote}</span>
+            </div>
+          )}
         </div>
       )}
     </div>

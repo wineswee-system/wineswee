@@ -773,6 +773,12 @@ export default {
   '⏱ 時間追蹤': '⏱ Time tracking', '預估': 'Estimated', '+ 記錄': '+ Log',
   '尚無子任務或查核清單': 'No subtasks or checklist yet', '+ 新增子任務': '+ Add subtask',
   '完成進度': 'Progress', '子任務': 'Subtasks', '+ 新增': '+ Add', '此清單無項目': 'This list has no items',
+  // 附件分頁(TaskAttachmentsTab,嵌在討論頁)
+  '附件已上傳': 'Attachment uploaded', '上傳失敗，請再試一次': 'Upload failed, please try again',
+  '下載': 'Download', '📎 發起附件 (': '📎 Initiator attachments (', '發起人未附檔': 'The initiator attached no files',
+  '📎 回報附件 (': '📎 Report attachments (', '上傳附件': 'Upload attachment',
+  '支援所有檔案類型（不含執行檔），單檔上限 10 MB': 'All file types supported (except executables), max 10 MB per file',
+  '尚無回報附件': 'No report attachments yet',
   // 討論分頁(TaskDiscussionTab)
   '輸入備註… 打 @ 可以標記同事': 'Enter a note… type @ to mention a colleague',
   '💬 備註 (': '💬 Notes (',

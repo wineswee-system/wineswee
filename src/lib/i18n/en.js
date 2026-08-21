@@ -727,4 +727,22 @@ export default {
   '至少需要填寫一個步驟名稱': 'At least one step name required', '刪除失敗（可能沒有權限）': 'Delete failed (maybe no permission)', '請填寫流程名稱': 'Enter flow name', '封存失敗：': 'Archive failed: ', '資料會移入回收暫存區保留備份（可供復原）。建議改用「封存」保留進行中紀錄。': 'Data moves to recycle bin (recoverable). Prefer Archive to keep in-progress records.', '刪除任務失敗：': 'Delete task failed: ', '刪除流程失敗：': 'Delete flow failed: ', '搜尋 ID、流程/任務名稱、負責人...': 'Search ID, flow/task name, owner...', '🤖 AI 助手': '🤖 AI Assistant',
   '👤 負責人': '👤 Owner', '你沒有權限做此動作': "You don't have permission for this action", '此單已被受理': 'Already accepted', '狀態不是處理中': 'Not in progress', '尚未回報完成': 'Not reported complete', '目前狀態不可執行': 'Not allowed in current state', '操作失敗': 'Operation failed', '退回原因：': 'Return reason: ', '不填 = 我自己接': 'Blank = I take it', '解除轉換？工單會回到單純「處理中」，可重新選轉專案/流程或回報完成（已建的專案/流程不會刪）。': 'Unlink conversion? The work order returns to In Progress; created project/flow is kept.', '已解除轉換': 'Conversion unlinked',
   '請其他部門協助處理事項 · 受理排程 · 完成結案（純流程紀錄，不走簽核）': 'Ask another dept to help · accept & schedule · close (record-only, no approval)', '期望 / 排定': 'Expected / scheduled', '排': 'Sched', '排 未定': 'Sched TBD', '優先：': 'Priority: ', '—（受理時填）': '— (filled on accept)', '已轉': 'Converted to', '前往': 'Go to', '解除轉換': 'Unlink conversion',
+
+  // ── 模組說明/殘餘(process)──
+  '工務處理維修:自己修 / 找廠商 → 需採購串費用申請 → 回報完工上傳': 'Facilities repairs: self-fix / hire vendor → link expense request → report completion',
+  '訂金（固定 30 萬）＋ 加盟金（多位投資人分攤、每人各自三期 45/45/10）收款記錄': 'Deposit (fixed 300k) + franchise fee (investors split, 3 stages 45/45/10) collection records',
+  '門市裝潢工程報價記錄：廠商/負責人/電話 + 工程費/監工/稅金/總價 + 可自訂付款分期': 'Store fit-out quotes: vendor/owner/phone + work/supervision/tax/total + custom installments',
+  '訂金 / 加盟金收款記錄（純記帳，加總滿額自動完成）': 'Deposit / franchise collection records (record-only, auto-complete when full)',
+  '門市裝潢報價記錄（純記錄，含付款分期）': 'Store fit-out quote records (record-only, with installments)',
+  '確定刪除此清單？資料會移入回收暫存區保留備份（可供復原）。': 'Delete this list? Data moves to the recycle bin (recoverable).',
+  '訂金（固定 30 萬）與加盟金（投資人分攤，每人各自三期 45 / 45 / 10）收款記錄 — 純記帳，滿額自動完成': 'Deposit (fixed 300k) & franchise fee (investors split, 3 stages 45/45/10) — record-only, auto-complete when full',
+  '投資人分攤（每位金額各自拆 45 / 45 / 10 三期，加總須等於總額）— 只能選「已付訂金」的投資人': 'Investor split (each in 3 stages 45/45/10; sum must equal total) — only investors who paid the deposit',
+  '⚠ 選了簽核鏈後，所有任務完成時流程會進入「待簽核」，需簽核通過才算結案': '⚠ With an approval chain, the flow goes to Pending Approval when tasks finish and closes only when approved',
+  '⚠️ 未設定專案開始/結束日期，圖表將以任務建立時間與今天推算範圍。建議編輯專案補齊日期以得到更準確的燃盡線。': '⚠️ No project start/end dates; the chart estimates from task creation to today. Edit the project for an accurate burndown.',
+  '建立流程 —— 選一個範本部署，完成後會自動綁定，流程全跑完工單就自動結案。': 'Create a flow — deploy a template; it auto-links, and the work order closes when the flow completes.',
+  'Categories — 統一管理專案、任務、流程、查核清單、簽核的分類': 'Categories — manage categories for projects, tasks, flows, checklists, approvals',
+  '全員通用': 'For everyone', '未設定其他專屬鏈時的 fallback': 'Fallback when no specific chain is set', '有門市歸屬（store_id IS NOT NULL）且非店長的員工套用': 'Applies to staff assigned to a store (not managers)', '行政人員': 'Admin staff', '沒有門市歸屬、也非主管的總部/行政員工套用': 'Applies to HQ/admin staff with no store and not managers',
+  '確認目標（營收/會員/曝光）、KPI': 'Confirm goals (revenue/members/reach), KPI', '需主管簽核才能完成此步驟': 'Manager approval required to complete this step', '觸發動作': 'Trigger action', '步驟開始通知': 'Step-start notification', '步驟完成通知': 'Step-complete notification', '請填寫範本名稱': 'Enter template name', '請填門市': 'Enter store', '開單': 'Open', '附件上傳失敗：': 'Attachment upload failed: ', '可上傳照片、PDF、Word、Excel 等': 'Upload photos, PDF, Word, Excel, etc.', '期別': 'Stage',
+  // 常見內插碎片(讓 5 個任務→5 tasks 等)
+  '個任務': 'tasks', '個步驟': 'steps', '個工作流程': 'workflows', '個里程碑': 'milestones', '個欄位': 'fields', '個角色': 'roles', '關）': ' step)', '項）': ' items)', '步）': ' steps)', '位人員，': 'people, ',
 }

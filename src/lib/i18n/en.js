@@ -773,6 +773,11 @@ export default {
   '⏱ 時間追蹤': '⏱ Time tracking', '預估': 'Estimated', '+ 記錄': '+ Log',
   '尚無子任務或查核清單': 'No subtasks or checklist yet', '+ 新增子任務': '+ Add subtask',
   '完成進度': 'Progress', '子任務': 'Subtasks', '+ 新增': '+ Add', '此清單無項目': 'This list has no items',
+  // 討論分頁(TaskDiscussionTab)
+  '輸入備註… 打 @ 可以標記同事': 'Enter a note… type @ to mention a colleague',
+  '💬 備註 (': '💬 Notes (',
+  '↵ 選擇 · Esc 關閉': '↵ Select · Esc close',
+  'Shift+Enter 換行 · Enter 送出 · 打 @ 標記同事並推送 LINE 通知': 'Shift+Enter new line · Enter send · type @ to mention a colleague and push a LINE notification',
   '日常': 'Routine', '任務已更新': 'Task updated', '業務分類': 'Business category',
   '所在欄位': 'Column', '（無）': '(None)', '週期性': 'Recurring', '自訂欄位': 'Custom fields',
 }

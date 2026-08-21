@@ -265,6 +265,9 @@ export default function Employees() {
           base_salary: Number(form.base_salary) || 0,
           hourly_rate: Number(form.hourly_rate) || 0,
           piece_rate: Number(form.piece_rate) || 0,
+          // ★ 伙食/交通津貼:計薪引擎讀 salary_structures,新增時沒寫這裡→填了不發薪。補寫進真理源
+          meal_allowance: Number(form.meal_allowance) || 0,
+          transport_allowance: Number(form.transport_allowance) || 0,
           custom_allowances: (form.custom_allowances || []).filter(c => c.name && Number(c.amount) > 0),
         })
         if (ssErr) { console.warn('salary_structures 建立失敗:', ssErr); toast.error('員工已建立，但薪資結構未建立：' + ssErr.message) }

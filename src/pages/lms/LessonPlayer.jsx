@@ -4,8 +4,9 @@ import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { useAuth } from '../../contexts/AuthContext'
 import { toast } from 'sonner'
-import { ArrowLeft, ArrowRight, CheckCircle, BookOpen, Video, HelpCircle, Clock } from 'lucide-react'
+import { ArrowLeft, ArrowRight, CheckCircle, BookOpen, Video, HelpCircle, Clock, Upload } from 'lucide-react'
 import { getEventBus } from '../../lib/events/EventBus'
+import { maybeCompleteCourse } from '../../lib/lms/completion'
 
 export default function LessonPlayer() {
   const { courseId, lessonId } = useParams()
@@ -18,8 +19,10 @@ export default function LessonPlayer() {
   const [lesson, setLesson] = useState(null)
   const [enrollment, setEnrollment] = useState(null)
   const [progress, setProgress] = useState({})
+  const [submissions, setSubmissions] = useState({}) // lesson_id → { status, score }
   const [loading, setLoading] = useState(true)
   const [marking, setMarking] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const startTimeRef = useRef(Date.now())
 
   useEffect(() => {
@@ -44,9 +47,15 @@ export default function LessonPlayer() {
             ;(data || []).forEach(p => { map[p.lesson_id] = p })
             setProgress(map)
           })
+        supabase.from('lms_quiz_submissions').select('lesson_id, status, score').eq('enrollment_id', e.data.id)
+          .then(({ data }) => {
+            const map = {}
+            ;(data || []).forEach(s => { map[s.lesson_id] = s })
+            setSubmissions(map)
+          })
       }
     }).finally(() => setLoading(false))
-  }, [courseId, lessonId])
+  }, [courseId, lessonId, profile?.id])
 
   useEffect(() => { startTimeRef.current = Date.now() }, [lessonId])
 
@@ -60,8 +69,42 @@ export default function LessonPlayer() {
 
   const goToLesson = (l) => { navigate(`/lms/course/${courseId}/lesson/${l.id}`); setLesson(l) }
 
+  const handleUpload = async (file) => {
+    if (!file || !enrollment || uploading) return
+    if (file.size > 50 * 1024 * 1024) { toast.error('檔案過大（上限約 50MB）'); return }
+    setUploading(true)
+    try {
+      const org = enrollment.organization_id ?? profile?.organization_id
+      const safe = file.name.replace(/[^\w.\-]+/g, '_')
+      const path = `${org}/${enrollment.id}/${lesson.id}/${Date.now()}_${safe}`
+      const { error: upErr } = await supabase.storage.from('lms-uploads').upload(path, file, { upsert: true })
+      if (upErr) throw upErr
+      const { data: pub } = supabase.storage.from('lms-uploads').getPublicUrl(path)
+      const { error } = await supabase.from('lms_quiz_submissions').upsert({
+        enrollment_id: enrollment.id, lesson_id: lesson.id,
+        course_id: parseInt(courseId), employee_id: enrollment.employee_id,
+        answers: [{ type: 'file', url: pub.publicUrl, name: file.name, path }],
+        auto_points: 0, total_points: 0, needs_review: true, status: 'submitted',
+        grades: {}, score: null, graded_by: null, graded_at: null,
+        organization_id: org,
+      }, { onConflict: 'enrollment_id,lesson_id' })
+      if (error) throw error
+      setSubmissions(prev => ({ ...prev, [lesson.id]: { status: 'submitted', score: null } }))
+      toast.success('作業已上傳，等待批閱')
+    } catch (err) {
+      toast.error(`上傳失敗：${err.message}`)
+    } finally {
+      setUploading(false)
+    }
+  }
+
   const markComplete = async () => {
     if (!enrollment || marking) return
+    // 測驗/作業單元不能用「標記完成」略過(測驗要作答通過、作業要上傳並通過批閱)
+    if (lesson.type === 'quiz' || lesson.type === 'assignment') {
+      toast.info(lesson.type === 'quiz' ? '此單元為測驗,請作答並達及格分才算完成' : '此單元為作業,請上傳檔案並通過批閱才算完成')
+      return
+    }
     setMarking(true)
     const timeSpent = Math.round((Date.now() - startTimeRef.current) / 1000)
     try {
@@ -72,8 +115,7 @@ export default function LessonPlayer() {
       }, { onConflict: 'enrollment_id,lesson_id' })
       if (error) throw error
 
-      const newProgress = { ...progress, [lesson.id]: { completed: true } }
-      setProgress(newProgress)
+      setProgress({ ...progress, [lesson.id]: { ...progress[lesson.id], completed: true } })
 
       await getEventBus().publish('lms.lesson.completed', {
         enrollment_id: String(enrollment.id), lesson_id: String(lesson.id),
@@ -81,15 +123,9 @@ export default function LessonPlayer() {
         employee_id: String(enrollment.employee_id), time_spent_seconds: timeSpent,
       })
 
-      const allDone = allLessons.every(l => newProgress[l.id]?.completed)
-      if (allDone) {
-        await supabase.from('lms_enrollments')
-          .update({ status: '已完成', completed_at: new Date().toISOString() })
-          .eq('id', enrollment.id)
-        await getEventBus().publish('lms.course.completed', {
-          enrollment_id: String(enrollment.id), course_id: String(courseId),
-          course_title: course.title, employee_id: String(enrollment.employee_id), passed: true,
-        })
+      // 以 DB 為準判定整門是否完成(含 quiz 是否通過),避免前端 state 漏算
+      const done = await maybeCompleteCourse({ enrollment, course })
+      if (done) {
         toast.success('恭喜完成課程！')
         navigate('/lms/progress')
         return
@@ -152,12 +188,23 @@ export default function LessonPlayer() {
               <Clock size={12} />{lesson.duration_minutes} 分鐘
             </span>
           </div>
-          <button className={isCompleted ? 'btn btn-secondary' : 'btn btn-primary'}
-            style={{ display: 'flex', alignItems: 'center', gap: 6 }}
-            onClick={markComplete} disabled={isCompleted || marking || !enrollment}>
-            <CheckCircle size={14} />
-            {isCompleted ? '已完成' : marking ? '標記中...' : '標記完成'}
-          </button>
+          {['quiz', 'assignment'].includes(lesson.type) ? (
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600,
+              color: isCompleted ? 'var(--accent-green)'
+                : submissions[lesson.id]?.status === 'submitted' ? 'var(--accent-orange)' : 'var(--text-muted)' }}>
+              <CheckCircle size={14} />
+              {isCompleted ? '已通過'
+                : submissions[lesson.id]?.status === 'submitted' ? '批閱中'
+                : lesson.type === 'quiz' ? '待完成測驗' : '待繳交作業'}
+            </span>
+          ) : (
+            <button className={isCompleted ? 'btn btn-secondary' : 'btn btn-primary'}
+              style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+              onClick={markComplete} disabled={isCompleted || marking || !enrollment}>
+              <CheckCircle size={14} />
+              {isCompleted ? '已完成' : marking ? '標記中...' : '標記完成'}
+            </button>
+          )}
         </div>
 
         <div style={{ flex: 1, padding: 28 }}>
@@ -166,10 +213,53 @@ export default function LessonPlayer() {
           ) : lesson.type === 'quiz' ? (
             <div style={{ textAlign: 'center', padding: 48 }}>
               <HelpCircle size={40} style={{ color: 'var(--accent-purple)', marginBottom: 12 }} />
-              <p style={{ color: 'var(--text-secondary)', marginBottom: 20 }}>此單元為測驗，點擊開始作答</p>
-              <button className="btn btn-primary" onClick={() => navigate(`/lms/course/${courseId}/quiz/${lesson.id}`)}>
-                開始測驗
-              </button>
+              {isCompleted ? (
+                <p style={{ color: 'var(--accent-green)', marginBottom: 20, fontWeight: 600 }}>
+                  ✓ 已通過此測驗{typeof progress[lesson.id]?.score === 'number' ? `（${progress[lesson.id].score} 分）` : ''}
+                </p>
+              ) : submissions[lesson.id]?.status === 'submitted' ? (
+                <p style={{ color: 'var(--accent-orange)', marginBottom: 20, fontWeight: 600 }}>
+                  📝 已提交，批閱中—管理者評分後才會計算成績
+                </p>
+              ) : (
+                <p style={{ color: 'var(--text-secondary)', marginBottom: 20 }}>
+                  此單元為測驗，需達 {course.passing_score || 80} 分才算通過
+                </p>
+              )}
+              {submissions[lesson.id]?.status === 'submitted' && !isCompleted ? (
+                <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>請等待批閱結果</span>
+              ) : (
+                <button className="btn btn-primary" onClick={() => navigate(`/lms/course/${courseId}/quiz/${lesson.id}`)}>
+                  {isCompleted ? '重新測驗' : '開始測驗'}
+                </button>
+              )}
+            </div>
+          ) : lesson.type === 'assignment' ? (
+            <div style={{ maxWidth: 640 }}>
+              <div style={{ lineHeight: 1.8, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', fontSize: 15, marginBottom: 20 }}>
+                {lesson.content || <span style={{ color: 'var(--text-muted)' }}>（此作業尚無說明）</span>}
+              </div>
+              {isCompleted ? (
+                <div className="card" style={{ padding: '14px 16px', background: 'var(--accent-green-dim)', color: 'var(--accent-green)', fontSize: 14 }}>
+                  ✓ 作業已通過批閱
+                </div>
+              ) : submissions[lesson.id]?.status === 'submitted' ? (
+                <div className="card" style={{ padding: '14px 16px', background: 'var(--accent-orange-dim)', color: 'var(--accent-orange)', fontSize: 14 }}>
+                  📤 已上傳，批閱中—管理者確認後才算完成
+                </div>
+              ) : (
+                <div>
+                  {submissions[lesson.id]?.status === 'graded' && (
+                    <p style={{ color: 'var(--accent-red)', fontSize: 13, marginBottom: 10 }}>上一份未通過,請重新上傳。</p>
+                  )}
+                  <label className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: uploading ? 'default' : 'pointer' }}>
+                    <Upload size={14} />{uploading ? '上傳中...' : '上傳作業檔案'}
+                    <input type="file" hidden disabled={uploading || !enrollment}
+                      accept="video/*,image/*,application/pdf" onChange={e => handleUpload(e.target.files?.[0])} />
+                  </label>
+                  <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>支援影片 / 圖片 / PDF,上限約 50MB。</p>
+                </div>
+              )}
             </div>
           ) : (
             <div style={{ maxWidth: 720, lineHeight: 1.8, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', fontSize: 15 }}>

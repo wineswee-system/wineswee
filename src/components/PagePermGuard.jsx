@@ -71,6 +71,7 @@ export const PAGE_PERM = {
   // LMS 管理
   '/system/offer-letter-templates':           'nav.lms.admin',
   '/lms/admin':                               'nav.lms.admin',
+  '/lms/review':                              'nav.lms.admin',
   '/lms/progress':                            'nav.schedule.basic',
 }
 

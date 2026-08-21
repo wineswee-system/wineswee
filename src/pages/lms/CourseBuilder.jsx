@@ -4,15 +4,17 @@ import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { useAuth } from '../../contexts/AuthContext'
 import { toast } from 'sonner'
-import { Plus, Trash2, ChevronDown, ChevronUp, Save, ArrowLeft, FileText, Video, HelpCircle, ArrowUp, ArrowDown } from 'lucide-react'
+import { Plus, Trash2, ChevronDown, ChevronUp, Save, ArrowLeft, FileText, Video, HelpCircle, ArrowUp, ArrowDown, Upload } from 'lucide-react'
 import { getEventBus } from '../../lib/events/EventBus'
 
-const LESSON_TYPE_ICON = { text: FileText, video: Video, quiz: HelpCircle }
-const LESSON_TYPE_LABEL = { text: '文字', video: '影片', quiz: '測驗' }
+const LESSON_TYPE_ICON = { text: FileText, video: Video, quiz: HelpCircle, assignment: Upload }
+const LESSON_TYPE_LABEL = { text: '文字', video: '影片', quiz: '測驗', assignment: '作業' }
 
 const DEFAULT_COURSE = {
-  title: '', description: '', category: '一般', difficulty: '初級',
-  estimated_hours: 1.0, passing_score: 80, is_required: false, status: '草稿',
+  title: '', description: '', category: '一般', difficulty: '初級', delivery_mode: '線上',
+  estimated_hours: 1.0, is_required: false, status: '草稿',
+  // 分級門檻:銅=passing_score(及格線)、銀、金。達哪一級發哪一張證照
+  passing_score: 70, tier_silver_score: 80, tier_gold_score: 90,
 }
 
 export default function CourseBuilder() {
@@ -27,6 +29,7 @@ export default function CourseBuilder() {
   const [loading, setLoading] = useState(isEdit)
   const [removedSectionIds, setRemovedSectionIds] = useState([])
   const [removedLessonIds, setRemovedLessonIds] = useState([])
+  const [initialStatus, setInitialStatus] = useState('草稿')
 
   useEffect(() => {
     if (!isEdit) return
@@ -34,7 +37,7 @@ export default function CourseBuilder() {
       supabase.from('lms_courses').select('*').eq('id', id).single(),
       supabase.from('lms_sections').select('*, lms_lessons(*)').eq('course_id', id).order('sort_order'),
     ]).then(([c, s]) => {
-      if (c.data) setCourse(c.data)
+      if (c.data) { setCourse(c.data); setInitialStatus(c.data.status || '草稿') }
       if (s.data) setSections(s.data.map(sec => ({
         ...sec,
         lessons: (sec.lms_lessons || []).sort((a, b) => a.sort_order - b.sort_order),
@@ -80,6 +83,8 @@ export default function CourseBuilder() {
 
   const handleSave = async () => {
     if (!course.title.trim()) { toast.error('請輸入課程名稱'); return }
+    const g = course.tier_gold_score ?? 90, s = course.tier_silver_score ?? 80, b = course.passing_score ?? 70
+    if (!(g >= s && s >= b)) { toast.error('分級門檻需 金 ≥ 銀 ≥ 銅'); return }
     setSaving(true)
     try {
       let courseId = id
@@ -132,9 +137,12 @@ export default function CourseBuilder() {
         }
       }
 
-      if (!isEdit && courseData.status === '發布') {
+      // 只在「轉為發布」的當下發事件(新建即發布,或編輯把草稿改成發布);
+      // 已是發布狀態的課再次編輯不重發,避免通知/自動化被灌爆
+      if (course.status === '發布' && initialStatus !== '發布') {
         await getEventBus().publish('lms.course.published', {
           course_id: String(courseId), title: course.title, category: course.category || '',
+          created_by: profile?.id ? String(profile.id) : undefined,
         })
       }
 
@@ -186,19 +194,22 @@ export default function CourseBuilder() {
             </select>
           </div>
           <div>
+            <label className="form-label">上課形式</label>
+            <select className="form-input" value={course.delivery_mode || '線上'}
+              onChange={e => setCourse(p => ({ ...p, delivery_mode: e.target.value }))}>
+              {['線上', '實體'].map(d => <option key={d}>{d}</option>)}
+            </select>
+          </div>
+          {course.delivery_mode === '實體' && (
+            <div style={{ gridColumn: '1 / -1', fontSize: 12, color: 'var(--text-muted)',
+              background: 'var(--bg-tertiary)', borderRadius: 6, padding: '8px 12px' }}>
+              實體課的「場次(時間/地點)與現場簽到」請在<strong>課程管理</strong>點該課程 →右側面板管理;簽到即完成該課程。
+            </div>
+          )}
+          <div>
             <label className="form-label">預估時數 (h)</label>
             <input className="form-input" type="number" min={0.5} step={0.5} value={course.estimated_hours}
               onChange={e => setCourse(p => ({ ...p, estimated_hours: parseFloat(e.target.value) || 1 }))} />
-          </div>
-          <div>
-            <label className="form-label">及格分數</label>
-            <input className="form-input" type="number" min={0} max={100} value={course.passing_score}
-              onChange={e => setCourse(p => ({ ...p, passing_score: parseInt(e.target.value) || 80 }))} />
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <input type="checkbox" id="is_required" checked={course.is_required}
-              onChange={e => setCourse(p => ({ ...p, is_required: e.target.checked }))} />
-            <label htmlFor="is_required" style={{ fontSize: 13, color: 'var(--text-secondary)', cursor: 'pointer' }}>設為必修課程</label>
           </div>
           <div>
             <label className="form-label">狀態</label>
@@ -206,6 +217,35 @@ export default function CourseBuilder() {
               onChange={e => setCourse(p => ({ ...p, status: e.target.value }))}>
               {['草稿', '發布', '封存'].map(s => <option key={s}>{s}</option>)}
             </select>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <input type="checkbox" id="is_required" checked={course.is_required}
+              onChange={e => setCourse(p => ({ ...p, is_required: e.target.checked }))} />
+            <label htmlFor="is_required" style={{ fontSize: 13, color: 'var(--text-secondary)', cursor: 'pointer' }}>設為必修課程</label>
+          </div>
+          {/* 分級證照門檻:達哪一級發哪一張;銅=及格線(達銅才算結業) */}
+          <div style={{ gridColumn: '1 / -1' }}>
+            <label className="form-label">結業分級門檻（分數）</label>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+              <div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>🥇 金</div>
+                <input className="form-input" type="number" min={0} max={100} value={course.tier_gold_score ?? 90}
+                  onChange={e => setCourse(p => ({ ...p, tier_gold_score: parseInt(e.target.value) || 0 }))} />
+              </div>
+              <div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>🥈 銀</div>
+                <input className="form-input" type="number" min={0} max={100} value={course.tier_silver_score ?? 80}
+                  onChange={e => setCourse(p => ({ ...p, tier_silver_score: parseInt(e.target.value) || 0 }))} />
+              </div>
+              <div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>🥉 銅（及格線）</div>
+                <input className="form-input" type="number" min={0} max={100} value={course.passing_score ?? 70}
+                  onChange={e => setCourse(p => ({ ...p, passing_score: parseInt(e.target.value) || 0 }))} />
+              </div>
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
+              考到金分數↑發金證照、銀↑發銀、銅↑發銅;沒到銅 = 未通過需補考。門檻大小需 金 ≥ 銀 ≥ 銅。
+            </div>
           </div>
           <div style={{ gridColumn: '1 / -1' }}>
             <label className="form-label">封面圖片網址（選填）</label>
@@ -299,7 +339,9 @@ function LessonEditor({ lesson, onChange, onRemove }) {
       {lesson.type !== 'quiz' ? (
         <textarea className="form-input" rows={3} value={lesson.content || ''}
           onChange={e => onChange({ content: e.target.value })}
-          placeholder={lesson.type === 'video' ? '貼上影片網址（YouTube / Vimeo）' : '輸入課程內容（支援 Markdown）'} />
+          placeholder={lesson.type === 'video' ? '貼上影片網址（YouTube / Vimeo）'
+            : lesson.type === 'assignment' ? '作業說明：要學員上傳什麼（例如自拍操作影片、簽名表單掃描檔）'
+            : '輸入課程內容（支援 Markdown）'} />
       ) : (
         <QuizEditor quizData={lesson.quiz_data} onChange={quiz_data => onChange({ quiz_data })} />
       )}
@@ -312,7 +354,7 @@ function QuizEditor({ quizData, onChange }) {
   const questions = Array.isArray(quizData) ? quizData : []
   const [showImport, setShowImport] = useState(false)
 
-  const addQuestion = () => onChange([...questions, { question: '', options: ['', ''], answer_index: 0, explanation: '' }])
+  const addQuestion = () => onChange([...questions, { type: 'single', question: '', options: ['', ''], answer_index: 0, answer_indices: [], points: 1, explanation: '' }])
   const removeQuestion = (qi) => onChange(questions.filter((_, i) => i !== qi))
   const updateQuestion = (qi, patch) => onChange(questions.map((q, i) => i !== qi ? q : { ...q, ...patch }))
   const addOption = (qi) => updateQuestion(qi, { options: [...questions[qi].options, ''] })
@@ -320,10 +362,31 @@ function QuizEditor({ quizData, onChange }) {
     const q = questions[qi]
     const opts = q.options.filter((_, i) => i !== oi)
     const ans = q.answer_index === oi ? 0 : q.answer_index > oi ? q.answer_index - 1 : q.answer_index
-    updateQuestion(qi, { options: opts, answer_index: Math.min(ans, opts.length - 1) })
+    const ansMulti = (q.answer_indices || []).filter(a => a !== oi).map(a => a > oi ? a - 1 : a)
+    updateQuestion(qi, { options: opts, answer_index: Math.min(ans, opts.length - 1), answer_indices: ansMulti })
   }
   const updateOption = (qi, oi, val) =>
     updateQuestion(qi, { options: questions[qi].options.map((o, i) => i !== oi ? o : val) })
+
+  // 切換題型:是非固定「是/否」、複選用 answer_indices、單選用 answer_index
+  const setType = (qi, type) => {
+    const q = questions[qi]
+    if (type === 'truefalse') {
+      updateQuestion(qi, { type, options: ['是', '否'], answer_index: q.answer_index === 1 ? 1 : 0, answer_indices: [] })
+    } else if (type === 'multiple') {
+      const base = (q.answer_indices && q.answer_indices.length) ? q.answer_indices : (typeof q.answer_index === 'number' ? [q.answer_index] : [])
+      updateQuestion(qi, { type, answer_indices: base })
+    } else if (type === 'essay') {
+      updateQuestion(qi, { type, answer_index: 0, answer_indices: [] })
+    } else {
+      updateQuestion(qi, { type, answer_index: (q.answer_indices && q.answer_indices.length ? q.answer_indices[0] : q.answer_index) || 0 })
+    }
+  }
+  const toggleMultiAnswer = (qi, oi) => {
+    const set = new Set(questions[qi].answer_indices || [])
+    set.has(oi) ? set.delete(oi) : set.add(oi)
+    updateQuestion(qi, { answer_indices: [...set].sort((a, b) => a - b) })
+  }
 
   return (
     <div>
@@ -358,9 +421,14 @@ function QuizEditor({ quizData, onChange }) {
         </div>
       )}
 
-      {questions.map((q, qi) => (
+      {questions.map((q, qi) => {
+        const qType = q.type || 'single'
+        const isMulti = qType === 'multiple'
+        const isTF = qType === 'truefalse'
+        const isEssay = qType === 'essay'
+        return (
         <div key={qi} style={{ border: '1px solid var(--border-primary)', borderRadius: 8, padding: 12, marginBottom: 10 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
             <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent-cyan)', minWidth: 22 }}>Q{qi + 1}</span>
             <input className="form-input" style={{ flex: 1 }} placeholder="輸入題目文字…"
               value={q.question} onChange={e => updateQuestion(qi, { question: e.target.value })} />
@@ -368,33 +436,55 @@ function QuizEditor({ quizData, onChange }) {
               onClick={() => removeQuestion(qi)}><Trash2 size={14} /></button>
           </div>
 
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 28, marginBottom: 10 }}>
+            <select className="form-input" style={{ width: 96, fontSize: 12 }} value={qType}
+              onChange={e => setType(qi, e.target.value)}>
+              <option value="single">單選</option>
+              <option value="truefalse">是非</option>
+              <option value="multiple">複選</option>
+              <option value="essay">申論</option>
+            </select>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>配分</span>
+            <input className="form-input" style={{ width: 64, fontSize: 12 }} type="number" min={1}
+              value={q.points ?? 1} onChange={e => updateQuestion(qi, { points: parseInt(e.target.value) || 1 })} />
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+              {isEssay ? '申論題・由後台人工批閱' : isMulti ? '勾選所有正解（需全對才給分）' : '點左側選正解'}
+            </span>
+          </div>
+
           <div style={{ paddingLeft: 28 }}>
-            {q.options.map((opt, oi) => (
-              <div key={oi} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                <input type="radio" name={`q${qi}-answer`} checked={q.answer_index === oi}
-                  onChange={() => updateQuestion(qi, { answer_index: oi })}
-                  title="設為正確答案"
-                  style={{ cursor: 'pointer', accentColor: 'var(--accent-green)', flexShrink: 0 }} />
-                <input className="form-input" style={{ flex: 1, fontSize: 13 }} placeholder={`選項 ${oi + 1}`}
-                  value={opt} onChange={e => updateOption(qi, oi, e.target.value)} />
-                {q.options.length > 2 && (
-                  <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2 }}
-                    onClick={() => removeOption(qi, oi)}><Trash2 size={12} /></button>
-                )}
-              </div>
-            ))}
-            {q.options.length < 6 && (
+            {isEssay ? (
+              <input className="form-input" style={{ fontSize: 12 }} placeholder="參考答案 / 評分重點（選填，僅批閱時參考，不給學員看）"
+                value={q.explanation || ''} onChange={e => updateQuestion(qi, { explanation: e.target.value })} />
+            ) : (<>
+            {q.options.map((opt, oi) => {
+              const checked = isMulti ? (q.answer_indices || []).includes(oi) : q.answer_index === oi
+              return (
+                <div key={oi} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                  <input type={isMulti ? 'checkbox' : 'radio'} name={`q${qi}-answer`} checked={checked}
+                    onChange={() => isMulti ? toggleMultiAnswer(qi, oi) : updateQuestion(qi, { answer_index: oi })}
+                    title="設為正確答案"
+                    style={{ cursor: 'pointer', accentColor: 'var(--accent-green)', flexShrink: 0 }} />
+                  <input className="form-input" style={{ flex: 1, fontSize: 13 }} placeholder={`選項 ${oi + 1}`}
+                    value={opt} disabled={isTF} onChange={e => updateOption(qi, oi, e.target.value)} />
+                  {!isTF && q.options.length > 2 && (
+                    <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2 }}
+                      onClick={() => removeOption(qi, oi)}><Trash2 size={12} /></button>
+                  )}
+                </div>
+              )
+            })}
+            {!isTF && q.options.length < 6 && (
               <button className="btn btn-ghost" style={{ fontSize: 11, padding: '2px 8px', marginBottom: 8 }}
                 onClick={() => addOption(qi)}>＋ 新增選項</button>
             )}
             <input className="form-input" style={{ fontSize: 12, marginTop: 4 }} placeholder="解析說明（選填，學員答題後顯示）"
               value={q.explanation || ''} onChange={e => updateQuestion(qi, { explanation: e.target.value })} />
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-              ● 點左側圓圈設定正確答案
-            </div>
+            </>)}
           </div>
         </div>
-      ))}
+        )
+      })}
 
       {showImport && (
         <QuizImportModal

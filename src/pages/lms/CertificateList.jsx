@@ -5,6 +5,12 @@ import { useAuth } from '../../contexts/AuthContext'
 import { Award, Download, Calendar } from 'lucide-react'
 import { printCertificate } from '../../lib/certificatePrinter'
 
+const TIER_META = {
+  '金': { icon: '🥇', label: '金級' },
+  '銀': { icon: '🥈', label: '銀級' },
+  '銅': { icon: '🥉', label: '銅級' },
+}
+
 export default function CertificateList() {
   const { profile } = useAuth()
   const employeeName = profile?.name || ''
@@ -79,7 +85,13 @@ function CertificateCard({ cert, course, employeeName, companyName }) {
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: 20, fontSize: 13, color: 'var(--text-secondary)', marginBottom: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, fontSize: 13, color: 'var(--text-secondary)', marginBottom: 14, flexWrap: 'wrap' }}>
+        {cert.tier && (
+          <span style={{ fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 20,
+            background: 'var(--bg-tertiary)', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 4 }}>
+            {TIER_META[cert.tier]?.icon} {TIER_META[cert.tier]?.label || cert.tier}
+          </span>
+        )}
         <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
           <Calendar size={13} style={{ color: 'var(--text-muted)' }} />
           {issueDate}

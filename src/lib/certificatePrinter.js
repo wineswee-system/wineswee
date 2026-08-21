@@ -9,6 +9,15 @@ export function printCertificate(cert, { courseName, employeeName, companyName =
   const scoreBlock = cert.score != null
     ? `<div class="score">測驗成績：<strong>${cert.score}</strong> 分</div>`
     : ''
+  const TIER_INFO = {
+    '金': { label: '金級', color: '#c99700', icon: '🥇' },
+    '銀': { label: '銀級', color: '#8a8f98', icon: '🥈' },
+    '銅': { label: '銅級', color: '#b8733f', icon: '🥉' },
+  }
+  const tierInfo = cert.tier ? TIER_INFO[cert.tier] : null
+  const tierBlock = tierInfo
+    ? `<div class="tier" style="color:${tierInfo.color};border-color:${tierInfo.color}">${tierInfo.icon} ${tierInfo.label}認證</div>`
+    : ''
 
   const html = `<!DOCTYPE html>
 <html lang="zh-TW">
@@ -63,7 +72,11 @@ export function printCertificate(cert, { courseName, employeeName, companyName =
     }
     .cert-title {
       font-size: 40px; font-weight: 900; letter-spacing: 12px;
-      color: #1a3a5c; margin-bottom: 28px;
+      color: #1a3a5c; margin-bottom: 16px;
+    }
+    .tier {
+      display: inline-block; font-size: 16px; font-weight: 700; letter-spacing: 2px;
+      border: 2px solid; border-radius: 999px; padding: 4px 18px; margin-bottom: 24px;
     }
     .cert-body {
       font-size: 16px; color: #444; line-height: 2; margin-bottom: 24px;
@@ -110,6 +123,7 @@ export function printCertificate(cert, { courseName, employeeName, companyName =
   <div class="cert">
     <div class="cert-label">CERTIFICATE OF COMPLETION</div>
     <div class="cert-title">結 業 證 書</div>
+    ${tierBlock}
 
     <div class="cert-body">
       茲證明<span class="name">${employeeName || '—'}</span>已圓滿完成<br />

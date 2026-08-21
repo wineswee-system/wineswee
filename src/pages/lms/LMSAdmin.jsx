@@ -5,7 +5,9 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 import { useAuth } from '../../contexts/AuthContext'
 import { toast } from 'sonner'
 import { confirm } from '../../lib/confirm'
-import { BookOpen, Users, Award, TrendingUp, Edit, Plus, X, UserPlus, Trash2, Upload } from 'lucide-react'
+import { getEventBus } from '../../lib/events/EventBus'
+import { completePhysicalAttendance } from '../../lib/lms/completion'
+import { BookOpen, Users, Award, TrendingUp, Edit, Plus, X, UserPlus, UsersRound, Trash2, Upload, Calendar, MapPin, ChevronDown, ChevronUp } from 'lucide-react'
 
 const STATUS_OPTIONS = ['草稿', '發布', '封存']
 const STATUS_COLOR = {
@@ -29,6 +31,20 @@ export default function LMSAdmin() {
   const [enrollLoading, setEnrollLoading] = useState(false)
   const [enrollTarget, setEnrollTarget] = useState('')
   const [enrolling, setEnrolling] = useState(false)
+  const [bulkAssigning, setBulkAssigning] = useState(false)
+
+  // 多選指派 modal
+  const [showAssign, setShowAssign] = useState(false)
+  const [assignSearch, setAssignSearch] = useState('')
+  const [assignStore, setAssignStore] = useState('')
+  const [assignSelected, setAssignSelected] = useState(() => new Set())
+
+  // 實體課場次 + 簽到
+  const [sessions, setSessions] = useState([])
+  const [attendance, setAttendance] = useState({}) // session_id → Set(employee_id)
+  const [activeSession, setActiveSession] = useState(null)
+  const [sessionForm, setSessionForm] = useState({ title: '', starts_at: '', location: '' })
+  const [attnBusy, setAttnBusy] = useState(false)
 
   const [showImport, setShowImport] = useState(false)
 
@@ -38,7 +54,7 @@ export default function LMSAdmin() {
       supabase.from('lms_courses').select('*').eq('organization_id', profile.organization_id).order('created_at', { ascending: false }),
       supabase.from('lms_enrollments').select('course_id, status, employee_id, id').eq('organization_id', profile.organization_id),
       supabase.from('lms_certificates').select('course_id, employee_id, issued_at').eq('organization_id', profile.organization_id),
-      supabase.from('employees').select('id, name, email').eq('organization_id', profile.organization_id).eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, email, store, position, job_category').eq('organization_id', profile.organization_id).eq('status', '在職').order('name'),
     ]).then(([c, e, cert, emp]) => {
       setCourses(c.data || [])
       setEnrollments(e.data || [])
@@ -51,6 +67,9 @@ export default function LMSAdmin() {
     if (selectedCourse?.id === course.id) { setSelectedCourse(null); return }
     setSelectedCourse(course)
     setEnrollTarget('')
+    setActiveSession(null)
+    setSessions([])
+    setAttendance({})
     setEnrollLoading(true)
     const { data } = await supabase
       .from('lms_enrollments')
@@ -59,15 +78,81 @@ export default function LMSAdmin() {
       .order('enrolled_at', { ascending: false })
     setCourseEnrollments(data || [])
     setEnrollLoading(false)
+    if (course.delivery_mode === '實體') loadSessions(course.id)
+  }
+
+  const loadSessions = async (courseId) => {
+    const { data: sess } = await supabase.from('lms_sessions').select('*').eq('course_id', courseId).order('starts_at', { ascending: true })
+    setSessions(sess || [])
+    const { data: attn } = await supabase.from('lms_attendance').select('session_id, employee_id').eq('course_id', courseId)
+    const map = {}
+    ;(attn || []).forEach(a => { (map[a.session_id] = map[a.session_id] || new Set()).add(a.employee_id) })
+    setAttendance(map)
+  }
+
+  const addSession = async () => {
+    if (!sessionForm.title.trim() || !selectedCourse) { toast.warning('請輸入場次名稱'); return }
+    const { data, error } = await supabase.from('lms_sessions').insert({
+      course_id: selectedCourse.id, title: sessionForm.title.trim(),
+      starts_at: sessionForm.starts_at || null, location: sessionForm.location || null,
+      organization_id: profile.organization_id,
+    }).select().single()
+    if (error) { toast.error(`新增場次失敗：${error.message}`); return }
+    setSessions(prev => [...prev, data])
+    setSessionForm({ title: '', starts_at: '', location: '' })
+  }
+
+  // 簽到切換:未簽到→簽到(並嘗試完課發證);已簽到→取消
+  const toggleAttendance = async (session, enr) => {
+    if (attnBusy) return
+    const present = attendance[session.id]?.has(enr.employee_id)
+    setAttnBusy(true)
+    try {
+      if (present) {
+        const { error } = await supabase.from('lms_attendance').delete()
+          .eq('session_id', session.id).eq('employee_id', enr.employee_id)
+        if (error) throw error
+        setAttendance(prev => { const s = new Set(prev[session.id]); s.delete(enr.employee_id); return { ...prev, [session.id]: s } })
+      } else {
+        const { error } = await supabase.from('lms_attendance').insert({
+          session_id: session.id, course_id: selectedCourse.id, enrollment_id: enr.id,
+          employee_id: enr.employee_id, checked_in_by: 'admin', organization_id: profile.organization_id,
+        })
+        if (error) throw error
+        setAttendance(prev => { const s = new Set(prev[session.id] || []); s.add(enr.employee_id); return { ...prev, [session.id]: s } })
+        // 簽到即完課(純實體課直接完成、有線上單元則需都完成)
+        const done = await completePhysicalAttendance({
+          enrollment: { id: enr.id, employee_id: enr.employee_id, status: enr.status },
+          course: { id: selectedCourse.id, title: selectedCourse.title },
+        })
+        if (done) {
+          setCourseEnrollments(prev => prev.map(e => e.id === enr.id ? { ...e, status: '已完成' } : e))
+          toast.success(`${enr.employees?.name || '學員'} 已簽到並完成課程`)
+        } else {
+          toast.success(`${enr.employees?.name || '學員'} 已簽到`)
+        }
+      }
+    } catch (err) {
+      toast.error(`簽到操作失敗：${err.message}`)
+    } finally {
+      setAttnBusy(false)
+    }
   }
 
   const handleStatusChange = async (courseId, newStatus) => {
+    const prevStatus = courses.find(c => c.id === courseId)?.status
     const { data, error } = await supabase
       .from('lms_courses').update({ status: newStatus }).eq('id', courseId).select().single()
     if (error) { toast.error('狀態更新失敗'); return }
     setCourses(prev => prev.map(c => c.id === courseId ? data : c))
     if (selectedCourse?.id === courseId) setSelectedCourse(data)
     toast.success(`已更新為「${newStatus}」`)
+    // 轉為發布的當下才發事件(草稿/封存→發布);已是發布不重發
+    if (newStatus === '發布' && prevStatus !== '發布') {
+      await getEventBus().publish('lms.course.published', {
+        course_id: String(courseId), title: data.title, category: data.category || '',
+      })
+    }
   }
 
   const handleEnrollEmployee = async () => {
@@ -90,12 +175,73 @@ export default function LMSAdmin() {
       setEnrollments(prev => [...prev, { id: data.id, course_id: selectedCourse.id, status: '進行中', employee_id: data.employee_id }])
       setEnrollTarget('')
       toast.success('已手動加入報名')
+      await getEventBus().publish('lms.enrollment.created', {
+        enrollment_id: String(data.id), course_id: String(selectedCourse.id),
+        course_title: selectedCourse.title, employee_id: String(data.employee_id),
+        employee_name: data.employees?.name || '', enrolled_by: 'admin',
+      })
     } catch (err) {
       toast.error(err.message.includes('unique') ? '此學員已在報名名單中' : err.message)
     } finally {
       setEnrolling(false)
     }
   }
+
+  // 批次把本課指派給指定的一組員工(全體/多選共用)
+  const assignEmployees = async (targets) => {
+    if (!selectedCourse || bulkAssigning) return 0
+    if (!targets.length) { toast.info('沒有可指派的對象'); return 0 }
+    setBulkAssigning(true)
+    try {
+      const rows = targets.map(emp => ({
+        course_id: selectedCourse.id, employee_id: emp.id,
+        enrolled_by: 'admin', organization_id: profile.organization_id, status: '進行中',
+      }))
+      const { data, error } = await supabase
+        .from('lms_enrollments').insert(rows).select('*, employees(name, email)')
+      if (error) throw error
+      const added = data || []
+      setCourseEnrollments(prev => [...added, ...prev])
+      setEnrollments(prev => [...prev, ...added.map(d => ({ id: d.id, course_id: selectedCourse.id, status: '進行中', employee_id: d.employee_id }))])
+      for (const d of added) {
+        await getEventBus().publish('lms.enrollment.created', {
+          enrollment_id: String(d.id), course_id: String(selectedCourse.id),
+          course_title: selectedCourse.title, employee_id: String(d.employee_id),
+          employee_name: d.employees?.name || '', enrolled_by: 'admin',
+        })
+      }
+      toast.success(`已指派 ${added.length} 位員工`)
+      return added.length
+    } catch (err) {
+      toast.error(`批次指派失敗：${err.message}`)
+      return 0
+    } finally {
+      setBulkAssigning(false)
+    }
+  }
+
+  // 一鍵指派全體尚未報名的在職員工
+  const handleBulkEnroll = async () => {
+    const targets = unenrolledEmployees
+    if (!targets.length) { toast.info('所有在職員工都已在名單中'); return }
+    const ok = await confirm(`將「${selectedCourse.title}」指派給 ${targets.length} 位尚未報名的在職員工？`)
+    if (!ok) return
+    await assignEmployees(targets)
+  }
+
+  // 多選指派:送出勾選的人
+  const handleAssignSelected = async () => {
+    const targets = unenrolledEmployees.filter(e => assignSelected.has(e.id))
+    if (!targets.length) { toast.warning('請至少勾選一位'); return }
+    const n = await assignEmployees(targets)
+    if (n > 0) { setShowAssign(false); setAssignSelected(new Set()); setAssignSearch(''); setAssignStore('') }
+  }
+
+  const toggleAssign = (id) => setAssignSelected(prev => {
+    const next = new Set(prev)
+    next.has(id) ? next.delete(id) : next.add(id)
+    return next
+  })
 
   const handleRemoveEnroll = async (enr) => {
     const ok = await confirm(`確定移除 ${enr.employees?.name || '此學員'} 的報名？`)
@@ -381,6 +527,60 @@ export default function LMSAdmin() {
             </button>
           </div>
 
+          {/* 實體課:場次與簽到 */}
+          {selectedCourse.delivery_mode === '實體' && (
+            <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--border-primary)', background: 'var(--bg-secondary)' }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 8 }}>場次與現場簽到</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
+                <input className="form-input" style={{ fontSize: 13 }} placeholder="場次名稱（如：第一梯次）"
+                  value={sessionForm.title} onChange={e => setSessionForm(f => ({ ...f, title: e.target.value }))} />
+                <input className="form-input" style={{ fontSize: 13 }} type="datetime-local"
+                  value={sessionForm.starts_at} onChange={e => setSessionForm(f => ({ ...f, starts_at: e.target.value }))} />
+                <input className="form-input" style={{ fontSize: 13 }} placeholder="地點"
+                  value={sessionForm.location} onChange={e => setSessionForm(f => ({ ...f, location: e.target.value }))} />
+                <button className="btn btn-secondary" style={{ fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}
+                  onClick={addSession}><Plus size={13} /> 新增場次</button>
+              </div>
+              {sessions.length === 0 ? (
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>尚無場次</div>
+              ) : sessions.map(s => {
+                const open = activeSession === s.id
+                const cnt = attendance[s.id]?.size || 0
+                return (
+                  <div key={s.id} className="card" style={{ padding: 0, marginBottom: 8, overflow: 'hidden' }}>
+                    <div onClick={() => setActiveSession(open ? null : s.id)} style={{ padding: '10px 12px', cursor: 'pointer' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{s.title}</span>
+                        <span style={{ fontSize: 11, color: 'var(--accent-cyan)' }}>已簽到 {cnt}/{courseEnrollments.length}</span>
+                        {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                        {s.starts_at && <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}><Calendar size={11} />{new Date(s.starts_at).toLocaleString('zh-TW', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>}
+                        {s.location && <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}><MapPin size={11} />{s.location}</span>}
+                      </div>
+                    </div>
+                    {open && (
+                      <div style={{ borderTop: '1px solid var(--border-primary)', padding: '6px 0' }}>
+                        {courseEnrollments.length === 0 ? (
+                          <div style={{ padding: '8px 12px', fontSize: 12, color: 'var(--text-muted)' }}>尚無學員報名，先在下方加入</div>
+                        ) : courseEnrollments.map(enr => {
+                          const present = attendance[s.id]?.has(enr.employee_id)
+                          return (
+                            <label key={enr.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 12px', cursor: 'pointer' }}>
+                              <input type="checkbox" checked={!!present} disabled={attnBusy} onChange={() => toggleAttendance(s, enr)} />
+                              <span style={{ flex: 1, fontSize: 13, color: 'var(--text-primary)' }}>{enr.employees?.name || `員工 #${enr.employee_id}`}</span>
+                              {present && <span style={{ fontSize: 11, color: 'var(--accent-green)' }}>已簽到</span>}
+                            </label>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
           {/* Add enrollment */}
           <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--border-primary)',
             background: 'var(--bg-secondary)' }}>
@@ -398,8 +598,23 @@ export default function LMSAdmin() {
                 <UserPlus size={13} />{enrolling ? '加入中...' : '加入'}
               </button>
             </div>
-            {unenrolledEmployees.length === 0 && (
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>所有員工均已報名</div>
+            {unenrolledEmployees.length > 0 ? (
+              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                <button className="btn btn-secondary" style={{ flex: 1, fontSize: 13,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                  onClick={() => { setAssignSelected(new Set()); setAssignSearch(''); setAssignStore(''); setShowAssign(true) }}
+                  disabled={bulkAssigning}>
+                  <UserPlus size={13} /> 指定特定的人
+                </button>
+                <button className="btn btn-secondary" style={{ flex: 1, fontSize: 13,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                  onClick={handleBulkEnroll} disabled={bulkAssigning}>
+                  <UsersRound size={13} />
+                  {bulkAssigning ? '指派中...' : `全體（${unenrolledEmployees.length}）`}
+                </button>
+              </div>
+            ) : (
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>所有在職員工均已報名</div>
             )}
           </div>
 
@@ -455,6 +670,91 @@ export default function LMSAdmin() {
           </div>
         </div>
       )}
+
+      {showAssign && selectedCourse && (() => {
+        const stores = [...new Set(unenrolledEmployees.map(e => e.store).filter(Boolean))].sort()
+        const list = unenrolledEmployees.filter(e =>
+          (!assignSearch || (e.name || '').includes(assignSearch)) &&
+          (!assignStore || e.store === assignStore)
+        )
+        const allChecked = list.length > 0 && list.every(e => assignSelected.has(e.id))
+        const toggleAll = () => setAssignSelected(prev => {
+          const next = new Set(prev)
+          if (allChecked) list.forEach(e => next.delete(e.id))
+          else list.forEach(e => next.add(e.id))
+          return next
+        })
+        return (
+          <div onClick={() => setShowAssign(false)} style={{ position: 'fixed', inset: 0, zIndex: 300,
+            background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+            <div className="card" onClick={e => e.stopPropagation()} style={{ width: 460, maxWidth: '100%',
+              maxHeight: '82vh', display: 'flex', flexDirection: 'column', padding: 0 }}>
+              {/* Header */}
+              <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-primary)',
+                display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                <div style={{ flex: 1, minWidth: 0, marginRight: 10 }}>
+                  <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)' }}>指定學員指派</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2,
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selectedCourse.title}</div>
+                </div>
+                <button className="btn btn-ghost" onClick={() => setShowAssign(false)} style={{ padding: 4, flexShrink: 0 }}>
+                  <X size={18} />
+                </button>
+              </div>
+              {/* Filters */}
+              <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--border-primary)', display: 'flex', gap: 8 }}>
+                <input className="form-input" style={{ flex: 1, fontSize: 13 }} placeholder="搜尋姓名..."
+                  value={assignSearch} onChange={e => setAssignSearch(e.target.value)} />
+                {stores.length > 0 && (
+                  <select className="form-input" style={{ width: 130, fontSize: 13 }}
+                    value={assignStore} onChange={e => setAssignStore(e.target.value)}>
+                    <option value="">所有門市</option>
+                    {stores.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                )}
+              </div>
+              {/* Select all */}
+              <div style={{ padding: '8px 20px', borderBottom: '1px solid var(--border-primary)',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--bg-secondary)' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={allChecked} onChange={toggleAll} />
+                  全選目前 {list.length} 位
+                </label>
+                <span style={{ fontSize: 12, color: 'var(--accent-cyan)', fontWeight: 600 }}>已選 {assignSelected.size} 位</span>
+              </div>
+              {/* List */}
+              <div style={{ flex: 1, overflowY: 'auto' }}>
+                {list.length === 0 ? (
+                  <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>查無符合的員工</div>
+                ) : list.map(e => {
+                  const checked = assignSelected.has(e.id)
+                  return (
+                    <label key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 20px',
+                      borderBottom: '1px solid var(--border-primary)', cursor: 'pointer',
+                      background: checked ? 'var(--accent-cyan-dim)' : 'transparent' }}>
+                      <input type="checkbox" checked={checked} onChange={() => toggleAssign(e.id)} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{e.name}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                          {[e.store, e.position || e.job_category].filter(Boolean).join(' · ') || '—'}
+                        </div>
+                      </div>
+                    </label>
+                  )
+                })}
+              </div>
+              {/* Footer */}
+              <div style={{ padding: '12px 20px', borderTop: '1px solid var(--border-primary)', display: 'flex', gap: 8 }}>
+                <button className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setShowAssign(false)}>取消</button>
+                <button className="btn btn-primary" style={{ flex: 2 }}
+                  onClick={handleAssignSelected} disabled={bulkAssigning || assignSelected.size === 0}>
+                  {bulkAssigning ? '指派中...' : `指派選取的 ${assignSelected.size} 位`}
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {showImport && (
         <TrainingImportModal

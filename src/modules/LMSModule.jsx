@@ -7,6 +7,7 @@ import QuizEngine from '../pages/lms/QuizEngine'
 import ProgressDashboard from '../pages/lms/ProgressDashboard'
 import CertificateList from '../pages/lms/CertificateList'
 import LMSAdmin from '../pages/lms/LMSAdmin'
+import ReviewCenter from '../pages/lms/ReviewCenter'
 
 export default function LMSModule() {
   return (
@@ -21,6 +22,7 @@ export default function LMSModule() {
       <Route path="progress" element={<ProgressDashboard />} />
       <Route path="certificates" element={<CertificateList />} />
       <Route path="admin" element={<LMSAdmin />} />
+      <Route path="review" element={<ReviewCenter />} />
     </Routes>
   )
 }

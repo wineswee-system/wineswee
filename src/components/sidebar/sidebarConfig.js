@@ -333,6 +333,7 @@ export const groupNav = {
         { icon: PlayCircle, label: '我的學習', path: '/lms/courses' },
         { icon: TrendingUp, label: '學習進度', path: '/lms/progress' },
         { icon: Award, label: '結業證書', path: '/lms/certificates' },
+        { icon: ClipboardCheck, label: '測驗批閱', path: '/lms/review' },
         { icon: ClipboardCheck, label: '試用期管理', path: '/hr/probation' },
         { icon: ArrowRightLeft, label: '轉調紀錄', path: '/hr/transfer' },
         { icon: FileCheck, label: '約聘管理', path: '/hr/contract-employees' },

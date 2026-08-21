@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { toast } from 'sonner'
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { useAuth } from '../../contexts/AuthContext'
@@ -28,6 +29,7 @@ export default function CourseList() {
     const courseQuery = supabase.from('lms_courses').select('*').eq('status', '發布').eq('organization_id', profile.organization_id).order('created_at', { ascending: false })
     const enrollQuery = supabase.from('lms_enrollments').select('id, course_id, status, completed_at').eq('employee_id', profile.id)
     Promise.all([courseQuery, enrollQuery]).then(async ([c, e]) => {
+      if (c.error) { toast.error(`載入課程失敗：${c.error.message}`); return }
       const list = c.data || []
       const enrs = e.data || []
       setCourses(list)
@@ -56,7 +58,7 @@ export default function CourseList() {
       })
       setProgressMap(pm)
     }).finally(() => setLoading(false))
-  }, [])
+  }, [profile?.organization_id, profile?.id])
 
   if (loading) return <LoadingSpinner />
 

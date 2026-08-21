@@ -335,6 +335,7 @@ export default function Sidebar() {
     // ── LMS ──
     '/system/offer-letter-templates': 'nav.lms.admin', // admin/super_admin
     '/lms/admin':             'nav.lms.admin',          // admin/super_admin
+    '/lms/review':            'nav.lms.admin',          // 測驗批閱：admin/super_admin
     '/lms/progress':          'nav.schedule.basic',     // 全員進度：manager/office_staff+
     // ── 員工體驗（除員工自助）──
     '/hr/surveys':   'nav.experience_mgr',

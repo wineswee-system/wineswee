@@ -1,5 +1,12 @@
 import { supabase } from '../../supabase.js'
 
+/** 取員工的 organization_id(通知寫入要帶,才過得了 notifications 的 RLS) */
+async function orgOf(employeeId) {
+  if (!employeeId) return null
+  const { data } = await supabase.from('employees').select('organization_id').eq('id', employeeId).single()
+  return data?.organization_id ?? null
+}
+
 /**
  * LMS event handlers.
  * Subscribes to cross-module events that affect learning records and HR development plans.
@@ -45,6 +52,17 @@ export function registerLMSHandlers(bus) {
       .eq('id', employee_id)
       .single()
 
+    // 依課程分級門檻(金/銀/銅)判定證照級別;銅=及格線,完課至少為銅
+    const { data: crs } = await supabase
+      .from('lms_courses')
+      .select('passing_score, tier_silver_score, tier_gold_score')
+      .eq('id', course_id)
+      .single()
+    const goldT = crs?.tier_gold_score ?? 90
+    const silverT = crs?.tier_silver_score ?? 80
+    const tier = (score != null && score >= goldT) ? '金'
+      : (score != null && score >= silverT) ? '銀' : '銅'
+
     const { data: cert, error: certErr } = await supabase
       .from('lms_certificates')
       .insert({
@@ -53,6 +71,7 @@ export function registerLMSHandlers(bus) {
         employee_id: parseInt(employee_id),
         certificate_number: certNum,
         score,
+        tier,
         issued_at: new Date().toISOString(),
         organization_id: emp?.organization_id,
       })
@@ -82,12 +101,18 @@ export function registerLMSHandlers(bus) {
 
   // ── Certificate issued → notify employee ──
   bus.subscribe('lms.certificate.issued', async function onCertificateIssuedNotify(event) {
-    const { employee_name, course_title, certificate_number } = event.payload
+    const { employee_id, employee_name, course_title, certificate_number } = event.payload
+
+    // notifications INSERT 有 RLS CHECK org_visible(organization_id),必須帶對的 org 才進得去
+    const orgId = await orgOf(employee_id)
+    if (!orgId) { console.warn('[LMS] 證書通知略過:查無 org', employee_id); return }
 
     await supabase.from('notifications').insert({
       type: '結業證書',
       title: `恭喜 ${employee_name || '您'} 完成「${course_title}」並獲得證書（${certificate_number}）`,
       read: false,
+      recipient_emp_id: employee_id ? parseInt(employee_id) : null,
+      organization_id: orgId,
     }).then(({ error }) => {
       if (error) console.warn('[LMS] Certificate notification failed:', error.message)
     })
@@ -95,14 +120,19 @@ export function registerLMSHandlers(bus) {
 
   // ── Enrollment created → notify learner ──
   bus.subscribe('lms.enrollment.created', async function onEnrollmentCreatedNotify(event) {
-    const { employee_name, course_title, due_date, enrolled_by } = event.payload
+    const { employee_id, employee_name, course_title, due_date, enrolled_by } = event.payload
     const dueText = due_date ? `，截止日期：${due_date}` : ''
     const byText = enrolled_by && enrolled_by !== 'self' ? `（由 ${enrolled_by} 指派）` : ''
+
+    const orgId = await orgOf(employee_id)
+    if (!orgId) { console.warn('[LMS] 報名通知略過:查無 org', employee_id); return }
 
     await supabase.from('notifications').insert({
       type: '課程報名',
       title: `${employee_name || '您'} 已報名「${course_title}」${byText}${dueText}`,
       read: false,
+      recipient_emp_id: employee_id ? parseInt(employee_id) : null,
+      organization_id: orgId,
     }).then(({ error }) => {
       if (error) console.warn('[LMS] Enrollment notification failed:', error.message)
     })

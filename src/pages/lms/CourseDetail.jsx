@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { useAuth } from '../../contexts/AuthContext'
 import { toast } from 'sonner'
-import { BookOpen, Video, HelpCircle, Clock, Award, CheckCircle, Play, ChevronRight } from 'lucide-react'
+import { BookOpen, Video, HelpCircle, Clock, Award, CheckCircle, Play, ChevronRight, Calendar, MapPin } from 'lucide-react'
 import { getEventBus } from '../../lib/events/EventBus'
 
 const DIFF_COLOR = { '初級': 'var(--accent-green)', '中級': 'var(--accent-orange)', '進階': 'var(--accent-red)' }
@@ -21,6 +21,16 @@ export default function CourseDetail() {
   const [allLessons, setAllLessons] = useState([])
   const [loading, setLoading] = useState(true)
   const [enrolling, setEnrolling] = useState(false)
+  const [physSessions, setPhysSessions] = useState([])
+  const [myAttendance, setMyAttendance] = useState(() => new Set())
+
+  useEffect(() => {
+    if (course?.delivery_mode !== '實體' || !profile?.id) return
+    supabase.from('lms_sessions').select('*').eq('course_id', courseId).order('starts_at', { ascending: true })
+      .then(({ data }) => setPhysSessions(data || []))
+    supabase.from('lms_attendance').select('session_id').eq('course_id', courseId).eq('employee_id', profile.id)
+      .then(({ data }) => setMyAttendance(new Set((data || []).map(a => a.session_id))))
+  }, [course?.delivery_mode, courseId, profile?.id])
 
   useEffect(() => {
     // 防呆:courseId 非數字(如網址誤帶 /lms/course/courses)不查 int 欄,導回課程列表
@@ -47,7 +57,7 @@ export default function CourseDetail() {
           })
       }
     }).finally(() => setLoading(false))
-  }, [courseId])
+  }, [courseId, profile?.id])
 
   const handleEnroll = async () => {
     if (enrolling) return
@@ -155,7 +165,39 @@ export default function CourseDetail() {
         )}
       </div>
 
+      {/* 實體課場次 */}
+      {course.delivery_mode === '實體' && (
+        <div className="card" style={{ padding: '18px 20px', marginBottom: 20 }}>
+          <h3 style={{ margin: '0 0 12px', fontSize: 15, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Calendar size={16} style={{ color: 'var(--accent-cyan)' }} /> 上課場次（實體課）
+          </h3>
+          {physSessions.length === 0 ? (
+            <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>尚未排定場次，請留意通知。</p>
+          ) : physSessions.map(s => {
+            const attended = myAttendance.has(s.id)
+            return (
+              <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', borderBottom: '1px solid var(--border-primary)' }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, color: 'var(--text-primary)', fontWeight: 500 }}>{s.title}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                    {s.starts_at && <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}><Calendar size={12} />{new Date(s.starts_at).toLocaleString('zh-TW', { month: 'numeric', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit' })}</span>}
+                    {s.location && <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}><MapPin size={12} />{s.location}</span>}
+                  </div>
+                </div>
+                <span style={{ fontSize: 12, fontWeight: 600, padding: '3px 10px', borderRadius: 20,
+                  background: attended ? 'var(--accent-green-dim)' : 'var(--bg-tertiary)',
+                  color: attended ? 'var(--accent-green)' : 'var(--text-muted)' }}>
+                  {attended ? '已簽到' : '未簽到'}
+                </span>
+              </div>
+            )
+          })}
+          <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '10px 0 0' }}>※ 實體課由講師現場點名簽到，簽到後即完成此課程。</p>
+        </div>
+      )}
+
       {/* Lesson list */}
+      {(course.delivery_mode !== '實體' || sections.length > 0) && (<>
       <h3 style={{ margin: '0 0 12px', fontSize: 15, color: 'var(--text-primary)', fontWeight: 600 }}>
         課程內容
       </h3>
@@ -199,6 +241,7 @@ export default function CourseDetail() {
           })}
         </div>
       ))}
+      </>)}
     </div>
   )
 }

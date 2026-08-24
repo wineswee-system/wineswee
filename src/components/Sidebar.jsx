@@ -108,7 +108,7 @@ const routeToGroup = (pathname) => {
   if (pathname.startsWith('/finance')) return 'finance'
   if (pathname.startsWith('/process')) return 'project'
   if (pathname.startsWith('/org/line')) return 'system' // LINE integration lives in System sidebar
-  if (pathname.startsWith('/hr') || pathname.startsWith('/org')) return 'people'
+  if (pathname.startsWith('/hr') || pathname.startsWith('/org') || pathname.startsWith('/lms')) return 'people'
   if (pathname.startsWith('/comms')) return 'comms'
   if (pathname.startsWith('/analytics')) return 'analytics'
   if (pathname.startsWith('/super-admin')) return 'super-admin'

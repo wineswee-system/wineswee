@@ -331,8 +331,11 @@ function LessonEditor({ lesson, onChange, onRemove }) {
           onChange={e => onChange({ type: e.target.value })}>
           {Object.entries(LESSON_TYPE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
         </select>
-        <input className="form-input" style={{ width: 80 }} type="number" min={1} value={lesson.duration_minutes}
-          onChange={e => onChange({ duration_minutes: parseInt(e.target.value) || 5 })} placeholder="分鐘" />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }} title="此單元預估時長(分鐘)">
+          <input className="form-input" style={{ width: 64 }} type="number" min={1} value={lesson.duration_minutes}
+            onChange={e => onChange({ duration_minutes: parseInt(e.target.value) || 5 })} placeholder="分鐘" />
+          <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>分鐘</span>
+        </div>
         <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-red)', padding: 4 }}
           onClick={onRemove}><Trash2 size={13} /></button>
       </div>

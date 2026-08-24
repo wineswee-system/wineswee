@@ -16,7 +16,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.resolve(__dirname, '..')
 const EN = path.join(ROOT, 'src/lib/i18n/en.js')
 const OUT = path.join(ROOT, 'i18n-missing.txt')
-const ROOTS = ['src/pages', 'src/components', 'src/modules']
+const ROOTS = ['src'] // 整個 src(walk 內排除 i18n / 測試檔)
 const showAll = process.argv.includes('--all')
 const SEP = String.fromCharCode(1)
 const ZH = /[一-鿿]/
@@ -31,7 +31,7 @@ function walk(d) {
   for (const f of fs.readdirSync(d, { withFileTypes: true })) {
     const p = path.join(d, f.name)
     if (f.isDirectory()) walk(p)
-    else if (/\.(jsx|js)$/.test(f.name) && !/i18n/.test(p)) files.push(p)
+    else if (/\.(jsx|js)$/.test(f.name) && !/i18n|__tests__|\.test\.|[\\/]test[\\/]/.test(p)) files.push(p)
   }
 }
 ROOTS.forEach(r => walk(path.join(ROOT, r)))

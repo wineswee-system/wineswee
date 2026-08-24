@@ -10211,4 +10211,8 @@ export default {
   "周轉天數下降": "Turnover days decreased",
   "DSO 達標": "DSO target met",
   "尚無差旅紀錄": "No travel records yet",
+  // 收尾補字
+  "首個任務": "First task",
+  "及格分數：": "Passing score: ",
+  "正式申報前請以國稅局「各類所得憑單電子申報系統」審核程式實測。": "Before official filing, verify with the National Taxation Bureau's e-Filing system for withholding statements.",
 }

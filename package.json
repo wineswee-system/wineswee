@@ -18,7 +18,8 @@
     "resolve-errors:dry": "node scripts/resolve-errors.mjs --dry-run",
     "resolve-errors:since": "node scripts/resolve-errors.mjs --since",
     "rwd-shots": "node scripts/rwd-shots.mjs",
-    "rwd-shots:login": "node scripts/rwd-shots.mjs --login"
+    "rwd-shots:login": "node scripts/rwd-shots.mjs --login",
+    "i18n:scan": "node scripts/i18n-scan.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.105.1",

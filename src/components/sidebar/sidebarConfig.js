@@ -191,6 +191,7 @@ export const groupNav = {
       icon: CreditCard,
       children: [
         { icon: Eye, label: '財務總覽', path: '/finance/overview' },
+        { icon: DollarSign, label: '費用查詢', path: '/hr/expense-query', title: '統一查所有費用單(非經常性費用申請 / 叫貨申請 / 經常性費用報銷),可篩類型/狀態/日期,點列看明細與簽核進度' },
         { icon: BookText, label: '傳票管理', path: '/finance/journal' },
         { icon: TrendingUp, label: '應收帳款', path: '/finance/ar' },
         { icon: Receipt, label: '應付帳款', path: '/finance/ap' },

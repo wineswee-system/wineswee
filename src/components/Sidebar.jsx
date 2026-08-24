@@ -348,6 +348,7 @@ export default function Sidebar() {
     '/hr/travel':           'nav.admin_office',
     '/hr/expense-requests': 'nav.admin_office',
     '/hr/expenses':         'nav.admin_office',
+    '/hr/expense-query':    'nav.admin_office',
     '/hr/documents':        'nav.admin_office',
     '/hr/labor-inspection': 'nav.admin_office',
     // ── 專案流程 ──

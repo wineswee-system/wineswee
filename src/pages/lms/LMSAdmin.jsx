@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -684,8 +685,8 @@ export default function LMSAdmin() {
           else list.forEach(e => next.add(e.id))
           return next
         })
-        return (
-          <div onClick={() => setShowAssign(false)} style={{ position: 'fixed', inset: 0, zIndex: 300,
+        return createPortal((
+          <div onClick={() => setShowAssign(false)} style={{ position: 'fixed', inset: 0, zIndex: 3000,
             background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
             <div className="card" onClick={e => e.stopPropagation()} style={{ width: 460, maxWidth: '100%',
               maxHeight: '82vh', display: 'flex', flexDirection: 'column', padding: 0 }}>
@@ -753,7 +754,7 @@ export default function LMSAdmin() {
               </div>
             </div>
           </div>
-        )
+        ), document.body)
       })()}
 
       {showImport && (

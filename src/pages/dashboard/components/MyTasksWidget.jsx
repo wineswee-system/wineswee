@@ -87,13 +87,14 @@ export default function MyTasksWidget() {
     if (d === today) return { group: 'today', tone: 'orange', dot: '🟠', text: `今天 ${(t.due_time || '17:00').slice(0, 5)} 前` }
     return { group: 'later', tone: 'muted', dot: '⚪', text: `還有 ${daysBetween(today, d)} 天（${md(d)}）` }
   }
+  // 專案跟流程都可能有 → 兩個標籤都回傳(步驟資訊從流程帶)
   const srcOf = (t) => {
-    if (t.workflow_instance_id && wfMap[t.workflow_instance_id]) {
-      const w = wfMap[t.workflow_instance_id]
-      return { name: w.name, step: t.step_order ? `第 ${t.step_order} 步${w.total ? `／共 ${w.total} 步` : ''}` : '' }
-    }
-    if (t.project_id && projMap[t.project_id]) return { name: projMap[t.project_id], step: '' }
-    return { name: t.store || '', step: '' }
+    const project = (t.project_id && projMap[t.project_id]) ? projMap[t.project_id] : null
+    const w = (t.workflow_instance_id && wfMap[t.workflow_instance_id]) ? wfMap[t.workflow_instance_id] : null
+    const flow = w ? w.name : null
+    const step = (w && t.step_order) ? `第 ${t.step_order} 步${w.total ? `／共 ${w.total} 步` : ''}` : ''
+    const fallback = (!project && !flow) ? (t.store || '') : ''
+    return { project, flow, step, fallback, label: project || flow || fallback }
   }
   const TONE = {
     red: { c: 'var(--accent-red)', bg: 'var(--accent-red-dim)' },
@@ -128,8 +129,14 @@ export default function MyTasksWidget() {
           border: `1px solid ${big ? tone.c : 'var(--border-subtle)'}`,
         }}>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 5, flexWrap: 'wrap' }}>
-          {src.name && (
-            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent-cyan)', background: 'var(--accent-cyan-dim)', borderRadius: 6, padding: '2px 8px' }}>{src.name}</span>
+          {src.project && (
+            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent-purple)', background: 'var(--accent-purple-dim)', borderRadius: 6, padding: '2px 8px' }}>📁 {src.project}</span>
+          )}
+          {src.flow && (
+            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent-cyan)', background: 'var(--accent-cyan-dim)', borderRadius: 6, padding: '2px 8px' }}>🔀 {src.flow}</span>
+          )}
+          {src.fallback && (
+            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', background: 'var(--bg-tertiary)', borderRadius: 6, padding: '2px 8px' }}>{src.fallback}</span>
           )}
           {src.step && <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>{src.step}</span>}
         </div>
@@ -211,7 +218,7 @@ export default function MyTasksWidget() {
                   <div key={t.id} onClick={() => openTask(t)}
                     style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, padding: '6px 4px', cursor: 'pointer' }}>
                     <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {t.title}{src.name ? ` · ${src.name}` : ''}
+                      {t.title}{src.label ? ` · ${src.label}` : ''}
                     </span>
                     <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>{t.status}</span>
                   </div>

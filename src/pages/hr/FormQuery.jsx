@@ -121,6 +121,13 @@ export default function FormQuery() {
   const handleForceApprove = async () => {
     const rows = selectedRows()
     if (!rows.length) return
+    // 守門:選取中若有「已被駁回」的單,強制通過會蓋過主管/督導的駁回,先明確警告
+    const rejected = rows.filter(r => ['已駁回', '已退回', '已拒絕'].includes(r.status))
+    if (rejected.length) {
+      const names = rejected.slice(0, 6).map(r => `${r.employee || r.employee_name || ''} #${r.id}`).join('、')
+      const ok = window.confirm(`⚠ 選取的 ${rows.length} 張中，有 ${rejected.length} 張「已被駁回」：\n${names}${rejected.length > 6 ? ' …' : ''}\n\n強制通過會蓋過主管/督導的駁回。確定要一起強制通過嗎？`)
+      if (!ok) return
+    }
     const reason = window.prompt(`強制通過 ${rows.length} 張表單。\n這會直接核准並觸發後續（離職→離職、加班→計薪…），且記錄稽核。\n\n請填強制通過原因：`)
     if (!reason || !reason.trim()) return
     setActing(true)

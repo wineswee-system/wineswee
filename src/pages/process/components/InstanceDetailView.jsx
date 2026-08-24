@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { toast } from '../../../lib/toast'
 import {
   Plus, Pencil, ChevronLeft, MoreVertical, Archive, Trash2,
-  Users, User, ClipboardList, FolderOpen, ShieldCheck, ShieldX, X, GripVertical, GitBranch, LayoutDashboard
+  Users, User, ClipboardList, FolderOpen, ShieldCheck, ShieldX, X, GripVertical, GitBranch, LayoutDashboard, GanttChartSquare
 } from 'lucide-react'
 import { updateTask } from '../../../lib/db'
 import TaskContextMenu from '../../../components/ui/TaskContextMenu'
@@ -13,6 +13,7 @@ import TaskDiscussionModal from '../../../components/TaskDiscussionModal'
 import BoundFormsField from '../../../components/tasks/BoundFormsField'
 import InitiatorAttachmentField from '../../../components/tasks/InitiatorAttachmentField'
 import WorkflowDagView from '../../../components/tasks/WorkflowDagView'
+import WorkflowGantt from './WorkflowGantt'
 
 const STATUS_LIST = ['未開始', '待簽核', '進行中', '待確認', '已完成', '已退回', '已擱置']
 
@@ -403,6 +404,7 @@ export default function InstanceDetailView({
           {[
             { k: 'steps', icon: <ClipboardList size={14} />,     label: `步驟任務 (${stats.total})` },
             { k: 'board', icon: <LayoutDashboard size={14} />,   label: '看板' },
+            { k: 'gantt', icon: <GanttChartSquare size={14} />,  label: '甘特圖' },
             { k: 'dag',   icon: <GitBranch size={14} />,         label: '依賴圖' },
           ].map(({ k, icon, label }) => {
             const active = activeTab === k
@@ -493,6 +495,13 @@ export default function InstanceDetailView({
               </div>
             )
           })}
+        </div>
+      )}
+
+      {/* Gantt view */}
+      {activeTab === 'gantt' && (
+        <div className="card" style={{ padding: '16px 20px' }}>
+          <WorkflowGantt steps={instSteps} instance={inst} />
         </div>
       )}
 

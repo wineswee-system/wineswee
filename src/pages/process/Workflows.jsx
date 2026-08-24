@@ -996,6 +996,7 @@ export default function Workflows() {
         status: '進行中',
         started_by: currentUser,
         started_by_id: profile?.id || null,
+        assignee: deployForm.owner || null,   // 流程負責人(整個流程 owner)
         applicant_emp_id: profile?.id || null,
         organization_id: profile?.organization_id || null,
         target_employee_id: targetType === 'employee' ? targetEmpId : null,

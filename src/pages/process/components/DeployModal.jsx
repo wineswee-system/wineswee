@@ -290,8 +290,8 @@ export default function DeployModal({
         </div>
       ) : (
         <>
-          {/* ─── 對象 + 分店（基本資訊）─── */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          {/* ─── 對象 + 分店 + 流程負責人（基本資訊）─── */}
+          <div style={{ display: 'grid', gridTemplateColumns: targetType === 'employee' ? '1fr 1fr 1fr' : '1fr 1fr', gap: 12 }}>
             <Field label="部署到哪個分店" required>
               <select className="form-input" style={{ width: '100%' }}
                 value={deployForm.location}
@@ -314,6 +314,18 @@ export default function DeployModal({
                 </select>
               </Field>
             )}
+            <Field label={
+              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <User size={12} /> 流程負責人
+              </span>
+            }>
+              <select className="form-input" style={{ width: '100%' }}
+                value={deployForm.owner || ''}
+                onChange={e => setDeployForm(f => ({ ...f, owner: e.target.value }))}>
+                <option value="">請選擇負責人</option>
+                {(employees || []).map(emp => <option key={emp.id} value={emp.name}>{emp.name}</option>)}
+              </select>
+            </Field>
           </div>
 
           {/* ─── 時程 + 優先度 ─── */}

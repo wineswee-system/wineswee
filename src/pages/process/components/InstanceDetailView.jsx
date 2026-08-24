@@ -537,7 +537,7 @@ export default function InstanceDetailView({
                         <span style={{ fontWeight: 700, fontSize: 12 }}>{step.step_order}</span>
                       </div>
                     </td>
-                    <td onClick={e => e.stopPropagation()}>
+                    <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         {step.task_code && (
                           <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)', border: '1px solid rgba(6,182,212,0.2)', flexShrink: 0, letterSpacing: '0.03em' }}>
@@ -549,6 +549,7 @@ export default function InstanceDetailView({
                             autoFocus
                             disabled={titleSaving}
                             value={editingTitleVal}
+                            onClick={e => e.stopPropagation()}
                             onChange={e => setEditingTitleVal(e.target.value)}
                             onBlur={async () => {
                               if (titleSaving) return
@@ -595,10 +596,11 @@ export default function InstanceDetailView({
                       </div>
                     </td>
                     {/* Assignee — click to pick inline */}
-                    <td onClick={e => e.stopPropagation()} style={{ position: 'relative', minWidth: 90 }}>
+                    <td style={{ position: 'relative', minWidth: 90 }}>
                       {editingAssigneeId === step.id ? (
                         <select autoFocus className="form-input" style={{ fontSize: 11, padding: '2px 4px', minWidth: 90 }}
                           value={step.assignee || ''}
+                          onClick={e => e.stopPropagation()}
                           onChange={async e => {
                             // ★寫 assignee_id(非 assignee 文字):trigger 只在 UPDATE OF assignee_id 才反推文字,
                             //   只寫文字會讓 assignee_id 停在舊人(通知/我的任務錯人)。
@@ -613,8 +615,8 @@ export default function InstanceDetailView({
                         </select>
                       ) : (
                         <span style={{ fontSize: 12, cursor: 'pointer', display: 'block', padding: '2px 4px', borderRadius: 4 }}
-                          onClick={() => setEditingAssigneeId(step.id)}
-                          title="點擊指派"
+                          onDoubleClick={e => { e.stopPropagation(); setEditingAssigneeId(step.id) }}
+                          title="單擊開任務、雙擊直接改指派"
                           onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-secondary)'}
                           onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                           {step.assignee || <span style={{ color: 'var(--border-medium)' }}>— 指派</span>}
@@ -624,10 +626,11 @@ export default function InstanceDetailView({
                     <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{step.store || inst.store || '—'}</td>
                     <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{step.planned_start || <span style={{ color: 'var(--border-medium)' }}>年/月/日</span>}</td>
                     {/* Due date — click to pick inline */}
-                    <td onClick={e => e.stopPropagation()} style={{ fontSize: 12, minWidth: 110 }}>
+                    <td style={{ fontSize: 12, minWidth: 110 }}>
                       {editingDueDateId === step.id ? (
                         <input autoFocus type="date" className="form-input" style={{ fontSize: 11, padding: '2px 4px', width: 120 }}
                           defaultValue={step.due_date || ''}
+                          onClick={e => e.stopPropagation()}
                           onBlur={async e => {
                             const val = e.target.value
                             if (val !== step.due_date) {
@@ -640,8 +643,8 @@ export default function InstanceDetailView({
                         />
                       ) : (
                         <div style={{ cursor: 'pointer', padding: '2px 4px', borderRadius: 4 }}
-                          onClick={() => setEditingDueDateId(step.id)}
-                          title="點擊編輯日期"
+                          onDoubleClick={e => { e.stopPropagation(); setEditingDueDateId(step.id) }}
+                          title="單擊開任務、雙擊直接改日期"
                           onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-secondary)'}
                           onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                           {step.due_date

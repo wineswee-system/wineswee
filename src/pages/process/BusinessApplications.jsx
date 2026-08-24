@@ -104,7 +104,7 @@ export default function BusinessApplications() {
             <p>費用 / 非費用類表單入口（被任務綁定時也從這些表單填寫）</p>
           </div>
           {hasPermission('nav.admin_office') && (
-            <button className="btn btn-secondary" onClick={() => navigate('/hr/expense-query')}
+            <button className="btn btn-secondary" onClick={() => navigate('/process/expense-query')}
               style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}
               title="查所有費用單(非經常性/叫貨/經常性報銷),看金額與簽核進度">
               💰 費用查詢

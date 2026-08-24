@@ -28,6 +28,7 @@ import RepairOrders from '../pages/process/RepairOrders'
 import StoreAudits from '../pages/workflow/StoreAudits'
 import ExpenseRequests from '../pages/workflow/ExpenseRequests'
 import Expenses from '../pages/workflow/Expenses'
+import ExpenseQuery from '../pages/process/ExpenseQuery'
 import CustomFormFill from '../pages/workflow/CustomFormFill'
 import FormSubmissions from '../pages/workflow/FormSubmissions'
 import LoadingSpinner from '../components/LoadingSpinner'
@@ -84,6 +85,7 @@ export default function ProcessModule() {
       <Route path="expense-requests" element={<ExpenseRequests />} />
       <Route path="order-requests" element={<ExpenseRequests docType="order" />} />
       <Route path="expenses" element={<Expenses />} />
+      <Route path="expense-query" element={<ExpenseQuery />} />
       <Route path="forms/custom/:templateId" element={<CustomFormFill />} />
       <Route path="forms/submissions" element={<FormSubmissions />} />
       <Route path="task-confirmations" element={<TaskConfirmations />} />

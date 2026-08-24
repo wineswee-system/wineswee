@@ -319,12 +319,12 @@ export default function DeployModal({
                 <User size={12} /> 流程負責人
               </span>
             }>
-              <select className="form-input" style={{ width: '100%' }}
-                value={deployForm.owner || ''}
-                onChange={e => setDeployForm(f => ({ ...f, owner: e.target.value }))}>
-                <option value="">請選擇負責人</option>
-                {(employees || []).map(emp => <option key={emp.id} value={emp.name}>{emp.name}</option>)}
-              </select>
+              <SearchableSelect
+                value={deployForm.owner || null}
+                onChange={(v) => setDeployForm(f => ({ ...f, owner: v || '' }))}
+                options={empOptions(employees, { keyBy: 'name' })}
+                placeholder="請選擇 / 搜尋員工..."
+              />
             </Field>
           </div>
 

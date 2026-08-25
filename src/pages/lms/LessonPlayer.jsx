@@ -296,15 +296,17 @@ export default function LessonPlayer() {
 function VideoPlayer({ url }) {
   const isYoutube = url.includes('youtube.com') || url.includes('youtu.be')
   const isVimeo = url.includes('vimeo.com')
-  // 直接用 aspect-ratio 的 iframe(不用 paddingBottom+絕對定位+overflow,避免在縮放/flex 版面被裁成一角);限最大寬置中
-  const frame = { width: '100%', maxWidth: 800, aspectRatio: '16 / 9', border: 'none', borderRadius: 8, display: 'block', background: '#000' }
+  // 限最大寬置中的 16:9 盒;iframe 給明確 1280x720 屬性,瀏覽器才照 16:9 排版(不然預設300x150→拉伸放大、播放鍵跑掉)
+  const box = { width: '100%', maxWidth: 800, margin: '0 auto' }
+  const wrap = { position: 'relative', paddingBottom: '56.25%', height: 0, overflow: 'hidden', borderRadius: 8, background: '#000' }
+  const abs = { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 'none' }
   if (isYoutube) {
     const videoId = url.match(/(?:v=|youtu\.be\/)([^&?/]+)/)?.[1]
-    return <iframe style={frame} src={`https://www.youtube.com/embed/${videoId}?playsinline=1&rel=0`} allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowFullScreen title="lesson video" />
+    return <div style={box}><div style={wrap}><iframe src={`https://www.youtube.com/embed/${videoId}?playsinline=1&rel=0`} width="1280" height="720" style={abs} allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowFullScreen title="lesson video" /></div></div>
   }
   if (isVimeo) {
     const videoId = url.match(/vimeo\.com\/(\d+)/)?.[1]
-    return <iframe style={frame} src={`https://player.vimeo.com/video/${videoId}`} allowFullScreen title="lesson video" />
+    return <div style={box}><div style={wrap}><iframe src={`https://player.vimeo.com/video/${videoId}`} width="1280" height="720" style={abs} allowFullScreen title="lesson video" /></div></div>
   }
-  return <video controls playsInline style={{ ...frame }} src={url}>您的瀏覽器不支援影片播放</video>
+  return <video controls playsInline style={{ width: '100%', maxWidth: 800, margin: '0 auto', borderRadius: 8, background: '#000', display: 'block' }} src={url}>您的瀏覽器不支援影片播放</video>
 }

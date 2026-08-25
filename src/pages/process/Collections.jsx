@@ -439,6 +439,27 @@ function FranchiseTab({ orgId, profile, franchises, ffInvestors, ffPays, deposit
                                 <StatusPill done={invDone} doneText="已收滿" />
                               </div>
                               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                {!invDone && (
+                                  <LumpSumEditor
+                                    stageRemaining={[0, 1, 2].map(i => Math.max(0, targets[i] - paidStages[i]))}
+                                    onDistribute={async ({ paid_date, amount, note }) => {
+                                      let left = n(amount); const ins = []
+                                      for (let si = 0; si < 3; si++) {
+                                        if (left <= 0.5) break
+                                        const put = Math.min(left, Math.max(0, targets[si] - paidStages[si]))
+                                        if (put > 0.5) { ins.push({ stage: si + 1, amount: put }); left -= put }
+                                      }
+                                      if (ins.length === 0) { toast.warning('已無可分配的期數'); return false }
+                                      const noteTag = note || `整筆 ${fmt(n(amount))} 自動分期`
+                                      const { error } = await supabase.from('franchise_fee_payments').insert(
+                                        ins.map(r => ({ organization_id: orgId, franchise_fee_id: f.id, investor_id: ffi.investor_id, stage: r.stage, paid_date, amount: r.amount, note: noteTag, created_by: profile?.name || null }))
+                                      )
+                                      if (error) { toast.error('新增失敗：' + error.message); return false }
+                                      toast.success(`已記錄 ${inv?.name || ''} 整筆 ${fmt(n(amount))}（分 ${ins.length} 期）`)
+                                      reload(); return true
+                                    }}
+                                  />
+                                )}
                                 {[0, 1, 2].map(si => {
                                   const stage = si + 1
                                   const pct = [45, 45, 10][si]
@@ -599,6 +620,52 @@ function PaymentEditor({ rows, onAdd, onDelete, compact, max }) {
           <input className="form-input" type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder={capped ? `金額（最多 ${fmt(remaining)}）` : '金額'} style={{ width: capped ? 180 : 120 }} />
           <input className="form-input" value={note} onChange={e => setNote(e.target.value)} placeholder="備註（選填）" style={{ flex: 1, minWidth: 120 }} />
           <button className="btn btn-primary" style={{ padding: '6px 12px' }} onClick={submit} disabled={busy}><Plus size={13} /> {busy ? '記錄中…' : '記一筆'}</button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// 整筆收款 → 自動由第1→2→3期依序灌滿(每期照舊上限),一次記多筆
+function LumpSumEditor({ stageRemaining, onDistribute }) {
+  const [date, setDate] = useState(today())
+  const [amount, setAmount] = useState('')
+  const [note, setNote] = useState('')
+  const [busy, setBusy] = useState(false)
+  const totalRem = stageRemaining.reduce((s, x) => s + Math.max(0, x), 0)
+
+  const preview = useMemo(() => {
+    let left = n(amount); const out = []
+    for (let i = 0; i < 3; i++) {
+      if (left <= 0.5) break
+      const put = Math.min(left, Math.max(0, stageRemaining[i]))
+      if (put > 0.5) { out.push({ stage: i + 1, amount: put }); left -= put }
+    }
+    return { rows: out, overflow: Math.max(0, left) }
+  }, [amount, stageRemaining])
+
+  const submit = async () => {
+    if (n(amount) <= 0) { toast.warning('金額要 > 0'); return }
+    if (n(amount) > totalRem + 0.5) { toast.warning(`超過剩餘總額，最多再記 ${fmt(totalRem)}`); return }
+    setBusy(true)
+    const ok = await onDistribute({ paid_date: date, amount: n(amount), note })
+    setBusy(false)
+    if (ok) { setAmount(''); setNote('') }
+  }
+
+  if (totalRem <= 0.5) return null
+  return (
+    <div style={{ background: 'var(--accent-cyan-dim)', borderRadius: 8, padding: 10 }}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent-cyan)', marginBottom: 6 }}>整筆收款（自動分期）</div>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <input className="form-input" type="date" value={date} onChange={e => setDate(e.target.value)} style={{ width: 150 }} />
+        <input className="form-input" type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder={`整筆金額（最多 ${fmt(totalRem)}）`} style={{ width: 190 }} />
+        <input className="form-input" value={note} onChange={e => setNote(e.target.value)} placeholder="備註（選填）" style={{ flex: 1, minWidth: 120 }} />
+        <button className="btn btn-primary" style={{ padding: '6px 12px' }} onClick={submit} disabled={busy}><Plus size={13} /> {busy ? '分配中…' : '一次收款'}</button>
+      </div>
+      {preview.rows.length > 0 && (
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
+          將分配：{preview.rows.map(r => `第${r.stage}期 ${fmt(r.amount)}`).join(' · ')}{preview.overflow > 0.5 ? `（超出 ${fmt(preview.overflow)} 無法分配）` : ''}
         </div>
       )}
     </div>

@@ -12367,4 +12367,10 @@ export default {
   "拿鐵咖啡": "Latte",
   "巧克力蛋糕": "Chocolate cake",
   "信用卡應收": "Credit card receivable",
+  // 收款一次收款
+  "整筆收款（自動分期）": "Lump-sum payment (auto-split by stage)",
+  "一次收款": "Record lump sum",
+  "分配中…": "Distributing…",
+  "將分配：": "Will allocate: ",
+  "已無可分配的期數": "No stages left to allocate",
 }

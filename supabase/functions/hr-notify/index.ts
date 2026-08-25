@@ -204,7 +204,7 @@ function buildCorrectionNotification(type: "approved" | "rejected" | "step_assig
   correction_type?: string; requested_clock_in?: string;
   requested_clock_out?: string; rejection_reason?: string;
   applicant_name?: string; step_label?: string; reason?: string;
-  request_id?: number; liff_id?: string | null;
+  request_id?: number; liff_id?: string | null; photo_url?: string | null;
 }) {
   if (type === "step_assigned") {
     const typeLabel: Record<string, string> = {
@@ -229,6 +229,7 @@ function buildCorrectionNotification(type: "approved" | "rejected" | "step_assig
       type: "flex", altText: `📋 補打卡申請待簽核`,
       contents: {
         type: "bubble", size: "kilo",
+        ...(details.photo_url ? { hero: { type: "image", url: details.photo_url, size: "full", aspectRatio: "20:13", aspectMode: "cover", action: { type: "uri", uri: details.photo_url } } } : {}),
         header: {
           type: "box", layout: "vertical", backgroundColor: "#2B6CB0", paddingAll: "14px",
           contents: [{ type: "text", text: "📋 補打卡申請待簽核", weight: "bold", color: "#FFFFFF", size: "md" }],
@@ -1639,7 +1640,21 @@ serve(async (req) => {
     } else if (type === "ot_rejected") {
       message = buildOtNotification("rejected", details);
     } else if (type === "correction_step_assigned") {
-      message = buildCorrectionNotification("step_assigned", { ...details, liff_id: acct?.liffId || null });
+      // 撈第一張照片(form_attachments, form_type='correction')塞進卡片 hero;service_role bypassrls
+      let photoUrl: string | null = null;
+      if (details?.request_id) {
+        const { data: fa } = await db.from("form_attachments")
+          .select("storage_bucket, storage_path, mime_type")
+          .eq("form_type", "correction").eq("form_id", details.request_id)
+          .order("id", { ascending: true });
+        const img = (fa || []).find((a: any) =>
+          (a.mime_type ?? "").startsWith("image") || /\.(jpe?g|png|gif|webp|heic|heif)(\?|$)/i.test(a.storage_path || ""));
+        if (img) {
+          const { data } = db.storage.from(img.storage_bucket || "attachments").getPublicUrl(img.storage_path);
+          photoUrl = data?.publicUrl || null;
+        }
+      }
+      message = buildCorrectionNotification("step_assigned", { ...details, liff_id: acct?.liffId || null, photo_url: photoUrl });
     } else if (type === "correction_approved") {
       message = buildCorrectionNotification("approved", details);
     } else if (type === "correction_rejected") {

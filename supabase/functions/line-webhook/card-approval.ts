@@ -285,7 +285,8 @@ export async function fetchApprovalCard(
 //   - expense_request: expense_request_attachments 表 + bucket 'attachments'
 //   - expense (報帳): expenses.attachments 欄位（已存好的 publicUrl 陣列）
 //   - leave: leave_requests.attachments 欄位（已存好的 publicUrl 陣列）
-//   - 其他 5 類目前無附件功能 → 回 []
+//   - correction (補打卡): 多型 form_attachments 表 (form_type='correction') + bucket 'attachments'
+//   - 其他類目前無附件功能 → 回 []
 
 async function fetchAttachments(
   db: SupabaseClient,
@@ -320,6 +321,22 @@ async function fetchAttachments(
           url,
           fileType: deriveMimeFromUrl(url),
         }));
+    }
+
+    if (type === "correction") {
+      // 補打卡照片存多型 form_attachments 表 (form_type='correction')；service_role 直查(bypassrls)
+      const { data: rows } = await db
+        .from("form_attachments")
+        .select("file_name, storage_bucket, storage_path, mime_type")
+        .eq("form_type", "correction")
+        .eq("form_id", id)
+        .order("id", { ascending: true });
+      if (!rows || rows.length === 0) return [];
+      return rows.map((r: any) => ({
+        name: r.file_name ?? "附件",
+        url: storagePublicUrl(db, r.storage_bucket ?? "attachments", r.storage_path),
+        fileType: r.mime_type ?? deriveMimeFromUrl(r.storage_path ?? ""),
+      }));
     }
 
     return [];

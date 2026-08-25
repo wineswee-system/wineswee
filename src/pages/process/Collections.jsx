@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Wallet, Handshake, Users, Plus, ChevronDown, ChevronRight, Trash2, Check, X } from 'lucide-react'
+import { Wallet, Handshake, Users, Plus, ChevronDown, ChevronRight, Trash2, Check, X, Pencil } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
@@ -218,6 +218,17 @@ function DepositTab({ orgId, profile, deposits, depPays, investors, addInvestor,
     toast.success('已刪除'); reload()
   }
 
+  const [editId, setEditId] = useState(null)
+  const [editForm, setEditForm] = useState({ title: '', invId: '' })
+  const startEdit = (d) => { setEditId(d.id); setEditForm({ title: d.title || '', invId: d.investor_id || '' }) }
+  const saveEdit = async () => {
+    if (!editForm.title.trim()) { toast.warning('請填標的名稱'); return }
+    if (!editForm.invId) { toast.warning('請選投資人'); return }
+    const { error } = await supabase.from('deposit_records').update({ title: editForm.title.trim(), investor_id: editForm.invId }).eq('id', editId)
+    if (error) { toast.error('更新失敗：' + error.message); return }
+    setEditId(null); toast.success('已更新'); reload()
+  }
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
@@ -257,14 +268,31 @@ function DepositTab({ orgId, profile, deposits, depPays, investors, addInvestor,
               const inv = invById[d.investor_id]
               return (
                 <Grp key={d.id}>
+                  {editId === d.id ? (
+                  <tr>
+                    <td></td>
+                    <td><input className="form-input" value={editForm.title} onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))} autoFocus style={{ width: '100%' }} /></td>
+                    <td><InvestorPicker value={editForm.invId} onChange={v => setEditForm(f => ({ ...f, invId: v }))} investors={investors} addInvestor={addInvestor} /></td>
+                    <td><Progress paid={n(d.paid_total)} target={n(d.target_amount)} /></td>
+                    <td><StatusPill done={d.status === 'completed'} /></td>
+                    <td><div style={{ display: 'flex', gap: 4 }}>
+                      <button className="btn btn-primary" style={{ padding: '2px 6px' }} onClick={saveEdit} title="儲存"><Check size={13} /></button>
+                      <button className="btn btn-secondary" style={{ padding: '2px 6px' }} onClick={() => setEditId(null)} title="取消"><X size={13} /></button>
+                    </div></td>
+                  </tr>
+                  ) : (
                   <tr style={{ cursor: 'pointer' }} onClick={() => setExpanded(isExp ? null : d.id)}>
                     <td>{isExp ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</td>
                     <td style={{ fontWeight: 600 }}>{d.title}</td>
                     <td>{inv ? <>{inv.name}{inv.company ? <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>（{inv.company}）</span> : null}</> : '—'}</td>
                     <td><Progress paid={n(d.paid_total)} target={n(d.target_amount)} /></td>
                     <td><StatusPill done={d.status === 'completed'} /></td>
-                    <td><button className="btn btn-secondary" style={{ padding: '2px 6px' }} onClick={e => { e.stopPropagation(); delDeposit(d) }}><Trash2 size={13} style={{ color: 'var(--accent-red)' }} /></button></td>
+                    <td><div style={{ display: 'flex', gap: 4 }}>
+                      <button className="btn btn-secondary" style={{ padding: '2px 6px' }} onClick={e => { e.stopPropagation(); startEdit(d) }} title="編輯"><Pencil size={13} style={{ color: 'var(--accent-cyan)' }} /></button>
+                      <button className="btn btn-secondary" style={{ padding: '2px 6px' }} onClick={e => { e.stopPropagation(); delDeposit(d) }} title="刪除"><Trash2 size={13} style={{ color: 'var(--accent-red)' }} /></button>
+                    </div></td>
                   </tr>
+                  )}
                   {isExp && (
                     <tr><td colSpan={6} style={{ padding: 0 }}>
                       <PaymentEditor rows={paysByDep[d.id] || []} max={Math.max(0, n(d.target_amount) - n(d.paid_total))}
@@ -529,6 +557,18 @@ function InvestorTab({ orgId, profile, investors, deposits, ffInvestors, addInve
     toast.success('已刪除'); reload()
   }
 
+  const [editId, setEditId] = useState(null)
+  const [editForm, setEditForm] = useState({ company: '', name: '', phone: '' })
+  const startEdit = (i) => { setEditId(i.id); setEditForm({ company: i.company || '', name: i.name || '', phone: i.phone || '' }) }
+  const saveEdit = async () => {
+    if (!editForm.name.trim()) { toast.warning('名字必填'); return }
+    const { error } = await supabase.from('collection_investors').update({
+      company: editForm.company.trim() || null, name: editForm.name.trim(), phone: editForm.phone.trim() || null,
+    }).eq('id', editId)
+    if (error) { toast.error('更新失敗：' + error.message); return }
+    setEditId(null); toast.success('已更新'); reload()
+  }
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
@@ -558,14 +598,27 @@ function InvestorTab({ orgId, profile, investors, deposits, ffInvestors, addInve
           <thead><tr><th>公司</th><th>名字</th><th>電話</th><th style={{ width: 40 }}></th></tr></thead>
           <tbody>
             {investors.length === 0 && <tr><td colSpan={4} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 32 }}>尚無投資人</td></tr>}
-            {investors.map(i => (
+            {investors.map(i => editId === i.id ? (
+              <tr key={i.id}>
+                <td><input className="form-input" value={editForm.company} onChange={e => setEditForm(f => ({ ...f, company: e.target.value }))} placeholder="公司（選填）" style={{ width: '100%' }} /></td>
+                <td><input className="form-input" value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} autoFocus style={{ width: '100%' }} /></td>
+                <td><input className="form-input" value={editForm.phone} onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))} placeholder="電話" style={{ width: '100%' }} /></td>
+                <td><div style={{ display: 'flex', gap: 4 }}>
+                  <button className="btn btn-primary" style={{ padding: '2px 6px' }} onClick={saveEdit} title="儲存"><Check size={13} /></button>
+                  <button className="btn btn-secondary" style={{ padding: '2px 6px' }} onClick={() => setEditId(null)} title="取消"><X size={13} /></button>
+                </div></td>
+              </tr>
+            ) : (
               <tr key={i.id}>
                 <td style={{ color: i.company ? 'var(--text-primary)' : 'var(--text-muted)' }}>{i.company || '—'}</td>
                 <td style={{ fontWeight: 600 }}>{i.name}</td>
                 <td>{i.phone}</td>
-                <td><button className="btn btn-secondary" style={{ padding: '2px 6px' }} onClick={() => del(i)} title={usedIds.has(i.id) ? '已被引用，不能刪' : '刪除'}>
-                  <Trash2 size={13} style={{ color: usedIds.has(i.id) ? 'var(--text-muted)' : 'var(--accent-red)' }} />
-                </button></td>
+                <td><div style={{ display: 'flex', gap: 4 }}>
+                  <button className="btn btn-secondary" style={{ padding: '2px 6px' }} onClick={() => startEdit(i)} title="編輯"><Pencil size={13} style={{ color: 'var(--accent-cyan)' }} /></button>
+                  <button className="btn btn-secondary" style={{ padding: '2px 6px' }} onClick={() => del(i)} title={usedIds.has(i.id) ? '已被引用，不能刪' : '刪除'}>
+                    <Trash2 size={13} style={{ color: usedIds.has(i.id) ? 'var(--text-muted)' : 'var(--accent-red)' }} />
+                  </button>
+                </div></td>
               </tr>
             ))}
           </tbody>

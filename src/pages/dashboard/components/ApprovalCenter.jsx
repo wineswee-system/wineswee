@@ -351,6 +351,20 @@ function PendingApprovalsView() {
       setDetail(d => (d && d.row.id === row.id ? { ...d, emp } : d))
     }
 
+    // 補打卡照片:附件存在多型 form_attachments(form_type='correction'),撈出組 URL 讓審核人看得到
+    if (type === 'correction') {
+      supabase.from('form_attachments')
+        .select('storage_bucket, storage_path')
+        .eq('form_type', 'correction').eq('form_id', row.id)
+        .then(({ data: atts }) => {
+          if (detailIdRef.current !== row.id) return
+          const urls = (atts || [])
+            .map(a => supabase.storage.from(a.storage_bucket || 'attachments').getPublicUrl(a.storage_path).data?.publicUrl)
+            .filter(Boolean)
+          setDetail(d => (d && d.row.id === row.id ? { ...d, row: { ...d.row, attachments: urls } } : d))
+        })
+    }
+
     // 簽核鏈（snapshot 優先，對齊 HR 頁顯示）
     const steps = await buildFormChainSteps({
       formType: cfg.formType,

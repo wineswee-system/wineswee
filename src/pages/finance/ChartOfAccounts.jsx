@@ -19,7 +19,8 @@ const TYPES = [
 const typeColor = (type) => TYPES.find(t => t.value === type)?.color || 'var(--text-secondary)'
 const typeDim = (type) => TYPES.find(t => t.value === type)?.dim || 'var(--bg-tertiary)'
 
-const emptyForm = { code: '', name: '', type: '費用', parent_code: '', description: '', balance: 0 }
+// pick_scope 控制此科目在「費用申請」下拉的可見性:all=全部可選 / restricted=限有權限者 / null=不開放
+const emptyForm = { code: '', name: '', type: '費用', parent_code: '', description: '', balance: 0, pick_scope: 'all' }
 
 export default function ChartOfAccounts() {
   const orgId = useOrgId()
@@ -52,6 +53,7 @@ export default function ChartOfAccounts() {
     delete payload.id
     if (!payload.parent_code) payload.parent_code = null
     if (!payload.description) payload.description = null
+    if (!payload.pick_scope) payload.pick_scope = null  // 空字串 = 不開放申請 → 存 null
 
     if (editingId) {
       const { error } = await updateAccount(editingId, payload)
@@ -75,6 +77,7 @@ export default function ChartOfAccounts() {
       parent_code: acc.parent_code || '',
       description: acc.description || '',
       balance: acc.balance || 0,
+      pick_scope: acc.pick_scope || '',
     })
     setEditingId(acc.id)
     setShowModal(true)
@@ -264,6 +267,18 @@ export default function ChartOfAccounts() {
                 <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>說明</label>
                 <input type="text" value={form.description} onChange={e => set('description', e.target.value)} placeholder="選填"
                   style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }} />
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>申請可選範圍</label>
+                <select value={form.pick_scope} onChange={e => set('pick_scope', e.target.value)}
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }}>
+                  <option value="all">全部可選（費用申請下拉可選）</option>
+                  <option value="restricted">限有權限者（受限科目）</option>
+                  <option value="">不開放申請（不出現在申請下拉）</option>
+                </select>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+                  費用類科目建議「全部可選」;資產／負債／收入等一般選「不開放申請」。
+                </div>
               </div>
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 20 }}>

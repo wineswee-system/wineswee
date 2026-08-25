@@ -1,6 +1,7 @@
--- 月薪未滿月比例:分母固定 30 天(月薪=30天制)。滿月=全額;計件/時薪不動;保費 proration(在保比例)另計維持曆日。
--- 徽章顯示分母 salary_total_wd 也對齊:月薪=30、計件=當月曆日。
--- 共用引擎 _compute_payroll_for_employee(preview_payroll / generate_payroll / liff_get_my_salary_detail 三邊同步)。此檔為完整定義留痕。
+-- 月薪未滿月比例:分母固定 30 天(月薪=30天制)。滿月=全額;計件維持曆日;時薪不動;保費 proration(在保比例)另計維持曆日。
+-- 徽章顯示分母 salary_total_wd 對齊:月薪=30、計件=曆日。
+-- ★金額用「精確先乘後除」ceil(X * 在職天 / v_sal_den)取代 ceil(X * 浮點比例),避免 23/30 浮點×ceil 溢 1 元。
+-- 共用引擎(preview_payroll / generate_payroll / liff_get_my_salary_detail)。此檔為完整定義留痕。
 
 CREATE OR REPLACE FUNCTION public._compute_payroll_for_employee(p_emp_id integer, p_period text)
  RETURNS jsonb
@@ -185,6 +186,7 @@ DECLARE
   v_eff_end        date;
 
   v_sal_ratio      numeric := 1;
+  v_sal_den        numeric := 1;
 
   v_sal_actual     int;
 
@@ -908,6 +910,7 @@ BEGIN
       WHEN v_sal_actual >= v_total_days THEN 1                    -- 滿月=全額
       WHEN v_is_piece THEN v_sal_actual::numeric / v_total_days   -- 計件:維持曆日制不動
       ELSE LEAST(v_sal_actual::numeric / 30.0, 1) END;
+    v_sal_den := CASE WHEN v_sal_actual >= v_total_days THEN v_sal_actual WHEN v_is_piece THEN v_total_days ELSE 30 END;
 
   END IF;
 
@@ -915,23 +918,23 @@ BEGIN
 
   IF NOT v_is_hourly THEN
 
-    v_eff_base   := ceil(v_base_salary   * v_sal_ratio);
+    v_eff_base   := ceil(v_base_salary   * v_sal_actual / v_sal_den);
 
-    v_eff_role   := ceil(v_role_allow    * v_sal_ratio);
+    v_eff_role   := ceil(v_role_allow    * v_sal_actual / v_sal_den);
 
-    v_eff_meal   := ceil(v_meal          * v_sal_ratio);
+    v_eff_meal   := ceil(v_meal          * v_sal_actual / v_sal_den);
 
-    v_eff_transp := ceil(v_transport     * v_sal_ratio);
+    v_eff_transp := ceil(v_transport     * v_sal_actual / v_sal_den);
 
-    v_eff_attb   := ceil(v_attendance_bonus * v_sal_ratio);
+    v_eff_attb   := ceil(v_attendance_bonus * v_sal_actual / v_sal_den);
 
-    v_eff_night  := ceil(v_night         * v_sal_ratio);
+    v_eff_night  := ceil(v_night         * v_sal_actual / v_sal_den);
 
-    v_eff_cross  := ceil(v_cross         * v_sal_ratio);
+    v_eff_cross  := ceil(v_cross         * v_sal_actual / v_sal_den);
 
-    v_eff_otherc := ceil(v_other_custom  * v_sal_ratio);
+    v_eff_otherc := ceil(v_other_custom  * v_sal_actual / v_sal_den);
 
-    v_eff_custom_total := ceil(v_custom_total * v_sal_ratio);
+    v_eff_custom_total := ceil(v_custom_total * v_sal_actual / v_sal_den);
 
   ELSE
 

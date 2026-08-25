@@ -234,6 +234,15 @@ export default function LessonPlayer() {
                 </button>
               )}
             </div>
+          ) : lesson.type === 'pdf' ? (
+            lesson.content ? (
+              <div>
+                <iframe src={lesson.content} title="PDF 教材"
+                  style={{ width: '100%', height: '70vh', border: '1px solid var(--border-primary)', borderRadius: 8 }} />
+                <a href={lesson.content} target="_blank" rel="noreferrer" className="btn btn-secondary"
+                  style={{ marginTop: 10, display: 'inline-block' }}>在新分頁開啟 / 下載</a>
+              </div>
+            ) : <span style={{ color: 'var(--text-muted)' }}>（此單元尚無 PDF）</span>
           ) : lesson.type === 'assignment' ? (
             <div style={{ maxWidth: 640 }}>
               <div style={{ lineHeight: 1.8, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', fontSize: 15, marginBottom: 20 }}>

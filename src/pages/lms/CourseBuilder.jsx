@@ -4,11 +4,11 @@ import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { useAuth } from '../../contexts/AuthContext'
 import { toast } from 'sonner'
-import { Plus, Trash2, ChevronDown, ChevronUp, Save, ArrowLeft, FileText, Video, HelpCircle, ArrowUp, ArrowDown, Upload } from 'lucide-react'
+import { Plus, Trash2, ChevronDown, ChevronUp, Save, ArrowLeft, FileText, Video, HelpCircle, ArrowUp, ArrowDown, Upload, File } from 'lucide-react'
 import { getEventBus } from '../../lib/events/EventBus'
 
-const LESSON_TYPE_ICON = { text: FileText, video: Video, quiz: HelpCircle, assignment: Upload }
-const LESSON_TYPE_LABEL = { text: '文字', video: '影片', quiz: '測驗', assignment: '作業' }
+const LESSON_TYPE_ICON = { text: FileText, video: Video, pdf: File, quiz: HelpCircle, assignment: Upload }
+const LESSON_TYPE_LABEL = { text: '文字', video: '影片', pdf: '文件PDF', quiz: '測驗', assignment: '作業' }
 
 const DEFAULT_COURSE = {
   title: '', description: '', category: '一般', difficulty: '初級', delivery_mode: '線上',
@@ -339,15 +339,49 @@ function LessonEditor({ lesson, onChange, onRemove }) {
         <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-red)', padding: 4 }}
           onClick={onRemove}><Trash2 size={13} /></button>
       </div>
-      {lesson.type !== 'quiz' ? (
+      {lesson.type === 'quiz' ? (
+        <QuizEditor quizData={lesson.quiz_data} onChange={quiz_data => onChange({ quiz_data })} />
+      ) : lesson.type === 'pdf' ? (
+        <PdfLessonField content={lesson.content} onChange={c => onChange({ content: c })} />
+      ) : (
         <textarea className="form-input" rows={3} value={lesson.content || ''}
           onChange={e => onChange({ content: e.target.value })}
           placeholder={lesson.type === 'video' ? '貼上影片網址（YouTube / Vimeo）'
             : lesson.type === 'assignment' ? '作業說明：要學員上傳什麼（例如自拍操作影片、簽名表單掃描檔）'
             : '輸入課程內容（支援 Markdown）'} />
-      ) : (
-        <QuizEditor quizData={lesson.quiz_data} onChange={quiz_data => onChange({ quiz_data })} />
       )}
+    </div>
+  )
+}
+
+// ── PdfLessonField:文件(PDF)教材 — 貼網址或上傳 ──
+function PdfLessonField({ content, onChange }) {
+  const [uploading, setUploading] = useState(false)
+  const upload = async (file) => {
+    if (!file) return
+    if (file.size > 50 * 1024 * 1024) { toast.error('檔案過大（上限約 50MB）'); return }
+    setUploading(true)
+    try {
+      const safe = file.name.replace(/[^\w.\-]+/g, '_')
+      const path = `pdf/${Date.now()}_${safe}`
+      const { error } = await supabase.storage.from('lms-uploads').upload(path, file, { upsert: true })
+      if (error) throw error
+      const { data } = supabase.storage.from('lms-uploads').getPublicUrl(path)
+      onChange(data.publicUrl)
+      toast.success('PDF 已上傳')
+    } catch (e) { toast.error('上傳失敗：' + e.message) } finally { setUploading(false) }
+  }
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <input className="form-input" style={{ flex: 1 }} placeholder="貼上 PDF 網址,或用右邊上傳"
+          value={content || ''} onChange={e => onChange(e.target.value)} />
+        <label className="btn btn-secondary" style={{ whiteSpace: 'nowrap', cursor: uploading ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
+          <Upload size={13} />{uploading ? '上傳中...' : '上傳 PDF'}
+          <input type="file" hidden accept="application/pdf" disabled={uploading} onChange={e => upload(e.target.files?.[0])} />
+        </label>
+      </div>
+      {content && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>目前：{decodeURIComponent(String(content).split('/').pop())}</div>}
     </div>
   )
 }

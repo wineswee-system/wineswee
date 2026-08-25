@@ -54,7 +54,7 @@ export default function LMSAdmin() {
     Promise.all([
       supabase.from('lms_courses').select('*').eq('organization_id', profile.organization_id).order('created_at', { ascending: false }),
       supabase.from('lms_enrollments').select('course_id, status, employee_id, id').eq('organization_id', profile.organization_id),
-      supabase.from('lms_certificates').select('course_id, employee_id, issued_at').eq('organization_id', profile.organization_id),
+      supabase.from('lms_certificates').select('course_id, employee_id, issued_at, tier').eq('organization_id', profile.organization_id),
       supabase.from('employees').select('id, name, email, store, position, job_category').eq('organization_id', profile.organization_id).eq('status', '在職').order('name'),
     ]).then(([c, e, cert, emp]) => {
       setCourses(c.data || [])
@@ -475,7 +475,11 @@ export default function LMSAdmin() {
                 {employees.map(emp => {
                   const empEnrs = enrollments.filter(e => e.employee_id === emp.id)
                   const empDone = empEnrs.filter(e => e.status === '已完成').length
-                  const empCerts = certificates.filter(c => c.employee_id === emp.id).length
+                  const empCertList = certificates.filter(c => c.employee_id === emp.id)
+                  const empCerts = empCertList.length
+                  const cG = empCertList.filter(c => c.tier === '金').length
+                  const cS = empCertList.filter(c => c.tier === '銀').length
+                  const cB = empCertList.filter(c => c.tier === '銅').length
                   const empRate = empEnrs.length ? Math.round((empDone / empEnrs.length) * 100) : 0
                   return (
                     <tr key={emp.id} style={{ borderBottom: '1px solid var(--border-primary)' }}>
@@ -492,8 +496,13 @@ export default function LMSAdmin() {
                           </div>
                         ) : <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>未報名</span>}
                       </td>
-                      <td style={{ padding: '10px 14px', color: empCerts > 0 ? 'var(--accent-green)' : 'var(--text-muted)' }}>
-                        {empCerts > 0 ? `${empCerts} 張` : '—'}
+                      <td style={{ padding: '10px 14px' }}>
+                        {empCerts > 0 ? (
+                          <span style={{ fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                            🥇{cG} 🥈{cS} 🥉{cB}
+                            <span style={{ color: 'var(--text-muted)', fontWeight: 400, marginLeft: 6, fontSize: 12 }}>共 {empCerts}</span>
+                          </span>
+                        ) : <span style={{ color: 'var(--text-muted)' }}>—</span>}
                       </td>
                     </tr>
                   )

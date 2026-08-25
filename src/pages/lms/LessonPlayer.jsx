@@ -296,23 +296,15 @@ export default function LessonPlayer() {
 function VideoPlayer({ url }) {
   const isYoutube = url.includes('youtube.com') || url.includes('youtu.be')
   const isVimeo = url.includes('vimeo.com')
+  // 直接用 aspect-ratio 的 iframe(不用 paddingBottom+絕對定位+overflow,避免在縮放/flex 版面被裁成一角);限最大寬置中
+  const frame = { width: '100%', maxWidth: 800, aspectRatio: '16 / 9', border: 'none', borderRadius: 8, display: 'block', background: '#000' }
   if (isYoutube) {
     const videoId = url.match(/(?:v=|youtu\.be\/)([^&?/]+)/)?.[1]
-    return (
-      <div style={{ position: 'relative', paddingBottom: '56.25%', height: 0, borderRadius: 8, overflow: 'hidden' }}>
-        <iframe style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 'none' }}
-          src={`https://www.youtube.com/embed/${videoId}`} allowFullScreen title="lesson video" />
-      </div>
-    )
+    return <iframe style={frame} src={`https://www.youtube.com/embed/${videoId}`} allowFullScreen title="lesson video" />
   }
   if (isVimeo) {
     const videoId = url.match(/vimeo\.com\/(\d+)/)?.[1]
-    return (
-      <div style={{ position: 'relative', paddingBottom: '56.25%', height: 0, borderRadius: 8, overflow: 'hidden' }}>
-        <iframe style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 'none' }}
-          src={`https://player.vimeo.com/video/${videoId}`} allowFullScreen title="lesson video" />
-      </div>
-    )
+    return <iframe style={frame} src={`https://player.vimeo.com/video/${videoId}`} allowFullScreen title="lesson video" />
   }
-  return <video controls style={{ width: '100%', borderRadius: 8, background: '#000' }} src={url}>您的瀏覽器不支援影片播放</video>
+  return <video controls style={{ ...frame }} src={url}>您的瀏覽器不支援影片播放</video>
 }

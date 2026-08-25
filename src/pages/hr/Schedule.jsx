@@ -2182,7 +2182,7 @@ export default function Schedule() {
 
       {mainTab === 'analytics' && (
         <AnalyticsTab
-          filtered={filtered} schedules={schedules} weekDates={weekDates}
+          filtered={filtered} schedules={schedules} weekDates={activeDates}
           shiftDefs={shiftDefs} storeSettings={storeSettings} holidays={holidays}
         />
       )}

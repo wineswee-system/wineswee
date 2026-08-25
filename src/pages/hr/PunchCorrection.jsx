@@ -97,6 +97,17 @@ export default function PunchCorrection() {
     setDetailRow(row)
     setLoadingChain(true)
     setDetailChainSteps([])
+    // 撈 form_attachments(web/LIFF 上傳的補打卡照片)組成可顯示 URL；非阻塞
+    supabase.from('form_attachments')
+      .select('storage_bucket, storage_path, file_name')
+      .eq('form_type', 'correction').eq('form_id', row.id)
+      .then(({ data }) => {
+        if (detailRowIdRef.current !== row.id) return
+        const urls = (data || [])
+          .map(a => supabase.storage.from(a.storage_bucket || 'attachments').getPublicUrl(a.storage_path).data?.publicUrl)
+          .filter(Boolean)
+        setDetailRow(prev => (prev && prev.id === row.id ? { ...prev, attachments: urls } : prev))
+      })
     const empRow = employees.find(e => e.name === row.employee)
     const steps = await buildFormChainSteps({
       formType: 'punch',

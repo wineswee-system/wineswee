@@ -1,6 +1,6 @@
--- 月薪未滿月比例:分母固定 30 天(月薪=30天制)。滿月=全額;計件/時薪不動;保費 proration 另計不變。
--- 共用引擎 _compute_payroll_for_employee(preview_payroll / generate_payroll / liff_get_my_salary_detail 三邊同步)。
--- 已於 live 以「抓完整定義→只換 v_sal_ratio 那行 CASE」套用,此檔為留痕/可重現的完整定義。
+-- 月薪未滿月比例:分母固定 30 天(月薪=30天制)。滿月=全額;計件/時薪不動;保費 proration(在保比例)另計維持曆日。
+-- 徽章顯示分母 salary_total_wd 也對齊:月薪=30、計件=當月曆日。
+-- 共用引擎 _compute_payroll_for_employee(preview_payroll / generate_payroll / liff_get_my_salary_detail 三邊同步)。此檔為完整定義留痕。
 
 CREATE OR REPLACE FUNCTION public._compute_payroll_for_employee(p_emp_id integer, p_period text)
  RETURNS jsonb
@@ -1359,7 +1359,7 @@ BEGIN
 
     'salary_actual_wd', v_sal_actual,
 
-    'salary_total_wd', v_total_days,
+    'salary_total_wd', CASE WHEN v_is_piece THEN v_total_days ELSE 30 END,  -- 顯示分母對齊實際:月薪=30
 
     'join_date', v_emp.join_date,
 

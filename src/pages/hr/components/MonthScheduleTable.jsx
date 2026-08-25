@@ -279,7 +279,7 @@ export default function MonthScheduleTable({
                   <tr style={{ background: 'var(--bg-secondary)' }}>
                     <td style={stickyL}>⏱ 總工時</td>
                     {monthDates.map(d => <td key={d} style={cell}>{(dailyHours[d] || 0) > 0 ? dailyHours[d].toFixed(1) : '·'}</td>)}
-                    <td style={stickyR}>{totHours.toFixed(0)}h</td>
+                    <td style={stickyR}>{totHours.toFixed(1)}h</td>
                   </tr>
                   <tr>
                     <td style={stickyL}>💰 預估業績<span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>(千)</span></td>

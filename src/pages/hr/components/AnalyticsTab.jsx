@@ -246,7 +246,7 @@ export default function AnalyticsTab({ filtered, schedules, weekDates, shiftDefs
               ))}
               <tr style={{ fontWeight: 700, borderTop: '2px solid var(--border-medium)' }}>
                 <td colSpan={3}>合計</td>
-                <td style={{ textAlign: 'center', color: 'var(--accent-cyan)' }}>{Math.round(totalHours)}h</td>
+                <td style={{ textAlign: 'center', color: 'var(--accent-cyan)' }}>{totalHours.toFixed(1)}h</td>
                 <td></td>
                 <td style={{ textAlign: 'right', color: totalCost > budget && budget > 0 ? 'var(--accent-red)' : 'var(--accent-cyan)' }}>
                   NT$ {totalCost.toLocaleString()}

@@ -81,8 +81,9 @@ export default function AnalyticsTab({ filtered, schedules, weekDates, shiftDefs
       {storeSettings?.work_hour_system && storeSettings.work_hour_system !== '標準工時' && storeSettings?.variable_period_start && weekDates?.length > 0 && (() => {
         const ws = storeSettings.work_hour_system
         const anchor = storeSettings.variable_period_start
-        // 用 view 起點 probe cycle，cycleMax 從 getWorkSystemConstraints 拿（跟演算法用同一張表）
-        const cycle = getCycleFor(weekDates[0], ws, anchor)
+        // 用 view「中間那天」probe cycle（月視圖跨 cycle 時挑到佔最多天的那期；
+        //   避免用首日 09-01 落在上一期 #4 最後一天而誤選整個 8 月 cycle）。cycleMax 從 getWorkSystemConstraints 拿。
+        const cycle = getCycleFor(weekDates[Math.floor(weekDates.length / 2)], ws, anchor)
         const cycleMax = cycle.periodTotalHours
         const ftMax = storeSettings?.ft_monthly_hours_max ?? 175
         const ptMax = storeSettings?.pt_monthly_hours_max ?? 175

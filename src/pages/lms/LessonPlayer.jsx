@@ -300,11 +300,11 @@ function VideoPlayer({ url }) {
   const frame = { width: '100%', maxWidth: 800, aspectRatio: '16 / 9', border: 'none', borderRadius: 8, display: 'block', background: '#000' }
   if (isYoutube) {
     const videoId = url.match(/(?:v=|youtu\.be\/)([^&?/]+)/)?.[1]
-    return <iframe style={frame} src={`https://www.youtube.com/embed/${videoId}`} allowFullScreen title="lesson video" />
+    return <iframe style={frame} src={`https://www.youtube.com/embed/${videoId}?playsinline=1&rel=0`} allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowFullScreen title="lesson video" />
   }
   if (isVimeo) {
     const videoId = url.match(/vimeo\.com\/(\d+)/)?.[1]
     return <iframe style={frame} src={`https://player.vimeo.com/video/${videoId}`} allowFullScreen title="lesson video" />
   }
-  return <video controls style={{ ...frame }} src={url}>您的瀏覽器不支援影片播放</video>
+  return <video controls playsInline style={{ ...frame }} src={url}>您的瀏覽器不支援影片播放</video>
 }

@@ -294,19 +294,27 @@ export default function LessonPlayer() {
 }
 
 function VideoPlayer({ url }) {
+  const [play, setPlay] = useState(false)
   const isYoutube = url.includes('youtube.com') || url.includes('youtu.be')
   const isVimeo = url.includes('vimeo.com')
-  // 限最大寬置中的 16:9 盒;iframe 給明確 1280x720 屬性,瀏覽器才照 16:9 排版(不然預設300x150→拉伸放大、播放鍵跑掉)
   const box = { width: '100%', maxWidth: 800, margin: '0 auto' }
-  const wrap = { position: 'relative', paddingBottom: '56.25%', height: 0, overflow: 'hidden', borderRadius: 8, background: '#000' }
+  const wrap = { position: 'relative', width: '100%', paddingBottom: '56.25%', height: 0, overflow: 'hidden', borderRadius: 8, background: '#000' }
   const abs = { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 'none' }
+  // lite-embed:預設縮圖+自繪播放鍵(保證正中央),點擊才載入播放器並自動播放
+  const PlayBtn = () => (
+    <span style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: 68, height: 68, borderRadius: '50%', background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 12px rgba(0,0,0,0.4)' }}>
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z" /></svg>
+    </span>
+  )
   if (isYoutube) {
     const videoId = url.match(/(?:v=|youtu\.be\/)([^&?/]+)/)?.[1]
-    return <div style={box}><div style={wrap}><iframe src={`https://www.youtube.com/embed/${videoId}?playsinline=1&rel=0`} width="1280" height="720" style={abs} allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowFullScreen title="lesson video" /></div></div>
+    if (play) return <div style={box}><div style={wrap}><iframe src={`https://www.youtube.com/embed/${videoId}?autoplay=1&playsinline=1&rel=0`} width="1280" height="720" style={abs} allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowFullScreen title="lesson video" /></div></div>
+    return <div style={box}><div style={{ ...wrap, cursor: 'pointer' }} onClick={() => setPlay(true)}><img src={`https://img.youtube.com/vi/${videoId}/hqdefault.jpg`} alt="" style={{ ...abs, objectFit: 'cover' }} /><PlayBtn /></div></div>
   }
   if (isVimeo) {
     const videoId = url.match(/vimeo\.com\/(\d+)/)?.[1]
-    return <div style={box}><div style={wrap}><iframe src={`https://player.vimeo.com/video/${videoId}`} width="1280" height="720" style={abs} allowFullScreen title="lesson video" /></div></div>
+    if (play) return <div style={box}><div style={wrap}><iframe src={`https://player.vimeo.com/video/${videoId}?autoplay=1`} width="1280" height="720" style={abs} allow="autoplay; fullscreen; picture-in-picture" allowFullScreen title="lesson video" /></div></div>
+    return <div style={box}><div style={{ ...wrap, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setPlay(true)}><PlayBtn /></div></div>
   }
   return <video controls playsInline style={{ width: '100%', maxWidth: 800, margin: '0 auto', borderRadius: 8, background: '#000', display: 'block' }} src={url}>您的瀏覽器不支援影片播放</video>
 }

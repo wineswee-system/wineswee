@@ -38,6 +38,11 @@ const FIXED_RENOVATION = [
   { icon: Hammer, name: '裝潢報價', desc: '門市裝潢工程報價記錄：廠商/負責人/電話 + 工程費/監工/稅金/總價 + 可自訂付款分期', action: '/process/renovation-quotes', color: 'var(--accent-orange)', dim: 'var(--accent-orange-dim)', tag: '記錄' },
 ]
 
+// 線上預購 / 出貨SOP（純狀態追蹤，不走簽核）— 鎖 preorder.manage
+const FIXED_PREORDER = [
+  { icon: Package, name: '線上預購', desc: '客戶預購登記：品項/數量(可多筆) + 提袋/統編/指定送貨時間 → 未出貨/已出貨狀態追蹤', action: '/process/preorders', color: 'var(--accent-cyan)', dim: 'var(--accent-cyan-dim)', tag: '出貨' },
+]
+
 const COLOR_MAP = {
   cyan:   { color: 'var(--accent-cyan)',   dim: 'var(--accent-cyan-dim)' },
   blue:   { color: 'var(--accent-blue)',   dim: 'var(--accent-blue-dim)' },
@@ -117,6 +122,7 @@ export default function BusinessApplications() {
       <FormGroup title="📋 非費用組" desc="純流程申請，不涉及驗收" items={nonExpenseGroup} navigate={navigate} />
       <FormGroup title="💵 收款" desc="訂金 / 加盟金收款記錄（純記帳，加總滿額自動完成）" items={collectionGroup} navigate={navigate} />
       <FormGroup title="🔨 裝潢工程" desc="門市裝潢報價記錄（純記錄，含付款分期）" items={hasPermission('renovation.manage') ? FIXED_RENOVATION : []} navigate={navigate} />
+      <FormGroup title="📦 線上預購" desc="客戶預購 / 出貨SOP（純狀態追蹤，未出貨 ⇄ 已出貨）" items={hasPermission('preorder.manage') ? FIXED_PREORDER : []} navigate={navigate} />
 
       {expenseGroup.length === 0 && nonExpenseGroup.length === 0 && (
         <div className="card" style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>

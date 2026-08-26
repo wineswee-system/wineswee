@@ -3,7 +3,7 @@ import Modal, { Field } from '../../../components/Modal'
 import SearchableSelect, { empOptions } from '../../../components/SearchableSelect'
 import { useAuth } from '../../../contexts/AuthContext'
 import { loadPositions, groupPositions, DEFAULT_POSITIONS } from '../../../lib/positions'
-import { loadInsuranceBrackets, findLaborBracket, findHealthBracket } from '../../../lib/insuranceBrackets'
+import { loadInsuranceBrackets, findLaborBracket, findHealthBracket, findPensionBracket } from '../../../lib/insuranceBrackets'
 import { toast } from '../../../lib/toast'
 
 // 常見津貼快選（跟 SalaryFormModal / HrTabContent 一致）；點一下加進自訂津貼
@@ -77,12 +77,15 @@ export default function EmployeeFormModal({
     // 健保:一般受僱者依基數查表(最低 29,500);★兼職一律固定最低 29,500
     //   (PT 投保基數是時薪×時數×4.33,weekly_hours 常灌水成 40 → 基數 >29,500 會抓到過高級距)
     const health = findHealthBracket(insBrackets.health, isPT ? 0 : insuredBase)?.insured_salary
-    // 三者法定投保上限不同,各自封頂(級距表最高到 313,000,不 clamp 會超投保)
+    // ★ 勞退用「勞退月提繳分級表」(1,500~150,000),不可拿勞保級距(封頂 45,800)硬套 → 高薪者才會對
+    const pension = findPensionBracket(insBrackets.pension, insuredBase)?.monthly_wage
+    // 各險別法定投保上限不同,各自封頂
     if (labor) {
       set('labor_ins_grade',        Math.min(labor, 45800))   // 勞保封頂 45,800
       set('labor_occ_injury_grade', Math.min(labor, 72800))   // 職災封頂 72,800
-      set('labor_pension_grade',    Math.min(labor, 150000))  // 勞退月提繳工資封頂 150,000
     }
+    // 勞退:優先用勞退表;勞退表沒載到才 fallback 勞保級距(舊行為)
+    set('labor_pension_grade', pension || (labor ? Math.min(labor, 150000) : 0))
     if (health) set('health_ins_grade', health)                // 健保最高 313,000(不封頂)
     toast.success(`已依投保基數 ${Math.round(insuredBase).toLocaleString()} 帶入級距，可再手動調整`)
   }

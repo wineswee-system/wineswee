@@ -31,19 +31,22 @@ export async function loadInsuranceBrackets(year) {
   if (cache.has(year)) return cache.get(year)
 
   const p = (async () => {
-    const [laborRes, healthRes] = await Promise.all([
+    const [laborRes, healthRes, pensionRes] = await Promise.all([
       supabase.from('labor_ins_brackets').select('*').eq('year', year).order('grade'),
       supabase.from('health_ins_brackets').select('*').eq('year', year).order('grade'),
+      supabase.from('labor_pension_brackets').select('*').eq('year', year).order('monthly_wage'),
     ])
     if (laborRes.error) throw laborRes.error
     if (healthRes.error) throw healthRes.error
+    // 勞退表可能尚未建立(舊年度)→ 不致命,回空陣列
     const labor = laborRes.data || []
     const health = healthRes.data || []
+    const pension = pensionRes.error ? [] : (pensionRes.data || [])
     if (labor.length === 0 || health.length === 0) {
       // 該年度沒資料
       return null
     }
-    return { labor, health, year }
+    return { labor, health, pension, year }
   })()
 
   cache.set(year, p)
@@ -152,6 +155,25 @@ export function findPTInsuredSalary(brackets, salary) {
   }
   // 超過 PT_MAX → cap
   return PT_MAX
+}
+
+/**
+ * 勞退月提繳級距查找（對齊 DB _pension_bracket_row）
+ *
+ * 勞退月提繳工資 = 第一個 monthly_wage >= 實際工資 的級距；超過最高級 → 最高級（150,000 cap）。
+ * 與勞保不同：勞退表獨立(1,500~150,000)，不可拿勞保級距(封頂 45,800)硬套。
+ *
+ * @param {Array} pensionBrackets - DB labor_pension_brackets（含 monthly_wage）
+ * @param {number} salary - 實際工資（本薪 + 津貼）
+ * @returns {object | null} bracket row（含 monthly_wage），或 null
+ */
+export function findPensionBracket(pensionBrackets, salary) {
+  if (!pensionBrackets || pensionBrackets.length === 0) return null
+  const sorted = [...pensionBrackets].sort((a, b) => (a.monthly_wage || 0) - (b.monthly_wage || 0))
+  for (const b of sorted) {
+    if ((b.monthly_wage || 0) >= salary) return b
+  }
+  return sorted[sorted.length - 1]   // 超過最高級 → cap 150,000
 }
 
 /**

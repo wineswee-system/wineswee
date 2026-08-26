@@ -4,7 +4,7 @@ import { getPTAnnualLeaveHours, getAnnualLeaveEntitlement } from '../../lib/leav
 import SearchableSelect, { empOptions } from '../SearchableSelect'
 import { useAuth } from '../../contexts/AuthContext'
 import { loadPositions, groupPositions, DEFAULT_POSITIONS } from '../../lib/positions'
-import { loadInsuranceBrackets, findLaborBracket, findHealthBracket } from '../../lib/insuranceBrackets'
+import { loadInsuranceBrackets, findLaborBracket, findHealthBracket, findPensionBracket } from '../../lib/insuranceBrackets'
 import { toast } from '../../lib/toast'
 
 const maskBank = (v) => v ? '****' + v.slice(-4) : ''
@@ -87,12 +87,14 @@ export default function HrTabContent({
     const labor = findLaborBracket(insBrackets.labor, insuredBase, { isPartTime: isPT })?.insured_salary
     // 健保無 PT 例外:受僱者一律從第 1 級 29,500 起跳(對齊計薪引擎),不套 PT 11,100~29,500
     const health = findHealthBracket(insBrackets.health, insuredBase)?.insured_salary
-    // 三者法定投保上限不同,各自封頂(級距表最高到 313,000,不 clamp 會超投保)
+    // ★ 勞退用「勞退月提繳分級表」(1,500~150,000),不可拿勞保級距(封頂 45,800)硬套 → 高薪者才會對
+    const pension = findPensionBracket(insBrackets.pension, insuredBase)?.monthly_wage
+    // 各險別法定投保上限不同,各自封頂
     if (labor) {
       set('labor_ins_grade',        Math.min(labor, 45800))   // 勞保封頂 45,800
       set('labor_occ_injury_grade', Math.min(labor, 72800))   // 職災封頂 72,800
-      set('labor_pension_grade',    Math.min(labor, 150000))  // 勞退月提繳工資封頂 150,000
     }
+    set('labor_pension_grade', pension || (labor ? Math.min(labor, 150000) : 0))  // 勞退優先讀勞退表,沒載到才 fallback
     if (health) set('health_ins_grade', health)                // 健保最高 313,000(不封頂)
     toast.success(`已依投保基數 ${Math.round(insuredBase).toLocaleString()} 帶入級距，可再手動調整`)
   }

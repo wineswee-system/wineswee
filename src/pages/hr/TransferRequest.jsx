@@ -10,6 +10,7 @@ import AsyncButton from '../../components/AsyncButton'
 import ExtraSignerControls from '../../components/ExtraSignerControls'
 import Modal, { Field } from '../../components/Modal'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
+import { loadPositions, groupPositions } from '../../lib/positions'
 import { toast } from '../../lib/toast'
 import {
   findFormChainByApplicantType, loadChainStepsBatch, approveChainStep, notifyApprovers,
@@ -41,6 +42,8 @@ export default function TransferRequest() {
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
   const [stores, setStores] = useState([])
+  const [positions, setPositions] = useState([])   // 職位下拉(福董在「職位管理」維護)
+  useEffect(() => { loadPositions().then(setPositions) }, [])
   const [chainSteps, setChainSteps] = useState({})
   const [activeChain, setActiveChain] = useState(null)
   const [organization, setOrganization] = useState(null)  // 印簽呈用
@@ -487,7 +490,17 @@ export default function TransferRequest() {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Field label="新職位（可空）">
-              <input className="form-input" type="text" style={{ width: '100%' }} placeholder="例：店長 / 督導 / 部門主管" value={form.new_position} onChange={e => setForm(f => ({ ...f, new_position: e.target.value }))} />
+              <select className="form-input" style={{ width: '100%' }} value={form.new_position} onChange={e => setForm(f => ({ ...f, new_position: e.target.value }))}>
+                <option value="">— 不變 —</option>
+                {form.new_position && !positions.some(p => p.label === form.new_position) && (
+                  <option value={form.new_position}>{form.new_position}(舊值)</option>
+                )}
+                {groupPositions(positions).map(g => (
+                  <optgroup key={g.group} label={g.group}>
+                    {g.opts.map(p => <option key={p.label} value={p.label}>{p.label}</option>)}
+                  </optgroup>
+                ))}
+              </select>
             </Field>
             <Field label="新基本薪資（可空）">
               <input className="form-input" type="number" style={{ width: '100%' }} placeholder="例：45000" value={form.new_base_salary} onChange={e => setForm(f => ({ ...f, new_base_salary: e.target.value }))} />

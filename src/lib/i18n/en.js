@@ -8539,7 +8539,7 @@ export default {
   "例：員工申請外部訓練課程...": "e.g. Employee applies for an external training course...",
   "本月加班時數最多的是哪個部門？": "Which department had the most overtime hours this month?",
   "先下載範本，填好後上傳 CSV": "Download the template first, fill it in and upload the CSV",
-  "單次 NT$ 2,000 以上": "NT$2,000 or more per transaction",
+  "單次 NT$ 20,000 以上": "NT$20,000 or more per transaction",
   "筆異動\\n- DELETE $": "changes\\n- DELETE $",
   "依據勞基法、性平法完整假別管理": "Full leave-type management per labor and gender-equality laws",
   "找不到員工資料，無法查補休餘額": "Employee record not found, cannot check comp time balance",

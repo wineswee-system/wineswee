@@ -182,7 +182,7 @@ export default function LaborLawRates() {
           </div>
           <div style={{ padding: '12px 0', borderBottom: '1px solid var(--border-subtle)' }}>
             <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>起徵門檻</div>
-            <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--accent-orange)' }}>單次 NT$ 2,000 以上</div>
+            <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--accent-orange)' }}>單次 NT$ 20,000 以上</div>
           </div>
           <div style={{ padding: '12px 0', borderBottom: '1px solid var(--border-subtle)' }}>
             <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>法源</div>

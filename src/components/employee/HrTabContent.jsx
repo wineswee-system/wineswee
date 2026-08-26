@@ -88,8 +88,8 @@ export default function HrTabContent({
     // 健保無 PT 例外:受僱者一律從第 1 級 29,500 起跳(對齊計薪引擎),不套 PT 11,100~29,500
     const health = findHealthBracket(insBrackets.health, insuredBase)?.insured_salary
     // ★ 勞退/職災各有獨立分級表,不可拿勞保級距(封頂45,800)硬套
-    const pension = findPensionBracket(insBrackets.pension, insuredBase)?.monthly_wage
-    const occ = findOccBracket(insBrackets.occ, isPT ? 11100 : insuredBase)?.insured_salary   // 職災上限72,800;PT下限11,100
+    const pension = findPensionBracket(insBrackets.pension, isPT ? 11100 : insuredBase)?.monthly_wage
+    const occ = findOccBracket(insBrackets.occ, isPT ? 0 : insuredBase)?.insured_salary   // 職災上限72,800;PT下限29,500
     if (labor) set('labor_ins_grade', Math.min(labor, 45800))                    // 勞保封頂 45,800
     set('labor_occ_injury_grade', occ || (labor ? Math.min(labor, 72800) : 0))   // 職災讀職災表,沒載到才 fallback
     set('labor_pension_grade', pension || (labor ? Math.min(labor, 150000) : 0)) // 勞退讀勞退表

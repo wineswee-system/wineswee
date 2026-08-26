@@ -78,8 +78,8 @@ export default function EmployeeFormModal({
     //   (PT 投保基數是時薪×時數×4.33,weekly_hours 常灌水成 40 → 基數 >29,500 會抓到過高級距)
     const health = findHealthBracket(insBrackets.health, isPT ? 0 : insuredBase)?.insured_salary
     // ★ 勞退用「勞退月提繳分級表」(1,500~150,000),不可拿勞保級距(封頂 45,800)硬套 → 高薪者才會對
-    const pension = findPensionBracket(insBrackets.pension, insuredBase)?.monthly_wage
-    const occ = findOccBracket(insBrackets.occ, isPT ? 11100 : insuredBase)?.insured_salary   // 職災讀職災表,上限72,800、PT下限11,100
+    const pension = findPensionBracket(insBrackets.pension, isPT ? 11100 : insuredBase)?.monthly_wage
+    const occ = findOccBracket(insBrackets.occ, isPT ? 0 : insuredBase)?.insured_salary   // 職災讀職災表,上限72,800、PT下限29,500
     if (labor) set('labor_ins_grade', Math.min(labor, 45800))                    // 勞保封頂 45,800
     set('labor_occ_injury_grade', occ || (labor ? Math.min(labor, 72800) : 0))   // 職災
     set('labor_pension_grade', pension || (labor ? Math.min(labor, 150000) : 0)) // 勞退

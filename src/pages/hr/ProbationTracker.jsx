@@ -7,6 +7,7 @@ import Modal, { Field } from '../../components/Modal'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
 import { useAuth } from '../../contexts/AuthContext'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 
 import { toast } from '../../lib/toast'
 const STATUS_STYLES = {
@@ -35,9 +36,10 @@ export default function ProbationTracker() {
   const setF = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
   useEffect(() => {
+    const orgId = profile?.organization_id ?? getTenantOrgId()   // super_admin 無固定 org → 吃目前切換的 org
     Promise.all([
       getProbationRecords(profile?.organization_id),
-      supabase.from('employees').select('id, name, name_en, dept, department_id, store, store_id, position, join_date, departments!department_id(name), stores!store_id(name)').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, name_en, dept, department_id, store, store_id, position, join_date, departments!department_id(name), stores!store_id(name)').eq('status', '在職').eq('organization_id', orgId).order('name'),
     ]).then(([r, e]) => {
       setRecords(r.data || [])
       setEmployees(e.data || [])

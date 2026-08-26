@@ -46,6 +46,7 @@ import Severance from '../pages/hr/Severance'
 import WorkUnitSettings from '../pages/hr/WorkUnitSettings'
 import HRForms from '../pages/hr/HRForms'
 import InsuranceGradeMonitor from '../pages/hr/InsuranceGradeMonitor'
+import InsuranceBrackets from '../pages/hr/InsuranceBrackets'
 import LaborLawRates from '../pages/hr/LaborLawRates'
 import Resignation from '../pages/hr/Resignation'
 import TransferRequest from '../pages/hr/TransferRequest'
@@ -128,6 +129,7 @@ export default memo(function HRModule() {
       <Route path="form-builder" element={<FormBuilder />} />
       <Route path="recently-deleted" element={<RecentlyDeleted />} />
       <Route path="insurance-grade" element={<InsuranceGradeMonitor />} />
+      <Route path="insurance-brackets" element={<InsuranceBrackets />} />
       <Route path="labor-law-rates" element={<LaborLawRates />} />
       <Route path="contract-employees" element={<ContractEmployees />} />
       <Route path="foreign-workers" element={<ForeignWorkers />} />

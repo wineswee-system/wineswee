@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { ModalOverlay } from '../../components/Modal'
-import { Plus, Trash2, Edit3, X, Search, Package, Truck, Download, CalendarDays } from 'lucide-react'
+import { Plus, Trash2, Edit3, X, Search, Package, Truck, Download } from 'lucide-react'
+import DateRangeField from '../../components/DateRangeField'
 import { supabase } from '../../lib/supabase'
 import { useOrgId } from '../../contexts/AuthContext'
 import { confirm } from '../../lib/confirm'
@@ -186,19 +187,9 @@ export default function Preorders() {
         {statPill('已出貨', '已出貨', counts.已出貨, 'var(--accent-green)')}
       </div>
 
-      {/* 篩選列:日期起訖 + 快捷 + 搜尋 */}
+      {/* 篩選列:日期區間選擇器 + 搜尋 */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <CalendarDays size={16} style={{ color: 'var(--text-muted)' }} />
-          <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{ ...fieldStyle, width: 'auto' }} />
-          <span style={{ color: 'var(--text-muted)' }}>~</span>
-          <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={{ ...fieldStyle, width: 'auto' }} />
-        </div>
-        <div style={{ display: 'flex', gap: 6 }}>
-          {[['today', '今天'], ['7d', '近7天'], ['month', '本月'], ['', '全部']].map(([k, l]) => (
-            <button key={l} onClick={() => applyPreset(k)} style={{ padding: '6px 12px', borderRadius: 99, fontSize: 13, cursor: 'pointer', border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-secondary)' }}>{l}</button>
-          ))}
-        </div>
+        <DateRangeField start={dateFrom} end={dateTo} onChange={(s, e) => { setDateFrom(s || ''); setDateTo(e || '') }} />
         <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
           <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="搜尋姓名 / 電話 / 地址 / 品項"

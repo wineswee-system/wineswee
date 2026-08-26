@@ -351,6 +351,7 @@ export default function Sidebar() {
     '/hr/documents':        'nav.admin_office',
     '/hr/labor-inspection': 'nav.admin_office',
     // ── 專案流程 ──
+    '/process/preorders':               'nav.entry.process.preorders',
     '/process/overview':                'nav.project.work',
     '/process/projects':                'nav.project.work',
     '/process/workflows':               'nav.project.work',

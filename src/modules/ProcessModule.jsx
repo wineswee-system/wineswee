@@ -29,6 +29,7 @@ import StoreAudits from '../pages/workflow/StoreAudits'
 import ExpenseRequests from '../pages/workflow/ExpenseRequests'
 import Expenses from '../pages/workflow/Expenses'
 import ExpenseQuery from '../pages/process/ExpenseQuery'
+import Preorders from '../pages/process/Preorders'
 import CustomFormFill from '../pages/workflow/CustomFormFill'
 import FormSubmissions from '../pages/workflow/FormSubmissions'
 import LoadingSpinner from '../components/LoadingSpinner'
@@ -86,6 +87,7 @@ export default function ProcessModule() {
       <Route path="order-requests" element={<ExpenseRequests docType="order" />} />
       <Route path="expenses" element={<Expenses />} />
       <Route path="expense-query" element={<ExpenseQuery />} />
+      <Route path="preorders" element={<Preorders />} />
       <Route path="forms/custom/:templateId" element={<CustomFormFill />} />
       <Route path="forms/submissions" element={<FormSubmissions />} />
       <Route path="task-confirmations" element={<TaskConfirmations />} />

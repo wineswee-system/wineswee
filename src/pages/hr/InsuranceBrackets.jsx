@@ -7,9 +7,10 @@ import { confirm } from '../../lib/confirm'
 
 // 三張級距表設定:欄位/上限提示不同
 const KINDS = {
-  labor:   { table: 'labor_ins_brackets',    label: '勞保',  valueCol: 'insured_salary', premiums: true,  note: '投保上限 45,800（職災共用此表、上限 72,800）' },
-  health:  { table: 'health_ins_brackets',   label: '健保',  valueCol: 'insured_salary', premiums: true,  note: '最高 313,000' },
-  pension: { table: 'labor_pension_brackets', label: '勞退',  valueCol: 'monthly_wage',   premiums: false, note: '月提繳工資，最高 150,000' },
+  labor:   { table: 'labor_ins_brackets',        label: '勞保',  valueCol: 'insured_salary', premiums: true,  note: '投保上限 45,800' },
+  occ:     { table: 'labor_occ_injury_brackets', label: '職災',  valueCol: 'insured_salary', premiums: false, note: '職災投保薪資，上限 72,800（保費雇主約 0.21%，依行業別另計）' },
+  health:  { table: 'health_ins_brackets',       label: '健保',  valueCol: 'insured_salary', premiums: true,  note: '最高 313,000' },
+  pension: { table: 'labor_pension_brackets',    label: '勞退',  valueCol: 'monthly_wage',   premiums: false, note: '月提繳工資，最高 150,000' },
 }
 const inp = { width: '100%', padding: '5px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)', color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }
 

@@ -31,22 +31,24 @@ export async function loadInsuranceBrackets(year) {
   if (cache.has(year)) return cache.get(year)
 
   const p = (async () => {
-    const [laborRes, healthRes, pensionRes] = await Promise.all([
+    const [laborRes, healthRes, pensionRes, occRes] = await Promise.all([
       supabase.from('labor_ins_brackets').select('*').eq('year', year).order('grade'),
       supabase.from('health_ins_brackets').select('*').eq('year', year).order('grade'),
       supabase.from('labor_pension_brackets').select('*').eq('year', year).order('monthly_wage'),
+      supabase.from('labor_occ_injury_brackets').select('*').eq('year', year).order('insured_salary'),
     ])
     if (laborRes.error) throw laborRes.error
     if (healthRes.error) throw healthRes.error
-    // 勞退表可能尚未建立(舊年度)→ 不致命,回空陣列
+    // 勞退/職災表可能尚未建立(舊年度)→ 不致命,回空陣列
     const labor = laborRes.data || []
     const health = healthRes.data || []
     const pension = pensionRes.error ? [] : (pensionRes.data || [])
+    const occ = occRes.error ? [] : (occRes.data || [])
     if (labor.length === 0 || health.length === 0) {
       // 該年度沒資料
       return null
     }
-    return { labor, health, pension, year }
+    return { labor, health, pension, occ, year }
   })()
 
   cache.set(year, p)
@@ -174,6 +176,22 @@ export function findPensionBracket(pensionBrackets, salary) {
     if ((b.monthly_wage || 0) >= salary) return b
   }
   return sorted[sorted.length - 1]   // 超過最高級 → cap 150,000
+}
+
+/**
+ * 職災級距查找（獨立表 labor_occ_injury_brackets，上限 72,800）
+ * 第一個 insured_salary >= 實際工資 的級距；超過最高級 → 最高級（72,800 cap）
+ * @param {Array} occBrackets
+ * @param {number} salary
+ * @returns {object | null}
+ */
+export function findOccBracket(occBrackets, salary) {
+  if (!occBrackets || occBrackets.length === 0) return null
+  const sorted = [...occBrackets].sort((a, b) => (a.insured_salary || 0) - (b.insured_salary || 0))
+  for (const b of sorted) {
+    if ((b.insured_salary || 0) >= salary) return b
+  }
+  return sorted[sorted.length - 1]   // cap 72,800
 }
 
 /**

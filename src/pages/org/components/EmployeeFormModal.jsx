@@ -3,7 +3,7 @@ import Modal, { Field } from '../../../components/Modal'
 import SearchableSelect, { empOptions } from '../../../components/SearchableSelect'
 import { useAuth } from '../../../contexts/AuthContext'
 import { loadPositions, groupPositions, DEFAULT_POSITIONS } from '../../../lib/positions'
-import { loadInsuranceBrackets, findLaborBracket, findHealthBracket, findPensionBracket } from '../../../lib/insuranceBrackets'
+import { loadInsuranceBrackets, findLaborBracket, findHealthBracket, findPensionBracket, findOccBracket } from '../../../lib/insuranceBrackets'
 import { toast } from '../../../lib/toast'
 
 // 常見津貼快選（跟 SalaryFormModal / HrTabContent 一致）；點一下加進自訂津貼
@@ -79,13 +79,10 @@ export default function EmployeeFormModal({
     const health = findHealthBracket(insBrackets.health, isPT ? 0 : insuredBase)?.insured_salary
     // ★ 勞退用「勞退月提繳分級表」(1,500~150,000),不可拿勞保級距(封頂 45,800)硬套 → 高薪者才會對
     const pension = findPensionBracket(insBrackets.pension, insuredBase)?.monthly_wage
-    // 各險別法定投保上限不同,各自封頂
-    if (labor) {
-      set('labor_ins_grade',        Math.min(labor, 45800))   // 勞保封頂 45,800
-      set('labor_occ_injury_grade', Math.min(labor, 72800))   // 職災封頂 72,800
-    }
-    // 勞退:優先用勞退表;勞退表沒載到才 fallback 勞保級距(舊行為)
-    set('labor_pension_grade', pension || (labor ? Math.min(labor, 150000) : 0))
+    const occ = findOccBracket(insBrackets.occ, isPT ? 11100 : insuredBase)?.insured_salary   // 職災讀職災表,上限72,800、PT下限11,100
+    if (labor) set('labor_ins_grade', Math.min(labor, 45800))                    // 勞保封頂 45,800
+    set('labor_occ_injury_grade', occ || (labor ? Math.min(labor, 72800) : 0))   // 職災
+    set('labor_pension_grade', pension || (labor ? Math.min(labor, 150000) : 0)) // 勞退
     if (health) set('health_ins_grade', health)                // 健保最高 313,000(不封頂)
     toast.success(`已依投保基數 ${Math.round(insuredBase).toLocaleString()} 帶入級距，可再手動調整`)
   }
@@ -93,7 +90,7 @@ export default function EmployeeFormModal({
   // 四種級距下拉:直接讀 DB 級距表;勞保≤45,800、職災≤72,800、健保→313,000、勞退→150,000
   const gradeOpts = (arr, key, max) => [...new Set((arr || []).map(b => Number(b[key])).filter(v => v > 0 && (!max || v <= max)))].sort((a, b) => a - b)
   const laborOpts = gradeOpts(insBrackets?.labor, 'insured_salary', 45800)
-  const occOpts = gradeOpts(insBrackets?.labor, 'insured_salary', 72800)
+  const occOpts = gradeOpts(insBrackets?.occ, 'insured_salary')
   const healthOpts = gradeOpts(insBrackets?.health, 'insured_salary')
   const pensionOpts = gradeOpts(insBrackets?.pension, 'monthly_wage')
   const GradeSelect = ({ value, opts, onChange }) => {

@@ -4,7 +4,7 @@ import { getPTAnnualLeaveHours, getAnnualLeaveEntitlement } from '../../lib/leav
 import SearchableSelect, { empOptions } from '../SearchableSelect'
 import { useAuth } from '../../contexts/AuthContext'
 import { loadPositions, groupPositions, DEFAULT_POSITIONS } from '../../lib/positions'
-import { loadInsuranceBrackets, findLaborBracket, findHealthBracket, findPensionBracket } from '../../lib/insuranceBrackets'
+import { loadInsuranceBrackets, findLaborBracket, findHealthBracket, findPensionBracket, findOccBracket } from '../../lib/insuranceBrackets'
 import { toast } from '../../lib/toast'
 
 const maskBank = (v) => v ? '****' + v.slice(-4) : ''
@@ -87,14 +87,12 @@ export default function HrTabContent({
     const labor = findLaborBracket(insBrackets.labor, insuredBase, { isPartTime: isPT })?.insured_salary
     // 健保無 PT 例外:受僱者一律從第 1 級 29,500 起跳(對齊計薪引擎),不套 PT 11,100~29,500
     const health = findHealthBracket(insBrackets.health, insuredBase)?.insured_salary
-    // ★ 勞退用「勞退月提繳分級表」(1,500~150,000),不可拿勞保級距(封頂 45,800)硬套 → 高薪者才會對
+    // ★ 勞退/職災各有獨立分級表,不可拿勞保級距(封頂45,800)硬套
     const pension = findPensionBracket(insBrackets.pension, insuredBase)?.monthly_wage
-    // 各險別法定投保上限不同,各自封頂
-    if (labor) {
-      set('labor_ins_grade',        Math.min(labor, 45800))   // 勞保封頂 45,800
-      set('labor_occ_injury_grade', Math.min(labor, 72800))   // 職災封頂 72,800
-    }
-    set('labor_pension_grade', pension || (labor ? Math.min(labor, 150000) : 0))  // 勞退優先讀勞退表,沒載到才 fallback
+    const occ = findOccBracket(insBrackets.occ, isPT ? 11100 : insuredBase)?.insured_salary   // 職災上限72,800;PT下限11,100
+    if (labor) set('labor_ins_grade', Math.min(labor, 45800))                    // 勞保封頂 45,800
+    set('labor_occ_injury_grade', occ || (labor ? Math.min(labor, 72800) : 0))   // 職災讀職災表,沒載到才 fallback
+    set('labor_pension_grade', pension || (labor ? Math.min(labor, 150000) : 0)) // 勞退讀勞退表
     if (health) set('health_ins_grade', health)                // 健保最高 313,000(不封頂)
     toast.success(`已依投保基數 ${Math.round(insuredBase).toLocaleString()} 帶入級距，可再手動調整`)
   }
@@ -102,7 +100,7 @@ export default function HrTabContent({
   // 各險別合法級距下拉選項(來自級距表);勞保≤45,800、職災≤72,800、勞退用月提繳工資(≤150,000)
   const gradeOpts = (arr, key, max) => [...new Set((arr || []).map(b => Number(b[key])).filter(v => v > 0 && (!max || v <= max)))].sort((a, b) => a - b)
   const laborOpts = gradeOpts(insBrackets?.labor, 'insured_salary', 45800)
-  const occOpts = gradeOpts(insBrackets?.labor, 'insured_salary', 72800)
+  const occOpts = gradeOpts(insBrackets?.occ, 'insured_salary')
   const healthOpts = gradeOpts(insBrackets?.health, 'insured_salary')
   const pensionOpts = gradeOpts(insBrackets?.pension, 'monthly_wage')
   // 級距下拉:列合法級距可挑;現有值若不在清單(例:超過上限的舊值)保留在最前並標「目前值」

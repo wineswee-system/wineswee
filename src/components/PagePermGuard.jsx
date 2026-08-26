@@ -62,6 +62,7 @@ export const PAGE_PERM = {
   // 出勤管理功能（store_staff 不能進）
   '/hr/clock-rules':                          'nav.schedule.config',
   '/hr/attendance-diff-report':               'nav.schedule.basic',
+  '/hr/insurance-brackets':                   'nav.salary.law',
   '/hr/import':                               'nav.hr_form.builder',
   // 排班管理功能
   '/hr/schedule-xlsx-import':                 'nav.schedule.basic',

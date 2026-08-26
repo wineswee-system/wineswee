@@ -321,6 +321,7 @@ export const groupNav = {
         { icon: Gift, label: '福利政策', path: '/hr/benefit-settings' },
         { icon: Scale, label: '法令工資設定', path: '/hr/labor-law-rates' },
         { icon: FileBarChart, label: '健保級距監控', path: '/hr/insurance-grade' },
+        { icon: Scale, label: '投保級距表', path: '/hr/insurance-brackets', title: '維護每年度 勞保/健保/勞退 級距表(帶入/計薪自動吃當年度)' },
       ]
     },
     {

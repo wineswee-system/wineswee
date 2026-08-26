@@ -321,6 +321,7 @@ export default function Sidebar() {
     '/hr/benefit-settings':  'nav.salary.advanced',
     '/hr/labor-law-rates':   'nav.salary.law',
     '/hr/insurance-grade':   'nav.salary.law',
+    '/hr/insurance-brackets':'nav.salary.law',
     // ── HR 表單（管理功能） ──
     '/hr/forms/transfer':     'nav.talent',            // 人事異動：manager/admin+（人才管理功能）
     '/hr/forms/headcount':    'nav.talent',            // 人力需求：manager/admin+（人才管理功能）

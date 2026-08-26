@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { ModalOverlay } from '../../components/Modal'
-import { Plus, Trash2, Edit3, X, Search, Package, Truck } from 'lucide-react'
+import { Plus, Trash2, Edit3, X, Search, Package, Truck, Download, CalendarDays } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useOrgId } from '../../contexts/AuthContext'
 import { confirm } from '../../lib/confirm'
@@ -31,8 +31,20 @@ export default function Preorders() {
   const [error, setError] = useState(null)
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+
+  const pad = n => String(n).padStart(2, '0')
+  const fmtDate = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+  const applyPreset = (key) => {
+    const today = new Date()
+    if (key === 'today') { const t = fmtDate(today); setDateFrom(t); setDateTo(t) }
+    else if (key === '7d') { const s = new Date(today); s.setDate(s.getDate() - 6); setDateFrom(fmtDate(s)); setDateTo(fmtDate(today)) }
+    else if (key === 'month') { setDateFrom(`${today.getFullYear()}-${pad(today.getMonth() + 1)}-01`); setDateTo(fmtDate(today)) }
+    else { setDateFrom(''); setDateTo('') }
+  }
 
   const load = async () => {
     setLoading(true)
@@ -96,17 +108,51 @@ export default function Preorders() {
     if (error) setError(error.message); else setRows(prev => prev.filter(x => x.id !== r.id))
   }
 
-  const filtered = rows.filter(r => {
-    if (filterStatus && r.status !== filterStatus) return false
-    if (search.trim()) {
-      const q = search.trim().toLowerCase()
-      const inItems = (r.items || []).some(it => (it.name || '').toLowerCase().includes(q))
-      if (![r.customer_name, r.phone, r.address].some(f => (f || '').toLowerCase().includes(q)) && !inItems) return false
-    }
+  const matchSearch = (r) => {
+    if (!search.trim()) return true
+    const q = search.trim().toLowerCase()
+    const inItems = (r.items || []).some(it => (it.name || '').toLowerCase().includes(q))
+    return [r.customer_name, r.phone, r.address].some(f => (f || '').toLowerCase().includes(q)) || inItems
+  }
+  const inDateRange = (r) => {
+    if (dateFrom && (r.order_date || '') < dateFrom) return false
+    if (dateTo && (r.order_date || '') > dateTo) return false
     return true
-  })
+  }
+  // 日期+搜尋先過(給統計用),狀態再套(讓徽章顯示各狀態筆數)
+  const scoped = rows.filter(r => inDateRange(r) && matchSearch(r))
+  const counts = { all: scoped.length, 未出貨: scoped.filter(r => r.status === '未出貨').length, 已出貨: scoped.filter(r => r.status === '已出貨').length }
+  const filtered = scoped.filter(r => !filterStatus || r.status === filterStatus)
 
   const itemsSummary = (items) => (items || []).map(it => `${it.name}×${it.qty}`).join('、') || '—'
+
+  const exportCsv = () => {
+    const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`
+    const headers = ['日期', '姓名', '電話', '地址', '品項', '提袋', '發票統編', '指定送貨時間', '其他交待', '狀態']
+    const lines = [headers.join(',')]
+    filtered.forEach(r => lines.push([
+      r.order_date || '', r.customer_name || '', r.phone || '', r.address || '',
+      itemsSummary(r.items), r.need_bag ? '是' : '', r.need_invoice ? (r.invoice_tax_id || '是') : '',
+      r.specific_delivery ? (r.delivery_time || '是') : '', r.notes || '', r.status,
+    ].map(esc).join(',')))
+    const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = `預購清單_${fmtDate(new Date())}.csv`; a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const statPill = (key, label, n, activeColor) => {
+    const active = filterStatus === key
+    return (
+      <button onClick={() => setFilterStatus(active ? '' : key)}
+        style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 88, padding: '8px 14px', borderRadius: 10, cursor: 'pointer',
+          border: `1.5px solid ${active ? activeColor : 'var(--border)'}`, background: active ? activeColor + '18' : 'var(--bg-card)' }}>
+        <span style={{ fontSize: 20, fontWeight: 800, color: activeColor }}>{n}</span>
+        <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{label}</span>
+      </button>
+    )
+  }
   const statusPill = (s) => {
     const shipped = s === '已出貨'
     return (
@@ -123,22 +169,43 @@ export default function Preorders() {
     <div style={{ padding: 20 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
         <h2 style={{ display: 'flex', alignItems: 'center', gap: 8, margin: 0 }}><Package size={20} /> 線上預購 / 出貨SOP</h2>
-        <button onClick={openNew} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8, border: 'none', background: 'var(--accent-cyan)', color: '#fff', fontWeight: 700, cursor: 'pointer' }}>
-          <Plus size={16} /> 新增預購
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={exportCsv} title="把目前篩選出來的清單匯出成 Excel/CSV(出貨清單)" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-secondary)', fontWeight: 600, cursor: 'pointer' }}>
+            <Download size={16} /> 匯出CSV
+          </button>
+          <button onClick={openNew} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8, border: 'none', background: 'var(--accent-cyan)', color: '#fff', fontWeight: 700, cursor: 'pointer' }}>
+            <Plus size={16} /> 新增預購
+          </button>
+        </div>
       </div>
 
+      {/* 統計徽章(點擊即依狀態篩選) */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
+        {statPill('', '全部', counts.all, 'var(--accent-cyan)')}
+        {statPill('未出貨', '未出貨', counts.未出貨, 'var(--accent-orange)')}
+        {statPill('已出貨', '已出貨', counts.已出貨, 'var(--accent-green)')}
+      </div>
+
+      {/* 篩選列:日期起訖 + 快捷 + 搜尋 */}
+      <div style={{ display: 'flex', gap: 10, marginBottom: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <CalendarDays size={16} style={{ color: 'var(--text-muted)' }} />
+          <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{ ...fieldStyle, width: 'auto' }} />
+          <span style={{ color: 'var(--text-muted)' }}>~</span>
+          <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={{ ...fieldStyle, width: 'auto' }} />
+        </div>
+        <div style={{ display: 'flex', gap: 6 }}>
+          {[['today', '今天'], ['7d', '近7天'], ['month', '本月'], ['', '全部']].map(([k, l]) => (
+            <button key={l} onClick={() => applyPreset(k)} style={{ padding: '6px 12px', borderRadius: 99, fontSize: 13, cursor: 'pointer', border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-secondary)' }}>{l}</button>
+          ))}
+        </div>
         <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
           <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="搜尋姓名 / 電話 / 地址 / 品項"
             style={{ ...fieldStyle, paddingLeft: 32 }} />
         </div>
-        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ ...fieldStyle, width: 'auto' }}>
-          <option value="">全部狀態</option>
-          {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-        </select>
       </div>
+      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>共 {filtered.length} 筆{filterStatus ? `（${filterStatus}）` : ''}</div>
 
       {error && <div style={{ color: 'var(--accent-red)', marginBottom: 10 }}>{error}</div>}
 

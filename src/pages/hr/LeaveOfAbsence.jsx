@@ -115,7 +115,7 @@ export default function LeaveOfAbsence() {
   const load = async () => {
     setLoading(true)
     let q = supabase.from('leave_of_absence_requests')
-      .select('*, employee:employees(id,name,name_en,department_id,position), approver:employees!approver_id(id,name,signature_url)')
+      .select('*, employee:employees!employee_id(id,name,name_en,department_id,position), approver:employees!approver_id(id,name,signature_url)')
       .order('id', { ascending: false })
     if (!isManagerOrAbove && profile?.id) q = q.eq('employee_id', profile.id)
     const orgId = profile?.organization_id ?? getTenantOrgId()

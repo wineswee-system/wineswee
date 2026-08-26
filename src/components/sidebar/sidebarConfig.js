@@ -306,22 +306,18 @@ export const groupNav = {
       icon: DollarSign,
       children: [
         { icon: DollarSign, label: '薪資管理', path: '/hr/salary' },
-        { icon: DollarSign, label: '薪資統整', path: '/hr/salary-summary' },
         { icon: DollarSign, label: '薪資結構', path: '/hr/salary-structures' },
         { icon: CreditCard, label: '薪資發放', path: '/hr/payroll' },
         { icon: Scale, label: '資遣管理', path: '/hr/severance' },
         { icon: Scale, label: '法扣管理', path: '/hr/legal-deductions' },
         { icon: FileBarChart, label: '扣繳憑單', path: '/hr/tax-forms' },
-        { icon: FileBarChart, label: '二代健保補充保費', path: '/hr/nhi-supplement' },
-        { icon: Star, label: '績效管理', path: '/hr/performance' },
-        { icon: DollarSign, label: '績效獎金', path: '/hr/bonus' },
         { icon: DollarSign, label: '門市業績獎金', path: '/hr/store-bonus' },
-        // 門市稽核已搬到「專案流程 → 門市稽核」
-        { icon: Scale, label: '薪酬基準', path: '/hr/compensation' },
         { icon: Gift, label: '福利政策', path: '/hr/benefit-settings' },
         { icon: Scale, label: '法令工資設定', path: '/hr/labor-law-rates' },
-        { icon: FileBarChart, label: '健保級距監控', path: '/hr/insurance-grade' },
         { icon: Scale, label: '投保級距表', path: '/hr/insurance-brackets', title: '維護每年度 勞保/健保/勞退 級距表(帶入/計薪自動吃當年度)' },
+        // ── 以下 6 項已從側欄隱藏(頁面/路由保留,要救回把該行加回即可)──
+        //   薪資統整 /hr/salary-summary、二代健保補充保費 /hr/nhi-supplement、績效管理 /hr/performance、
+        //   績效獎金 /hr/bonus、薪酬基準 /hr/compensation、健保級距監控 /hr/insurance-grade
       ]
     },
     {

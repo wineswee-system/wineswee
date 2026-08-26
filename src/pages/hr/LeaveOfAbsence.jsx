@@ -21,7 +21,7 @@ import { usePendingApprovals } from '../../lib/usePendingApprovals'
 import { confirm } from '../../lib/confirm'
 
 // 留職停薪原因類型（對齊 DB schema 註解）
-const REASON_TYPES = ['產假', '育嬰留停', '兵役', '進修', '家庭因素', '其他']
+const REASON_TYPES = ['育嬰留停', '兵役', '進修', '家庭因素', '其他']
 
 const STATUS_BADGE = {
   '申請中': { bg: 'rgba(99,102,241,0.12)', color: '#6366f1' },
@@ -105,8 +105,9 @@ export default function LeaveOfAbsence() {
     employee_id: profile?.id || '',
     start_date: '',
     planned_end_date: '',
-    reason_type: '產假',
+    reason_type: '育嬰留停',
     reason_detail: '',
+    keep_insurance: true,
   })
   const [reviewModal, setReviewModal] = useState(null)
   const [rejectReason, setRejectReason] = useState('')
@@ -165,6 +166,7 @@ export default function LeaveOfAbsence() {
       planned_end_date: form.planned_end_date,
       reason_type: form.reason_type,
       reason_detail: form.reason_detail || null,
+      keep_insurance: form.keep_insurance !== false,
       organization_id: profile?.organization_id || 1,
       status: '申請中',
       current_step: 0,
@@ -186,7 +188,7 @@ export default function LeaveOfAbsence() {
         toast.error('簽核流程重啟失敗：' + (e.message || '未知錯誤'))
       }
       setShowForm(false); setEditingId(null)
-      setForm({ employee_id: profile?.id || '', start_date: '', planned_end_date: '', reason_type: '產假', reason_detail: '' })
+      setForm({ employee_id: profile?.id || '', start_date: '', planned_end_date: '', reason_type: '育嬰留停', reason_detail: '', keep_insurance: true })
       load()
       return
     }
@@ -195,7 +197,7 @@ export default function LeaveOfAbsence() {
     if (error) return toast.error('送出失敗：' + error.message)
 
     setShowForm(false)
-    setForm({ employee_id: profile?.id || '', start_date: '', planned_end_date: '', reason_type: '產假', reason_detail: '' })
+    setForm({ employee_id: profile?.id || '', start_date: '', planned_end_date: '', reason_type: '育嬰留停', reason_detail: '', keep_insurance: true })
     load()
   }
 
@@ -359,7 +361,7 @@ export default function LeaveOfAbsence() {
                                 employee_id: r.employee_id,
                                 start_date: r.start_date || '',
                                 planned_end_date: r.planned_end_date || '',
-                                reason_type: r.reason_type || '產假',
+                                reason_type: r.reason_type || '育嬰留停', keep_insurance: r.keep_insurance !== false,
                                 reason_detail: r.reason_detail || '',
                               })
                               setShowForm(true)
@@ -373,7 +375,7 @@ export default function LeaveOfAbsence() {
                                 employee_id: r.employee_id,
                                 start_date: r.start_date || '',
                                 planned_end_date: r.planned_end_date || '',
-                                reason_type: r.reason_type || '產假',
+                                reason_type: r.reason_type || '育嬰留停', keep_insurance: r.keep_insurance !== false,
                                 reason_detail: r.reason_detail || '',
                               })
                               setShowForm(true)
@@ -421,6 +423,12 @@ export default function LeaveOfAbsence() {
           <Field label="原因類型" required error={errors.reason_type} errorMsg="請選原因">
             <select className="form-input" style={{ width: '100%' }} value={form.reason_type} onChange={e => setForm(f => ({ ...f, reason_type: e.target.value }))}>
               {REASON_TYPES.map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </Field>
+          <Field label="留停期間勞健保">
+            <select className="form-input" style={{ width: '100%' }} value={form.keep_insurance !== false ? '1' : '0'} onChange={e => setForm(f => ({ ...f, keep_insurance: e.target.value === '1' }))}>
+              <option value="1">續保（雇主負擔照付；本人自付由公司代收）</option>
+              <option value="0">退保（留停期間不投保，保費不計）</option>
             </select>
           </Field>
           <Field label="原因說明（選填）">

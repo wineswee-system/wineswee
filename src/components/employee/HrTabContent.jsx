@@ -99,6 +99,25 @@ export default function HrTabContent({
     toast.success(`已依投保基數 ${Math.round(insuredBase).toLocaleString()} 帶入級距，可再手動調整`)
   }
 
+  // 各險別合法級距下拉選項(來自級距表);勞保≤45,800、職災≤72,800、勞退用月提繳工資(≤150,000)
+  const gradeOpts = (arr, key, max) => [...new Set((arr || []).map(b => Number(b[key])).filter(v => v > 0 && (!max || v <= max)))].sort((a, b) => a - b)
+  const laborOpts = gradeOpts(insBrackets?.labor, 'insured_salary', 45800)
+  const occOpts = gradeOpts(insBrackets?.labor, 'insured_salary', 72800)
+  const healthOpts = gradeOpts(insBrackets?.health, 'insured_salary')
+  const pensionOpts = gradeOpts(insBrackets?.pension, 'monthly_wage')
+  // 級距下拉:列合法級距可挑;現有值若不在清單(例:超過上限的舊值)保留在最前並標「目前值」
+  const GradeSelect = ({ value, opts, onChange, placeholder }) => {
+    const cur = value != null && value !== '' ? String(Number(value)) : ''
+    const has = opts.some(o => String(o) === cur)
+    return (
+      <select className="form-input" style={{ width: '100%' }} value={cur} onChange={e => onChange(e.target.value)}>
+        <option value="">{placeholder || '— 選擇級距 —'}</option>
+        {cur && !has && <option value={cur}>{Number(cur).toLocaleString()}（目前值·非標準）</option>}
+        {opts.map(o => <option key={o} value={o}>{o.toLocaleString()}</option>)}
+      </select>
+    )
+  }
+
   return (
     <>
       {/* ════════════════════════════════════════
@@ -472,8 +491,8 @@ export default function HrTabContent({
             </div>
             {form.labor_insurance && (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10 }}>
-                <div><div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>投保級距</div><input className="form-input" type="number" style={{ width: '100%' }} placeholder="27600" value={form.labor_ins_grade || ''} onChange={e => set('labor_ins_grade', e.target.value)} /></div>
-                <div><div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>職災級距</div><input className="form-input" type="number" style={{ width: '100%' }} placeholder="同投保級距" value={form.labor_occ_injury_grade || ''} onChange={e => set('labor_occ_injury_grade', e.target.value)} /></div>
+                <div><div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>投保級距</div><GradeSelect value={form.labor_ins_grade} opts={laborOpts} onChange={v => set('labor_ins_grade', v)} /></div>
+                <div><div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>職災級距</div><GradeSelect value={form.labor_occ_injury_grade} opts={occOpts} onChange={v => set('labor_occ_injury_grade', v)} /></div>
                 <div><div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>加保日期</div><input className="form-input" type="date" style={{ width: '100%' }} value={form.labor_ins_start || ''} onChange={e => set('labor_ins_start', e.target.value)} /></div>
                 <div><div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>退保日期</div><input className="form-input" type="date" style={{ width: '100%' }} value={form.labor_ins_end || ''} onChange={e => set('labor_ins_end', e.target.value)} /></div>
               </div>
@@ -487,7 +506,7 @@ export default function HrTabContent({
             </div>
             {form.health_insurance && (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
-                <div><div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>投保級距</div><input className="form-input" type="number" style={{ width: '100%' }} placeholder="27600" value={form.health_ins_grade || ''} onChange={e => set('health_ins_grade', e.target.value)} /></div>
+                <div><div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>投保級距</div><GradeSelect value={form.health_ins_grade} opts={healthOpts} onChange={v => set('health_ins_grade', v)} /></div>
                 <div><div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>加保日期</div><input className="form-input" type="date" style={{ width: '100%' }} value={form.health_ins_start || ''} onChange={e => set('health_ins_start', e.target.value)} /></div>
                 <div><div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>退保日期</div><input className="form-input" type="date" style={{ width: '100%' }} value={form.health_ins_end || ''} onChange={e => set('health_ins_end', e.target.value)} /></div>
               </div>
@@ -501,7 +520,7 @@ export default function HrTabContent({
             </div>
             {form.pension && (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
-                <div><div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>提繳工資級距</div><input className="form-input" type="number" style={{ width: '100%' }} placeholder="同投保級距" value={form.labor_pension_grade || ''} onChange={e => set('labor_pension_grade', e.target.value)} /></div>
+                <div><div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>提繳工資級距</div><GradeSelect value={form.labor_pension_grade} opts={pensionOpts} onChange={v => set('labor_pension_grade', v)} placeholder="— 選擇勞退級距 —" /></div>
                 <div><div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>提繳率 (%)</div><input className="form-input" type="number" style={{ width: '100%' }} placeholder="6" value={form.pension_rate || 6} onChange={e => set('pension_rate', e.target.value)} /></div>
                 <div><div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>加保日期</div><input className="form-input" type="date" style={{ width: '100%' }} value={form.labor_pension_start || ''} onChange={e => set('labor_pension_start', e.target.value)} /></div>
               </div>

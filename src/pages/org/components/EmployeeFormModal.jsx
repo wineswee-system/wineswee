@@ -90,6 +90,24 @@ export default function EmployeeFormModal({
     toast.success(`已依投保基數 ${Math.round(insuredBase).toLocaleString()} 帶入級距，可再手動調整`)
   }
 
+  // 四種級距下拉:直接讀 DB 級距表;勞保≤45,800、職災≤72,800、健保→313,000、勞退→150,000
+  const gradeOpts = (arr, key, max) => [...new Set((arr || []).map(b => Number(b[key])).filter(v => v > 0 && (!max || v <= max)))].sort((a, b) => a - b)
+  const laborOpts = gradeOpts(insBrackets?.labor, 'insured_salary', 45800)
+  const occOpts = gradeOpts(insBrackets?.labor, 'insured_salary', 72800)
+  const healthOpts = gradeOpts(insBrackets?.health, 'insured_salary')
+  const pensionOpts = gradeOpts(insBrackets?.pension, 'monthly_wage')
+  const GradeSelect = ({ value, opts, onChange }) => {
+    const cur = value != null && value !== '' ? String(Number(value)) : ''
+    const has = opts.some(o => String(o) === cur)
+    return (
+      <select className="form-input" style={{ width: '100%' }} value={cur} onChange={e => onChange(e.target.value)}>
+        <option value="">— 留空自動 —</option>
+        {cur && !has && <option value={cur}>{Number(cur).toLocaleString()}（目前值·非標準）</option>}
+        {opts.map(o => <option key={o} value={o}>{o.toLocaleString()}</option>)}
+      </select>
+    )
+  }
+
   // 自訂津貼（存進 salary_structures.custom_allowances；算入投保基數）
   const addCustomAllowance = (name = '') => setForm(f => ({ ...f, custom_allowances: [...(f.custom_allowances || []), { name, amount: '' }] }))
   const updateCustomAllowance = (idx, field, val) => setForm(f => ({ ...f, custom_allowances: (f.custom_allowances || []).map((c, i) => i === idx ? { ...c, [field]: val } : c) }))
@@ -403,20 +421,22 @@ export default function EmployeeFormModal({
           <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 }}>
             {(form.labor_insurance ?? true) && (
               <Field label="勞保級距">
-                <input className="form-input" type="number" style={{ width: '100%' }} placeholder="留空自動(封頂45800)"
-                  value={form.labor_ins_grade || ''} onChange={e => set('labor_ins_grade', e.target.value)} />
+                <GradeSelect value={form.labor_ins_grade} opts={laborOpts} onChange={v => set('labor_ins_grade', v)} />
+              </Field>
+            )}
+            {(form.labor_insurance ?? true) && (
+              <Field label="職災級距">
+                <GradeSelect value={form.labor_occ_injury_grade} opts={occOpts} onChange={v => set('labor_occ_injury_grade', v)} />
               </Field>
             )}
             {(form.health_insurance ?? true) && (
               <Field label="健保級距">
-                <input className="form-input" type="number" style={{ width: '100%' }} placeholder="留空自動"
-                  value={form.health_ins_grade || ''} onChange={e => set('health_ins_grade', e.target.value)} />
+                <GradeSelect value={form.health_ins_grade} opts={healthOpts} onChange={v => set('health_ins_grade', v)} />
               </Field>
             )}
             {(form.pension ?? true) && (
               <Field label="勞退提繳工資級距">
-                <input className="form-input" type="number" style={{ width: '100%' }} placeholder="留空同投保"
-                  value={form.labor_pension_grade || ''} onChange={e => set('labor_pension_grade', e.target.value)} />
+                <GradeSelect value={form.labor_pension_grade} opts={pensionOpts} onChange={v => set('labor_pension_grade', v)} />
               </Field>
             )}
           </div>

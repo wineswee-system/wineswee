@@ -7,9 +7,14 @@ export default function AnalyticsTab({ filtered, schedules, weekDates, shiftDefs
   const shiftDefMap = {}
   for (const d of (shiftDefs || [])) shiftDefMap[d.name] = d
 
+  // 頂卡(總計/人均/成本)限定在「視圖範圍」內,避免把 cycle 補載的跨月邊界天算進本月總計
+  const viewLo = weekDates?.[0]
+  const viewHi = weekDates?.[weekDates.length - 1]
+  const inView = (s) => !viewLo || (s.date >= viewLo && s.date <= viewHi)
+
   // Calculate per-employee stats
   const empStats = filtered.map(e => {
-    const empSch = schedules.filter(s => s.employee === e.name)
+    const empSch = schedules.filter(s => s.employee === e.name && inView(s))
     const work = empSch.filter(s => s.shift && !isAbsence(s.shift))
     const rest = empSch.filter(s => isAbsence(s.shift))
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, memo } from 'react'
 import { Plus, Trash2, Save, Copy, AlertTriangle } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -12,6 +12,20 @@ const KINDS = {
   pension: { table: 'labor_pension_brackets', label: '勞退',  valueCol: 'monthly_wage',   premiums: false, note: '月提繳工資，最高 150,000' },
 }
 const inp = { width: '100%', padding: '5px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)', color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }
+
+// 單列 memo:只有被改的那列 row 物件變 → 只重繪該列,避免整張表(80+級)每打字重繪卡頓
+const BracketRow = memo(function BracketRow({ r, i, valueCol, premiums, onCell, onDel }) {
+  return (
+    <tr>
+      <td><input style={inp} type="number" value={r.grade ?? ''} onChange={e => onCell(i, 'grade', e.target.value)} /></td>
+      <td><input style={inp} type="number" value={r.min_salary ?? ''} onChange={e => onCell(i, 'min_salary', e.target.value)} /></td>
+      <td><input style={inp} type="number" value={r[valueCol] ?? ''} onChange={e => onCell(i, valueCol, e.target.value)} /></td>
+      {premiums && <td><input style={inp} type="number" value={r.employee_premium ?? ''} onChange={e => onCell(i, 'employee_premium', e.target.value)} /></td>}
+      {premiums && <td><input style={inp} type="number" value={r.employer_premium ?? ''} onChange={e => onCell(i, 'employer_premium', e.target.value)} /></td>}
+      <td><button onClick={() => onDel(i)} title="刪除此級" style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--accent-red)' }}><Trash2 size={15} /></button></td>
+    </tr>
+  )
+})
 
 export default function InsuranceBrackets() {
   const [years, setYears] = useState([])
@@ -46,9 +60,9 @@ export default function InsuranceBrackets() {
   useEffect(() => { loadYears().finally(() => setLoading(false)) }, [])
   useEffect(() => { loadRows() }, [year, kind])
 
-  const setCell = (i, k, v) => setRows(rs => rs.map((r, idx) => idx === i ? { ...r, [k]: v } : r))
+  const setCell = useCallback((i, k, v) => setRows(rs => rs.map((r, idx) => idx === i ? { ...r, [k]: v } : r)), [])
+  const delRow = useCallback((i) => setRows(rs => rs.filter((_, idx) => idx !== i)), [])
   const addRow = () => setRows(rs => [...rs, { year, grade: (rs.length ? Math.max(...rs.map(r => Number(r.grade) || 0)) + 1 : 1), min_salary: '', [cfg.valueCol]: '', employee_premium: '', employer_premium: '' }])
-  const delRow = (i) => setRows(rs => rs.filter((_, idx) => idx !== i))
 
   const save = async () => {
     if (!rows.length) { toast.error('沒有資料可儲存'); return }
@@ -151,14 +165,7 @@ export default function InsuranceBrackets() {
               <tbody>
                 {rows.length === 0 && <tr><td colSpan={cfg.premiums ? 6 : 4} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 20 }}>此年度尚無資料，按下方「新增一級」或用「新增年度」複製</td></tr>}
                 {rows.map((r, i) => (
-                  <tr key={i}>
-                    <td><input style={inp} type="number" value={r.grade ?? ''} onChange={e => setCell(i, 'grade', e.target.value)} /></td>
-                    <td><input style={inp} type="number" value={r.min_salary ?? ''} onChange={e => setCell(i, 'min_salary', e.target.value)} /></td>
-                    <td><input style={inp} type="number" value={r[cfg.valueCol] ?? ''} onChange={e => setCell(i, cfg.valueCol, e.target.value)} /></td>
-                    {cfg.premiums && <td><input style={inp} type="number" value={r.employee_premium ?? ''} onChange={e => setCell(i, 'employee_premium', e.target.value)} /></td>}
-                    {cfg.premiums && <td><input style={inp} type="number" value={r.employer_premium ?? ''} onChange={e => setCell(i, 'employer_premium', e.target.value)} /></td>}
-                    <td><button onClick={() => delRow(i)} title="刪除此級" style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--accent-red)' }}><Trash2 size={15} /></button></td>
-                  </tr>
+                  <BracketRow key={i} r={r} i={i} valueCol={cfg.valueCol} premiums={cfg.premiums} onCell={setCell} onDel={delRow} />
                 ))}
               </tbody>
             </table>

@@ -5,6 +5,8 @@ import {
   Copy, Download, Upload, Filter, SortAsc, Lock, BarChart2, Play,
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../contexts/AuthContext'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -122,6 +124,7 @@ function TriToggle({ label, value, onChange }) {
  *   - Import JSON file of templates (skip duplicates by name)
  */
 export default function TemplateLibrary() {
+  const { profile } = useAuth()
   const navigate = useNavigate()
   const importInputRef = useRef(null)
 
@@ -159,13 +162,14 @@ export default function TemplateLibrary() {
   // ── Load all data on mount ──
   useEffect(() => {
     const fetchAll = async () => {
+      const orgId = profile?.organization_id ?? getTenantOrgId()
       const [tplRes, instRes, storeRes, empRes, deptRes, listRes, formRes, clRes, acRes] = await Promise.allSettled([
         supabase.from('sop_templates').select('*').order('category').then(r => r.data || []),
         supabase.from('workflow_instances').select('template_name').then(r => r.data || []),
         supabase.from('stores').select('id, name').order('name').then(r => r.data || []),
         supabase.from('employees')
           .select('id, name, department_id, position, is_manager')
-          .eq('status', '在職').order('name')
+          .eq('status', '在職').eq('organization_id', orgId).order('name')
           .then(r => r.data || []),
         supabase.from('departments').select('id, name').order('name').then(r => r.data || []),
         supabase.from('list_templates').select('*').order('name').then(r => r.data || []),

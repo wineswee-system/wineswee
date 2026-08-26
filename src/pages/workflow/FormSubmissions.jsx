@@ -312,10 +312,12 @@ export default function FormSubmissions() {
     }
 
     // 撈所有在職員工的 signature_url 給 PDF 簽核欄顯示簽名 / 印章圖
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     const { data: empList } = await supabase
       .from('employees')
       .select('name, signature_url')
       .eq('status', '在職')
+      .eq('organization_id', orgId)
       .not('signature_url', 'is', null)
     const signatures = Object.fromEntries(
       (empList || []).filter(e => e.signature_url).map(e => [e.name, e.signature_url])

@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Calculator, Plus, Download, Trash2, Building2, RefreshCw } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../contexts/AuthContext'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import Modal, { Field } from '../../components/Modal'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Badge from '../../components/ui/Badge'
@@ -35,6 +37,7 @@ const ALL_CATEGORIES = ['高額獎金', ...NHI_MANUAL_CATEGORIES]
  * 路由：需在 HrModule 註冊（本檔不自行註冊）。
  */
 export default function NhiSupplement() {
+  const { profile } = useAuth()
   const now = new Date()
   const defaultPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   const [period, setPeriod] = useState(defaultPeriod)
@@ -53,12 +56,13 @@ export default function NhiSupplement() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
+      const orgId = profile?.organization_id ?? getTenantOrgId()
       const [rows, yearRows, employer, p, empRes] = await Promise.all([
         getNhiRecordsByPeriod(period),
         getNhiRecordsByYear(year),
         getNhiEmployerRecord(period),
         loadNhiParams(year),
-        supabase.from('employees').select('id, name, status').order('name'),
+        supabase.from('employees').select('id, name, status').eq('organization_id', orgId).order('name'),
       ])
       setRecords(rows)
       setYearRecords(yearRows)

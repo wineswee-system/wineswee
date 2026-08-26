@@ -50,7 +50,7 @@ export default function BusinessTravel() {
     const orgId = profile?.organization_id ?? getTenantOrgId()
     return Promise.all([
       getBusinessTrips(orgId),
-      supabase.from('employees').select('id, name, dept, department_id, position, signature_url, departments!department_id(name)').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, dept, department_id, position, signature_url, departments!department_id(name)').eq('status', '在職').eq('organization_id', orgId).order('name'),
       supabase.from('departments').select('*').order('name'),
       orgId ? supabase.from('organizations').select('name, logo_url').eq('id', orgId).maybeSingle() : Promise.resolve({ data: null }),
     ]).then(([t, e, d, orgRes]) => {

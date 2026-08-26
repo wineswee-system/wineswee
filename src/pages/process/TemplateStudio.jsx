@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Plus, Shield, Save, History, Eye, Copy, X, Lock } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
 import { Field } from '../../components/Modal'
@@ -103,13 +104,14 @@ export default function TemplateStudio() {
   // ── Load reference data + template (if editing) ──
   useEffect(() => {
     const fetchAll = async () => {
+      const orgId = profile?.organization_id ?? getTenantOrgId()
       const [clRes, acRes, tplsRes, catsRes, deptRes, empRes] = await Promise.allSettled([
         supabase.from('checklists').select('id, name, items').order('name'),
         supabase.from('approval_chains').select('id, name, approval_chain_steps(count)').order('name'),
         supabase.from('sop_templates').select('id, name').order('name'),
         supabase.from('workflow_categories').select('id, name').eq('scope', 'workflow').order('name'),
         supabase.from('departments').select('id, name').order('name'),
-        supabase.from('employees').select('id, name, name_en, position, dept, store').eq('status', '在職').order('name'),
+        supabase.from('employees').select('id, name, name_en, position, dept, store').eq('status', '在職').eq('organization_id', orgId).order('name'),
       ])
 
       if (clRes.status === 'fulfilled' && clRes.value.data) {

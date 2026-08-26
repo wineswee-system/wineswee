@@ -6,6 +6,8 @@ import { getNhiRecordsByYear } from '../../../lib/db/nhiSupplement'
 import { logger } from '../../../lib/logger'
 import { toast } from '../../../lib/toast'
 import { fmtNT as fmt } from '../../../lib/currency'
+import { useAuth } from '../../../contexts/AuthContext'
+import { getTenantOrgId } from '../../../lib/events/middleware/tenantContext'
 
 /**
  * F-B4 扣繳憑單媒體申報檔（固定長度 120 bytes/筆）下載區塊
@@ -16,6 +18,7 @@ import { fmtNT as fmt } from '../../../lib/currency'
  * @param {{year: number, salaryRows: Array}} props - salaryRows = 該年度 salary_records
  */
 export default function WithholdingMediaSection({ year, salaryRows }) {
+  const { profile } = useAuth()
   const rocYear = year - 1911
   const [employees, setEmployees] = useState([])
   const [nhiByEmployee, setNhiByEmployee] = useState({})
@@ -23,8 +26,9 @@ export default function WithholdingMediaSection({ year, salaryRows }) {
 
   useEffect(() => {
     let cancelled = false
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     Promise.all([
-      supabase.from('employees').select('id, name, id_number'),
+      supabase.from('employees').select('id, name, id_number').eq('organization_id', orgId),
       getNhiRecordsByYear(year).catch(() => []), // 表未建立/無資料 → 二代健保費以 0 帶入
     ]).then(([empRes, nhiRows]) => {
       if (cancelled) return

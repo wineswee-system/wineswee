@@ -91,7 +91,7 @@ export default function Tasks() {
     const orgId = profile?.organization_id ?? getTenantOrgId()
     return Promise.all([
       getTasks({ orgId }),
-      supabase.from('employees').select('id, name, department_id, position, dept').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, department_id, position, dept').eq('status', '在職').eq('organization_id', orgId).order('name'),
       supabase.from('departments').select('id, name').order('name'),
       supabase.from('projects').select('id, name').order('name'),
       getCategories('task'),

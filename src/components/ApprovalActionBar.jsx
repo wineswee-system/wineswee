@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import { getTenantOrgId } from '../lib/events/middleware/tenantContext'
 import SearchableSelect, { empOptions } from './SearchableSelect'
 import AsyncButton from './AsyncButton'
 import { confirm } from '../lib/confirm'
@@ -55,6 +56,7 @@ export default function ApprovalActionBar({
         if (!cancelled) setLoading(false)
         return
       }
+      const orgId = profile?.organization_id ?? getTenantOrgId()
       const [{ data: extras }, { data: emps }] = await Promise.all([
         supabase.from('approval_extra_steps')
           .select('id, source_id, insert_before_step, assignee_id, requested_by_id, reason, status')
@@ -65,6 +67,7 @@ export default function ApprovalActionBar({
         supabase.from('employees')
           .select('id, name, department_id')
           .eq('status', '在職')
+          .eq('organization_id', orgId)
           .order('name'),
       ])
       if (cancelled) return

@@ -119,15 +119,15 @@ export default function SOPTemplates() {
   const [newTemplate, setNewTemplate] = useState({ type: 'workflow', name: '', category: '展店', description: '', steps: [{ title: '', role: '', priority: '中', description: '', required_forms: [] }] })
 
   useEffect(() => {
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     Promise.all([
       supabase.from('sop_templates').select('*').order('id'),
       supabase.from('stores').select('*').order('name'),
-      supabase.from('employees').select('id, name, department_id, position, departments(name)').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, department_id, position, departments(name)').eq('status', '在職').eq('organization_id', orgId).order('name'),
     ]).then(async ([t, l, e]) => {
       let tpls = t.data || []
       // If no templates in DB, seed defaults
       if (tpls.length === 0) {
-        const orgId = profile?.organization_id ?? getTenantOrgId()
         for (const tpl of DEFAULT_TEMPLATES) {
           const { data } = await supabase.from('sop_templates').insert({
             name: tpl.name,

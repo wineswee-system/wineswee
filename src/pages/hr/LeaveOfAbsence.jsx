@@ -121,7 +121,7 @@ export default function LeaveOfAbsence() {
     const orgId = profile?.organization_id ?? getTenantOrgId()
     const [{ data: r }, { data: e }, chain, orgRes] = await Promise.all([
       q,
-      supabase.from('employees').select('id,name,name_en,position,dept,department_id,store,store_id,signature_url,departments!department_id(name),stores!store_id(name)').eq('status','在職').order('name'),
+      supabase.from('employees').select('id,name,name_en,position,dept,department_id,store,store_id,signature_url,departments!department_id(name),stores!store_id(name)').eq('status','在職').eq('organization_id', orgId).order('name'),
       findFormChainByApplicantType('loa', orgId, profile?.id),
       orgId ? supabase.from('organizations').select('name, logo_url').eq('id', orgId).maybeSingle() : Promise.resolve({ data: null }),
     ])

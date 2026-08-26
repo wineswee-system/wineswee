@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { User, Calendar, DollarSign, Clock, FileText, Bell, ChevronRight, Upload, Trash2, PenTool } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { empLabel } from '../../lib/empLabel'
@@ -24,7 +25,8 @@ export default function SelfService() {
   const sigFileRef = useRef(null)
 
   useEffect(() => {
-    supabase.from('employees').select('*, departments!department_id(name), stores!store_id(name)').eq('status', '在職').order('name')
+    const orgId = profile?.organization_id ?? getTenantOrgId()
+    supabase.from('employees').select('*, departments!department_id(name), stores!store_id(name)').eq('status', '在職').eq('organization_id', orgId).order('name')
       .then(({ data }) => {
         setEmployees(data || [])
         if (data?.length) {

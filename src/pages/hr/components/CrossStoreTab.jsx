@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { isAbsence } from '../../../lib/scheduleUtils'
+import { useAuth } from '../../../contexts/AuthContext'
+import { getTenantOrgId } from '../../../lib/events/middleware/tenantContext'
 
 export default function CrossStoreTab({ storeFilter, locations, shiftDefs, weekDates }) {
+  const { profile } = useAuth()
   const [allEmployees, setAllEmployees] = useState([])
   const [staffingData, setStaffingData] = useState({}) // storeId → [staffing rules]
   const [schedules, setSchedules] = useState([])
@@ -11,8 +14,9 @@ export default function CrossStoreTab({ storeFilter, locations, shiftDefs, weekD
   useEffect(() => {
     if (!weekDates?.length) return
     setLoading(true)
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     Promise.all([
-      supabase.from('employees').select('id, name, store, store_id, additional_stores, employment_type, position, stores!store_id(name)').eq('status', '在職'),
+      supabase.from('employees').select('id, name, store, store_id, additional_stores, employment_type, position, stores!store_id(name)').eq('status', '在職').eq('organization_id', orgId),
       supabase.from('store_staffing').select('*'),
       supabase.from('schedules').select('employee, date, shift').gte('date', weekDates[0]).lte('date', weekDates[weekDates.length - 1]),
     ]).then(([e, s, sc]) => {

@@ -9,6 +9,7 @@ import { validateBenefitPolicy, BONUS_TYPE_LABELS, getLeaveLabel } from '../../l
 import { empLabel } from '../../lib/empLabel'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { useAuth } from '../../contexts/AuthContext'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 
 import { confirm } from '../../lib/confirm'
 const TABS = [
@@ -20,7 +21,7 @@ const emptyLeaveForm = { code: '', extra_days: 0, notes: '' }
 const emptyBonusForm = { code: '', type: 'fixed', amount: 0, rate: 0, base: 'sales', cap: 0, period: 'monthly', notes: '' }
 
 export default function BenefitSettings() {
-  const { hasPermission } = useAuth()
+  const { hasPermission, profile } = useAuth()
   const [tab, setTab] = useState('leave')
   const canEditPolicy = hasPermission(tab === 'leave' ? 'leave_type.edit' : 'bonus.compute')
   const [stores, setStores] = useState([])
@@ -37,9 +38,10 @@ export default function BenefitSettings() {
 
   // Load stores + employees
   useEffect(() => {
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     Promise.all([
       supabase.from('stores').select('id, name').order('name'),
-      supabase.from('employees').select('id, name, store_id, stores!store_id(name)').order('name'),
+      supabase.from('employees').select('id, name, store_id, stores!store_id(name)').eq('organization_id', orgId).order('name'),
     ]).then(([s, e]) => {
       setStores(s.data || [])
       setEmployees(e.data || [])

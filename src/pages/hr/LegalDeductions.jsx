@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { Plus, Edit2, Pause, Play, Trash2, Gavel, AlertCircle } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
@@ -50,9 +51,10 @@ export default function LegalDeductions() {
 
   const loadData = () => {
     setLoading(true)
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     Promise.all([
       supabase.from('legal_deductions').select('*').order('id', { ascending: false }),
-      supabase.from('employees').select('id, name, name_en, dept, store, store_id, position, departments!department_id(name), stores!store_id(name)').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, name_en, dept, store, store_id, position, departments!department_id(name), stores!store_id(name)').eq('status', '在職').eq('organization_id', orgId).order('name'),
       supabase.from('departments').select('*').order('name'),
     ]).then(([d, e, dp]) => {
       setItems(d.data || [])

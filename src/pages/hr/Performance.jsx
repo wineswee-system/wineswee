@@ -3,6 +3,7 @@ import { Plus, ChevronUp, ChevronDown } from 'lucide-react'
 import { getPerformanceReviews } from '../../lib/db'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
@@ -29,10 +30,11 @@ export default function Performance() {
   const [goalForm, setGoalForm] = useState({ employee: '', category: GOAL_CATEGORIES[0], title: '', target: '', current: '0', unit: '', deadline: '', note: '' })
 
   useEffect(() => {
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     Promise.all([
       getPerformanceReviews(profile?.organization_id),
       supabase.from('performance_goals').select('*').order('id'),
-      supabase.from('employees').select('id, name, dept, department_id, position, departments!department_id(name)').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, dept, department_id, position, departments!department_id(name)').eq('status', '在職').eq('organization_id', orgId).order('name'),
       supabase.from('departments').select('*').order('name'),
     ]).then(([r, g, e, d]) => {
       setReviews(r.data || [])

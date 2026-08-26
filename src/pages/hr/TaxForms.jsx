@@ -5,6 +5,7 @@ import { getTaxWithholdingRecords, upsertTaxWithholding } from '../../lib/db'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
 import { useAuth } from '../../contexts/AuthContext'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { printWithholdingCertificate, printBatchCertificates } from '../../lib/withholdingCertificate'
 
 import { toast } from '../../lib/toast'
@@ -31,9 +32,10 @@ export default function TaxForms() {
   const [company, setCompany] = useState(loadCompany)
 
   useEffect(() => {
+    const orgId = profile?.organization_id ?? getTenantOrgId()
     Promise.all([
       getTaxWithholdingRecords(year),
-      supabase.from('employees').select('id, name, id_number, address, department_id, position, status, join_date, departments(name)').order('name'),
+      supabase.from('employees').select('id, name, id_number, address, department_id, position, status, join_date, departments(name)').eq('organization_id', orgId).order('name'),
       supabase.from('salary_records').select('*').like('month', `${year}-%`).order('month'),
     ]).then(([r, e, s]) => {
       setRecords(r.data || [])

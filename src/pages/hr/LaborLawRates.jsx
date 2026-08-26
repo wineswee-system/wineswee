@@ -7,6 +7,8 @@ import Modal, { Field } from '../../components/Modal'
 
 import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
+import { loadNhiParams } from '../../lib/nhiSupplement'
+const nfmt = (n) => 'NT$ ' + Number(n || 0).toLocaleString()
 function SectionHeader({ title, subtitle }) {
   return (
     <div style={{ marginBottom: 16 }}>
@@ -86,6 +88,8 @@ export default function LaborLawRates() {
   const [year, setYear] = useState(new Date().getFullYear())
   const [laborBrackets, setLaborBrackets] = useState([])
   const [healthBrackets, setHealthBrackets] = useState([])
+  const [nhiParams, setNhiParams] = useState(null)   // 二代健保:讀 nhi_supplement_params
+  const [lawParams, setLawParams] = useState(null)    // 基本工資/勞退:讀 labor_law_params
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [importModal, setImportModal] = useState(null) // { table: 'labor_ins_brackets' | 'health_ins_brackets' }
@@ -93,14 +97,18 @@ export default function LaborLawRates() {
   const fetchRates = async () => {
     try {
       setLoading(true)
-      const [laborRes, healthRes] = await Promise.all([
+      const [laborRes, healthRes, nhi, lawRes] = await Promise.all([
         supabase.from('labor_ins_brackets').select('*').eq('year', year).order('grade'),
         supabase.from('health_ins_brackets').select('*').eq('year', year).order('grade'),
+        loadNhiParams(year),
+        supabase.from('labor_law_params').select('*').eq('effective_year', year).maybeSingle(),
       ])
       if (laborRes.error) throw laborRes.error
       if (healthRes.error) throw healthRes.error
       setLaborBrackets(laborRes.data || [])
       setHealthBrackets(healthRes.data || [])
+      setNhiParams(nhi)
+      setLawParams(lawRes.data || null)
     } catch (err) {
       console.error('Failed to load labor law rates:', err)
       setError('費率資料載入失敗，請重新整理頁面')
@@ -155,14 +163,14 @@ export default function LaborLawRates() {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
         <div className="card" style={{ padding: 20 }}>
           <SectionHeader title="基本工資" subtitle={`${year} 年度適用`} />
-          <StaticRow label="月薪基本工資" value="NT$ 29,500" />
-          <StaticRow label="時薪基本工資" value="NT$ 196" />
+          <StaticRow label="月薪基本工資" value={nfmt(lawParams?.min_wage_monthly ?? 29500)} />
+          <StaticRow label="時薪基本工資" value={nfmt(lawParams?.min_wage_hourly ?? 196)} />
           <StaticRow label="生效日" value={`${year}-01-01`} accent="var(--text-secondary)" />
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>※ 基本工資目前手動維護，未來可加 minimum_wage_history 表</div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>※ 讀 labor_law_params 表（可用 API/後台更新，逐年）{!lawParams && '；此年度尚無資料，顯示預設值'}</div>
         </div>
         <div className="card" style={{ padding: 20 }}>
           <SectionHeader title="勞退提繳率" subtitle="勞工退休金條例第14條" />
-          <StaticRow label="雇主最低提繳率" value="6%" />
+          <StaticRow label="雇主最低提繳率" value={`${((lawParams?.pension_employer_rate ?? 0.06) * 100).toFixed(0)}%`} />
           <StaticRow label="員工可自願提繳" value="0% – 6%" accent="var(--text-secondary)" />
           <div style={{
             marginTop: 12, padding: 10, background: 'var(--bg-secondary)',
@@ -178,11 +186,11 @@ export default function LaborLawRates() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
           <div style={{ padding: '12px 0', borderBottom: '1px solid var(--border-subtle)' }}>
             <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>費率</div>
-            <div style={{ fontWeight: 700, fontSize: 18, color: 'var(--accent-cyan)' }}>2.11%</div>
+            <div style={{ fontWeight: 700, fontSize: 18, color: 'var(--accent-cyan)' }}>{((Number(nhiParams?.rate) || 0.0211) * 100).toFixed(2)}%</div>
           </div>
           <div style={{ padding: '12px 0', borderBottom: '1px solid var(--border-subtle)' }}>
             <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>起徵門檻</div>
-            <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--accent-orange)' }}>單次 NT$ 20,000 以上</div>
+            <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--accent-orange)' }}>單次 {nfmt(nhiParams?.other_income_threshold ?? 20000)} 以上</div>
           </div>
           <div style={{ padding: '12px 0', borderBottom: '1px solid var(--border-subtle)' }}>
             <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>法源</div>

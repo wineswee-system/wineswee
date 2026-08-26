@@ -218,13 +218,14 @@ export default function Preorders() {
               <th style={{ padding: '10px 12px' }}>電話</th>
               <th style={{ padding: '10px 12px' }}>品項</th>
               <th style={{ padding: '10px 12px' }}>需求</th>
+              <th style={{ padding: '10px 12px' }}>備註</th>
               <th style={{ padding: '10px 12px' }}>狀態</th>
               <th style={{ padding: '10px 12px', textAlign: 'right' }}>操作</th>
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 ? (
-              <tr><td colSpan={7} style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)' }}>沒有預購單</td></tr>
+              <tr><td colSpan={8} style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)' }}>沒有預購單</td></tr>
             ) : filtered.map(r => (
               <tr key={r.id} style={{ borderTop: '1px solid var(--border)', fontSize: 14 }}>
                 <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>{r.order_date || '—'}</td>
@@ -234,6 +235,7 @@ export default function Preorders() {
                 <td style={{ padding: '10px 12px', fontSize: 12, color: 'var(--text-muted)' }}>
                   {[r.need_bag && '提袋', r.need_invoice && `統編${r.invoice_tax_id ? ' ' + r.invoice_tax_id : ''}`, r.specific_delivery && `指定時間${r.delivery_time ? ' ' + r.delivery_time : ''}`].filter(Boolean).join('、') || '—'}
                 </td>
+                <td style={{ padding: '10px 12px', maxWidth: 200, fontSize: 13, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap' }}>{r.notes || '—'}</td>
                 <td style={{ padding: '10px 12px' }}>
                   <button onClick={() => toggleStatus(r)} title="點擊切換出貨狀態" style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 0 }}>{statusPill(r.status)}</button>
                 </td>

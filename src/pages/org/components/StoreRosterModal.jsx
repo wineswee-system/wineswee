@@ -10,6 +10,7 @@ import { confirm } from '../../../lib/confirm'
 //   右區:跨店支援(additional_stores 存門市「名字」)。純加減,不動主要門市。
 export default function StoreRosterModal({ store, employees, onClose, onPatch }) {
   const [saving, setSaving] = useState(null)     // 正在存的員工 id
+  const [bulkBusy, setBulkBusy] = useState(false)
   const [qMain, setQMain] = useState('')
   const [qCross, setQCross] = useState('')
 
@@ -24,8 +25,10 @@ export default function StoreRosterModal({ store, employees, onClose, onPatch })
     const s = q.toLowerCase()
     return [e.name, e.name_en, e.position, e.employee_number, storeNameOf(e)].some(x => String(x || '').toLowerCase().includes(s))
   }
-  const mainCandidates = active.filter(e => e.store_id !== store.id && match(e, qMain)).slice(0, 60)
-  const crossCandidates = active.filter(e => e.store_id !== store.id && !(e.additional_stores || []).includes(store.name) && match(e, qCross)).slice(0, 60)
+  const mainCandidatesAll = active.filter(e => e.store_id !== store.id && match(e, qMain))
+  const crossCandidatesAll = active.filter(e => e.store_id !== store.id && !(e.additional_stores || []).includes(store.name) && match(e, qCross))
+  const mainCandidates = mainCandidatesAll.slice(0, 60)
+  const crossCandidates = crossCandidatesAll.slice(0, 60)
 
   const assignMain = async (emp) => {
     setSaving(emp.id)
@@ -63,6 +66,33 @@ export default function StoreRosterModal({ store, employees, onClose, onPatch })
     toast.success(`已移除 ${emp.name} 的 ${store.name} 跨店支援`)
   }
 
+  // 批次:把目前搜尋清單「全部加入」,免得一個一個點
+  const bulkAssignMain = async (list) => {
+    if (!list.length) return
+    if (!(await confirm({ message: `把這 ${list.length} 位員工的主要門市全部改成「${store.name}」?原本在別店的會一起搬過來(排班跟著人不刪)。`, confirmLabel: `全部加入 ${list.length} 位` }))) return
+    setBulkBusy(true)
+    const results = await Promise.all(list.map(e => updateEmployee(e.id, { store_id: store.id }).then(r => ({ e, r }))))
+    setBulkBusy(false)
+    let ok = 0
+    results.forEach(({ e, r }) => { if (!r.error) { onPatch(e.id, { store_id: store.id, store: store.name, stores: { name: store.name } }); ok++ } })
+    if (ok < list.length) toast.error(`${list.length - ok} 位加入失敗(可能無權限)`)
+    if (ok > 0) toast.success(`已把 ${ok} 位加入 ${store.name}`)
+  }
+  const bulkAddCross = async (list) => {
+    if (!list.length) return
+    if (!(await confirm({ message: `把這 ${list.length} 位員工全部加為「${store.name}」跨店支援?(主要門市不變)`, confirmLabel: `全部加入 ${list.length} 位` }))) return
+    setBulkBusy(true)
+    const results = await Promise.all(list.map(e => {
+      const next = [...new Set([...(e.additional_stores || []), store.name])]
+      return updateEmployee(e.id, { additional_stores: next }).then(r => ({ e, r, next }))
+    }))
+    setBulkBusy(false)
+    let ok = 0
+    results.forEach(({ e, r, next }) => { if (!r.error) { onPatch(e.id, { additional_stores: next }); ok++ } })
+    if (ok < list.length) toast.error(`${list.length - ok} 位加入失敗(可能無權限)`)
+    if (ok > 0) toast.success(`已把 ${ok} 位加為 ${store.name} 跨店支援`)
+  }
+
   const empLine = (e) => `${e.position || '—'}${storeNameOf(e) ? ` · 原 ${storeNameOf(e)}` : ''}`
 
   return (
@@ -97,6 +127,9 @@ export default function StoreRosterModal({ store, employees, onClose, onPatch })
             )}
             q={qMain} setQ={setQMain}
             candidates={mainCandidates}
+            bulkCount={mainCandidatesAll.length}
+            bulkBusy={bulkBusy}
+            onBulkAdd={() => bulkAssignMain(mainCandidatesAll)}
             renderCandidate={(e) => (
               <CandidateRow key={e.id} name={e.name} line={empLine(e)} busy={saving === e.id}
                 icon={e.store_id ? <Shuffle size={13} /> : <UserPlus size={13} />}
@@ -118,6 +151,10 @@ export default function StoreRosterModal({ store, employees, onClose, onPatch })
             )}
             q={qCross} setQ={setQCross}
             candidates={crossCandidates}
+            bulkCount={crossCandidatesAll.length}
+            bulkBusy={bulkBusy}
+            bulkAccent="var(--accent-orange)"
+            onBulkAdd={() => bulkAddCross(crossCandidatesAll)}
             renderCandidate={(e) => (
               <CandidateRow key={e.id} name={e.name} line={empLine(e)} busy={saving === e.id}
                 icon={<UserPlus size={13} />} label="加為支援" accent="var(--accent-orange)" onAdd={() => addCross(e)} />
@@ -129,7 +166,7 @@ export default function StoreRosterModal({ store, employees, onClose, onPatch })
   )
 }
 
-function Section({ icon, title, hint, count, accent, members, renderMember, q, setQ, candidates, renderCandidate }) {
+function Section({ icon, title, hint, count, accent, members, renderMember, q, setQ, candidates, renderCandidate, bulkCount = 0, bulkBusy, bulkAccent = 'var(--accent-cyan)', onBulkAdd }) {
   return (
     <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <div style={{ padding: '14px 18px 10px' }}>
@@ -147,15 +184,32 @@ function Section({ icon, title, hint, count, accent, members, renderMember, q, s
       </div>
       {/* add picker */}
       <div style={{ padding: '12px 18px 6px', borderTop: '1px dashed var(--border-subtle)', marginTop: 10 }}>
-        <div style={{ position: 'relative', marginBottom: 8 }}>
-          <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-          <input className="form-input" style={{ width: '100%', paddingLeft: 32 }} placeholder="搜尋員工加入…" value={q} onChange={e => setQ(e.target.value)} />
+        <div style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
+          <div style={{ position: 'relative', flex: 1 }}>
+            <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+            <input className="form-input" style={{ width: '100%', paddingLeft: 32 }} placeholder="搜尋員工加入…" value={q} onChange={e => setQ(e.target.value)} />
+          </div>
+          {onBulkAdd && (
+            <button disabled={bulkBusy || bulkCount === 0} onClick={onBulkAdd} title="把目前清單全部加入"
+              style={{
+                flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 5, padding: '0 12px', borderRadius: 8,
+                border: 'none', cursor: (bulkBusy || bulkCount === 0) ? 'default' : 'pointer', fontSize: 13, fontWeight: 700,
+                background: bulkAccent, color: '#fff', opacity: (bulkBusy || bulkCount === 0) ? 0.45 : 1, whiteSpace: 'nowrap',
+              }}>
+              <Users size={14} /> {bulkBusy ? '加入中…' : `全部加入${bulkCount ? ` (${bulkCount})` : ''}`}
+            </button>
+          )}
         </div>
       </div>
       <div style={{ padding: '0 18px 16px', flex: 1, overflowY: 'auto' }}>
         {candidates.length === 0
           ? <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '8px 0' }}>{q ? '查無符合員工' : '打字搜尋要加入的員工'}</div>
-          : <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>{candidates.map(renderCandidate)}</div>}
+          : <>
+              {bulkCount > candidates.length && (
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', padding: '2px 0 8px' }}>顯示前 {candidates.length} 位;「全部加入」會處理全部 {bulkCount} 位</div>
+              )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>{candidates.map(renderCandidate)}</div>
+            </>}
       </div>
     </div>
   )

@@ -1120,6 +1120,11 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
       {/* Detail Modal — split layout 與其他簽核表單一致 */}
       {showDetail && !showSettleModal && (() => {
         const empRow = employees.find(e => e.name === showDetail.employee)
+        // 核銷(驗收)階段:頭部人物卡秀「驗收人」(settle_assignee),而非申請人
+        const inSettleStage = ['待核銷', '已核銷', '核銷已退回'].includes(showDetail.status)
+        const settlerRow = inSettleStage && showDetail.settle_assignee_id
+          ? employees.find(e => e.id === showDetail.settle_assignee_id) : null
+        const headEmp = settlerRow || empRow
         const isNonExpense = showDetail.is_expense === false
         const fields = isNonExpense
           ? [
@@ -1137,6 +1142,7 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
                 ? (settleStore ? `${settleDept.name}／${settleStore.name}` : settleDept.name)
                 : null
               return [
+                { label: '申請人', value: showDetail.employee || '—' },
                 { label: '部門', value: showDetail.department || '—' },
                 { label: '科目', value: `${showDetail.account_code || ''} ${showDetail.account_name || ''}`.trim() || '—' },
                 { label: '門市', value: showDetail.store || '—' },
@@ -1273,12 +1279,12 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
             docNo={showDetail.id}
             status={showDetail.status}
             applicant={{
-              name: showDetail.employee,
-              name_en: empRow?.name_en,
-              position: empRow?.position,
-              dept: showDetail.department,
-              status: empRow?.status,
-              employee_no: empRow?.employee_number,
+              name: settlerRow ? settlerRow.name : showDetail.employee,
+              name_en: headEmp?.name_en,
+              position: headEmp?.position,
+              dept: settlerRow ? (settlerRow.dept || settlerRow.department) : showDetail.department,
+              status: headEmp?.status,
+              employee_no: headEmp?.employee_number,
             }}
             fields={fields}
             attachments={atts}

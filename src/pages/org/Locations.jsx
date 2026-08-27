@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
-import { Plus, Pencil, Trash2, MapPin } from 'lucide-react'
+import { Plus, Pencil, Trash2, MapPin, Users } from 'lucide-react'
 import { getStores, createStore, updateStore, deleteStore, getEmployees, getCompanies } from '../../lib/db'
+import StoreRosterModal from './components/StoreRosterModal'
 import { getDepartmentSectionsAll, getDepartments } from '../../lib/db/org'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import Modal, { Field } from '../../components/Modal'
@@ -28,6 +29,10 @@ export default function Locations() {
   const [geocoding, setGeocoding] = useState(false)
   const [editingStore, setEditingStore] = useState(null) // null = new, object = editing
   const [form, setForm] = useState(EMPTY_FORM)
+  const [rosterStore, setRosterStore] = useState(null)   // 開「管理員工」名冊的門市
+
+  // 名冊 modal 內指派/移除員工後,即時更新本頁 employees(門市員工數也跟著變)
+  const patchEmployee = (id, patch) => setEmployees(prev => prev.map(e => e.id === id ? { ...e, ...patch } : e))
 
   useEffect(() => {
     const orgId = profile?.organization_id ?? getTenantOrgId()
@@ -191,7 +196,18 @@ export default function Locations() {
                   <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{s.address}</td>
                   <td>{s.phone}</td>
                   <td>{employees.find(e => e.id === s.manager_id)?.name || s.manager || '-'}</td>
-                  <td>{employees.filter(e => (e.store_id === s.id || e.store === s.name) && e.status === '在職').length}</td>
+                  <td>
+                    {(() => {
+                      const cnt = employees.filter(e => (e.store_id === s.id || e.store === s.name) && e.status === '在職').length
+                      return canEditStructure ? (
+                        <button onClick={() => setRosterStore(s)} title="管理員工" style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 6,
+                          border: '1px solid var(--border-subtle)', background: 'var(--bg-secondary)', cursor: 'pointer',
+                          color: 'var(--accent-cyan)', fontWeight: 700, fontSize: 13,
+                        }}><Users size={12} />{cnt}</button>
+                      ) : cnt
+                    })()}
+                  </td>
                   <td style={{ fontSize: 12 }}>
                     {s.lat != null && s.lng != null ? (
                       <span className="badge badge-success"><span className="badge-dot"></span>{s.clock_radius || 150}m</span>
@@ -210,6 +226,7 @@ export default function Locations() {
                   <td>
                     {canEditStructure ? (
                     <div style={{ display: 'flex', gap: 4 }}>
+                      <button className="btn btn-sm btn-secondary" title="管理員工" onClick={() => setRosterStore(s)}><Users size={12} /></button>
                       <button className="btn btn-sm btn-secondary" onClick={() => openEdit(s)}><Pencil size={12} /></button>
                       <button className="btn btn-sm btn-secondary" onClick={() => handleDelete(s)} style={{ color: 'var(--accent-red)' }}><Trash2 size={12} /></button>
                     </div>
@@ -372,6 +389,15 @@ export default function Locations() {
             </div>
           </div>
         </Modal>
+      )}
+
+      {rosterStore && (
+        <StoreRosterModal
+          store={rosterStore}
+          employees={employees}
+          onPatch={patchEmployee}
+          onClose={() => setRosterStore(null)}
+        />
       )}
     </div>
   )

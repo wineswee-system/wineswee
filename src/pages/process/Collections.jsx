@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Wallet, Handshake, Users, Plus, ChevronDown, ChevronRight, Trash2, Check, X, Pencil } from 'lucide-react'
+import { Wallet, Handshake, Users, Plus, ChevronDown, ChevronRight, Trash2, Check, X, Pencil, Paperclip } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
@@ -12,6 +12,16 @@ import { fmtNT as fmt } from '../../lib/currency'
 const n = (x) => Number(x) || 0
 const today = () => new Date().toISOString().slice(0, 10)
 const DEPOSIT_TARGET = 300000
+
+// 匯款證明:上傳到 attachments bucket / collection 子目錄,回傳 { attachment_path, attachment_name }
+async function uploadProof(file) {
+  const safe = (file.name || 'proof').replace(/[\/\\?#%]+/g, '_').replace(/\s+/g, '_')
+  const path = `collection/${Date.now()}-${safe}`
+  const { error } = await supabase.storage.from('attachments').upload(path, file, { cacheControl: '3600', upsert: true })
+  if (error) { toast.error('匯款證明上傳失敗：' + error.message); return null }
+  return { attachment_path: path, attachment_name: safe }
+}
+const proofUrl = (p) => p?.attachment_path ? supabase.storage.from('attachments').getPublicUrl(p.attachment_path).data?.publicUrl : null
 
 // 三期目標（45/45/10，第三期用 額度−前兩期，免進位差）
 function stageTargets(amount) {
@@ -296,12 +306,13 @@ function DepositTab({ orgId, profile, deposits, depPays, investors, addInvestor,
                   {isExp && (
                     <tr><td colSpan={6} style={{ padding: 0 }}>
                       <PaymentEditor rows={paysByDep[d.id] || []} max={Math.max(0, n(d.target_amount) - n(d.paid_total))}
-                        onAdd={async ({ paid_date, amount, note }) => {
-                          const { error } = await supabase.from('deposit_payments').insert({ organization_id: orgId, deposit_id: d.id, paid_date, amount, note: note || null, created_by: profile?.name || null })
+                        onAdd={async ({ paid_date, amount, note, attachment_path, attachment_name }) => {
+                          const { error } = await supabase.from('deposit_payments').insert({ organization_id: orgId, deposit_id: d.id, paid_date, amount, note: note || null, attachment_path: attachment_path || null, attachment_name: attachment_name || null, created_by: profile?.name || null })
                           if (error) { toast.error('新增失敗：' + error.message); return false }
                           toast.success('已記錄收款'); reload(); return true
                         }}
                         onDelete={async (row) => { const { error } = await supabase.from('deposit_payments').delete().eq('id', row.id); if (error) { toast.error('刪除失敗：' + error.message); return } reload() }}
+                        onAttach={async (row, att) => { const { error } = await supabase.from('deposit_payments').update(att).eq('id', row.id); if (error) { toast.error('附件失敗：' + error.message); return } toast.success('已附匯款證明'); reload() }}
                       />
                     </td></tr>
                   )}
@@ -470,7 +481,7 @@ function FranchiseTab({ orgId, profile, franchises, ffInvestors, ffPays, deposit
                                 {!invDone && (
                                   <LumpSumEditor
                                     stageRemaining={[0, 1, 2].map(i => Math.max(0, targets[i] - paidStages[i]))}
-                                    onDistribute={async ({ paid_date, amount, note }) => {
+                                    onDistribute={async ({ paid_date, amount, note, attachment_path, attachment_name }) => {
                                       let left = n(amount); const ins = []
                                       for (let si = 0; si < 3; si++) {
                                         if (left <= 0.5) break
@@ -480,7 +491,7 @@ function FranchiseTab({ orgId, profile, franchises, ffInvestors, ffPays, deposit
                                       if (ins.length === 0) { toast.warning('已無可分配的期數'); return false }
                                       const noteTag = note || `整筆 ${fmt(n(amount))} 自動分期`
                                       const { error } = await supabase.from('franchise_fee_payments').insert(
-                                        ins.map(r => ({ organization_id: orgId, franchise_fee_id: f.id, investor_id: ffi.investor_id, stage: r.stage, paid_date, amount: r.amount, note: noteTag, created_by: profile?.name || null }))
+                                        ins.map(r => ({ organization_id: orgId, franchise_fee_id: f.id, investor_id: ffi.investor_id, stage: r.stage, paid_date, amount: r.amount, note: noteTag, attachment_path: attachment_path || null, attachment_name: attachment_name || null, created_by: profile?.name || null }))
                                       )
                                       if (error) { toast.error('新增失敗：' + error.message); return false }
                                       toast.success(`已記錄 ${inv?.name || ''} 整筆 ${fmt(n(amount))}（分 ${ins.length} 期）`)
@@ -499,14 +510,15 @@ function FranchiseTab({ orgId, profile, franchises, ffInvestors, ffPays, deposit
                                         <Progress small paid={paidStages[si]} target={targets[si]} />
                                       </div>
                                       <PaymentEditor compact rows={stagePays} max={Math.max(0, targets[si] - paidStages[si])}
-                                        onAdd={async ({ paid_date, amount, note }) => {
+                                        onAdd={async ({ paid_date, amount, note, attachment_path, attachment_name }) => {
                                           const { error } = await supabase.from('franchise_fee_payments').insert({
-                                            organization_id: orgId, franchise_fee_id: f.id, investor_id: ffi.investor_id, stage, paid_date, amount, note: note || null, created_by: profile?.name || null,
+                                            organization_id: orgId, franchise_fee_id: f.id, investor_id: ffi.investor_id, stage, paid_date, amount, note: note || null, attachment_path: attachment_path || null, attachment_name: attachment_name || null, created_by: profile?.name || null,
                                           })
                                           if (error) { toast.error('新增失敗：' + error.message); return false }
                                           toast.success(`已記錄 ${inv?.name || ''} 第 ${stage} 期`); reload(); return true
                                         }}
                                         onDelete={async (row) => { const { error } = await supabase.from('franchise_fee_payments').delete().eq('id', row.id); if (error) { toast.error('刪除失敗：' + error.message); return } reload() }}
+                                        onAttach={async (row, att) => { const { error } = await supabase.from('franchise_fee_payments').update(att).eq('id', row.id); if (error) { toast.error('附件失敗：' + error.message); return } toast.success('已附匯款證明'); reload() }}
                                       />
                                     </div>
                                   )
@@ -629,10 +641,11 @@ function InvestorTab({ orgId, profile, investors, deposits, ffInvestors, addInve
 }
 
 // ── 共用：一組收款明細 + 新增列（max：本期/本案剩餘上限，超收擋下）──
-function PaymentEditor({ rows, onAdd, onDelete, compact, max }) {
+function PaymentEditor({ rows, onAdd, onDelete, onAttach, compact, max }) {
   const [date, setDate] = useState(today())
   const [amount, setAmount] = useState('')
   const [note, setNote] = useState('')
+  const [file, setFile] = useState(null)
   const [busy, setBusy] = useState(false)
 
   const capped = max != null
@@ -643,9 +656,11 @@ function PaymentEditor({ rows, onAdd, onDelete, compact, max }) {
     if (n(amount) <= 0) { toast.warning('金額要 > 0'); return }
     if (capped && n(amount) > remaining + 0.5) { toast.warning(`超過剩餘上限，最多再記 ${fmt(remaining)}`); return }
     setBusy(true)
-    const ok = await onAdd({ paid_date: date, amount: n(amount), note })
+    let att = {}
+    if (file) { const up = await uploadProof(file); if (up) att = up }
+    const ok = await onAdd({ paid_date: date, amount: n(amount), note, ...att })
     setBusy(false)
-    if (ok) { setAmount(''); setNote('') }
+    if (ok) { setAmount(''); setNote(''); setFile(null) }
   }
 
   return (
@@ -659,6 +674,9 @@ function PaymentEditor({ rows, onAdd, onDelete, compact, max }) {
               {p.note && <span style={{ color: 'var(--text-muted)' }}>{p.note}</span>}
             </div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              {proofUrl(p)
+                ? <a href={proofUrl(p)} target="_blank" rel="noreferrer" title={p.attachment_name || '匯款證明'} style={{ color: 'var(--accent-cyan)', display: 'inline-flex' }}><Paperclip size={13} /></a>
+                : onAttach && <label title="附匯款證明" style={{ color: 'var(--text-muted)', cursor: 'pointer', display: 'inline-flex' }}><Paperclip size={13} /><input type="file" hidden accept="image/*,application/pdf" onChange={async e => { const f = e.target.files?.[0]; if (!f) return; const up = await uploadProof(f); if (up) onAttach(p, up) }} /></label>}
               <span style={{ color: 'var(--accent-green)', fontWeight: 700 }}>{fmt(n(p.amount))}</span>
               <button className="btn btn-secondary" style={{ padding: '1px 5px' }} onClick={() => onDelete(p)}><Trash2 size={12} style={{ color: 'var(--accent-red)' }} /></button>
             </div>
@@ -672,6 +690,10 @@ function PaymentEditor({ rows, onAdd, onDelete, compact, max }) {
           <input className="form-input" type="date" value={date} onChange={e => setDate(e.target.value)} style={{ width: 150 }} />
           <input className="form-input" type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder={capped ? `金額（最多 ${fmt(remaining)}）` : '金額'} style={{ width: capped ? 180 : 120 }} />
           <input className="form-input" value={note} onChange={e => setNote(e.target.value)} placeholder="備註（選填）" style={{ flex: 1, minWidth: 120 }} />
+          <label className="btn btn-secondary" style={{ padding: '6px 10px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
+            <Paperclip size={13} /> {file ? (file.name.length > 10 ? file.name.slice(0, 9) + '…' : file.name) : '匯款證明'}
+            <input type="file" hidden accept="image/*,application/pdf" onChange={e => setFile(e.target.files?.[0] || null)} />
+          </label>
           <button className="btn btn-primary" style={{ padding: '6px 12px' }} onClick={submit} disabled={busy}><Plus size={13} /> {busy ? '記錄中…' : '記一筆'}</button>
         </div>
       )}
@@ -684,6 +706,7 @@ function LumpSumEditor({ stageRemaining, onDistribute }) {
   const [date, setDate] = useState(today())
   const [amount, setAmount] = useState('')
   const [note, setNote] = useState('')
+  const [file, setFile] = useState(null)
   const [busy, setBusy] = useState(false)
   const totalRem = stageRemaining.reduce((s, x) => s + Math.max(0, x), 0)
 
@@ -701,9 +724,11 @@ function LumpSumEditor({ stageRemaining, onDistribute }) {
     if (n(amount) <= 0) { toast.warning('金額要 > 0'); return }
     if (n(amount) > totalRem + 0.5) { toast.warning(`超過剩餘總額，最多再記 ${fmt(totalRem)}`); return }
     setBusy(true)
-    const ok = await onDistribute({ paid_date: date, amount: n(amount), note })
+    let att = {}
+    if (file) { const up = await uploadProof(file); if (up) att = up }
+    const ok = await onDistribute({ paid_date: date, amount: n(amount), note, ...att })
     setBusy(false)
-    if (ok) { setAmount(''); setNote('') }
+    if (ok) { setAmount(''); setNote(''); setFile(null) }
   }
 
   if (totalRem <= 0.5) return null
@@ -714,6 +739,10 @@ function LumpSumEditor({ stageRemaining, onDistribute }) {
         <input className="form-input" type="date" value={date} onChange={e => setDate(e.target.value)} style={{ width: 150 }} />
         <input className="form-input" type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder={`整筆金額（最多 ${fmt(totalRem)}）`} style={{ width: 190 }} />
         <input className="form-input" value={note} onChange={e => setNote(e.target.value)} placeholder="備註（選填）" style={{ flex: 1, minWidth: 120 }} />
+        <label className="btn btn-secondary" style={{ padding: '6px 10px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
+          <Paperclip size={13} /> {file ? (file.name.length > 10 ? file.name.slice(0, 9) + '…' : file.name) : '匯款證明'}
+          <input type="file" hidden accept="image/*,application/pdf" onChange={e => setFile(e.target.files?.[0] || null)} />
+        </label>
         <button className="btn btn-primary" style={{ padding: '6px 12px' }} onClick={submit} disabled={busy}><Plus size={13} /> {busy ? '分配中…' : '一次收款'}</button>
       </div>
       {preview.rows.length > 0 && (

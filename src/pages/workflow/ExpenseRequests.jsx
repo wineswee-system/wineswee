@@ -480,7 +480,7 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
 
   // Open settle modal
   const openSettle = (req) => {
-    setShowDetail(req)
+    openDetail(req)  // ★ 同時建明細+簽核鏈:關掉送驗收框後露出的明細才不會空鏈,下載簽呈也才有簽核流程
     setSettleEditMode(false)
     // 重新核銷：保留原本填的金額；首次核銷：以申請金額為預設值
     setSettleForm({
@@ -493,7 +493,7 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
 
   // 編輯「已送出、還沒人簽」的待核銷單（不重送、不動鏈；走 update_pending_settle）
   const openSettleEdit = (req) => {
-    setShowDetail(req)
+    openDetail(req)  // ★ 建簽核鏈:關掉編輯驗收框後露出的明細才有簽核流程、簽呈才正常
     setSettleEditMode(true)
     setSettleForm({
       actual_amount: req.actual_amount ?? req.estimated_amount,

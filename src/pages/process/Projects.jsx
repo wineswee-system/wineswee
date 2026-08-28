@@ -110,6 +110,15 @@ export default function Projects() {
     if (data) setWorkflows(prev => prev.map(w => w.id === wfId ? data : w))
   }
 
+  // 移出專案:解除流程與專案的綁定 → 變成獨立流程(在「流程管理 → 流程」可見)
+  const handleWfDetach = async (w) => {
+    if (!(await confirm({ message: `把流程「${w.template_name}」移出此專案？\n移出後它會變成獨立流程，可在「流程管理 → 流程」找到；底下的任務跟著流程一起移出。` }))) return
+    const { error } = await supabase.from('workflow_instances').update({ project_id: null, project_order: null }).eq('id', w.id)
+    if (error) { toast.error('移出失敗：' + (error.message || '')); return }
+    setWorkflows(prev => prev.map(x => x.id === w.id ? { ...x, project_id: null, project_order: null } : x))
+    toast.success('已移出專案')
+  }
+
   const handleProjectOrderChange = async (type, id, order) => {
     const val = order !== '' && order != null ? Number(order) : null
     if (type === 'wf') {
@@ -957,6 +966,7 @@ export default function Projects() {
         handleTaskReorder={handleTaskReorder}
         handleWfRename={handleWfRename}
         handleWfDelete={handleWfDelete}
+        handleWfDetach={handleWfDetach}
         onWfEdit={handleWfEdit}
         onProjectOrderChange={handleProjectOrderChange}
         approvalChains={approvalChains}

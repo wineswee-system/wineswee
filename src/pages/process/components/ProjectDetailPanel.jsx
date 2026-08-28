@@ -7,7 +7,7 @@ import {
   Plus, ChevronRight, ChevronDown, Check, Clock, Pause, Ban, Play,
   MessageSquare, Workflow, CheckSquare, Edit3, Trash2, FolderOpen,
   Users, GitBranch, MoreVertical, GripVertical,
-  TrendingDown, DollarSign, Send,
+  TrendingDown, DollarSign, Send, FolderMinus,
 } from 'lucide-react'
 import { notifyProjectMembers } from '../../../lib/lineNotify'
 import { toast } from '../../../lib/toast'
@@ -187,6 +187,7 @@ export default function ProjectDetailPanel({
   setWfMenuId,
   handleWfRename,
   handleWfDelete,
+  handleWfDetach,
   handleWfReorder,
   handleTaskReorder,
   dragWfId,
@@ -641,6 +642,14 @@ export default function ProjectDetailPanel({
                         onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                         onClick={() => { setWfMenuId(null); handleWfRename(w) }}
                       ><Edit3 size={13} /> 改名</button>
+                      {handleWfDetach && (
+                        <button
+                          style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '9px 14px', border: 'none', background: 'transparent', color: 'var(--text-primary)', fontSize: 13, cursor: 'pointer' }}
+                          onMouseEnter={e => e.currentTarget.style.background = 'var(--glass-light)'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                          onClick={() => { setWfMenuId(null); handleWfDetach(w) }}
+                        ><FolderMinus size={13} /> 移出專案</button>
+                      )}
                       <button
                         style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '9px 14px', border: 'none', background: 'transparent', color: 'var(--accent-red)', fontSize: 13, cursor: 'pointer', borderRadius: '0 0 8px 8px' }}
                         onMouseEnter={e => e.currentTarget.style.background = 'var(--glass-light)'}

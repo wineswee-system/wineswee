@@ -544,6 +544,7 @@ export default function PunchCorrection() {
             }}
             fields={[
               { label: '日期', value: detailRow.date },
+              { label: '門市', value: detailRow.store || '—' },
               { label: '打卡類型', value: typeLabel },
               { label: '補登時間', value: detailRow.correction_time },
               { label: '原因', value: detailRow.reason, multiline: true },

@@ -21,7 +21,7 @@ serve(async (req) => {
     }
     // @ts-ignore Deno runtime
     const sb = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
-    const { data, error } = await sb.storage.from('payslips').createSignedUrl(path, 120)
+    const { data, error } = await sb.storage.from('payslips').createSignedUrl(path, 300)
     if (error) return json({ error: error.message }, 500)
     return json({ url: data.signedUrl })
   } catch (e) {

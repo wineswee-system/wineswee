@@ -26,44 +26,64 @@ const CSS = `
 @keyframes wsRing{0%{opacity:.95;transform:translate(-50%,-50%) scale(.1)}100%{opacity:0;transform:translate(-50%,-50%) scale(3.2)}}
 @keyframes wsFlash{0%{opacity:0}14%{opacity:.95}100%{opacity:0}}
 @keyframes wsNamePop{0%{opacity:0;transform:translate(-50%,-50%) scale(0) rotate(-14deg)}55%{opacity:1;transform:translate(-50%,-50%) scale(1.3) rotate(6deg)}100%{opacity:1;transform:translate(-50%,-50%) scale(1) rotate(0)}}
-.ws-ball{animation:wsBallDrop .72s cubic-bezier(.34,1.5,.5,1) both}
-.ws-ball.wobble{animation:wsWobble 1.05s ease-in-out 1 both}
-.ws-ball.ready{border-radius:50%;cursor:pointer;animation:wsReadyPulse 1.1s ease-out infinite}
-.ws-ball .ws-top,.ws-ball .ws-bot{transition:transform .42s cubic-bezier(.34,1.8,.6,1)}
-.ws-ball.open .ws-top{transform:translateY(-140%) rotate(-24deg)}
-.ws-ball.open .ws-bot{transform:translateY(64%) rotate(12deg)}
-.ws-ball .ws-name{opacity:0;transform:translate(-50%,-50%) scale(0)}
-.ws-ball.open .ws-name{animation:wsNamePop .55s cubic-bezier(.34,1.9,.6,1) both}
-.ws-rays,.ws-ring,.ws-flash{position:absolute;top:50%;left:50%;opacity:0;pointer-events:none}
-.ws-ball.open .ws-rays{width:210px;height:210px;background:repeating-conic-gradient(from 0deg,rgba(255,230,109,.9) 0 6deg,transparent 6deg 15deg);border-radius:50%;animation:wsRays .75s ease-out both}
-.ws-ball.open .ws-ring{width:66px;height:66px;border:5px solid #ffcb05;border-radius:50%;animation:wsRing .6s ease-out both}
-.ws-ball.open .ws-flash{width:130px;height:130px;background:radial-gradient(rgba(255,255,255,.95),transparent 70%);border-radius:50%;animation:wsFlash .5s ease-out both}
+@keyframes wsReadyGlow{0%,100%{filter:drop-shadow(0 0 6px rgba(255,203,5,.55))}50%{filter:drop-shadow(0 0 18px rgba(255,203,5,.95))}}
+@keyframes wsShatter{0%{transform:translateX(-50%) scale(1) rotate(0)}18%{transform:translateX(-50%) scale(1.12) rotate(-5deg)}36%{transform:translateX(-50%) scale(1.05) rotate(5deg)}100%{transform:translateX(-50%) scale(.5) rotate(-10deg);opacity:0}}
+@keyframes wsShard{to{transform:translate(var(--tx),var(--ty)) rotate(var(--rot));opacity:0}}
+@keyframes wsSplash{0%{opacity:.9;transform:translate(-50%,-50%) scale(.2)}100%{opacity:0;transform:translate(-50%,-50%) scale(2.5)}}
+.ws-btl{animation:wsBallDrop .72s cubic-bezier(.34,1.5,.5,1) both}
+.ws-btl.wobble{animation:wsWobble 1.05s ease-in-out 1 both}
+.ws-btl.ready{cursor:pointer;animation:wsReadyGlow 1.1s ease-in-out infinite}
+.ws-btl .ws-glass{transition:transform .3s}
+.ws-btl.open .ws-glass{animation:wsShatter .5s ease-in both}
+.ws-btl .ws-name{opacity:0;transform:translate(-50%,-50%) scale(0)}
+.ws-btl.open .ws-name{animation:wsNamePop .55s cubic-bezier(.34,1.9,.6,1) both}
+.ws-shard,.ws-splash,.ws-rays,.ws-ring,.ws-flash{position:absolute;top:50%;left:50%;opacity:0;pointer-events:none}
+.ws-btl.open .ws-rays{width:210px;height:210px;background:repeating-conic-gradient(from 0deg,rgba(255,230,109,.9) 0 6deg,transparent 6deg 15deg);border-radius:50%;animation:wsRays .8s ease-out both}
+.ws-btl.open .ws-ring{width:66px;height:66px;border:5px solid #ffcb05;border-radius:50%;animation:wsRing .6s ease-out both}
+.ws-btl.open .ws-flash{width:130px;height:130px;background:radial-gradient(rgba(255,255,255,.95),transparent 70%);border-radius:50%;animation:wsFlash .5s ease-out both}
+.ws-btl.open .ws-splash{width:120px;height:120px;background:radial-gradient(rgba(124,20,38,.85),transparent 66%);border-radius:50%;animation:wsSplash .55s ease-out both}
+.ws-btl.open .ws-shard{opacity:1;animation:wsShard .6s ease-out both}
 .ws-hint{animation:wsHint .8s ease-in-out infinite}
 `
 
-// 怪獸球(風格化,非官方)— 純 CSS 畫;掉出→抖動→待點(發光)→點一下召喚爆開
-function Ball({ size = 96, phase, name, caption, onOpen }) {
-  const cls = 'ws-ball' + (phase === 'wobble' ? ' wobble' : '') + (phase === 'ready' ? ' ready' : '') + (phase === 'open' ? ' open' : '')
-  const ring = Math.max(3, size * 0.05)
+// 紅酒瓶(品牌感)— 純 CSS 畫;掉出→晃動→待點(發光)→點一下破瓶(碎片濺灑+召喚光)
+function Bottle({ phase, name, caption, onOpen }) {
+  const cls = 'ws-btl' + (phase === 'wobble' ? ' wobble' : '') + (phase === 'ready' ? ' ready' : '') + (phase === 'open' ? ' open' : '')
   const open = phase === 'open'
+  const shards = useMemo(() => Array.from({ length: 9 }, (_, i) => {
+    const a = (i / 9) * 2 * Math.PI + Math.random() * 0.6, dist = 55 + Math.random() * 45
+    return { tx: `${Math.cos(a) * dist}px`, ty: `${Math.sin(a) * dist - 10}px`, rot: `${Math.random() * 720 - 360}deg`, s: 6 + Math.random() * 7 }
+  }), [])
   return (
-    <div style={{ position: 'relative', width: size, height: size + 22, flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-      <div className={cls} onClick={() => phase === 'ready' && onOpen && onOpen()} style={{ position: 'relative', width: size, height: size }}>
-        {/* 召喚特效層 */}
-        <div className="ws-rays" style={{ zIndex: 3 }} />
-        <div className="ws-flash" style={{ zIndex: 3 }} />
-        <div className="ws-ring" style={{ zIndex: 3 }} />
-        <div className="ws-top" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '50%', background: 'linear-gradient(#ff5a5a,#ee1515)', borderRadius: `${size}px ${size}px 0 0`, boxSizing: 'border-box', border: `${ring}px solid #1a1a1a`, borderBottom: 'none', zIndex: 2 }} />
-        <div className="ws-bot" style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '50%', background: 'linear-gradient(#ffffff,#e6e8ea)', borderRadius: `0 0 ${size}px ${size}px`, boxSizing: 'border-box', border: `${ring}px solid #1a1a1a`, borderTop: 'none', zIndex: 2 }} />
-        {!open && <div style={{ position: 'absolute', top: `calc(50% - ${ring}px)`, left: 0, right: 0, height: ring * 2, background: '#1a1a1a', zIndex: 2 }} />}
-        {!open && <div style={{ position: 'absolute', top: '50%', left: '50%', width: size * 0.3, height: size * 0.3, transform: 'translate(-50%,-50%)', borderRadius: '50%', background: phase === 'ready' ? '#ffcb05' : '#fff', border: `${ring}px solid #1a1a1a`, zIndex: 2, transition: 'background .2s' }} />}
-        {/* 露出的中獎者 */}
-        <div className="ws-name" style={{ position: 'absolute', top: '46%', left: '50%', minWidth: size * 1.3, textAlign: 'center', zIndex: 5 }}>
-          <div style={{ fontSize: 20, fontWeight: 900, color: '#14283c', background: '#fff', borderRadius: 10, padding: '4px 12px', boxShadow: '0 4px 14px rgba(0,0,0,.25)', border: '2px solid #ffcb05', whiteSpace: 'nowrap' }}>{name}</div>
+    <div style={{ position: 'relative', width: 74, height: 152, flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+      <div className={cls} onClick={() => phase === 'ready' && onOpen && onOpen()} style={{ position: 'relative', width: 74, height: 130 }}>
+        {/* 召喚 / 破瓶特效 */}
+        <div className="ws-rays" style={{ zIndex: 1 }} />
+        <div className="ws-splash" style={{ zIndex: 1 }} />
+        <div className="ws-flash" style={{ zIndex: 2 }} />
+        <div className="ws-ring" style={{ zIndex: 2 }} />
+        {shards.map((sh, i) => (
+          <div key={i} className="ws-shard" style={{ width: sh.s, height: sh.s * 1.7, background: '#6d1226', zIndex: 4, clipPath: 'polygon(50% 0,100% 100%,0 100%)', '--tx': sh.tx, '--ty': sh.ty, '--rot': sh.rot }} />
+        ))}
+        {/* 酒瓶本體 */}
+        {!open && (
+          <div className="ws-glass" style={{ position: 'absolute', left: '50%', top: 2, transform: 'translateX(-50%)', zIndex: 3 }}>
+            <div style={{ width: 15, height: 13, background: '#7a1020', margin: '0 auto', borderRadius: '3px 3px 0 0' }} />
+            <div style={{ width: 17, height: 32, background: 'linear-gradient(90deg,#3a0a14,#7a1728,#3a0a14)', margin: '0 auto' }} />
+            <div style={{ width: 48, height: 78, background: 'linear-gradient(90deg,#360a13,#7a1728 42%,#a52440 55%,#360a13)', borderRadius: '14px 14px 8px 8px', margin: '-2px auto 0', position: 'relative', boxShadow: 'inset 0 0 8px rgba(0,0,0,.5)' }}>
+              <div style={{ position: 'absolute', top: 22, left: 5, right: 5, height: 38, background: '#f4ecd8', borderRadius: 3, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#7a1728', fontWeight: 900 }}>
+                <span style={{ fontSize: 15 }}>🍷</span><span style={{ fontSize: 7, letterSpacing: 1 }}>WINE</span>
+              </div>
+            </div>
+          </div>
+        )}
+        {/* 中獎者 */}
+        <div className="ws-name" style={{ position: 'absolute', top: '42%', left: '50%', minWidth: 132, textAlign: 'center', zIndex: 6 }}>
+          <div style={{ fontSize: 19, fontWeight: 900, color: '#14283c', background: '#fff', borderRadius: 10, padding: '4px 12px', boxShadow: '0 4px 14px rgba(0,0,0,.25)', border: '2px solid #ffcb05', whiteSpace: 'nowrap' }}>{name}</div>
           <div style={{ fontSize: 11, color: '#ef4444', fontWeight: 700, marginTop: 4 }}>{caption}</div>
         </div>
       </div>
-      {phase === 'ready' && <div className="ws-hint" style={{ marginTop: 4, fontSize: 11, fontWeight: 800, color: 'var(--accent-orange)' }}>👆 點我!</div>}
+      {phase === 'ready' && <div className="ws-hint" style={{ marginTop: 2, fontSize: 11, fontWeight: 800, color: 'var(--accent-orange)' }}>👆 開瓶!</div>}
     </div>
   )
 }
@@ -118,7 +138,22 @@ export default function WheelSpinner() {
       o.connect(gn); gn.connect(ac.destination); o.start(); o.stop(ac.currentTime + d)
     } catch { /* noop */ }
   }
-  const ding = () => { beep(880, 0.08, 'sine', 0.06); setTimeout(() => beep(1320, 0.12, 'sine', 0.06), 80) }
+  // 揭曉號角:登 登 登～登登(通用慶祝小號,非特定曲)
+  const ding = () => {
+    if (!soundOn) return
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext
+      const ac = acRef.current || (acRef.current = new AC())
+      const seq = [[523, 0, 0.13], [523, 0.16, 0.13], [659, 0.32, 0.13], [784, 0.50, 0.22], [1047, 0.74, 0.4]]
+      seq.forEach(([f, t, d]) => {
+        const o = ac.createOscillator(), g = ac.createGain()
+        o.type = 'triangle'; o.frequency.value = f
+        const st = ac.currentTime + t
+        g.gain.setValueAtTime(0.0001, st); g.gain.exponentialRampToValueAtTime(0.16, st + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, st + d)
+        o.connect(g); g.connect(ac.destination); o.start(st); o.stop(st + d + 0.03)
+      })
+    } catch { /* noop */ }
+  }
 
   const burstConfetti = () => {
     const cv = confettiRef.current; if (!cv) return
@@ -272,11 +307,11 @@ function SlotMachine({ names, pickWinners, pickCount, onWin, beep, ding, confett
     if (busy || names.length < 1) return
     setBusy(true); setBalls([]); setLever(true); T(() => setLever(false), 500)
     const k = Math.min(pickCount, names.length)
-    let delay = 55, elapsed = 0
+    let delay = 42, elapsed = 0
     const cycle = () => {
       setReel(names[Math.floor(Math.random() * names.length)]); beep(600 + Math.random() * 300, 0.015)
-      elapsed += delay; delay *= 1.13
-      if (elapsed < 2100) T(cycle, delay); else drop(k)
+      elapsed += delay; delay *= 1.10
+      if (elapsed < 4200) T(cycle, delay); else drop(k)
     }
     cycle()
   }
@@ -323,8 +358,8 @@ function SlotMachine({ names, pickWinners, pickCount, onWin, beep, ding, confett
       </div>
 
       {/* 掉出的球 */}
-      <div style={{ minHeight: 130, marginTop: 24, display: 'flex', gap: 14, flexWrap: 'wrap', justifyContent: 'center', alignItems: 'flex-start', width: '100%' }}>
-        {balls.map(b => <Ball key={b.id} phase={b.phase} name={b.name} caption={b.caption} onOpen={() => openBall(b.id)} />)}
+      <div style={{ minHeight: 162, marginTop: 24, display: 'flex', gap: 14, flexWrap: 'wrap', justifyContent: 'center', alignItems: 'flex-start', width: '100%' }}>
+        {balls.map(b => <Bottle key={b.id} phase={b.phase} name={b.name} caption={b.caption} onOpen={() => openBall(b.id)} />)}
       </div>
 
       <button onClick={pull} disabled={busy || names.length < 1} style={{

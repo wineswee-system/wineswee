@@ -1,6 +1,9 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronLeft, Shuffle, ArrowDownAZ, Trash2, Hash, Volume2, VolumeX, Sparkles, X, RotateCw, History } from 'lucide-react'
+import { ChevronLeft, Shuffle, ArrowDownAZ, Trash2, Hash, Volume2, VolumeX, Sparkles, X, RotateCw, History, Users } from 'lucide-react'
+import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../contexts/AuthContext'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 
 // 幸運抽選遊戲機（轉盤 + 拉霸機／怪獸球風）— 純前端,名單/紀錄存 localStorage,不上傳。
 // canvas / 球色用固定色值(CLAUDE.md 例外:JS 值餵 canvas 無法用 var())。
@@ -9,6 +12,7 @@ const LS_KEY = 'wheel_spinner_names'
 const LS_HIST = 'wheel_spinner_history'
 const DEFAULT = '小明\n小華\n小美\n阿強\n阿珍\n大雄\n阿賢\n小芳'
 const CAPTIONS = ['蛤～是你喔！', '登登登登～就是你！', '哇是你欸！', '恭喜，逃不掉了 🎉', '天選之人出現！', '球球選擇了你 ⚡', '中啦！快去謝老闆', '就決定是你了！', '啊不就好棒棒 ✨', '衝康成功(？)']
+const selSt = { flex: 1, padding: '7px 8px', borderRadius: 8, border: '1px solid var(--border-medium)', background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: 13 }
 
 const CSS = `
 @keyframes wsBallDrop{0%{transform:translateY(-360px) scale(1)}55%{transform:translateY(0) scale(1)}66%{transform:translateY(0) scaleX(1.35) scaleY(.62)}78%{transform:translateY(-46px) scaleX(.9) scaleY(1.12)}90%{transform:translateY(0) scaleX(1.12) scaleY(.9)}100%{transform:translateY(0) scale(1)}}
@@ -73,6 +77,30 @@ export default function WheelSpinner() {
   const [soundOn, setSoundOn] = useState(true)
   const [confettiOn, setConfettiOn] = useState(true)
   const [hist, setHist] = useState(() => { try { return JSON.parse(localStorage.getItem(LS_HIST) || '[]') } catch { return [] } })
+  const { profile } = useAuth()
+  const [emps, setEmps] = useState([])
+  const [showImp, setShowImp] = useState(false)
+  const [impStore, setImpStore] = useState('')
+  const [impDept, setImpDept] = useState('')
+
+  useEffect(() => {
+    const orgId = profile?.organization_id ?? getTenantOrgId()
+    if (!orgId) return
+    supabase.from('employees')
+      .select('name, store, store_id, dept, department_id, status')
+      .eq('organization_id', orgId).eq('status', '在職').order('name')
+      .then(({ data }) => setEmps(data || []))
+  }, [profile?.organization_id])
+
+  const impStores = useMemo(() => [...new Set(emps.map(e => e.store).filter(Boolean))].sort(), [emps])
+  const impDepts = useMemo(() => [...new Set(emps.map(e => e.dept).filter(Boolean))].sort(), [emps])
+  const impFiltered = useMemo(() => emps.filter(e => (!impStore || e.store === impStore) && (!impDept || e.dept === impDept)), [emps, impStore, impDept])
+  const importEmps = (append) => {
+    const list = impFiltered.map(e => e.name)
+    if (list.length === 0) { alert('這個條件沒有員工'); return }
+    setText(prev => append ? [...prev.split('\n').map(s => s.trim()).filter(Boolean), ...list].filter((v, i, a) => a.indexOf(v) === i).join('\n') : list.join('\n'))
+    setShowImp(false)
+  }
 
   const names = useMemo(() => text.split('\n').map(s => s.trim()).filter(Boolean), [text])
   useEffect(() => { localStorage.setItem(LS_KEY, text) }, [text])
@@ -162,12 +190,33 @@ export default function WheelSpinner() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
               <div style={{ fontWeight: 700 }}>名單 <span style={{ color: 'var(--text-muted)', fontWeight: 400, fontSize: 13 }}>({names.length})</span></div>
               <div style={{ display: 'flex', gap: 6 }}>
+                <button className="btn btn-sm btn-secondary" title="帶入員工" onClick={() => setShowImp(v => !v)} style={{ color: 'var(--accent-cyan)' }}><Users size={13} /></button>
                 <button className="btn btn-sm btn-secondary" title="產生數字" onClick={genRange}><Hash size={13} /></button>
                 <button className="btn btn-sm btn-secondary" title="洗牌" onClick={shuffle}><Shuffle size={13} /></button>
                 <button className="btn btn-sm btn-secondary" title="排序" onClick={sortAsc}><ArrowDownAZ size={13} /></button>
                 <button className="btn btn-sm btn-secondary" title="清空" onClick={() => setText('')} style={{ color: 'var(--accent-red)' }}><Trash2 size={13} /></button>
               </div>
             </div>
+
+            {showImp && (
+              <div style={{ marginBottom: 10, padding: 12, borderRadius: 10, border: '1px solid var(--accent-cyan)', background: 'var(--accent-cyan-dim)' }}>
+                <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 5 }}><Users size={13} /> 帶入在職員工</div>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                  <select value={impStore} onChange={e => setImpStore(e.target.value)} style={selSt}>
+                    <option value="">全部門市</option>
+                    {impStores.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                  <select value={impDept} onChange={e => setImpDept(e.target.value)} style={selSt}>
+                    <option value="">全部部門</option>
+                    {impDepts.map(d => <option key={d} value={d}>{d}</option>)}
+                  </select>
+                </div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <button className="btn btn-sm btn-primary" onClick={() => importEmps(false)} style={{ flex: 1 }}>帶入 {impFiltered.length} 位（取代）</button>
+                  <button className="btn btn-sm btn-secondary" onClick={() => importEmps(true)}>追加</button>
+                </div>
+              </div>
+            )}
             <textarea value={text} onChange={e => setText(e.target.value)} placeholder="一行一個名字…" spellCheck={false}
               style={{ width: '100%', height: 210, resize: 'vertical', padding: 12, borderRadius: 10, border: '1px solid var(--border-medium)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: 14, lineHeight: 1.7, boxSizing: 'border-box', fontFamily: 'inherit' }} />
             <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>

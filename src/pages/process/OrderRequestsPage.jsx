@@ -1,12 +1,14 @@
 import { useState } from 'react'
-import { ClipboardList, Receipt } from 'lucide-react'
+import { ClipboardList, Receipt, Building2 } from 'lucide-react'
 import ExpenseRequests from '../workflow/ExpenseRequests'
 import MonthlyInvoices from './MonthlyInvoices'
+import SupplierManager from './SupplierManager'
 
-// 叫貨申請單頁:兩個 tab —— 「叫貨申請」(既有 ExpenseRequests docType=order) + 「月結發票」(登記統計)
+// 叫貨申請單頁:tab —— 叫貨申請(ExpenseRequests docType=order) + 月結發票(對帳) + 廠商管理
 const TABS = [
   { key: 'requests', label: '叫貨申請', icon: ClipboardList },
   { key: 'invoices', label: '月結發票', icon: Receipt },
+  { key: 'suppliers', label: '廠商管理', icon: Building2 },
 ]
 
 export default function OrderRequestsPage() {
@@ -33,6 +35,7 @@ export default function OrderRequestsPage() {
         <ExpenseRequests docType="order" />
       </div>
       {tab === 'invoices' && <MonthlyInvoices />}
+      {tab === 'suppliers' && <SupplierManager />}
     </div>
   )
 }

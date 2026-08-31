@@ -171,6 +171,14 @@ export default function WheelSpinner() {
     setHist(prev => [{ names: winners, at, mode }, ...prev].slice(0, 100))
     if (removeWinner) setText(prev => prev.split('\n').filter(l => !winners.includes(l.trim())).join('\n'))
   }
+  // 拉霸機:抽完先從名單移除(防後續重複抽到),中獎紀錄等「開瓶」那刻才記
+  const removeFromPool = (winners) => {
+    if (removeWinner) setText(prev => prev.split('\n').filter(l => !winners.includes(l.trim())).join('\n'))
+  }
+  const recordOnly = (winners) => {
+    const at = new Date().toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+    setHist(prev => [{ names: winners, at, mode }, ...prev].slice(0, 100))
+  }
 
   const shuffle = () => setText(names.map(v => [Math.random(), v]).sort((a, b) => a[0] - b[0]).map(x => x[1]).join('\n'))
   const sortAsc = () => setText([...names].sort((a, b) => a.localeCompare(b, 'zh-Hant')).join('\n'))
@@ -215,7 +223,7 @@ export default function WheelSpinner() {
       <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'flex-start', position: 'relative', zIndex: 1 }}>
         <div style={{ flex: '1 1 460px', minWidth: 320 }}>
           {mode === 'slot'
-            ? <SlotMachine names={names} pickWinners={pickWinners} pickCount={pickCount} onWin={recordWin} beep={beep} ding={ding} confetti={confettiOn ? burstConfetti : null} />
+            ? <SlotMachine names={names} pickWinners={pickWinners} pickCount={pickCount} onDrop={removeFromPool} onReveal={recordOnly} beep={beep} ding={ding} confetti={confettiOn ? burstConfetti : null} />
             : <WheelMode names={names} onWin={recordWin} beep={beep} confetti={confettiOn ? burstConfetti : null} />}
         </div>
 
@@ -294,7 +302,7 @@ export default function WheelSpinner() {
 }
 
 // ══════════ 拉霸機（怪獸球）══════════
-function SlotMachine({ names, pickWinners, pickCount, onWin, beep, ding, confetti }) {
+function SlotMachine({ names, pickWinners, pickCount, onDrop, onReveal, beep, ding, confetti }) {
   const [reel, setReel] = useState('？？？')
   const [balls, setBalls] = useState([])
   const [busy, setBusy] = useState(false)
@@ -319,7 +327,7 @@ function SlotMachine({ names, pickWinners, pickCount, onWin, beep, ding, confett
   const drop = (k) => {
     setReel('🎉')
     const winners = pickWinners(k)
-    onWin(winners) // 結果已定:記錄 + 移除;球留給使用者點開揭曉
+    onDrop(winners) // 抽完只從名單移除(防後續重複抽到);中獎紀錄留到「開瓶」才記
     winners.forEach((w, i) => {
       T(() => {
         const id = `${Date.now()}-${i}`, caption = CAPTIONS[Math.floor(Math.random() * CAPTIONS.length)]
@@ -333,7 +341,10 @@ function SlotMachine({ names, pickWinners, pickCount, onWin, beep, ding, confett
   }
 
   const openBall = (id) => {
-    setBalls(prev => prev.map(b => (b.id === id && b.phase === 'ready') ? { ...b, phase: 'open' } : b))
+    const b = balls.find(x => x.id === id)
+    if (!b || b.phase !== 'ready') return   // 只在 ready→open 記一次,重複點不重複記
+    onReveal([b.name])                       // ← 開瓶這刻才寫中獎紀錄
+    setBalls(prev => prev.map(x => x.id === id ? { ...x, phase: 'open' } : x))
     ding(); if (confetti) confetti()
   }
 

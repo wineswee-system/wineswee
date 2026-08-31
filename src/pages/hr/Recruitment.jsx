@@ -970,42 +970,9 @@ export default function Recruitment() {
     toast.success('人力需求單已送出，進第 1 關簽核（部門主管會收到通知）')
   }
 
-  const handleApproveHcRequest = async (req) => {
-    const { data: job, error: jobErr } = await createRecruitmentJob({
-      title: req.position_title,
-      dept: req.dept,
-      type: '全職',
-      applicants: 0,
-      status: '招募中',
-      organization_id: orgId,
-      headcount: req.headcount,
-      headcount_request_id: req.id,
-      posted: new Date().toISOString().slice(0, 10),
-    })
-    if (jobErr) { toast.error('開職缺失敗：' + jobErr.message); return }
-    const { data } = await updateHeadcountRequest(req.id, {
-      status: 'approved',
-      reviewed_by: profile?.id || null,
-      reviewed_at: new Date().toISOString(),
-      job_id: job.id,
-    })
-    if (data) {
-      setHeadcountReqs(prev => prev.map(r => r.id === req.id ? data : r))
-      setJobs(prev => [...prev, job])
-      toast.success(`已核准，職缺「${req.position_title}」已建立`)
-    }
-  }
-
-  const handleRejectHcRequest = async (req) => {
-    const ok = await confirm('確定駁回此需求單？')
-    if (!ok) return
-    const { data } = await updateHeadcountRequest(req.id, {
-      status: 'rejected',
-      reviewed_by: profile?.id || null,
-      reviewed_at: new Date().toISOString(),
-    })
-    if (data) setHeadcountReqs(prev => prev.map(r => r.id === req.id ? data : r))
-  }
+  // 註:人力需求單的核准/駁回一律走簽核鏈(HeadcountRequest 頁 / 簽核中心 / LINE),
+  //     不在招募頁一鍵核准(避免繞過 5 關 + 狀態字串漂移);核准後開職缺由 DB trigger
+  //     trg_headcount_create_job 自動處理。招募頁此 tab 為唯讀檢視。
 
   // ── derived ──
   // 依 sort_order 排（沒設的排後面 → 再依刊登日新→舊）；下拉、表格共用此順序

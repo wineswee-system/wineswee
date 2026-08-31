@@ -28,6 +28,7 @@ const STATUS_BADGE = {
   '申請中': { bg: 'rgba(99,102,241,0.12)', color: '#6366f1' },
   '已核准': { bg: 'rgba(34,197,94,0.12)',  color: 'var(--accent-green)' },
   '已駁回': { bg: 'rgba(239,68,68,0.12)',  color: 'var(--accent-red)' },
+  '已退回': { bg: 'var(--accent-orange-dim)', color: 'var(--accent-orange)' },
   '已取消': { bg: 'rgba(156,163,175,0.12)', color: 'var(--text-muted)' },
 }
 

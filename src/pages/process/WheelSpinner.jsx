@@ -11,7 +11,7 @@ const PALETTE = ['#0ea5e9', '#f97316', '#22c55e', '#a855f7', '#ef4444', '#eab308
 const LS_KEY = 'wheel_spinner_names'
 const LS_HIST = 'wheel_spinner_history'
 const DEFAULT = '小明\n小華\n小美\n阿強\n阿珍\n大雄\n阿賢\n小芳'
-const CAPTIONS = ['蛤～是你喔！', '登登登登～就是你！', '哇是你欸！', '恭喜，逃不掉了 🎉', '天選之人出現！', '球球選擇了你 ⚡', '中啦！快去謝老闆', '就決定是你了！', '啊不就好棒棒 ✨', '衝康成功(？)']
+const CAPTIONS = ['就是這瓶！', '恭喜中選 🍾', '本日幸運兒', '這瓶是你的了', '運氣不錯喔！', '就決定是你了', '出瓶成功！', '中啦～', '請笑納', '乾杯！']
 const selSt = { flex: 1, padding: '7px 8px', borderRadius: 8, border: '1px solid var(--border-medium)', background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: 13 }
 
 const CSS = `
@@ -73,7 +73,7 @@ function Bottle({ phase, name, caption, onOpen }) {
             <div style={{ width: 17, height: 32, background: 'linear-gradient(90deg,#3a0a14,#7a1728,#3a0a14)', margin: '0 auto' }} />
             <div style={{ width: 48, height: 78, background: 'linear-gradient(90deg,#360a13,#7a1728 42%,#a52440 55%,#360a13)', borderRadius: '14px 14px 8px 8px', margin: '-2px auto 0', position: 'relative', boxShadow: 'inset 0 0 8px rgba(0,0,0,.5)' }}>
               <div style={{ position: 'absolute', top: 22, left: 5, right: 5, height: 38, background: '#f4ecd8', borderRadius: 3, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#7a1728', fontWeight: 900 }}>
-                <span style={{ fontSize: 15 }}>🍷</span><span style={{ fontSize: 7, letterSpacing: 1 }}>WINE</span>
+                <span style={{ fontSize: 15 }}>🍾</span><span style={{ fontSize: 7, letterSpacing: 1 }}>WINE</span>
               </div>
             </div>
           </div>
@@ -196,7 +196,7 @@ export default function WheelSpinner() {
         <div style={{ position: 'absolute', top: '-12%', left: '-6%', width: 360, height: 360, borderRadius: '50%', background: 'radial-gradient(rgba(165,36,64,.16),transparent 70%)' }} />
         <div style={{ position: 'absolute', bottom: '-10%', right: '-6%', width: 420, height: 420, borderRadius: '50%', background: 'radial-gradient(rgba(255,203,5,.13),transparent 70%)' }} />
         {['6%', '86%', '78%', '12%', '48%'].map((l, i) => (
-          <div key={i} style={{ position: 'absolute', left: l, top: ['12%', '20%', '64%', '76%', '88%'][i], fontSize: [48, 34, 56, 30, 40][i], opacity: 0.12, animation: `wsFloat ${4 + i}s ease-in-out ${i * 0.5}s infinite` }}>🍷</div>
+          <div key={i} style={{ position: 'absolute', left: l, top: ['12%', '20%', '64%', '76%', '88%'][i], fontSize: [48, 34, 56, 30, 40][i], opacity: 0.12, animation: `wsFloat ${4 + i}s ease-in-out ${i * 0.5}s infinite` }}>🍾</div>
         ))}
       </div>
 
@@ -342,7 +342,7 @@ function SlotMachine({ names, pickWinners, pickCount, onWin, beep, ding, confett
       {/* 自動販賣機 */}
       <div style={{ position: 'relative', width: '100%', maxWidth: 380, animation: busy ? 'wsShake .28s linear infinite' : 'none' }}>
         <div style={{ borderRadius: 20, padding: 16, background: 'linear-gradient(160deg,#8a1e30,#4a0d1a)', boxShadow: '0 14px 36px rgba(0,0,0,.32)', border: '5px solid #2a0810' }}>
-          <div style={{ textAlign: 'center', color: '#ffd7a0', fontWeight: 900, letterSpacing: 2, fontSize: 15, marginBottom: 12 }}>🍷 自動抽選機</div>
+          <div style={{ textAlign: 'center', color: '#ffd7a0', fontWeight: 900, letterSpacing: 2, fontSize: 15, marginBottom: 12 }}>🍾 自動抽選機</div>
           {/* 選號螢幕 */}
           <div style={{ background: '#0b1220', borderRadius: 12, padding: '18px 12px', textAlign: 'center', border: '3px solid #ffcb05', boxShadow: 'inset 0 4px 14px rgba(0,0,0,.6)', marginBottom: 12 }}>
             <div style={{ fontSize: 30, fontWeight: 900, color: '#ffe66d', minHeight: 40, filter: busy ? 'blur(.6px)' : 'none', wordBreak: 'break-all', textShadow: '0 0 12px rgba(255,203,5,.5)' }}>{reel}</div>
@@ -351,7 +351,7 @@ function SlotMachine({ names, pickWinners, pickCount, onWin, beep, ding, confett
           <div style={{ position: 'relative', background: 'linear-gradient(#1c2230,#2a3346)', borderRadius: 10, padding: '10px 6px', border: '3px solid #3a4658', display: 'flex', flexDirection: 'column', gap: 8, overflow: 'hidden' }}>
             {[0, 1].map(r => (
               <div key={r} style={{ display: 'flex', justifyContent: 'space-around' }}>
-                {[0, 1, 2, 3, 4].map(c => <span key={c} style={{ fontSize: 22, filter: 'saturate(.85)' }}>🍷</span>)}
+                {[0, 1, 2, 3, 4].map(c => <span key={c} style={{ fontSize: 22, filter: 'saturate(.85)' }}>🍾</span>)}
               </div>
             ))}
             <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(120deg,rgba(255,255,255,.2),rgba(255,255,255,.04) 40%,transparent 70%)', pointerEvents: 'none' }} />
@@ -374,7 +374,7 @@ function SlotMachine({ names, pickWinners, pickCount, onWin, beep, ding, confett
         background: busy || names.length < 1 ? 'var(--bg-secondary)' : 'linear-gradient(135deg,#a52440,#7a1728)',
         color: busy || names.length < 1 ? 'var(--text-muted)' : '#fff', cursor: busy || names.length < 1 ? 'default' : 'pointer',
         boxShadow: busy ? 'none' : '0 6px 0 #4a0d1a', transition: 'transform .1s',
-      }}>{busy ? '🎲 抽選中…' : '🍷 出瓶！'}</button>
+      }}>{busy ? '🎲 抽選中…' : '🍾 出瓶！'}</button>
     </div>
   )
 }

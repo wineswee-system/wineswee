@@ -5,88 +5,50 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 
-// 幸運抽選遊戲機（轉盤 + 拉霸機／怪獸球風）— 純前端,名單/紀錄存 localStorage,不上傳。
-// canvas / 球色用固定色值(CLAUDE.md 例外:JS 值餵 canvas 無法用 var())。
+// 幸運抽選遊戲機(小瑪莉水果盤 + 轉盤)— 純前端,名單/紀錄存 localStorage,不上傳。
+// canvas / 燈色用固定色值(CLAUDE.md 例外:JS 值餵 canvas 無法用 var())。
 const PALETTE = ['#0ea5e9', '#f97316', '#22c55e', '#a855f7', '#ef4444', '#eab308', '#14b8a6', '#ec4899', '#3b82f6', '#84cc16', '#f43f5e', '#06b6d4']
 const LS_KEY = 'wheel_spinner_names'
 const LS_HIST = 'wheel_spinner_history'
 const DEFAULT = '小明\n小華\n小美\n阿強\n阿珍\n大雄\n阿賢\n小芳'
-const CAPTIONS = ['就是這瓶！', '恭喜中選 🍾', '本日幸運兒', '這瓶是你的了', '運氣不錯喔！', '就決定是你了', '出瓶成功！', '中啦～', '請笑納', '乾杯！']
+const CAPTIONS = ['恭喜中選！', '就是你了', '本日幸運兒', '手氣不錯喔', '中啦～', '天選之人', '就決定是你', '幸運降臨', '抽到你了', '鏘鏘～']
+const FRUITS = ['🍒', '🍊', '🍋', '🍇', '🔔', '🍎', '⭐', '🍉']
 const selSt = { flex: 1, padding: '7px 8px', borderRadius: 8, border: '1px solid var(--border-medium)', background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: 13 }
 
 const CSS = `
-@keyframes wsBallDrop{0%{transform:translateY(-360px) scale(1)}55%{transform:translateY(0) scale(1)}66%{transform:translateY(0) scaleX(1.35) scaleY(.62)}78%{transform:translateY(-46px) scaleX(.9) scaleY(1.12)}90%{transform:translateY(0) scaleX(1.12) scaleY(.9)}100%{transform:translateY(0) scale(1)}}
-@keyframes wsWobble{0%,100%{transform:rotate(0)}12%{transform:rotate(-18deg)}30%{transform:rotate(15deg)}48%{transform:rotate(-12deg)}66%{transform:rotate(9deg)}84%{transform:rotate(-5deg)}}
-@keyframes wsLever{0%{transform:rotate(0)}35%{transform:rotate(72deg)}100%{transform:rotate(0)}}
-@keyframes wsShake{0%,100%{transform:translate(0,0)}20%{transform:translate(-3px,2px)}40%{transform:translate(3px,-2px)}60%{transform:translate(-2px,-2px)}80%{transform:translate(2px,2px)}}
+@keyframes wsShake{0%,100%{transform:translate(0,0)}20%{transform:translate(-2px,1px)}40%{transform:translate(2px,-1px)}60%{transform:translate(-1px,-1px)}80%{transform:translate(1px,1px)}}
 @keyframes wsFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-14px)}}
-@keyframes wsRollOut{0%{transform:translate(-70px,-46px) rotate(-120deg);opacity:0}22%{opacity:1}55%{transform:translate(0,12px) rotate(18deg)}76%{transform:translate(0,-7px) rotate(-7deg)}100%{transform:translate(0,0) rotate(0)}}
-@keyframes wsReadyPulse{0%,100%{box-shadow:0 0 0 0 rgba(255,203,5,.6),0 6px 14px rgba(0,0,0,.2)}50%{box-shadow:0 0 0 12px rgba(255,203,5,0),0 6px 14px rgba(0,0,0,.2)}}
-@keyframes wsHint{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
-@keyframes wsRays{0%{opacity:0;transform:translate(-50%,-50%) scale(.2) rotate(0)}25%{opacity:.9}100%{opacity:0;transform:translate(-50%,-50%) scale(2.7) rotate(160deg)}}
-@keyframes wsRing{0%{opacity:.95;transform:translate(-50%,-50%) scale(.1)}100%{opacity:0;transform:translate(-50%,-50%) scale(3.2)}}
-@keyframes wsFlash{0%{opacity:0}14%{opacity:.95}100%{opacity:0}}
-@keyframes wsNamePop{0%{opacity:0;transform:translate(-50%,-50%) scale(0) rotate(-14deg)}55%{opacity:1;transform:translate(-50%,-50%) scale(1.3) rotate(6deg)}100%{opacity:1;transform:translate(-50%,-50%) scale(1) rotate(0)}}
-@keyframes wsReadyGlow{0%,100%{filter:drop-shadow(0 0 6px rgba(255,203,5,.55))}50%{filter:drop-shadow(0 0 18px rgba(255,203,5,.95))}}
-@keyframes wsShatter{0%{transform:translateX(-50%) scale(1) rotate(0)}18%{transform:translateX(-50%) scale(1.12) rotate(-5deg)}36%{transform:translateX(-50%) scale(1.05) rotate(5deg)}100%{transform:translateX(-50%) scale(.5) rotate(-10deg);opacity:0}}
-@keyframes wsShard{to{transform:translate(var(--tx),var(--ty)) rotate(var(--rot));opacity:0}}
-@keyframes wsSplash{0%{opacity:.9;transform:translate(-50%,-50%) scale(.2)}100%{opacity:0;transform:translate(-50%,-50%) scale(2.5)}}
-.ws-btl{animation:wsRollOut .8s cubic-bezier(.34,1.4,.5,1) both}
-.ws-btl.wobble{animation:wsWobble 1.05s ease-in-out 1 both}
-.ws-btl.ready{cursor:pointer;animation:wsReadyGlow 1.1s ease-in-out infinite}
-.ws-btl .ws-glass{transition:transform .3s}
-.ws-btl.open .ws-glass{animation:wsShatter .5s ease-in both}
-.ws-btl .ws-name{opacity:0;transform:translate(-50%,-50%) scale(0)}
-.ws-btl.open .ws-name{animation:wsNamePop .55s cubic-bezier(.34,1.9,.6,1) both}
-.ws-shard,.ws-splash,.ws-rays,.ws-ring,.ws-flash{position:absolute;top:50%;left:50%;opacity:0;pointer-events:none}
-.ws-btl.open .ws-rays{width:210px;height:210px;background:repeating-conic-gradient(from 0deg,rgba(255,230,109,.9) 0 6deg,transparent 6deg 15deg);border-radius:50%;animation:wsRays .8s ease-out both}
-.ws-btl.open .ws-ring{width:66px;height:66px;border:5px solid #ffcb05;border-radius:50%;animation:wsRing .6s ease-out both}
-.ws-btl.open .ws-flash{width:130px;height:130px;background:radial-gradient(rgba(255,255,255,.95),transparent 70%);border-radius:50%;animation:wsFlash .5s ease-out both}
-.ws-btl.open .ws-splash{width:120px;height:120px;background:radial-gradient(rgba(124,20,38,.85),transparent 66%);border-radius:50%;animation:wsSplash .55s ease-out both}
-.ws-btl.open .ws-shard{opacity:1;animation:wsShard .6s ease-out both}
-.ws-hint{animation:wsHint .8s ease-in-out infinite}
+@keyframes wsCoinUp{0%{transform:translateY(0) rotate(0);opacity:1}60%{transform:translateY(-38px) rotate(200deg);opacity:1}100%{transform:translateY(-46px) rotate(380deg);opacity:0}}
+@keyframes wsWinPop{0%{opacity:0;transform:scale(0) rotate(-12deg)}55%{opacity:1;transform:scale(1.22) rotate(5deg)}100%{opacity:1;transform:scale(1) rotate(0)}}
+@keyframes wsTwinkle{0%,100%{opacity:.3}50%{opacity:1}}
+@keyframes wsTitlePulse{0%,100%{opacity:.85;transform:scale(1)}50%{opacity:1;transform:scale(1.05)}}
+.ws-coin{cursor:pointer;user-select:none;transition:transform .1s}
+.ws-coin:hover{transform:translateY(-2px)}
+.ws-coin.drop{animation:wsCoinUp .6s ease-in forwards;pointer-events:none}
+.ws-win{animation:wsWinPop .5s cubic-bezier(.34,1.7,.6,1) both}
 `
 
-// 紅酒瓶(品牌感)— 純 CSS 畫;掉出→晃動→待點(發光)→點一下破瓶(碎片濺灑+召喚光)
-function Bottle({ phase, name, caption, onOpen }) {
-  const cls = 'ws-btl' + (phase === 'wobble' ? ' wobble' : '') + (phase === 'ready' ? ' ready' : '') + (phase === 'open' ? ' open' : '')
-  const open = phase === 'open'
-  const shards = useMemo(() => Array.from({ length: 9 }, (_, i) => {
-    const a = (i / 9) * 2 * Math.PI + Math.random() * 0.6, dist = 55 + Math.random() * 45
-    return { tx: `${Math.cos(a) * dist}px`, ty: `${Math.sin(a) * dist - 10}px`, rot: `${Math.random() * 720 - 360}deg`, s: 6 + Math.random() * 7 }
-  }), [])
-  return (
-    <div style={{ position: 'relative', width: 74, height: 152, flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-      <div className={cls} onClick={() => phase === 'ready' && onOpen && onOpen()} style={{ position: 'relative', width: 74, height: 130 }}>
-        {/* 召喚 / 破瓶特效 */}
-        <div className="ws-rays" style={{ zIndex: 1 }} />
-        <div className="ws-splash" style={{ zIndex: 1 }} />
-        <div className="ws-flash" style={{ zIndex: 2 }} />
-        <div className="ws-ring" style={{ zIndex: 2 }} />
-        {shards.map((sh, i) => (
-          <div key={i} className="ws-shard" style={{ width: sh.s, height: sh.s * 1.7, background: '#6d1226', zIndex: 4, clipPath: 'polygon(50% 0,100% 100%,0 100%)', '--tx': sh.tx, '--ty': sh.ty, '--rot': sh.rot }} />
-        ))}
-        {/* 酒瓶本體 */}
-        {!open && (
-          <div className="ws-glass" style={{ position: 'absolute', left: '50%', top: 2, transform: 'translateX(-50%)', zIndex: 3 }}>
-            <div style={{ width: 15, height: 13, background: '#7a1020', margin: '0 auto', borderRadius: '3px 3px 0 0' }} />
-            <div style={{ width: 17, height: 32, background: 'linear-gradient(90deg,#3a0a14,#7a1728,#3a0a14)', margin: '0 auto' }} />
-            <div style={{ width: 48, height: 78, background: 'linear-gradient(90deg,#360a13,#7a1728 42%,#a52440 55%,#360a13)', borderRadius: '14px 14px 8px 8px', margin: '-2px auto 0', position: 'relative', boxShadow: 'inset 0 0 8px rgba(0,0,0,.5)' }}>
-              <div style={{ position: 'absolute', top: 22, left: 5, right: 5, height: 38, background: '#f4ecd8', borderRadius: 3, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#7a1728', fontWeight: 900 }}>
-                <span style={{ fontSize: 15 }}>🍾</span><span style={{ fontSize: 7, letterSpacing: 1 }}>WINE</span>
-              </div>
-            </div>
-          </div>
-        )}
-        {/* 中獎者 */}
-        <div className="ws-name" style={{ position: 'absolute', top: '42%', left: '50%', minWidth: 132, textAlign: 'center', zIndex: 6 }}>
-          <div style={{ fontSize: 19, fontWeight: 900, color: '#14283c', background: '#fff', borderRadius: 10, padding: '4px 12px', boxShadow: '0 4px 14px rgba(0,0,0,.25)', border: '2px solid #ffcb05', whiteSpace: 'nowrap' }}>{name}</div>
-          <div style={{ fontSize: 11, color: '#ef4444', fontWeight: 700, marginTop: 4 }}>{caption}</div>
-        </div>
-      </div>
-      {phase === 'ready' && <div className="ws-hint" style={{ marginTop: 2, fontSize: 11, fontWeight: 800, color: 'var(--accent-orange)' }}>👆 開瓶!</div>}
-    </div>
-  )
+// 依名單數量排出「邊框方陣」— 名字均勻鋪在周邊格,其餘補水果;跑馬燈繞著周邊跑。
+function computeBoard(list) {
+  const N = Math.max(list.length, 1)
+  let best = null
+  for (let rows = 3; rows <= 12; rows++) for (let cols = 3; cols <= 12; cols++) {
+    const p = 2 * (cols + rows) - 4
+    if (p < Math.max(N, 12)) continue
+    const score = (p - N) + Math.abs(cols - rows) * 0.7
+    if (!best || score < best.score) best = { cols, rows, p, score }
+  }
+  if (!best) best = { cols: 5, rows: 5, p: 16 }
+  const { cols, rows, p } = best
+  const coords = []                                    // 周邊格順時針(左上→右上→右下→左下)
+  for (let c = 0; c < cols; c++) coords.push([0, c])
+  for (let r = 1; r < rows; r++) coords.push([r, cols - 1])
+  for (let c = cols - 2; c >= 0; c--) coords.push([rows - 1, c])
+  for (let r = rows - 2; r >= 1; r--) coords.push([r, 0])
+  const cells = coords.map(([r, c], idx) => ({ r, c, idx, fruit: FRUITS[idx % FRUITS.length] }))
+  const step = p / N                                   // step>=1 → floor 保證不撞格
+  for (let i = 0; i < N; i++) cells[Math.floor(i * step)].name = list[i]
+  return { cols, rows, p, cells }
 }
 
 export default function WheelSpinner() {
@@ -171,7 +133,7 @@ export default function WheelSpinner() {
     setHist(prev => [{ names: winners, at, mode }, ...prev].slice(0, 100))
     if (removeWinner) setText(prev => prev.split('\n').filter(l => !winners.includes(l.trim())).join('\n'))
   }
-  // 拉霸機:抽完先從名單移除(防後續重複抽到),中獎紀錄等「開瓶」那刻才記
+  // 小瑪莉:抽完先從名單移除(防後續重複抽到);中獎紀錄等「停格揭曉」那刻才記
   const removeFromPool = (winners) => {
     if (removeWinner) setText(prev => prev.split('\n').filter(l => !winners.includes(l.trim())).join('\n'))
   }
@@ -199,22 +161,22 @@ export default function WheelSpinner() {
   return (
     <div className="fade-in" style={{ position: 'relative' }}>
       <style>{CSS}</style>
-      {/* 背景:酒香氛圍 */}
+      {/* 背景:氛圍光暈 */}
       <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', overflow: 'hidden', zIndex: 0 }}>
-        <div style={{ position: 'absolute', top: '-12%', left: '-6%', width: 360, height: 360, borderRadius: '50%', background: 'radial-gradient(rgba(165,36,64,.16),transparent 70%)' }} />
+        <div style={{ position: 'absolute', top: '-12%', left: '-6%', width: 360, height: 360, borderRadius: '50%', background: 'radial-gradient(rgba(192,31,47,.14),transparent 70%)' }} />
         <div style={{ position: 'absolute', bottom: '-10%', right: '-6%', width: 420, height: 420, borderRadius: '50%', background: 'radial-gradient(rgba(255,203,5,.13),transparent 70%)' }} />
         {['6%', '86%', '78%', '12%', '48%'].map((l, i) => (
-          <div key={i} style={{ position: 'absolute', left: l, top: ['12%', '20%', '64%', '76%', '88%'][i], fontSize: [48, 34, 56, 30, 40][i], opacity: 0.12, animation: `wsFloat ${4 + i}s ease-in-out ${i * 0.5}s infinite` }}>🍾</div>
+          <div key={i} style={{ position: 'absolute', left: l, top: ['12%', '20%', '64%', '76%', '88%'][i], fontSize: [48, 34, 56, 30, 40][i], opacity: 0.1, animation: `wsFloat ${4 + i}s ease-in-out ${i * 0.5}s infinite` }}>{['🍒', '🍀', '⭐', '🔔', '🍊'][i]}</div>
         ))}
       </div>
 
       <div className="page-header" style={{ position: 'relative', zIndex: 1 }}><div className="page-header-row">
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <button className="btn btn-secondary" onClick={() => navigate('/process/applications')} style={{ padding: '6px 10px' }}><ChevronLeft size={16} /></button>
-          <div><h2><span className="header-icon">🎰</span> 幸運抽選機</h2><p>丟球抽選 · 隨機公平 · 資料不上傳</p></div>
+          <div><h2><span className="header-icon">🎰</span> 幸運抽選機</h2><p>投幣 · 跑燈抽選 · 隨機公平 · 資料不上傳</p></div>
         </div>
         <div style={{ display: 'flex', gap: 4, background: 'var(--bg-secondary)', padding: 4, borderRadius: 10 }}>
-          {[['slot', '🎰 拉霸機'], ['wheel', '🎡 轉盤']].map(([m, l]) => (
+          {[['slot', '🍀 小瑪莉'], ['wheel', '🎡 轉盤']].map(([m, l]) => (
             <button key={m} onClick={() => setMode(m)} style={{ padding: '7px 14px', borderRadius: 7, border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, background: mode === m ? 'var(--accent-cyan)' : 'transparent', color: mode === m ? '#fff' : 'var(--text-secondary)' }}>{l}</button>
           ))}
         </div>
@@ -288,7 +250,7 @@ export default function WheelSpinner() {
                 {hist.map((h, i) => (
                   <div key={i} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, padding: '6px 10px', borderRadius: 8, background: 'var(--bg-secondary)', fontSize: 13 }}>
                     <span style={{ fontWeight: 600, color: 'var(--accent-cyan)' }}>{h.names.join('、')}</span>
-                    <span style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap', fontSize: 11 }}>{h.mode === 'slot' ? '🎰' : '🎡'} {h.at}</span>
+                    <span style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap', fontSize: 11 }}>{h.mode === 'slot' ? '🍀' : '🎡'} {h.at}</span>
                   </div>
                 ))}
               </div>}
@@ -301,91 +263,159 @@ export default function WheelSpinner() {
   )
 }
 
-// ══════════ 拉霸機（怪獸球）══════════
+// ══════════ 小瑪莉(水果盤跑燈)══════════
 function SlotMachine({ names, pickWinners, pickCount, onDrop, onReveal, beep, ding, confetti }) {
-  const [reel, setReel] = useState('？？？')
-  const [balls, setBalls] = useState([])
-  const [busy, setBusy] = useState(false)
-  const [lever, setLever] = useState(false)
+  const [spinning, setSpinning] = useState(false)
+  const [board, setBoard] = useState([])
+  const [lit, setLit] = useState(-1)
+  const [reveal, setReveal] = useState(null)
+  const [credits, setCredits] = useState(0)
+  const [won, setWon] = useState(0)
+  const [coinAnim, setCoinAnim] = useState(false)
   const timers = useRef([])
   useEffect(() => () => timers.current.forEach(clearTimeout), [])
   const T = (fn, ms) => { const id = setTimeout(fn, ms); timers.current.push(id); return id }
 
-  const pull = () => {
-    if (busy || names.length < 1) return
-    setBusy(true); setBalls([]); setLever(true); T(() => setLever(false), 500)
-    const k = Math.min(pickCount, names.length)
-    let delay = 42, elapsed = 0
-    const cycle = () => {
-      setReel(names[Math.floor(Math.random() * names.length)]); beep(600 + Math.random() * 300, 0.015)
-      elapsed += delay; delay *= 1.10
-      if (elapsed < 4200) T(cycle, delay); else drop(k)
+  const ringNames = spinning ? board : names
+  const layout = useMemo(() => computeBoard(ringNames), [ringNames])
+  const pad = 8
+  const cellPct = Math.max(8, Math.min(15, 74 / Math.max(layout.cols, layout.rows)))
+  const fs = layout.cols <= 6 ? 12 : layout.cols <= 8 ? 10 : layout.cols <= 10 ? 9 : 8
+  const shortName = n => (n && n.length > 4 ? n.slice(0, 4) + '…' : n)
+
+  const insertCoin = () => {
+    if (coinAnim || spinning) return
+    setCoinAnim(true); beep(900, 0.05, 'square', 0.05); T(() => beep(1350, 0.06, 'square', 0.05), 70)
+    T(() => { setCoinAnim(false); setCredits(c => Math.min(99, c + 1)) }, 600)
+  }
+
+  // 跑馬燈:繞周邊幾圈後減速,最後停在 targetSlot
+  const runLight = (targetSlot, lay, onLand) => {
+    const p = lay.p
+    const loops = 3 + Math.floor(Math.random() * 2)
+    const totalTicks = loops * p + targetSlot
+    const ramp = Math.round(p * 1.7)
+    let i = 0
+    const tick = () => {
+      setLit(i % p); beep(700 + Math.random() * 160, 0.018)
+      if (i >= totalTicks) { onLand(); return }
+      const remaining = totalTicks - i
+      let delay = 30
+      if (remaining <= ramp) { const t = 1 - remaining / ramp; delay = 30 + 290 * (t * t) }
+      i++; T(tick, delay)
     }
-    cycle()
+    tick()
   }
 
-  const drop = (k) => {
-    setReel('🎉')
-    const winners = pickWinners(k)
-    onDrop(winners) // 抽完只從名單移除(防後續重複抽到);中獎紀錄留到「開瓶」才記
-    winners.forEach((w, i) => {
-      T(() => {
-        const id = `${Date.now()}-${i}`, caption = CAPTIONS[Math.floor(Math.random() * CAPTIONS.length)]
-        setBalls(prev => [...prev, { id, name: w, caption, phase: 'drop' }])
-        beep(300, 0.05, 'sine', 0.05)
-        T(() => setBalls(prev => prev.map(b => b.id === id ? { ...b, phase: 'wobble' } : b)), 720)
-        T(() => setBalls(prev => prev.map(b => b.id === id ? { ...b, phase: 'ready' } : b)), 1780)
-      }, i * 520)
-    })
-    T(() => { setBusy(false); setReel('？？？') }, winners.length * 520 + 1900)
+  const spin = () => {
+    if (spinning || credits < 1 || names.length < 1) return
+    setCredits(c => c - 1); setReveal(null)
+    const frozen = names.slice()
+    const lay = computeBoard(frozen)          // 凍結本輪盤面(抽多位時中途移除也不重排)
+    setBoard(frozen); setSpinning(true)
+    const winners = pickWinners(Math.min(pickCount, frozen.length))
+    let qi = 0
+    const doNext = () => {
+      if (qi >= winners.length) { setSpinning(false); setLit(-1); return }
+      const w = winners[qi]
+      const slot = lay.cells.findIndex(c => c.name === w)
+      runLight(slot < 0 ? 0 : slot, lay, () => {
+        setLit(slot); setWon(x => x + 1)
+        setReveal({ name: w, caption: CAPTIONS[Math.floor(Math.random() * CAPTIONS.length)] })
+        onReveal([w]); onDrop([w])            // ← 停格揭曉這刻才記中獎 + 從名單移除
+        ding(); if (confetti) confetti()
+        qi++
+        T(() => { if (qi < winners.length) setReveal(null); doNext() }, 1600)
+      })
+    }
+    doNext()
   }
 
-  const openBall = (id) => {
-    const b = balls.find(x => x.id === id)
-    if (!b || b.phase !== 'ready') return   // 只在 ready→open 記一次,重複點不重複記
-    onReveal([b.name])                       // ← 開瓶這刻才寫中獎紀錄
-    setBalls(prev => prev.map(x => x.id === id ? { ...x, phase: 'open' } : x))
-    ding(); if (confetti) confetti()
-  }
+  const canSpin = !spinning && credits >= 1 && names.length >= 1
 
   return (
-    <div className="card" style={{ padding: 22, display: 'flex', flexDirection: 'column', alignItems: 'center' }} data-slot={busy ? '1' : '0'}>
-      {/* 自動販賣機 */}
-      <div style={{ position: 'relative', width: '100%', maxWidth: 380, animation: busy ? 'wsShake .28s linear infinite' : 'none' }}>
-        <div style={{ borderRadius: 20, padding: 16, background: 'linear-gradient(160deg,#8a1e30,#4a0d1a)', boxShadow: '0 14px 36px rgba(0,0,0,.32)', border: '5px solid #2a0810' }}>
-          <div style={{ textAlign: 'center', color: '#ffd7a0', fontWeight: 900, letterSpacing: 2, fontSize: 15, marginBottom: 12 }}>🍾 自動抽選機</div>
-          {/* 選號螢幕 */}
-          <div style={{ background: '#0b1220', borderRadius: 12, padding: '18px 12px', textAlign: 'center', border: '3px solid #ffcb05', boxShadow: 'inset 0 4px 14px rgba(0,0,0,.6)', marginBottom: 12 }}>
-            <div style={{ fontSize: 30, fontWeight: 900, color: '#ffe66d', minHeight: 40, filter: busy ? 'blur(.6px)' : 'none', wordBreak: 'break-all', textShadow: '0 0 12px rgba(255,203,5,.5)' }}>{reel}</div>
+    <div className="card" style={{ padding: 20, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+      <div style={{ width: '100%', maxWidth: 430, animation: spinning ? 'wsShake .3s linear infinite' : 'none' }}>
+        {/* 機台外殼 */}
+        <div style={{ background: 'linear-gradient(#f7f8fc,#dde1ea)', borderRadius: '22px 22px 14px 14px', padding: '14px 14px 12px', border: '3px solid #c3c9d6', boxShadow: '0 16px 40px rgba(0,0,0,.22)' }}>
+          {/* LED 顯示 */}
+          <div style={{ display: 'flex', justifyContent: 'center', gap: 16, marginBottom: 10 }}>
+            <Led label="中獎" value={won} />
+            <Led label="CREDIT" value={credits} amber />
           </div>
-          {/* 玻璃展示櫃 */}
-          <div style={{ position: 'relative', background: 'linear-gradient(#1c2230,#2a3346)', borderRadius: 10, padding: '10px 6px', border: '3px solid #3a4658', display: 'flex', flexDirection: 'column', gap: 8, overflow: 'hidden' }}>
-            {[0, 1].map(r => (
-              <div key={r} style={{ display: 'flex', justifyContent: 'space-around' }}>
-                {[0, 1, 2, 3, 4].map(c => <span key={c} style={{ fontSize: 22, filter: 'saturate(.85)' }}>🍾</span>)}
-              </div>
+          {/* 水果盤 */}
+          <div style={{ position: 'relative', width: '100%', aspectRatio: '1', overflow: 'hidden', background: 'radial-gradient(circle at 50% 42%,#12294a,#0a1424)', borderRadius: 14, border: '4px solid #c01f2f', boxShadow: 'inset 0 0 34px rgba(0,0,0,.75)' }}>
+            {/* 角落燈泡 */}
+            {[['4%', '4%'], ['96%', '4%'], ['96%', '96%'], ['4%', '96%']].map(([l, t], i) => (
+              <div key={i} style={{ position: 'absolute', left: l, top: t, transform: 'translate(-50%,-50%)', width: 8, height: 8, borderRadius: '50%', background: '#ffd21a', boxShadow: '0 0 8px #ffd21a', animation: `wsTwinkle ${1 + i * 0.3}s ease-in-out infinite` }} />
             ))}
-            <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(120deg,rgba(255,255,255,.2),rgba(255,255,255,.04) 40%,transparent 70%)', pointerEvents: 'none' }} />
+            {/* 周邊格 */}
+            {layout.cells.map(cell => {
+              const x = layout.cols > 1 ? pad + (cell.c / (layout.cols - 1)) * (100 - 2 * pad) : 50
+              const y = layout.rows > 1 ? pad + (cell.r / (layout.rows - 1)) * (100 - 2 * pad) : 50
+              const isLit = lit === cell.idx, isName = !!cell.name
+              return (
+                <div key={cell.idx} style={{
+                  position: 'absolute', left: x + '%', top: y + '%', transform: 'translate(-50%,-50%)',
+                  width: cellPct + '%', height: cellPct + '%', borderRadius: 6, boxSizing: 'border-box',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 1, overflow: 'hidden',
+                  fontSize: fs, fontWeight: 800, lineHeight: 1.02, textAlign: 'center', wordBreak: 'break-all',
+                  background: isLit ? 'linear-gradient(#fff6bf,#ffcf1a)' : isName ? 'rgba(255,255,255,.93)' : 'rgba(255,255,255,.10)',
+                  color: isLit ? '#a5122b' : isName ? '#14283c' : '#ffd79f',
+                  border: isLit ? '2px solid #fff' : '1px solid rgba(255,255,255,.22)',
+                  boxShadow: isLit ? '0 0 16px 5px rgba(255,205,5,.95)' : 'none',
+                  transition: 'background .05s, box-shadow .05s, color .05s',
+                }}>{isName ? shortName(cell.name) : cell.fruit}</div>
+              )
+            })}
+            {/* 中央顯示 */}
+            <div style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%,-50%)', width: '56%', textAlign: 'center', pointerEvents: 'none' }}>
+              {reveal ? (
+                <div className="ws-win" key={reveal.name}>
+                  <div style={{ fontSize: 10, letterSpacing: 3, color: '#ffcf3a', fontWeight: 800 }}>🎉 中 獎</div>
+                  <div style={{ fontSize: 22, fontWeight: 900, color: '#fff', margin: '4px 0', textShadow: '0 2px 10px rgba(0,0,0,.6)', wordBreak: 'break-all' }}>{reveal.name}</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#ffd79f' }}>{reveal.caption}</div>
+                </div>
+              ) : (
+                <div style={{ animation: spinning ? 'wsTitlePulse .5s ease-in-out infinite' : 'none' }}>
+                  <div style={{ fontSize: 26 }}>🍀</div>
+                  <div style={{ fontSize: 15, fontWeight: 900, color: '#ffcf3a', letterSpacing: 1, textShadow: '0 0 10px rgba(255,207,58,.6)' }}>{spinning ? '抽選中…' : '幸運小瑪莉'}</div>
+                  {!spinning && <div style={{ fontSize: 10, color: '#9fb4cf', marginTop: 3 }}>{names.length < 1 ? '請先輸入名單' : credits < 1 ? '投幣後開始' : '按開始抽選'}</div>}
+                </div>
+              )}
+            </div>
           </div>
-          {/* 取物口 */}
-          <div style={{ marginTop: 12, background: '#160308', borderRadius: '6px 6px 10px 10px', padding: '9px 12px', border: '3px solid #2a0810' }}>
-            <div style={{ height: 11, background: '#000', borderRadius: 3, boxShadow: 'inset 0 3px 8px rgba(0,0,0,.9)' }} />
-            <div style={{ fontSize: 10, color: '#c98a72', marginTop: 5, letterSpacing: 3, textAlign: 'center' }}>取 物 口</div>
+          {/* 投幣區 */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 12 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+              {/* 投幣口 */}
+              <div style={{ width: 54, height: 16, borderRadius: 4, background: 'linear-gradient(#2a2f3a,#12151c)', border: '2px solid #454b58', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ width: 30, height: 5, borderRadius: 3, background: '#000', boxShadow: 'inset 0 1px 3px rgba(0,0,0,.9)' }} />
+              </div>
+              {/* 硬幣 */}
+              <div className={'ws-coin' + (coinAnim ? ' drop' : '')} onClick={insertCoin} title="投幣"
+                style={{ width: 42, height: 42, borderRadius: '50%', background: 'radial-gradient(circle at 35% 30%,#ffe98a,#f5b301 55%,#b9820a)', border: '3px solid #d99a06', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: 16, color: '#7a5300', boxShadow: '0 4px 8px rgba(0,0,0,.28)' }}>投</div>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700 }}>👆 投幣</div>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* 取物托盤:滾出來的酒瓶 */}
-      <div style={{ minHeight: 168, marginTop: 16, padding: '10px 8px', display: 'flex', gap: 14, flexWrap: 'wrap', justifyContent: 'center', alignItems: 'flex-start', width: '100%', maxWidth: 420, borderRadius: 12, background: balls.length ? 'var(--bg-secondary)' : 'transparent', transition: 'background .3s' }}>
-        {balls.map(b => <Bottle key={b.id} phase={b.phase} name={b.name} caption={b.caption} onOpen={() => openBall(b.id)} />)}
-      </div>
+      <button onClick={spin} disabled={!canSpin} style={{
+        marginTop: 16, padding: '13px 46px', borderRadius: 14, border: 'none', fontSize: 18, fontWeight: 900,
+        background: canSpin ? 'linear-gradient(135deg,#c01f2f,#8a1220)' : 'var(--bg-secondary)',
+        color: canSpin ? '#fff' : 'var(--text-muted)', cursor: canSpin ? 'pointer' : 'default',
+        boxShadow: canSpin ? '0 6px 0 #5a0c16' : 'none', transition: 'transform .1s',
+      }}>{spinning ? '🎰 抽選中…' : credits < 1 ? '🪙 先投幣' : '🎰 開始！'}</button>
+    </div>
+  )
+}
 
-      <button onClick={pull} disabled={busy || names.length < 1} style={{
-        marginTop: 4, padding: '13px 44px', borderRadius: 14, border: 'none', fontSize: 18, fontWeight: 900,
-        background: busy || names.length < 1 ? 'var(--bg-secondary)' : 'linear-gradient(135deg,#a52440,#7a1728)',
-        color: busy || names.length < 1 ? 'var(--text-muted)' : '#fff', cursor: busy || names.length < 1 ? 'default' : 'pointer',
-        boxShadow: busy ? 'none' : '0 6px 0 #4a0d1a', transition: 'transform .1s',
-      }}>{busy ? '🎲 抽選中…' : '🍾 出瓶！'}</button>
+function Led({ label, value, amber }) {
+  return (
+    <div style={{ background: '#141414', borderRadius: 6, padding: '3px 12px', textAlign: 'center', border: '1px solid #2e2e2e', minWidth: 62 }}>
+      <div style={{ fontSize: 8, letterSpacing: 1, color: '#7a7a7a', fontWeight: 700 }}>{label}</div>
+      <div style={{ fontSize: 18, fontWeight: 900, fontFamily: 'ui-monospace,monospace', color: amber ? '#ffb300' : '#ff4444', textShadow: `0 0 8px ${amber ? '#ffb300' : '#ff4444'}` }}>{String(value).padStart(3, '0')}</div>
     </div>
   )
 }
@@ -412,13 +442,11 @@ function WheelMode({ names, onWin, beep, confetti }) {
       const l = names[i].length > 11 ? names[i].slice(0, 10) + '…' : names[i]; ctx.fillText(l, R - 20, 5); ctx.restore()
     }
     ctx.restore()
-    // 中心怪獸球
+    // 中心紅圈
     const rr = 34; ctx.save(); ctx.translate(R, R)
-    ctx.beginPath(); ctx.arc(0, 0, rr, Math.PI, 2 * Math.PI); ctx.closePath(); ctx.fillStyle = '#ee1515'; ctx.fill()
-    ctx.beginPath(); ctx.arc(0, 0, rr, 0, Math.PI); ctx.closePath(); ctx.fillStyle = '#f4f4f5'; ctx.fill()
-    ctx.fillStyle = '#1a1a1a'; ctx.fillRect(-rr, -4, rr * 2, 8)
-    ctx.beginPath(); ctx.arc(0, 0, rr, 0, 2 * Math.PI); ctx.strokeStyle = '#1a1a1a'; ctx.lineWidth = 3; ctx.stroke()
-    ctx.beginPath(); ctx.arc(0, 0, 11, 0, 2 * Math.PI); ctx.fillStyle = '#fff'; ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = '#1a1a1a'; ctx.stroke()
+    ctx.beginPath(); ctx.arc(0, 0, rr, 0, 2 * Math.PI); ctx.fillStyle = '#c01f2f'; ctx.fill()
+    ctx.beginPath(); ctx.arc(0, 0, rr, 0, 2 * Math.PI); ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.stroke()
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 18px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('抽', 0, 1)
     ctx.restore()
   }, [names])
   useEffect(() => { draw() }, [draw])

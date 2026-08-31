@@ -397,7 +397,7 @@ function SlotMachine({ names, pickWinners, pickCount, onDrop, onReveal, beep, di
               </div>
               {/* 硬幣 */}
               <div className={'ws-coin' + (coinAnim ? ' drop' : '')} onClick={insertCoin} title="投幣"
-                style={{ width: 42, height: 42, borderRadius: '50%', background: 'radial-gradient(circle at 35% 30%,#ffe98a,#f5b301 55%,#b9820a)', border: '3px solid #d99a06', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: 16, color: '#7a5300', boxShadow: '0 4px 8px rgba(0,0,0,.28)' }}>投</div>
+                style={{ width: 42, height: 42, borderRadius: '50%', background: 'radial-gradient(circle at 35% 30%,#ffe98a,#f5b301 55%,#b9820a)', border: '3px solid #d99a06', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: 22, color: '#7a5300', textShadow: '0 1px 0 rgba(255,255,255,.4)', boxShadow: '0 4px 8px rgba(0,0,0,.28)' }}>$</div>
               <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700 }}>👆 投幣</div>
             </div>
           </div>

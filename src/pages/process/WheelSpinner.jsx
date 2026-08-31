@@ -22,6 +22,9 @@ const CSS = `
 @keyframes wsWinPop{0%{opacity:0;transform:scale(0) rotate(-12deg)}55%{opacity:1;transform:scale(1.22) rotate(5deg)}100%{opacity:1;transform:scale(1) rotate(0)}}
 @keyframes wsTwinkle{0%,100%{opacity:.3}50%{opacity:1}}
 @keyframes wsTitlePulse{0%,100%{opacity:.85;transform:scale(1)}50%{opacity:1;transform:scale(1.05)}}
+@keyframes wsBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+@keyframes wsCheer{0%,100%{transform:translateY(0) rotate(-6deg)}50%{transform:translateY(-8px) rotate(6deg)}}
+@keyframes wsMwin{0%{transform:translateY(0) scale(1)}30%{transform:translateY(-16px) scale(1.12)}60%{transform:translateY(0) scale(1)}80%{transform:translateY(-6px)}100%{transform:translateY(0)}}
 .ws-coin{cursor:pointer;user-select:none;transition:transform .1s}
 .ws-coin:hover{transform:translateY(-2px)}
 .ws-coin.drop{animation:wsCoinUp .6s ease-in forwards;pointer-events:none}
@@ -369,18 +372,18 @@ function SlotMachine({ names, pickWinners, pickCount, onDrop, onReveal, beep, di
               )
             })}
             {/* 中央顯示 */}
-            <div style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%,-50%)', width: '56%', textAlign: 'center', pointerEvents: 'none' }}>
+            <div style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%,-50%)', width: '60%', textAlign: 'center', pointerEvents: 'none' }}>
+              <Mascot mood={reveal ? 'win' : spinning ? 'spin' : 'idle'} size={reveal ? 74 : 84} key={reveal ? 'w:' + reveal.name : spinning ? 'spin' : 'idle'} />
               {reveal ? (
-                <div className="ws-win" key={reveal.name}>
+                <div className="ws-win" key={reveal.name} style={{ marginTop: 2 }}>
                   <div style={{ fontSize: 10, letterSpacing: 3, color: '#ffcf3a', fontWeight: 800 }}>🎉 中 獎</div>
-                  <div style={{ fontSize: 22, fontWeight: 900, color: '#fff', margin: '4px 0', textShadow: '0 2px 10px rgba(0,0,0,.6)', wordBreak: 'break-all' }}>{reveal.name}</div>
+                  <div style={{ fontSize: 21, fontWeight: 900, color: '#fff', margin: '2px 0', textShadow: '0 2px 10px rgba(0,0,0,.6)', wordBreak: 'break-all' }}>{reveal.name}</div>
                   <div style={{ fontSize: 11, fontWeight: 700, color: '#ffd79f' }}>{reveal.caption}</div>
                 </div>
               ) : (
-                <div style={{ animation: spinning ? 'wsTitlePulse .5s ease-in-out infinite' : 'none' }}>
-                  <div style={{ fontSize: 26 }}>🍀</div>
-                  <div style={{ fontSize: 15, fontWeight: 900, color: '#ffcf3a', letterSpacing: 1, textShadow: '0 0 10px rgba(255,207,58,.6)' }}>{spinning ? '抽選中…' : '幸運小瑪莉'}</div>
-                  {!spinning && <div style={{ fontSize: 10, color: '#9fb4cf', marginTop: 3 }}>{names.length < 1 ? '請先輸入名單' : credits < 1 ? '投幣後開始' : '按開始抽選'}</div>}
+                <div style={{ marginTop: 2, animation: spinning ? 'wsTitlePulse .5s ease-in-out infinite' : 'none' }}>
+                  <div style={{ fontSize: 14, fontWeight: 900, color: '#ffcf3a', letterSpacing: 1, textShadow: '0 0 10px rgba(255,207,58,.6)' }}>{spinning ? '抽選中…' : '幸運小瑪莉'}</div>
+                  {!spinning && <div style={{ fontSize: 10, color: '#9fb4cf', marginTop: 2 }}>{names.length < 1 ? '請先輸入名單' : credits < 1 ? '投幣後開始' : '按開始抽選'}</div>}
                 </div>
               )}
             </div>
@@ -416,6 +419,53 @@ function Led({ label, value, amber }) {
     <div style={{ background: '#141414', borderRadius: 6, padding: '3px 12px', textAlign: 'center', border: '1px solid #2e2e2e', minWidth: 62 }}>
       <div style={{ fontSize: 8, letterSpacing: 1, color: '#7a7a7a', fontWeight: 700 }}>{label}</div>
       <div style={{ fontSize: 18, fontWeight: 900, fontFamily: 'ui-monospace,monospace', color: amber ? '#ffb300' : '#ff4444', textShadow: `0 0 8px ${amber ? '#ffb300' : '#ff4444'}` }}>{String(value).padStart(3, '0')}</div>
+    </div>
+  )
+}
+
+// 原創吉祥物「招財金幣小福星」(非任天堂版權角色)— 呼應投幣主題;會晃動/興奮/歡呼
+function Mascot({ mood, size = 86 }) {
+  const anim = mood === 'idle' ? 'wsBob 2.4s ease-in-out infinite'
+    : mood === 'spin' ? 'wsCheer .35s ease-in-out infinite'
+    : 'wsMwin .6s ease'
+  const eyes = mood === 'win'
+    ? (<>
+        <path d="M35 53 q4.5 -6 9 0" fill="none" stroke="#5a3d00" strokeWidth="2.6" strokeLinecap="round" />
+        <path d="M56 53 q4.5 -6 9 0" fill="none" stroke="#5a3d00" strokeWidth="2.6" strokeLinecap="round" />
+      </>)
+    : (<>
+        <circle cx="41" cy="53" r="5.6" fill="#fff" stroke="#5a3d00" strokeWidth="1.4" />
+        <circle cx="59" cy="53" r="5.6" fill="#fff" stroke="#5a3d00" strokeWidth="1.4" />
+        <circle cx="42" cy={mood === 'spin' ? 51 : 54} r="2.7" fill="#3a2600" />
+        <circle cx="60" cy={mood === 'spin' ? 51 : 54} r="2.7" fill="#3a2600" />
+      </>)
+  const mouth = mood === 'win'
+    ? <path d="M40 62 q10 12 20 0 q-10 5 -20 0z" fill="#a5322a" />
+    : mood === 'spin'
+      ? <ellipse cx="50" cy="66" rx="5" ry="6.5" fill="#a5322a" />
+      : <path d="M42 64 q8 7 16 0" fill="none" stroke="#7a2b12" strokeWidth="2.6" strokeLinecap="round" />
+  return (
+    <div style={{ width: size, height: size, margin: '0 auto', animation: anim, transformOrigin: '50% 82%' }}>
+      <svg viewBox="0 0 100 100" width={size} height={size} style={{ display: 'block', filter: 'drop-shadow(0 4px 6px rgba(0,0,0,.4))' }}>
+        <defs>
+          <radialGradient id="wsCoinG" cx="38%" cy="32%" r="75%">
+            <stop offset="0%" stopColor="#fff2b0" />
+            <stop offset="55%" stopColor="#f7c331" />
+            <stop offset="100%" stopColor="#d18f06" />
+          </radialGradient>
+        </defs>
+        <ellipse cx="38" cy="91" rx="7" ry="4" fill="#c8860a" />
+        <ellipse cx="62" cy="91" rx="7" ry="4" fill="#c8860a" />
+        <ellipse cx="14" cy="58" rx="7" ry="5" fill="#eeb424" transform="rotate(-20 14 58)" />
+        <ellipse cx="86" cy="52" rx="7" ry="5" fill="#eeb424" transform="rotate(24 86 52)" />
+        <circle cx="50" cy="52" r="36" fill="#d99a06" />
+        <circle cx="50" cy="52" r="31" fill="url(#wsCoinG)" stroke="#e8b83a" strokeWidth="1.5" />
+        <path d="M50 27 l2.5 5.2 5.7.6 -4.3 3.8 1.3 5.6 -5.2-2.9 -5.2 2.9 1.3-5.6 -4.3-3.8 5.7-.6z" fill="#ff9d2e" />
+        <circle cx="34" cy="61" r="4.5" fill="#ff8f8f" opacity=".7" />
+        <circle cx="66" cy="61" r="4.5" fill="#ff8f8f" opacity=".7" />
+        {eyes}
+        {mouth}
+      </svg>
     </div>
   )
 }

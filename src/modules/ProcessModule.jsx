@@ -30,6 +30,7 @@ import ExpenseRequests from '../pages/workflow/ExpenseRequests'
 import Expenses from '../pages/workflow/Expenses'
 import ExpenseQuery from '../pages/process/ExpenseQuery'
 import Preorders from '../pages/process/Preorders'
+import OrderRequestsPage from '../pages/process/OrderRequestsPage'
 import WheelSpinner from '../pages/process/WheelSpinner'
 import CustomFormFill from '../pages/workflow/CustomFormFill'
 import FormSubmissions from '../pages/workflow/FormSubmissions'
@@ -85,7 +86,7 @@ export default function ProcessModule() {
       <Route path="store-audits" element={<StoreAudits />} />
       {/* 業務表單 alias 路由 — 讓頂部 tab 維持「專案流程」 */}
       <Route path="expense-requests" element={<ExpenseRequests />} />
-      <Route path="order-requests" element={<ExpenseRequests docType="order" />} />
+      <Route path="order-requests" element={<OrderRequestsPage />} />
       <Route path="expenses" element={<Expenses />} />
       <Route path="expense-query" element={<ExpenseQuery />} />
       <Route path="preorders" element={<Preorders />} />

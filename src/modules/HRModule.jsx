@@ -23,6 +23,7 @@ import Transfer from '../pages/hr/Transfer'
 import BusinessTravel from '../pages/hr/BusinessTravel'
 import Expenses from '../pages/workflow/Expenses'
 import ExpenseRequests from '../pages/workflow/ExpenseRequests'
+import OrderRequestsPage from '../pages/process/OrderRequestsPage'
 import Bonus from '../pages/hr/Bonus'
 import LaborInspection from '../pages/hr/LaborInspection'
 import Training from '../pages/hr/Training'
@@ -93,7 +94,7 @@ export default memo(function HRModule() {
       <Route path="travel" element={<BusinessTravel />} />
       <Route path="expenses" element={<Expenses />} />
       <Route path="expense-requests" element={<ExpenseRequests />} />
-      <Route path="order-requests" element={<ExpenseRequests docType="order" />} />
+      <Route path="order-requests" element={<OrderRequestsPage />} />
       <Route path="bonus" element={<Bonus />} />
       <Route path="labor-inspection" element={<LaborInspection />} />
       <Route path="training" element={<Training />} />

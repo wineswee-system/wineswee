@@ -42,6 +42,7 @@ const fmtCur = (n, cur) => {
 const emptyForm = {
   employee: '', account_code: '', title: '', description: '',
   estimated_amount: '', store: '', supplier: '', currency: 'TWD',
+  billing_month: '',
   acceptance_units: [],
 }
 
@@ -272,6 +273,7 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
       estimated_amount: req.estimated_amount?.toString() || '',
       store: req.store || '',
       supplier: req.supplier || '',
+      billing_month: req.billing_month || '',
       currency: req.currency || 'TWD',
       settle_assignee_id: req.settle_assignee_id ? String(req.settle_assignee_id) : '',
       settle_department_id: req.settle_department_id ? String(req.settle_department_id) : '',
@@ -325,6 +327,7 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
       description: form.description || null,
       estimated_amount: isExpense ? total : null,
       supplier: isExpense ? (form.supplier || null) : null,
+      billing_month: docType === 'order' ? (form.billing_month || null) : null,
       items: isExpense ? validItems : null,
       store: isExpense ? (form.store || null) : null,
       currency: isExpense ? (form.currency || 'TWD') : 'TWD',
@@ -1098,6 +1101,7 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
         currencies={currencies}
         onCurrencyChange={v => setForm(f => ({ ...f, currency: v }))}
         docType={docType}
+        orgId={profile?.organization_id ?? getTenantOrgId()}
       />
 
       {/* Settlement Modal */}
@@ -1147,6 +1151,7 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
                 { label: '科目', value: `${showDetail.account_code || ''} ${showDetail.account_name || ''}`.trim() || '—' },
                 { label: '門市', value: showDetail.store || '—' },
                 { label: '供應商', value: showDetail.supplier || '—' },
+                ...(docType === 'order' && showDetail.billing_month ? [{ label: '帳務月份', value: showDetail.billing_month }] : []),
                 { label: '項目', value: showDetail.title || '—' },
                 ...(settleAssignee
                     ? [{ label: verb('驗收人', DOC), value: settleAssignee.name }]

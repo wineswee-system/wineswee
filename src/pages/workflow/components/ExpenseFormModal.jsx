@@ -2,6 +2,7 @@
 import { X, Plus, Upload, FileText, Image, Download } from 'lucide-react'
 import { ModalOverlay } from '../../../components/Modal'
 import SearchableSelect, { empOptions } from '../../../components/SearchableSelect'
+import { supabase } from '../../../lib/supabase'
 import { clearError } from '../../../lib/formValidation'
 import { toast } from '../../../lib/toast'
 
@@ -183,9 +184,24 @@ export default function ExpenseFormModal({
   currency, currencies = [], onCurrencyChange,
   departments = [],
   docType = 'expense',  // 'order' = 叫貨/採購 → 一律費用，不顯示「非費用」切換
+  orgId = null,
 }) {
   const isOrder = docType === 'order'
   const csvRef = useRef(null)
+  const [supplierList, setSupplierList] = useState([])   // 叫貨:廠商主檔(suppliers)名稱建議
+
+  // 叫貨模式載入廠商主檔(datalist 建議用);費用模式不撈
+  useEffect(() => {
+    if (!open || !isOrder) return
+    let live = true
+    ;(async () => {
+      let q = supabase.from('suppliers').select('name').order('name')
+      if (orgId) q = q.eq('organization_id', orgId)
+      const { data } = await q
+      if (live) setSupplierList([...new Set((data || []).map(s => s.name).filter(Boolean))])
+    })()
+    return () => { live = false }
+  }, [open, isOrder, orgId])
 
   // 早退放在所有 hook 之後，避免條件式 hook（open 切換時 hook 數量改變會炸）
   if (!open) return null
@@ -347,10 +363,19 @@ export default function ExpenseFormModal({
           {isExpense && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
               <div>
-                <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>供應商/廠商</label>
-                <input type="text" value={form.supplier} onChange={e => set('supplier', e.target.value)} placeholder="選填"
+                <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>供應商/廠商{isOrder ? '（打字選廠商）' : ''}</label>
+                <input type="text" value={form.supplier} onChange={e => set('supplier', e.target.value)} placeholder={isOrder ? '選 / 打廠商名稱' : '選填'}
+                  list={isOrder ? 'er-supplier-list' : undefined}
                   style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }} />
+                {isOrder && <datalist id="er-supplier-list">{supplierList.map(s => <option key={s} value={s} />)}</datalist>}
               </div>
+              {isOrder && (
+                <div>
+                  <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>帳務月份<span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>（算哪個月的帳）</span></label>
+                  <input type="month" value={form.billing_month || ''} onChange={e => set('billing_month', e.target.value)}
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }} />
+                </div>
+              )}
               <StoreSelect
                 value={form.store || ''}
                 onChange={v => { set('store', v); clearError('store', setErrors) }}

@@ -120,31 +120,10 @@ export function registerHRHandlers(bus) {
     })
   })
 
-  // ── Leave approved → deduct used days from entitlement ──
-  bus.subscribe('hr.leave.approved', async function onLeaveApprovedDeductEntitlement(event) {
-    const { employee, type, days } = event.payload
-
-    const { data: emp } = await supabase.from('employees').select('id').eq('name', employee).maybeSingle()
-    if (!emp) return
-
-    const currentYear = new Date().getFullYear()
-    const { data: entitlement } = await supabase
-      .from('leave_entitlements')
-      .select('*')
-      .eq('employee_id', emp.id)
-      .eq('year', currentYear)
-      .eq('leave_type', type)
-      .maybeSingle()
-
-    if (!entitlement) return
-
-    await supabase.from('leave_entitlements')
-      .update({ used_days: (entitlement.used_days || 0) + days })
-      .eq('id', entitlement.id)
-      .then(({ error }) => {
-        if (error) console.warn(`[HR] Leave entitlement deduction failed for ${employee}:`, error.message)
-      })
-  })
+  // ── (已移除)請假核准扣額度 handler ──
+  // 舊 handler 查過時表 leave_entitlements、又用主表 leave_balances 的欄名
+  // (leave_type/employee_id,實際是 type/employee)→ 每次核准噴 42703 後空轉。
+  // 特休 used_days 現由 leave_balances(單一源、讀請假單)管理,此段為死碼,移除以免污染錯誤 log。
 
   // ── Clock out → record hours worked in attendance ──
   bus.subscribe('hr.clock.out', async function onClockOutRecordHours(event) {

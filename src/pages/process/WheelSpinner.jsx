@@ -20,6 +20,7 @@ const CSS = `
 @keyframes wsLever{0%{transform:rotate(0)}35%{transform:rotate(72deg)}100%{transform:rotate(0)}}
 @keyframes wsShake{0%,100%{transform:translate(0,0)}20%{transform:translate(-3px,2px)}40%{transform:translate(3px,-2px)}60%{transform:translate(-2px,-2px)}80%{transform:translate(2px,2px)}}
 @keyframes wsFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-14px)}}
+@keyframes wsRollOut{0%{transform:translate(-70px,-46px) rotate(-120deg);opacity:0}22%{opacity:1}55%{transform:translate(0,12px) rotate(18deg)}76%{transform:translate(0,-7px) rotate(-7deg)}100%{transform:translate(0,0) rotate(0)}}
 @keyframes wsReadyPulse{0%,100%{box-shadow:0 0 0 0 rgba(255,203,5,.6),0 6px 14px rgba(0,0,0,.2)}50%{box-shadow:0 0 0 12px rgba(255,203,5,0),0 6px 14px rgba(0,0,0,.2)}}
 @keyframes wsHint{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
 @keyframes wsRays{0%{opacity:0;transform:translate(-50%,-50%) scale(.2) rotate(0)}25%{opacity:.9}100%{opacity:0;transform:translate(-50%,-50%) scale(2.7) rotate(160deg)}}
@@ -30,7 +31,7 @@ const CSS = `
 @keyframes wsShatter{0%{transform:translateX(-50%) scale(1) rotate(0)}18%{transform:translateX(-50%) scale(1.12) rotate(-5deg)}36%{transform:translateX(-50%) scale(1.05) rotate(5deg)}100%{transform:translateX(-50%) scale(.5) rotate(-10deg);opacity:0}}
 @keyframes wsShard{to{transform:translate(var(--tx),var(--ty)) rotate(var(--rot));opacity:0}}
 @keyframes wsSplash{0%{opacity:.9;transform:translate(-50%,-50%) scale(.2)}100%{opacity:0;transform:translate(-50%,-50%) scale(2.5)}}
-.ws-btl{animation:wsBallDrop .72s cubic-bezier(.34,1.5,.5,1) both}
+.ws-btl{animation:wsRollOut .8s cubic-bezier(.34,1.4,.5,1) both}
 .ws-btl.wobble{animation:wsWobble 1.05s ease-in-out 1 both}
 .ws-btl.ready{cursor:pointer;animation:wsReadyGlow 1.1s ease-in-out infinite}
 .ws-btl .ws-glass{transition:transform .3s}
@@ -190,13 +191,12 @@ export default function WheelSpinner() {
   return (
     <div className="fade-in" style={{ position: 'relative' }}>
       <style>{CSS}</style>
-      {/* 背景飄球 */}
-      <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', overflow: 'hidden', zIndex: 0, opacity: 0.5 }}>
-        {[[80, '6%', '14%', 0], [54, '86%', '20%', 1.2], [110, '78%', '68%', 2], [46, '10%', '74%', 0.6], [66, '46%', '86%', 1.6]].map(([s, l, t, d], i) => (
-          <div key={i} style={{ position: 'absolute', left: l, top: t, width: s, height: s, borderRadius: '50%', background: 'linear-gradient(#ff5a5a 0 50%, #eef0f2 50% 100%)', border: '2px solid rgba(0,0,0,.12)', animation: `wsFloat ${4 + i}s ease-in-out ${d}s infinite` }}>
-            <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, height: 3, transform: 'translateY(-50%)', background: 'rgba(0,0,0,.15)' }} />
-            <div style={{ position: 'absolute', top: '50%', left: '50%', width: s * 0.28, height: s * 0.28, transform: 'translate(-50%,-50%)', borderRadius: '50%', background: '#fff', border: '2px solid rgba(0,0,0,.15)' }} />
-          </div>
+      {/* 背景:酒香氛圍 */}
+      <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', overflow: 'hidden', zIndex: 0 }}>
+        <div style={{ position: 'absolute', top: '-12%', left: '-6%', width: 360, height: 360, borderRadius: '50%', background: 'radial-gradient(rgba(165,36,64,.16),transparent 70%)' }} />
+        <div style={{ position: 'absolute', bottom: '-10%', right: '-6%', width: 420, height: 420, borderRadius: '50%', background: 'radial-gradient(rgba(255,203,5,.13),transparent 70%)' }} />
+        {['6%', '86%', '78%', '12%', '48%'].map((l, i) => (
+          <div key={i} style={{ position: 'absolute', left: l, top: ['12%', '20%', '64%', '76%', '88%'][i], fontSize: [48, 34, 56, 30, 40][i], opacity: 0.12, animation: `wsFloat ${4 + i}s ease-in-out ${i * 0.5}s infinite` }}>🍷</div>
         ))}
       </div>
 
@@ -339,35 +339,42 @@ function SlotMachine({ names, pickWinners, pickCount, onWin, beep, ding, confett
 
   return (
     <div className="card" style={{ padding: 22, display: 'flex', flexDirection: 'column', alignItems: 'center' }} data-slot={busy ? '1' : '0'}>
-      {/* 機台 */}
-      <div style={{ position: 'relative', width: '100%', maxWidth: 420, animation: busy ? 'wsShake .3s linear infinite' : 'none' }}>
-        <div style={{ borderRadius: 22, padding: '20px 20px 26px', background: 'linear-gradient(#ff5a5a,#d61414)', boxShadow: '0 10px 30px rgba(214,20,20,.35)', border: '4px solid #1a1a1a' }}>
-          <div style={{ textAlign: 'center', color: '#fff', fontWeight: 900, letterSpacing: 3, fontSize: 15, marginBottom: 12, textShadow: '0 2px 0 rgba(0,0,0,.25)' }}>◉ 抽選機 ◉</div>
-          {/* 顯示窗 */}
-          <div style={{ background: '#0b1220', borderRadius: 14, padding: '26px 12px', textAlign: 'center', border: '4px solid #ffcb05', boxShadow: 'inset 0 4px 14px rgba(0,0,0,.6)' }}>
-            <div style={{ fontSize: 34, fontWeight: 900, color: '#ffe66d', minHeight: 44, filter: busy ? 'blur(0.6px)' : 'none', letterSpacing: 1, wordBreak: 'break-all', textShadow: '0 0 12px rgba(255,203,5,.5)' }}>{reel}</div>
+      {/* 自動販賣機 */}
+      <div style={{ position: 'relative', width: '100%', maxWidth: 380, animation: busy ? 'wsShake .28s linear infinite' : 'none' }}>
+        <div style={{ borderRadius: 20, padding: 16, background: 'linear-gradient(160deg,#8a1e30,#4a0d1a)', boxShadow: '0 14px 36px rgba(0,0,0,.32)', border: '5px solid #2a0810' }}>
+          <div style={{ textAlign: 'center', color: '#ffd7a0', fontWeight: 900, letterSpacing: 2, fontSize: 15, marginBottom: 12 }}>🍷 自動抽選機</div>
+          {/* 選號螢幕 */}
+          <div style={{ background: '#0b1220', borderRadius: 12, padding: '18px 12px', textAlign: 'center', border: '3px solid #ffcb05', boxShadow: 'inset 0 4px 14px rgba(0,0,0,.6)', marginBottom: 12 }}>
+            <div style={{ fontSize: 30, fontWeight: 900, color: '#ffe66d', minHeight: 40, filter: busy ? 'blur(.6px)' : 'none', wordBreak: 'break-all', textShadow: '0 0 12px rgba(255,203,5,.5)' }}>{reel}</div>
           </div>
-          {/* 出球口 */}
-          <div style={{ marginTop: 12, height: 8, background: '#1a1a1a', borderRadius: 4 }} />
-        </div>
-        {/* 拉桿 */}
-        <div style={{ position: 'absolute', right: -20, top: 40, width: 16, height: 90, transformOrigin: 'top center', animation: lever ? 'wsLever .5s ease-in-out' : 'none' }}>
-          <div style={{ width: 8, height: 66, margin: '0 auto', background: '#9ca3af', borderRadius: 4 }} />
-          <div style={{ width: 26, height: 26, borderRadius: '50%', background: 'radial-gradient(circle at 35% 30%,#ff8a8a,#d61414)', margin: '-4px auto 0', border: '3px solid #1a1a1a' }} />
+          {/* 玻璃展示櫃 */}
+          <div style={{ position: 'relative', background: 'linear-gradient(#1c2230,#2a3346)', borderRadius: 10, padding: '10px 6px', border: '3px solid #3a4658', display: 'flex', flexDirection: 'column', gap: 8, overflow: 'hidden' }}>
+            {[0, 1].map(r => (
+              <div key={r} style={{ display: 'flex', justifyContent: 'space-around' }}>
+                {[0, 1, 2, 3, 4].map(c => <span key={c} style={{ fontSize: 22, filter: 'saturate(.85)' }}>🍷</span>)}
+              </div>
+            ))}
+            <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(120deg,rgba(255,255,255,.2),rgba(255,255,255,.04) 40%,transparent 70%)', pointerEvents: 'none' }} />
+          </div>
+          {/* 取物口 */}
+          <div style={{ marginTop: 12, background: '#160308', borderRadius: '6px 6px 10px 10px', padding: '9px 12px', border: '3px solid #2a0810' }}>
+            <div style={{ height: 11, background: '#000', borderRadius: 3, boxShadow: 'inset 0 3px 8px rgba(0,0,0,.9)' }} />
+            <div style={{ fontSize: 10, color: '#c98a72', marginTop: 5, letterSpacing: 3, textAlign: 'center' }}>取 物 口</div>
+          </div>
         </div>
       </div>
 
-      {/* 掉出的球 */}
-      <div style={{ minHeight: 162, marginTop: 24, display: 'flex', gap: 14, flexWrap: 'wrap', justifyContent: 'center', alignItems: 'flex-start', width: '100%' }}>
+      {/* 取物托盤:滾出來的酒瓶 */}
+      <div style={{ minHeight: 168, marginTop: 16, padding: '10px 8px', display: 'flex', gap: 14, flexWrap: 'wrap', justifyContent: 'center', alignItems: 'flex-start', width: '100%', maxWidth: 420, borderRadius: 12, background: balls.length ? 'var(--bg-secondary)' : 'transparent', transition: 'background .3s' }}>
         {balls.map(b => <Bottle key={b.id} phase={b.phase} name={b.name} caption={b.caption} onOpen={() => openBall(b.id)} />)}
       </div>
 
       <button onClick={pull} disabled={busy || names.length < 1} style={{
-        marginTop: 8, padding: '13px 44px', borderRadius: 14, border: 'none', fontSize: 18, fontWeight: 900,
-        background: busy || names.length < 1 ? 'var(--bg-secondary)' : 'linear-gradient(135deg,#ffcb05,#ff9500)',
-        color: busy || names.length < 1 ? 'var(--text-muted)' : '#1a1a1a', cursor: busy || names.length < 1 ? 'default' : 'pointer',
-        boxShadow: busy ? 'none' : '0 6px 0 #b36b00', transition: 'transform .1s',
-      }}>{busy ? '🎲 抽選中…' : '🕹️ 拉！丟球！'}</button>
+        marginTop: 4, padding: '13px 44px', borderRadius: 14, border: 'none', fontSize: 18, fontWeight: 900,
+        background: busy || names.length < 1 ? 'var(--bg-secondary)' : 'linear-gradient(135deg,#a52440,#7a1728)',
+        color: busy || names.length < 1 ? 'var(--text-muted)' : '#fff', cursor: busy || names.length < 1 ? 'default' : 'pointer',
+        boxShadow: busy ? 'none' : '0 6px 0 #4a0d1a', transition: 'transform .1s',
+      }}>{busy ? '🎲 抽選中…' : '🍷 出瓶！'}</button>
     </div>
   )
 }

@@ -147,6 +147,13 @@ export function validateResult(assignments, data) {
     if (normalized !== d.name && !shiftDefMap[normalized]) shiftDefMap[normalized] = d
   }
   const lookupShiftDef = (shiftName) => shiftDefMap[shiftName] || shiftDefMap[formatShiftLabel(shiftName)] || null
+  // 班次工時:先查班別定義,查不到就解析時間字串(自訂班如 "11~0"/"16-1" 也要納入檢查,否則超時漏抓)
+  const shiftSpanHours = (shiftName) => {
+    const def = lookupShiftDef(shiftName)
+    if (def) return getShiftHours(def)
+    const pr = parseShiftRange(shiftName)
+    return pr ? getShiftHours({ start_time: pr.start, end_time: pr.end }) : null
+  }
 
   const offMap = new Set()
   for (const o of offRequests) offMap.add(`${o.employee}_${o.date}`)
@@ -169,11 +176,11 @@ export function validateResult(assignments, data) {
 
     const workEntries = empAssignments.filter(a => !isAbsence(a.shift))
 
-    // H2: Daily hours
+    // H2: Daily hours（自訂班次查不到班別定義也要檢查 → shiftSpanHours 會 fallback 解析時間字串)
     for (const a of workEntries) {
-      const def = lookupShiftDef(a.shift)
-      if (def && getShiftHours(def) > DAILY_MAX_SPAN_HOURS) {
-        violations.push({ employee: emp.name, constraint: 'H2', law: '單日工時上限', message: `${emp.name} ${a.date}: ${getShiftHours(def).toFixed(1)}h 超過單日上限 ${DAILY_MAX_SPAN_HOURS}h`, severity: 'error' })
+      const h = shiftSpanHours(a.shift)
+      if (h != null && h > DAILY_MAX_SPAN_HOURS) {
+        violations.push({ employee: emp.name, constraint: 'H2', law: '單日工時上限', message: `${emp.name} ${a.date}: ${h.toFixed(1)}h 超過單日上限 ${DAILY_MAX_SPAN_HOURS}h`, severity: 'error' })
       }
     }
 

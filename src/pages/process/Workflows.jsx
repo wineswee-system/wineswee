@@ -284,16 +284,10 @@ export default function Workflows() {
       if (instId) {
         const instTasks = latestTasks.filter(t => t.workflow_instance_id === instId)
         if (instTasks.length > 0 && instTasks.every(t => t.status === '已完成')) {
-          const currentInst = instances.find(i => i.id === instId)
-          if (currentInst?.completion_chain_id) {
-            // start the completion chain — instance stays '待簽核' until chain approves
-            await supabase.rpc('workflow_instance_start_chain', { p_instance_id: instId })
-            const { data: inst } = await updateWorkflowInstance(instId, { status: '待簽核' })
-            if (inst) setInstances(prev => prev.map(i => i.id === instId ? inst : i))
-          } else {
-            const { data: inst } = await updateWorkflowInstance(instId, { status: '已完成', completed_at: new Date().toISOString() })
-            if (inst) setInstances(prev => prev.map(i => i.id === instId ? inst : i))
-          }
+          // 完成簽核鏈已停用(2026-08-31):所有任務完成即直接結案。
+          // DB trigger _trg_workflow_autocomplete 也會做,這裡同步前端 UI。
+          const { data: inst } = await updateWorkflowInstance(instId, { status: '已完成', completed_at: new Date().toISOString() })
+          if (inst) setInstances(prev => prev.map(i => i.id === instId ? inst : i))
         }
       }
     }

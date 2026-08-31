@@ -31,9 +31,13 @@ export default function MonthlyInvoices() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
   const [search, setSearch] = useState('')
-  const [filterMonth, setFilterMonth] = useState('')
+  const [filterYear, setFilterYear] = useState('')
+  const [filterMonth, setFilterMonth] = useState('')   // '01'..'12' or '' = 整年
+  const [onlyMissing, setOnlyMissing] = useState(false)
+  const [sortBy, setSortBy] = useState('month')         // 'month' | 'amount'
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+  const hasFiles = (r) => Array.isArray(r.attachments) && r.attachments.length > 0
 
   const load = async () => {
     setLoading(true)
@@ -108,17 +112,26 @@ export default function MonthlyInvoices() {
   }
 
   // 篩選 + 統計
-  const months = [...new Set(rows.map(r => r.invoice_month).filter(Boolean))].sort().reverse()
+  const years = [...new Set(rows.map(r => (r.invoice_month || '').slice(0, 4)).filter(Boolean))].sort().reverse()
+  const vendorList = [...new Set(rows.map(r => r.vendor).filter(Boolean))].sort()   // datalist 建議用
   const filtered = rows.filter(r => {
-    if (filterMonth && r.invoice_month !== filterMonth) return false
+    const [y, m] = (r.invoice_month || '').split('-')
+    if (filterYear && y !== filterYear) return false
+    if (filterMonth && m !== filterMonth) return false
+    if (onlyMissing && hasFiles(r)) return false
     if (search.trim()) { const q = search.trim().toLowerCase(); if (!(r.vendor || '').toLowerCase().includes(q) && !(r.note || '').toLowerCase().includes(q)) return false }
     return true
+  }).sort((a, b) => {
+    if (sortBy === 'amount') return (Number(b.amount) || 0) - (Number(a.amount) || 0)
+    return (b.invoice_month || '').localeCompare(a.invoice_month || '') || (b.id - a.id)
   })
   const totalAmount = filtered.reduce((s, r) => s + (Number(r.amount) || 0), 0)
+  const missingCount = filtered.filter(r => !hasFiles(r)).length
   // 依廠商彙總(給統計)
   const byVendor = {}
   filtered.forEach(r => { byVendor[r.vendor] = (byVendor[r.vendor] || 0) + (Number(r.amount) || 0) })
   const vendorSummary = Object.entries(byVendor).sort((a, b) => b[1] - a[1])
+  const monthLabel = filterYear ? (filterMonth ? `${filterYear}-${filterMonth}` : `${filterYear} 整年`) : (filterMonth ? `每年 ${filterMonth} 月` : '')
 
   const csvExport = () => {
     const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`
@@ -127,7 +140,7 @@ export default function MonthlyInvoices() {
     lines.push(['', '合計', totalAmount, '', ''].map(esc).join(','))
     const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' })
     const url = URL.createObjectURL(blob)
-    const a = document.createElement('a'); a.href = url; a.download = `月結發票_${filterMonth || '全部'}.csv`; a.click(); URL.revokeObjectURL(url)
+    const a = document.createElement('a'); a.href = url; a.download = `月結發票_${monthLabel || '全部'}.csv`; a.click(); URL.revokeObjectURL(url)
   }
 
   if (loading) return <LoadingSpinner />
@@ -147,7 +160,7 @@ export default function MonthlyInvoices() {
         </div>
       </div>
 
-      {/* 統計:張數 + 合計金額 */}
+      {/* 統計:張數 + 合計金額 + 未附發票 */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', flexDirection: 'column', minWidth: 110, padding: '10px 16px', borderRadius: 10, border: '1.5px solid var(--border)', background: 'var(--bg-card)' }}>
           <span style={{ fontSize: 22, fontWeight: 800, color: 'var(--accent-cyan)' }}>{filtered.length}</span>
@@ -155,20 +168,34 @@ export default function MonthlyInvoices() {
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', minWidth: 150, padding: '10px 16px', borderRadius: 10, border: '1.5px solid var(--border)', background: 'var(--bg-card)' }}>
           <span style={{ fontSize: 22, fontWeight: 800, color: 'var(--accent-green)' }}>{fmtMoney(totalAmount)}</span>
-          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>合計金額{filterMonth ? `（${filterMonth}）` : ''}</span>
+          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>合計金額{monthLabel ? `（${monthLabel}）` : ''}</span>
         </div>
+        <button onClick={() => setOnlyMissing(v => !v)} title="只看還沒附發票的" style={{ display: 'flex', flexDirection: 'column', minWidth: 110, padding: '10px 16px', borderRadius: 10, cursor: 'pointer', textAlign: 'left',
+          border: `1.5px solid ${onlyMissing ? 'var(--accent-orange)' : 'var(--border)'}`, background: onlyMissing ? 'var(--accent-orange-dim)' : 'var(--bg-card)' }}>
+          <span style={{ fontSize: 22, fontWeight: 800, color: 'var(--accent-orange)' }}>{missingCount}</span>
+          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>未附發票{onlyMissing ? ' ·篩選中' : ''}</span>
+        </button>
       </div>
 
-      {/* 篩選:月份 + 廠商搜尋 */}
+      {/* 篩選:年 + 月 + 廠商(打字自動建議) + 排序 */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-        <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)} style={{ ...fieldStyle, width: 'auto', minWidth: 140 }}>
-          <option value="">全部月份</option>
-          {months.map(m => <option key={m} value={m}>{m}</option>)}
+        <select value={filterYear} onChange={e => setFilterYear(e.target.value)} style={{ ...fieldStyle, width: 'auto', minWidth: 100 }}>
+          <option value="">全部年</option>
+          {years.map(y => <option key={y} value={y}>{y} 年</option>)}
+        </select>
+        <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)} style={{ ...fieldStyle, width: 'auto', minWidth: 100 }}>
+          <option value="">整年</option>
+          {Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0')).map(m => <option key={m} value={m}>{m} 月</option>)}
         </select>
         <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
           <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="搜尋廠商 / 備註" style={{ ...fieldStyle, paddingLeft: 32 }} />
+          <input value={search} onChange={e => setSearch(e.target.value)} list="mi-vendor-list" placeholder="搜尋廠商 / 備註（打字自動建議廠商）" style={{ ...fieldStyle, paddingLeft: 32 }} />
+          <datalist id="mi-vendor-list">{vendorList.map(v => <option key={v} value={v} />)}</datalist>
         </div>
+        <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={{ ...fieldStyle, width: 'auto', minWidth: 120 }}>
+          <option value="month">排序：月份新→舊</option>
+          <option value="amount">排序：金額大→小</option>
+        </select>
       </div>
 
       {/* 依廠商彙總(統計) */}
@@ -216,7 +243,7 @@ export default function MonthlyInvoices() {
                       ))}
                       {(r.attachments || []).length > 4 && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>+{(r.attachments || []).length - 4}</span>}
                     </div>
-                  ) : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                  ) : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 99, fontSize: 11, fontWeight: 600, background: 'var(--accent-orange-dim)', color: 'var(--accent-orange)' }}>未附發票</span>}
                 </td>
                 <td style={{ padding: '10px 12px', maxWidth: 200, fontSize: 13, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap' }}>{r.note || '—'}</td>
                 <td style={{ padding: '10px 12px', textAlign: 'right', whiteSpace: 'nowrap' }}>
@@ -241,7 +268,7 @@ export default function MonthlyInvoices() {
                 <div><label style={labelStyle}>月份 <span style={{ color: 'var(--accent-red)' }}>*</span></label><input type="month" value={form.invoice_month} onChange={e => set('invoice_month', e.target.value)} style={fieldStyle} /></div>
                 <div><label style={labelStyle}>金額</label><input type="number" min={0} value={form.amount} onChange={e => set('amount', e.target.value)} placeholder="0" style={fieldStyle} /></div>
               </div>
-              <div><label style={labelStyle}>廠商 <span style={{ color: 'var(--accent-red)' }}>*</span></label><input value={form.vendor} onChange={e => set('vendor', e.target.value)} placeholder="廠商名稱" style={fieldStyle} /></div>
+              <div><label style={labelStyle}>廠商 <span style={{ color: 'var(--accent-red)' }}>*</span></label><input value={form.vendor} onChange={e => set('vendor', e.target.value)} list="mi-vendor-list" placeholder="廠商名稱（打字自動建議已登記廠商）" style={fieldStyle} /></div>
               <div><label style={labelStyle}>備註</label><textarea value={form.note} onChange={e => set('note', e.target.value)} rows={2} style={{ ...fieldStyle, resize: 'vertical' }} /></div>
 
               <div>

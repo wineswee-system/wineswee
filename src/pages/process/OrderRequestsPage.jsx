@@ -13,7 +13,7 @@ export default function OrderRequestsPage() {
   const [tab, setTab] = useState('requests')
   return (
     <div>
-      <div style={{ display: 'flex', gap: 6, padding: '16px 20px 0', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 6, padding: '16px 20px 20px', marginBottom: 8, flexWrap: 'wrap', borderBottom: '1px solid var(--border)' }}>
         {TABS.map(t => {
           const Icon = t.icon
           const active = tab === t.key

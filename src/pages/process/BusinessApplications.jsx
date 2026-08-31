@@ -1,7 +1,7 @@
 ﻿import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
-import { Wallet, Receipt, FileText, ClipboardList, Package, ShoppingCart, Building2, Banknote, Hammer, Wrench } from 'lucide-react'
+import { Wallet, Receipt, FileText, ClipboardList, Package, ShoppingCart, Building2, Banknote, Hammer, Wrench, Target } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -41,6 +41,11 @@ const FIXED_RENOVATION = [
 // 線上預購 / 出貨SOP（純狀態追蹤，不走簽核）— 鎖 preorder.manage
 const FIXED_PREORDER = [
   { icon: Package, name: '線上預購', desc: '客戶預購登記：品項/數量(可多筆) + 提袋/統編/指定送貨時間 → 未出貨/已出貨狀態追蹤', action: '/process/preorders', color: 'var(--accent-cyan)', dim: 'var(--accent-cyan-dim)', tag: '出貨' },
+]
+
+// 小工具（純前端，不走簽核 / 不上傳）
+const FIXED_TOOLS = [
+  { icon: Target, name: '幸運轉盤', desc: '輸入名單轉盤抽選：抽員工 / 抽獎 / 決定順序，可洗牌、抽中後移除（純工具，資料留在瀏覽器）', action: '/process/wheel', color: 'var(--accent-purple)', dim: 'var(--accent-purple-dim)', tag: '工具' },
 ]
 
 const COLOR_MAP = {
@@ -123,6 +128,7 @@ export default function BusinessApplications() {
       <FormGroup title="💵 收款" desc="訂金 / 加盟金收款記錄（純記帳，加總滿額自動完成）" items={collectionGroup} navigate={navigate} />
       <FormGroup title="🔨 裝潢工程" desc="門市裝潢報價記錄（純記錄，含付款分期）" items={hasPermission('renovation.manage') ? FIXED_RENOVATION : []} navigate={navigate} />
       <FormGroup title="📦 線上預購" desc="客戶預購 / 出貨SOP（純狀態追蹤，未出貨 ⇄ 已出貨）" items={hasPermission('preorder.manage') ? FIXED_PREORDER : []} navigate={navigate} />
+      <FormGroup title="🎯 小工具" desc="輔助小工具（純前端，資料不上傳）" items={FIXED_TOOLS} navigate={navigate} />
 
       {expenseGroup.length === 0 && nonExpenseGroup.length === 0 && (
         <div className="card" style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>

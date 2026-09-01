@@ -123,17 +123,18 @@ export default function OrgChart() {
       && !sectionSupervisorIds.has(e.id)
     )
 
-  // Employees assigned to a store, with 店長 first
-  const isStoreLead = (e) => (e.position || '').includes('店長') && !(e.position || '').includes('副店長')
+  // Employees assigned to a store, with 負責人 first
+  // 負責人優先看 stores.manager_id(督導/儲備/經理當負責人也算),沒設才 fallback 職位含「店長」
+  const isStoreLead = (e, store) => (store?.manager_id ? e.id === store.manager_id : (e.position || '').includes('店長') && !(e.position || '').includes('副店長'))
   // 儲備幹部：組織圖上獨立一層,掛在店長底下(位階在店長與一般門市人員之間)
   const isReserve = (e) => (e.position || '').includes('儲備')
   const storeEmployees = (store) =>
     employees
       .filter(e => e.store_id === store.id)
       .sort((a, b) => {
-        // 1. 店長 first
-        const aLead = isStoreLead(a) ? 0 : 1
-        const bLead = isStoreLead(b) ? 0 : 1
+        // 1. 負責人 first
+        const aLead = isStoreLead(a, store) ? 0 : 1
+        const bLead = isStoreLead(b, store) ? 0 : 1
         if (aLead !== bLead) return aLead - bLead
         // 2. 正職/約聘 group before 兼職/派遣 group
         const aPart = a.employment_type === '兼職' ? 1 : 0
@@ -394,8 +395,8 @@ export default function OrgChart() {
                                   {staff.map(emp => (
                                     <div key={emp.id} style={{
                                       fontSize: 11,
-                                      color: isStoreLead(emp) ? color : 'var(--text-secondary)',
-                                      fontWeight: isStoreLead(emp) ? 600 : 400,
+                                      color: isStoreLead(emp, s) ? color : 'var(--text-secondary)',
+                                      fontWeight: isStoreLead(emp, s) ? 600 : 400,
                                     }}>
                                       {labelOf(emp)}
                                       {emp.position && <span style={{ color: 'var(--text-muted)', marginLeft: 4 }}>· {emp.position}</span>}
@@ -466,8 +467,8 @@ export default function OrgChart() {
                             {staff.map(emp => (
                               <div key={emp.id} style={{
                                 fontSize: 11,
-                                color: isStoreLead(emp) ? color : 'var(--text-secondary)',
-                                fontWeight: isStoreLead(emp) ? 700 : 500,
+                                color: isStoreLead(emp, s) ? color : 'var(--text-secondary)',
+                                fontWeight: isStoreLead(emp, s) ? 700 : 500,
                                 lineHeight: 1.3,
                               }}>
                                 {labelOf(emp)}

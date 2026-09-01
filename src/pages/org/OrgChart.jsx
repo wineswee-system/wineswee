@@ -128,9 +128,14 @@ export default function OrgChart() {
   const isStoreLead = (e, store) => (store?.manager_id ? e.id === store.manager_id : (e.position || '').includes('店長') && !(e.position || '').includes('副店長'))
   // 儲備幹部：組織圖上獨立一層,掛在店長底下(位階在店長與一般門市人員之間)
   const isReserve = (e) => (e.position || '').includes('儲備')
-  const storeEmployees = (store) =>
-    employees
-      .filter(e => e.store_id === store.id)
+  const storeEmployees = (store) => {
+    const list = employees.filter(e => e.store_id === store.id)
+    // 跨店負責人:負責人(manager_id)的 store_id 若在別家店(如督導管多店),本店卡撈不到 → 補進來,否則負責人不出現
+    if (store.manager_id && !list.some(e => e.id === store.manager_id)) {
+      const mgr = employees.find(e => e.id === store.manager_id)
+      if (mgr) list.push(mgr)
+    }
+    return list
       .sort((a, b) => {
         // 1. 負責人 first
         const aLead = isStoreLead(a, store) ? 0 : 1
@@ -143,12 +148,10 @@ export default function OrgChart() {
         // 3. then by name (zh-Hant collation)
         return (a.name || '').localeCompare(b.name || '', 'zh-Hant')
       })
-
-  // Dept members excluding those already shown under a store in that dept
-  const deptMembersExcludingStoreStaff = (dept) => {
-    const deptStoreIds = new Set(stores.filter(s => s.department_id === dept.id).map(s => s.id))
-    return members(dept).filter(e => !e.store_id || !deptStoreIds.has(e.store_id))
   }
+
+  // Dept members excluding store staff — 有掛門市的(非主管)人在門市卡顯示,不放部門框(部門框只留純部門層/主管)
+  const deptMembersExcludingStoreStaff = (dept) => members(dept).filter(e => !e.store_id)
 
   // Stores belonging to a department（只顯示「有負責人」的門市:有設 manager_id、或店裡有人職位含店長;都沒有→不畫)
   const hasLead = (s) => !!s.manager_id || employees.some(e => e.store_id === s.id && (e.position || '').includes('店長') && !(e.position || '').includes('副店長'))

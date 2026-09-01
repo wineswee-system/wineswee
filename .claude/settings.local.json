@@ -71,7 +71,8 @@
       "mcp__plugin_everything-claude-code_playwright__browser_take_screenshot",
       "Bash(echo \"---exit $?\")",
       "PowerShell(git add -u)",
-      "PowerShell(git add supabase/migrations/20260706160000_pos_server_side_sale_v3.sql)"
+      "PowerShell(git add supabase/migrations/20260706160000_pos_server_side_sale_v3.sql)",
+      "Bash(npm run *)"
     ],
     "additionalDirectories": [
       "\\tmp"

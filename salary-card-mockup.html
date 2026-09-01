@@ -1,0 +1,146 @@
+<title>LINE 薪資卡模擬 — 陳嘉益</title>
+<style>
+  :root{
+    --page-bg:#dfe6ee; --page-fg:#2b3138; --panel:#eef2f6; --muted:#6b7480;
+    --card:#ffffff; --card-line:#eceff3; --label:#5b636d; --value:#2d333b;
+    --add:#16a34a; --ded:#dc2626; --gold:#d9932e; --gold-bg:#fff8ec;
+  }
+  @media (prefers-color-scheme:dark){ :root{ --page-bg:#14171b; --page-fg:#e6e9ee; --panel:#1d2126; --muted:#9aa3ae; } }
+  :root[data-theme="light"]{ --page-bg:#dfe6ee; --page-fg:#2b3138; --panel:#eef2f6; --muted:#6b7480; }
+  :root[data-theme="dark"]{ --page-bg:#14171b; --page-fg:#e6e9ee; --panel:#1d2126; --muted:#9aa3ae; }
+  *{box-sizing:border-box}
+  body{margin:0; background:var(--page-bg); color:var(--page-fg);
+    font-family:"PingFang TC","Noto Sans TC","Microsoft JhengHei",system-ui,-apple-system,sans-serif;
+    -webkit-font-smoothing:antialiased; line-height:1.5;}
+  .wrap{max-width:900px; margin:0 auto; padding:32px 20px 64px;}
+  .eyebrow{font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); font-weight:700}
+  h1{font-size:24px; margin:.25em 0 .15em; text-wrap:balance; font-weight:800}
+  .sub{color:var(--muted); font-size:14px; max-width:64ch}
+  .grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:28px; align-items:start; margin-top:28px}
+  .col{display:flex; flex-direction:column; gap:12px}
+  .col > .caption{font-size:13px; color:var(--muted)}
+  .col > .caption b{color:var(--page-fg)}
+  .cname{font-size:12px; letter-spacing:.1em; text-transform:uppercase; font-weight:700; color:var(--muted)}
+  .chat{background:var(--panel); border-radius:18px; padding:20px 16px; display:flex; flex-direction:column; gap:10px;
+        box-shadow:inset 0 0 0 1px rgba(120,130,140,.12)}
+  .from{font-size:11px; color:var(--muted); margin-left:6px}
+  .bubble{background:var(--card); border-radius:16px; overflow:hidden; width:100%; max-width:340px;
+          box-shadow:0 6px 20px rgba(20,30,40,.16); color:#2d333b;}
+  .bub-head{padding:15px 16px; color:#fff}
+  .bub-head .h1{font-weight:800; font-size:17px}
+  .bub-head .h2{font-size:12px; opacity:.9; margin-top:3px}
+  .head-gold{background:#d9932e} .head-green{background:#22b455}
+  .bub-body{padding:14px 16px; font-size:14px}
+  .r{display:flex; justify-content:space-between; gap:10px; padding:3px 0; font-variant-numeric:tabular-nums}
+  .r .l{color:var(--label)} .r .v{color:var(--value); text-align:right}
+  .r.strong .l,.r.strong .v{font-weight:800}
+  .sep{height:1px; background:var(--card-line); margin:10px 0}
+  .grp{font-weight:800; font-size:13px; margin:12px 0 4px; display:flex; justify-content:space-between}
+  .grp.add{color:var(--add)} .grp.ded{color:var(--ded)}
+  .v.add{color:var(--add)} .v.ded{color:var(--ded)}
+  .base{font-weight:800}
+  .resid .l,.resid .v{font-style:italic}
+  .net{margin-top:12px; background:var(--gold-bg); border-radius:10px; padding:11px 12px; display:flex; justify-content:space-between; align-items:center}
+  .net .l{color:var(--gold); font-weight:800; font-size:15px}
+  .net .v{color:var(--gold); font-weight:800; font-size:20px; font-variant-numeric:tabular-nums}
+  .net.green{background:rgba(34,180,85,.10)} .net.green .l,.net.green .v{color:#1a9349}
+  .foot{padding:10px 16px 14px; display:flex; flex-direction:column; gap:8px}
+  .btn{border-radius:9px; padding:9px; text-align:center; font-size:13px; font-weight:700}
+  .btn.ghost{background:#f1f3f6; color:#556}
+  .note{font-size:11px; color:var(--muted); text-align:center; padding-top:2px}
+  .legend{margin-top:34px; background:var(--panel); border-radius:14px; padding:16px 18px; font-size:13px; color:var(--muted);
+          box-shadow:inset 0 0 0 1px rgba(120,130,140,.1)}
+  .legend b{color:var(--page-fg)} .legend ul{margin:8px 0 0; padding-left:18px} .legend li{margin:3px 0}
+  .flag{border-left:3px solid var(--gold); padding:8px 12px; margin-top:10px; background:var(--gold-bg); border-radius:0 8px 8px 0; color:#7a5a1e; font-size:12.5px}
+  @media (prefers-color-scheme:dark){ .flag{color:#e6c98a; background:rgba(217,147,46,.08)} }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">SME Ops · LINE 薪資通知</div>
+    <h1>薪資卡模擬 — 陳嘉益 · 2026-07</h1>
+    <p class="sub">套改版後的兩張 LINE 卡片：本薪 → 加項 → 減項 → 實領，夜班/跨店津貼逐項列出，金額為 0 的項目不顯示。用語與 LIFF 薪資袋一致。</p>
+  </header>
+
+  <div class="grid">
+    <!-- Card 1 -->
+    <div class="col">
+      <div class="cname">① 薪水指令卡（輸入「薪水」）</div>
+      <div class="chat">
+        <div class="from">SME Ops · 剛剛</div>
+        <div class="bubble">
+          <div class="bub-head head-gold">
+            <div class="h1">💰 薪資明細</div><div class="h2">陳嘉益 · 2026-07</div>
+          </div>
+          <div class="bub-body">
+            <div class="r strong"><span class="l">月份</span><span class="v">2026-07</span></div>
+            <div class="sep"></div>
+            <div class="r"><span class="l base">本薪</span><span class="v base">$ 41,000</span></div>
+            <div class="grp add"><span>＋ 加項</span><span>+45,235</span></div>
+            <div class="r"><span class="l">主管加給</span><span class="v add">+ 8,000</span></div>
+            <div class="r"><span class="l">伙食津貼</span><span class="v add">+ 3,000</span></div>
+            <div class="r"><span class="l">夜班津貼</span><span class="v add">+ 3,000</span></div>
+            <div class="r"><span class="l">跨店津貼</span><span class="v add">+ 7,500</span></div>
+            <div class="r"><span class="l">加班費</span><span class="v add">+ 16,903</span></div>
+            <div class="r resid"><span class="l">其他加項</span><span class="v add">+ 6,832</span></div>
+            <div class="grp ded"><span>－ 減項</span><span>-1,976</span></div>
+            <div class="r"><span class="l">勞保自付</span><span class="v ded">- 1,145</span></div>
+            <div class="r"><span class="l">健保自付</span><span class="v ded">- 710</span></div>
+            <div class="r"><span class="l">遲到</span><span class="v ded">- 121</span></div>
+            <div class="sep"></div>
+            <div class="net"><span class="l">＝ 實領</span><span class="v">$ 84,259</span></div>
+          </div>
+          <div class="foot"><div class="btn ghost">📊 歷史薪資 (LIFF)</div></div>
+        </div>
+      </div>
+      <div class="caption"><b>解鎖後</b>的完整卡。41,000 + 45,235 − 1,976 = <b>84,259</b>，加得回實領。</div>
+    </div>
+
+    <!-- Card 2 -->
+    <div class="col">
+      <div class="cname">② 薪資單（每月發送）</div>
+      <div class="chat">
+        <div class="from">SME Ops · 剛剛</div>
+        <div class="bubble">
+          <div class="bub-head head-green">
+            <div class="h1">💰 薪資單通知</div><div class="h2">2026-07</div>
+          </div>
+          <div class="bub-body">
+            <div class="r strong"><span class="l">陳嘉益 您好</span><span class="v"></span></div>
+            <div class="sep"></div>
+            <div class="r"><span class="l base">本薪</span><span class="v base">$ 41,000</span></div>
+            <div class="grp add"><span>＋ 加項</span><span>+45,235</span></div>
+            <div class="r"><span class="l">主管加給</span><span class="v add">+ 8,000</span></div>
+            <div class="r"><span class="l">伙食津貼</span><span class="v add">+ 3,000</span></div>
+            <div class="r"><span class="l">夜班津貼</span><span class="v add">+ 3,000</span></div>
+            <div class="r"><span class="l">跨店津貼</span><span class="v add">+ 7,500</span></div>
+            <div class="r"><span class="l">加班費</span><span class="v add">+ 16,903</span></div>
+            <div class="r resid"><span class="l">其他加項</span><span class="v add">+ 6,832</span></div>
+            <div class="grp ded"><span>－ 減項</span><span>-1,976</span></div>
+            <div class="r"><span class="l">勞保自付</span><span class="v ded">- 1,145</span></div>
+            <div class="r"><span class="l">健保自付</span><span class="v ded">- 710</span></div>
+            <div class="r"><span class="l">遲到</span><span class="v ded">- 121</span></div>
+            <div class="sep"></div>
+            <div class="net green"><span class="l">＝ 實領</span><span class="v">$ 84,259</span></div>
+          </div>
+          <div class="foot"><div class="note">如有疑問請洽人資部門</div></div>
+        </div>
+      </div>
+      <div class="caption">正式薪資單，結構同薪資袋：<b>本薪獨立最上</b> → 加項 → 減項 → 實領。津貼逐項、0 不顯示。</div>
+    </div>
+  </div>
+
+  <div class="flag">
+    ⚠️ 這 6,832「其他加項」是因為<b>七月是草稿、還沒跑完整計薪</b>：存檔 net (84,259) 比可見欄位加總多 6,832，殘差被吸收保證加得回實領。正式跑完/發布的月份會逐項到位、殘差歸 0。（薪資袋顯示同一筆也是這樣，兩邊一致。）
+  </div>
+
+  <div class="legend">
+    <b>改了什麼</b>
+    <ul>
+      <li>基本薪資→<b>本薪</b>、收入/扣款→<b>加項/減項</b>、實發→<b>實領</b>、遲到扣薪→<b>遲到</b></li>
+      <li>卡片 RPC 補回 <b>custom_allowances</b>（夜班/跨店等）＋勞保/健保拆分 → 逐項對齊薪資袋（不再塞「其他加項」）</li>
+      <li>金額為 <b>0 的項目不顯示</b></li>
+      <li>金額讀<b>已發布存檔值</b>，加得回實領（差額走殘差）</li>
+    </ul>
+  </div>
+</div>

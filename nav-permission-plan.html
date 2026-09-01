@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>全導航逐入口權限 — 規畫書</title>
+<style>
+  :root {
+    --bg: #f4f6f9;
+    --surface: #ffffff;
+    --surface-2: #eef1f5;
+    --ink: #171b22;
+    --ink-2: #454d5b;
+    --muted: #737d8c;
+    --line: #dde2ea;
+    --line-strong: #c6cdd8;
+    --accent: #0e7f97;
+    --accent-soft: #e2f1f4;
+    --good: #157f4a;
+    --good-soft: #e2f2ea;
+    --warn: #a9640a;
+    --warn-soft: #f8ecd8;
+    --risk: #b3341f;
+    --risk-soft: #f8e4de;
+    --code-bg: #eef1f5;
+    --shadow: 0 1px 2px rgba(20,27,38,.05), 0 6px 20px rgba(20,27,38,.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1319; --surface: #161b23; --surface-2: #1c222c;
+      --ink: #eef1f6; --ink-2: #bcc5d2; --muted: #7f8a99;
+      --line: #262d38; --line-strong: #333c49;
+      --accent: #35b6cf; --accent-soft: #12313a;
+      --good: #4cc188; --good-soft: #12321f;
+      --warn: #e0a44e; --warn-soft: #3a2c12;
+      --risk: #ef7a63; --risk-soft: #3a1d16;
+      --code-bg: #1c222c;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="light"] {
+    --bg: #f4f6f9; --surface: #ffffff; --surface-2: #eef1f5;
+    --ink: #171b22; --ink-2: #454d5b; --muted: #737d8c;
+    --line: #dde2ea; --line-strong: #c6cdd8;
+    --accent: #0e7f97; --accent-soft: #e2f1f4;
+    --good: #157f4a; --good-soft: #e2f2ea;
+    --warn: #a9640a; --warn-soft: #f8ecd8;
+    --risk: #b3341f; --risk-soft: #f8e4de;
+    --code-bg: #eef1f5;
+    --shadow: 0 1px 2px rgba(20,27,38,.05), 0 6px 20px rgba(20,27,38,.06);
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f1319; --surface: #161b23; --surface-2: #1c222c;
+    --ink: #eef1f6; --ink-2: #bcc5d2; --muted: #7f8a99;
+    --line: #262d38; --line-strong: #333c49;
+    --accent: #35b6cf; --accent-soft: #12313a;
+    --good: #4cc188; --good-soft: #12321f;
+    --warn: #e0a44e; --warn-soft: #3a2c12;
+    --risk: #ef7a63; --risk-soft: #3a1d16;
+    --code-bg: #1c222c;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.35);
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: "Segoe UI", system-ui, -apple-system, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+    line-height: 1.7; font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 56px 24px 96px; }
+  code, .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+
+  .eyebrow {
+    font-size: 12px; letter-spacing: .18em; text-transform: uppercase;
+    color: var(--accent); font-weight: 700; margin: 0 0 10px;
+  }
+  h1 {
+    font-size: clamp(30px, 5vw, 44px); line-height: 1.12; margin: 0 0 14px;
+    font-weight: 800; letter-spacing: -.01em; text-wrap: balance;
+  }
+  .lede { font-size: 18px; color: var(--ink-2); margin: 0; max-width: 60ch; }
+
+  .meta {
+    display: flex; flex-wrap: wrap; gap: 10px 22px; margin: 26px 0 0;
+    padding-top: 20px; border-top: 1px solid var(--line);
+    font-size: 13px; color: var(--muted);
+  }
+  .meta b { color: var(--ink-2); font-weight: 600; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 700;
+    background: var(--warn-soft); color: var(--warn);
+  }
+
+  section { margin-top: 52px; }
+  h2 {
+    font-size: 13px; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--muted); font-weight: 700; margin: 0 0 18px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  h2::before {
+    content: ""; width: 22px; height: 2px; background: var(--accent); flex: none;
+  }
+  h3 { font-size: 20px; font-weight: 700; margin: 0 0 8px; letter-spacing: -.005em; }
+  p { margin: 0 0 14px; color: var(--ink-2); }
+  p strong, li strong { color: var(--ink); font-weight: 650; }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: 14px; padding: 22px 24px; box-shadow: var(--shadow);
+  }
+  .stack { display: flex; flex-direction: column; gap: 16px; }
+
+  ul { margin: 0 0 14px; padding-left: 20px; color: var(--ink-2); }
+  li { margin: 5px 0; }
+  li::marker { color: var(--line-strong); }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 640px) { .grid2 { grid-template-columns: 1fr; } }
+
+  .tbl-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; min-width: 520px; }
+  th, td { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: var(--surface-2); font-weight: 700; font-size: 12px; letter-spacing: .04em; color: var(--ink-2); }
+  tr:last-child td { border-bottom: none; }
+  td.mono, th.mono { font-size: 13px; white-space: nowrap; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  .tag {
+    display: inline-block; padding: 2px 8px; border-radius: 6px;
+    font-size: 11.5px; font-weight: 700; white-space: nowrap;
+  }
+  .t-risk { background: var(--risk-soft); color: var(--risk); }
+  .t-warn { background: var(--warn-soft); color: var(--warn); }
+  .t-good { background: var(--good-soft); color: var(--good); }
+  .t-acc  { background: var(--accent-soft); color: var(--accent); }
+
+  code {
+    background: var(--code-bg); padding: 1px 6px; border-radius: 5px;
+    font-size: .88em; color: var(--ink); border: 1px solid var(--line);
+  }
+
+  .callout {
+    border-radius: 14px; padding: 20px 22px; border: 1px solid;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .callout .lbl { font-size: 12px; letter-spacing: .1em; text-transform: uppercase; font-weight: 800; }
+  .callout.decide { background: var(--warn-soft); border-color: color-mix(in srgb, var(--warn) 35%, transparent); }
+  .callout.decide .lbl { color: var(--warn); }
+  .callout.risk { background: var(--risk-soft); border-color: color-mix(in srgb, var(--risk) 35%, transparent); }
+  .callout.risk .lbl { color: var(--risk); }
+  .callout p:last-child { margin-bottom: 0; }
+
+  .phase {
+    display: grid; grid-template-columns: 44px 1fr; gap: 18px; align-items: start;
+    padding: 18px 0; border-top: 1px solid var(--line);
+  }
+  .phase:first-child { border-top: none; }
+  .phase .n {
+    font-family: ui-monospace, Menlo, monospace; font-size: 15px; font-weight: 700;
+    color: var(--accent); background: var(--accent-soft);
+    width: 44px; height: 44px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .phase h3 { font-size: 17px; margin-bottom: 4px; }
+  .phase p { margin: 0; font-size: 14.5px; }
+
+  .opt {
+    border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; background: var(--surface);
+  }
+  .opt.rec { border-color: color-mix(in srgb, var(--good) 45%, transparent); background: var(--good-soft); }
+  .opt h4 { margin: 0 0 6px; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+  .opt p { margin: 0; font-size: 13.5px; }
+  .opt .verdict { font-size: 11.5px; font-weight: 700; letter-spacing: .04em; }
+
+  .files { font-size: 14px; }
+  .files .row { display: flex; gap: 12px; padding: 9px 0; border-bottom: 1px dashed var(--line); }
+  .files .row:last-child { border-bottom: none; }
+  .files .path { font-family: ui-monospace, Menlo, monospace; font-size: 12.5px; color: var(--accent); flex: none; min-width: 210px; }
+  .files .what { color: var(--ink-2); font-size: 13.5px; }
+  @media (max-width: 640px) { .files .row { flex-direction: column; gap: 2px; } .files .path { min-width: 0; } }
+
+  .foot { margin-top: 60px; padding-top: 20px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header>
+    <p class="eyebrow">SME Ops · 權限系統 · 內部規畫</p>
+    <h1>全導航逐入口權限</h1>
+    <p class="lede">讓上排每個 top tab、側欄每個入口，各自擁有一個可對「個別員工」開／關的權限開關 —— 自動生成、全涵蓋、以後新增頁面自動納管。</p>
+    <div class="meta">
+      <span><b>版本</b>　v1 草案</span>
+      <span><b>日期</b>　2026-08-06</span>
+      <span><b>範圍</b>　導航可見性 / 路由存取</span>
+      <span class="pill">待你拍板</span>
+    </div>
+  </header>
+
+  <!-- 目標 -->
+  <section>
+    <h2>目標</h2>
+    <div class="card stack">
+      <p style="margin:0;">「<strong>每一個入口都有開關</strong>」—— 不是模組群組那種粗開關，而是導航的每一格都能逐人控管：</p>
+      <ul style="margin:0;">
+        <li><strong>上排 top tab</strong>（商務營運 / 供應鏈 / 財務會計 / 人員組織 / 專案流程 / 數據分析 / 通訊協作 / 物流調度…）各一個開關；關掉整組連底下側欄都不見。</li>
+        <li><strong>側欄每個 leaf 入口</strong>（如 收銀台、菜單管理、客戶管理、庫存…）各一個開關；關掉只有那一格不見。</li>
+        <li>關掉 = 該員工<strong>側欄看不到、直接打網址也進不去</strong>。</li>
+        <li>權限頁自動照「top tab → 底下入口」層次列出全部開關，<strong>以後加新頁自動出現</strong>，不用手維護。</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 現況 -->
+  <section>
+    <h2>現況與缺口</h2>
+    <p>現在的導航過濾集中在 <code>src/components/Sidebar.jsx</code>，靠兩張<strong>手維護的對照表</strong>：</p>
+    <ul>
+      <li><code>GROUP_PERM</code> — top tab → 一個粗權限碼（例：商務營運 → <code>nav.group.crm</code>）。<strong>但 CRM 和銷售共用同一碼</strong>，無法分開。</li>
+      <li><code>PATH_PERM</code> — 約 50 條 leaf → 權限碼，<strong>只涵蓋部分頁</strong>。沒列到的入口（POS 全部、CRM/銷售/WMS 多數 leaf）等於<strong>對所有登入者開放</strong>。</li>
+    </ul>
+    <p>結論：<strong>不是每個入口都有開關</strong>，而且粒度太粗、涵蓋不全、手維護容易漏。要達標就是把這套<strong>擴成全涵蓋 + 自動生成</strong>。</p>
+  </section>
+
+  <!-- 設計 -->
+  <section>
+    <h2>設計 — 兩層權限碼</h2>
+    <p><strong>唯一資料來源</strong>就是現有的 <code>sidebarConfig.js</code>（<code>majorGroups</code> 定 top tab、<code>groupNav</code> 定每 tab 底下的 section 與 leaf）。權限碼<strong>由它自動推導</strong>，不另外手列：</p>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr><th>層級</th><th class="mono">權限碼格式</th><th>來源</th><th class="num">數量（約）</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Top tab</strong></td>
+            <td class="mono"><code>nav.top.&lt;key&gt;</code></td>
+            <td>majorGroups 的 key（commerce、supply、finance…）</td>
+            <td class="num">8</td>
+          </tr>
+          <tr>
+            <td><strong>側欄入口</strong></td>
+            <td class="mono"><code>nav.entry.&lt;path&gt;</code></td>
+            <td>groupNav 每個 leaf 的 path（<code>/pos/menu</code> → <code>nav.entry.pos.menu</code>）</td>
+            <td class="num">≈ 150</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:14px;">碼的名稱＝入口中文名、分組＝所屬 top tab，全部由設定檔生成，所以<strong>權限頁與實際導航永遠一致</strong>，加新頁自動長出對應開關。</p>
+  </section>
+
+  <!-- 生效點 -->
+  <section>
+    <h2>生效點（四處一致）</h2>
+    <div class="grid2">
+      <div class="card">
+        <h3 style="font-size:16px;">① 上排 top tab</h3>
+        <p style="margin:0;font-size:14px;"><code>majorGroups.filter(g =&gt; hasPermission(nav.top.&lt;key&gt;))</code>；一個 tab 底下全部入口都被關才收起整個 tab。</p>
+      </div>
+      <div class="card">
+        <h3 style="font-size:16px;">② 側欄 leaf</h3>
+        <p style="margin:0;font-size:14px;">每個 <code>children</code> 依 <code>hasPermission(nav.entry.&lt;path&gt;)</code> 顯示／隱藏。</p>
+      </div>
+      <div class="card">
+        <h3 style="font-size:16px;">③ 路由守門</h3>
+        <p style="margin:0;font-size:14px;">進頁前依當前路徑檢查 <code>nav.entry.*</code>；沒權限 → 「權限不足」擋頁（擴充現有 <code>PagePermGuard.jsx</code>）。防止直接打網址繞過。</p>
+      </div>
+      <div class="card">
+        <h3 style="font-size:16px;">④ 權限頁</h3>
+        <p style="margin:0;font-size:14px;">從 sidebarConfig 自動生成開關清單，照 top tab → 入口分組；取代手維護的對照表。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 預設策略：決策點 -->
+  <section>
+    <h2>預設策略 — 需要你決定</h2>
+    <div class="callout decide" style="margin-bottom:18px;">
+      <span class="lbl">關鍵決策</span>
+      <p style="margin:0;">新權限上線那一刻，每個角色<strong>預設</strong>能看到哪些入口？這決定「會不會有人突然被鎖」或「會不會有人突然看到不該看的」。三個選項：</p>
+    </div>
+    <div class="stack">
+      <div class="opt rec">
+        <h4>A · 沿用現況<span class="tag t-good">建議</span></h4>
+        <p>用現行 <code>GROUP_PERM / PATH_PERM</code> 對照表推導：<strong>哪個角色現在看得到哪個入口，就把該入口預設開給那個角色</strong>。不放寬、不縮緊，上線零感知；admin 再逐人微調。生成時要對照現行對照表 + 角色預設，工比較細但最安全。</p>
+      </div>
+      <div class="opt">
+        <h4 style="justify-content:space-between;"><span>B · 全部預設開給所有角色</span><span class="verdict" style="color:var(--warn);">有副作用</span></h4>
+        <p>最簡單，上線沒人被鎖。<strong>但會放寬現有限制</strong> —— 例如門市人員原本看不到薪資／財務，全開後會突然看得到，要 admin 事後逐一關掉。安全性倒退。</p>
+      </div>
+      <div class="opt">
+        <h4 style="justify-content:space-between;"><span>C · 只給 admin，其餘全關</span><span class="verdict" style="color:var(--risk);">不可行</span></h4>
+        <p>上線瞬間所有非管理員<strong>整個導航消失</strong>，要一格一格開回來，全公司停擺。僅列出作對照。</p>
+      </div>
+    </div>
+    <p style="margin-top:16px;"><strong>我的建議：選 A</strong>（沿用現況）。你先前提過「預設全開」＝選 B，我把副作用標出來讓你再定奪。</p>
+  </section>
+
+  <!-- 權限頁呈現 -->
+  <section>
+    <h2>權限頁呈現</h2>
+    <p>現有權限頁（<code>員工個別權限</code>）分兩塊功能：</p>
+    <ul>
+      <li><strong>導航開關（新）</strong> — 自動列出全部 <code>nav.top.*</code> / <code>nav.entry.*</code>，照 top tab 摺疊分組，每組有「全開 / 全關」批次；約 160 個開關（量大但有分組、可搜尋）。</li>
+      <li><strong>功能權限（既有保留）</strong> — <code>salary.compute</code>、<code>leave.approve</code> 這類「能做什麼動作」的細碼不動，跟「能不能看到入口」是兩件事。</li>
+    </ul>
+    <p style="margin:0;">批次選多位員工一次套用的機制沿用現有，不重寫。</p>
+  </section>
+
+  <!-- 影響檔案 / 分階段 -->
+  <section>
+    <h2>施工範圍與階段</h2>
+    <div class="card files" style="margin-bottom:22px;">
+      <div class="row"><span class="path">migration（新）</span><span class="what">掃 sidebarConfig 產生每入口／每 tab 一個權限碼 + 依選定策略 seed 角色預設。以腳本讀設定檔生成靜態 SQL。</span></div>
+      <div class="row"><span class="path">Sidebar.jsx</span><span class="what">拿掉手維護 GROUP_PERM / PATH_PERM，改用自動推導碼過濾 top tab 與 leaf。</span></div>
+      <div class="row"><span class="path">PagePermGuard.jsx</span><span class="what">路由守門擴成依當前路徑檢查 <code>nav.entry.*</code>，未授權擋頁。</span></div>
+      <div class="row"><span class="path">EmployeePermissions.jsx</span><span class="what">新增「導航開關」區塊，從 sidebarConfig 自動生成清單（分組 + 批次 + 搜尋）。</span></div>
+      <div class="row"><span class="path">sidebarConfig.js</span><span class="what">補一個共用 helper（<code>navPermCode(path)</code> / <code>topPermCode(key)</code>）當單一真相來源，四處共用。</span></div>
+    </div>
+    <div class="card">
+      <div class="phase"><span class="n">1</span><div><h3>生成與種子</h3><p>腳本掃設定檔 → 產生權限碼清單 + migration（seed 權限 + 依策略 A 帶入角色預設）。跑完 DB 有全套碼，但先不接生效點 → 零影響。</p></div></div>
+      <div class="phase"><span class="n">2</span><div><h3>導航生效</h3><p>Sidebar + 路由守門改吃新碼。此時「看得到 / 進得去」完全由新碼決定 —— 上線前重點驗收段。</p></div></div>
+      <div class="phase"><span class="n">3</span><div><h3>權限頁</h3><p>權限頁長出「導航開關」自動清單，admin 可逐人逐入口開關。</p></div></div>
+      <div class="phase"><span class="n">4</span><div><h3>驗收</h3><p>各角色實測（門市人員 / 行政 / 主管 / admin）側欄與網址存取；確認無人被誤鎖、無人越權。</p></div></div>
+    </div>
+  </section>
+
+  <!-- 風險 -->
+  <section>
+    <h2>風險與界線</h2>
+    <div class="callout risk" style="margin-bottom:16px;">
+      <span class="lbl">最大風險 · 誤鎖</span>
+      <p style="margin:0;">導航全面改吃新碼後，若某入口漏 seed，該員工就進不去。對策：<strong>super_admin 永遠放行</strong>（既有邏輯）＋ 守門「查無此碼時預設放行」保底＋階段 2 全角色驗收後才上。</p>
+    </div>
+    <ul>
+      <li><strong>super_admin org 為 null</strong>：既有已知情形，此案只碰導航可見性、不碰資料 RLS，不受影響。</li>
+      <li><strong>不在範圍</strong>：功能動作細碼（salary.compute 等）不動；資料列級 RLS 不動；LIFF 導航另案。</li>
+      <li><strong>量</strong>：約 160 個權限碼。權限頁用分組摺疊 + 搜尋，載入與操作可接受。</li>
+    </ul>
+  </section>
+
+  <!-- 拍板 -->
+  <section>
+    <h2>待你拍板</h2>
+    <div class="card stack">
+      <p style="margin:0;"><span class="tag t-acc">1</span>　預設策略選 <strong>A 沿用現況</strong>（建議）還是 <strong>B 全開</strong>？</p>
+      <p style="margin:0;"><span class="tag t-acc">2</span>　top tab 與 leaf <strong>兩層都要開關</strong>，這樣對嗎？（本規畫是兩層都做）</p>
+      <p style="margin:0;"><span class="tag t-acc">3</span>　通訊協作 / 物流調度 / 超管 現在是 super_admin 限定 —— 要<strong>一起納入逐人開關</strong>，還是維持超管專屬？</p>
+      <p style="margin:0;"><span class="tag t-acc">4</span>　先做<strong>全部一次到位</strong>，還是先做一個 top tab（如商務營運）試點驗收再全鋪？</p>
+    </div>
+  </section>
+
+  <p class="foot">回覆這四題後我就照此開工。實作全程沿用你現有的 migration → Studio 跑 → 驗證流程，分階段推、每階段可回退。</p>
+
+</div>
+</body>
+</html>

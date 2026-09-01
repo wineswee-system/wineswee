@@ -26,7 +26,6 @@ import ExpenseRequests from '../pages/workflow/ExpenseRequests'
 import OrderRequestsPage from '../pages/process/OrderRequestsPage'
 import Bonus from '../pages/hr/Bonus'
 import LaborInspection from '../pages/hr/LaborInspection'
-import Training from '../pages/hr/Training'
 import MySchedule from '../pages/hr/MySchedule'
 import AttritionPrediction from '../pages/hr/AttritionPrediction'
 import CompensationBenchmark from '../pages/hr/CompensationBenchmark'
@@ -97,7 +96,6 @@ export default memo(function HRModule() {
       <Route path="order-requests" element={<OrderRequestsPage />} />
       <Route path="bonus" element={<Bonus />} />
       <Route path="labor-inspection" element={<LaborInspection />} />
-      <Route path="training" element={<Training />} />
       <Route path="my-schedule" element={<MySchedule />} />
       <Route path="attrition" element={<AttritionPrediction />} />
       <Route path="compensation" element={<CompensationBenchmark />} />

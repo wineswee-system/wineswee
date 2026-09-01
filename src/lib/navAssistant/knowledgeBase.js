@@ -235,12 +235,12 @@ export const KNOWLEDGE_BASE = [
     module: 'HR',
     category: '人才發展',
     title: '教育訓練',
-    path: '/hr/training',
-    keywords: ['教育訓練', '上課', '課程', '訓練紀錄', 'training'],
+    path: '/lms/admin',
+    keywords: ['教育訓練', '上課', '課程', '訓練紀錄', 'training', 'LMS', '報名', '線上學習'],
     steps: [
-      '進入「人才發展 → 教育訓練」',
-      '建立課程、指派對象、登記上課時數',
-      '可匯出勞檢所需的訓練紀錄',
+      '進入「人才發展 → 課程管理」(LMS)',
+      '建立課程 / 場次,指派對象或開放報名',
+      '學員於「我的學習」上課、測驗;可查學習進度與結業證書',
     ],
   },
   {

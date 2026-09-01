@@ -33,7 +33,6 @@ function matchNavPath(pathname) {
 // 頁內的「執行/編輯」動作另由動作碼(*.execute/*.edit)gate（見各頁）。
 export const PAGE_PERM = {
   '/hr/recruitment':      'recruit.view',
-  '/hr/training':         'training.view',
   '/hr/probation':        'probation.view',
   '/hr/severance':        'severance.view',
   '/hr/legal-deductions': 'legal_deduction.view',

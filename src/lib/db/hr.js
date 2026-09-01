@@ -126,35 +126,6 @@ export const updateExpenseStatus = (id, status, rejectReason, orgId) => {
   return q.select().single()
 }
 
-export const getTrainingCourses = (orgId) => {
-  let q = supabase.from('training_courses').select('*').order('id', { ascending: false })
-  if (orgId) q = q.eq('organization_id', orgId)
-  return q
-}
-
-export const createTrainingCourse = (data) =>
-  supabase.from('training_courses').insert(data).select().single()
-
-export const updateTrainingCourse = (id, data) =>
-  supabase.from('training_courses').update(data).eq('id', id).select().single()
-
-export const deleteTrainingCourse = (id, orgId) => {
-  let q = supabase.from('training_courses').delete().eq('id', id)
-  if (orgId) q = q.eq('organization_id', orgId)
-  return q
-}
-
-export const getTrainingEnrollments = (courseId) => {
-  const q = supabase.from('training_enrollments').select('*').order('id')
-  return courseId ? q.eq('course_id', courseId) : q
-}
-
-export const createTrainingEnrollment = (data) =>
-  supabase.from('training_enrollments').insert(data).select().single()
-
-export const updateTrainingEnrollment = (id, data) =>
-  supabase.from('training_enrollments').update(data).eq('id', id).select().single()
-
 export const getProbationRecords = (orgId) => {
   let q = supabase.from('probation_records').select('*').order('end_date')
   if (orgId) q = q.eq('organization_id', orgId)

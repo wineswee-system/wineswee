@@ -37,7 +37,8 @@ BEGIN
     'has_chain', (v_task.approval_chain_id IS NOT NULL),
     'task', (SELECT row_to_json(x) FROM (
         SELECT id, title, description, notes, assignee, assignee_id, status, priority,
-               due_date, store, task_code, category, bucket, project_id, created_at
+               due_date, due_time, planned_start, reminder_at, store, task_code,
+               category, bucket, project_id, estimated_hours, logged_hours, created_at
           FROM tasks WHERE id = p_task_id) x),
     'project', (SELECT row_to_json(p) FROM (
         SELECT id, name, description, status, progress
@@ -54,8 +55,12 @@ BEGIN
         FROM task_comments WHERE task_id = p_task_id), '[]'::json),
     'confirmations', COALESCE((SELECT json_agg(json_build_object('id', id, 'approver', approver, 'status', status, 'step_order', step_order, 'notes', notes) ORDER BY step_order, id)
         FROM task_confirmations WHERE task_id = p_task_id), '[]'::json),
-    'workflow', COALESCE((SELECT json_agg(json_build_object('id', id, 'template_name', template_name, 'status', status) ORDER BY started_at DESC NULLS LAST)
-        FROM workflow_instances WHERE triggered_by_task_id = p_task_id), '[]'::json)
+    'workflow_instance', (SELECT row_to_json(w) FROM (
+        SELECT id, template_name, status, notes, started_at
+          FROM workflow_instances WHERE id = v_task.workflow_instance_id) w),
+    'workflow_steps', COALESCE((SELECT json_agg(json_build_object(
+          'id', id, 'title', title, 'status', status, 'step_order', step_order, 'assignee', assignee) ORDER BY step_order NULLS LAST, id)
+        FROM tasks WHERE workflow_instance_id = v_task.workflow_instance_id AND v_task.workflow_instance_id IS NOT NULL), '[]'::json)
   ) INTO v_result;
 
   RETURN v_result;

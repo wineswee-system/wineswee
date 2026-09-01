@@ -328,7 +328,6 @@ export default function Sidebar() {
     '/hr/recently-deleted':   'nav.org.full',         // 最近刪除：manager/admin+
     // ── 人才發展 ──
     '/hr/recruitment':        'nav.talent',
-    '/hr/training':           'nav.talent',
     '/hr/probation':          'nav.talent',
     '/hr/transfer':           'nav.talent',
     '/hr/contract-employees': 'nav.talent',

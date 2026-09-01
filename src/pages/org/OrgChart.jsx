@@ -395,7 +395,7 @@ export default function OrgChart() {
                                   {staff.map(emp => (
                                     <div key={emp.id} style={{
                                       fontSize: 11,
-                                      color: isStoreLead(emp, s) ? color : 'var(--text-secondary)',
+                                      color: isStoreLead(emp, s) ? color : (emp.employment_type === '兼職' ? 'var(--accent-orange)' : 'var(--text-secondary)'),
                                       fontWeight: isStoreLead(emp, s) ? 600 : 400,
                                     }}>
                                       {labelOf(emp)}
@@ -467,7 +467,7 @@ export default function OrgChart() {
                             {staff.map(emp => (
                               <div key={emp.id} style={{
                                 fontSize: 11,
-                                color: isStoreLead(emp, s) ? color : 'var(--text-secondary)',
+                                color: isStoreLead(emp, s) ? color : (emp.employment_type === '兼職' ? 'var(--accent-orange)' : 'var(--text-secondary)'),
                                 fontWeight: isStoreLead(emp, s) ? 700 : 500,
                                 lineHeight: 1.3,
                               }}>

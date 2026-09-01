@@ -623,7 +623,7 @@ export default function Salary() {
 
   // ── 匯出薪資計算報表（每門市一張工作表，對齊會計薪資帳表）──
   // 走 preview_payroll（與批次計薪/入帳同源）→ 吃當前選的月份 + 門市篩選
-  const handleExportRegister = async () => {
+  const handleExportRegister = async (which = 'register') => {
     setExportingReg(true)
     try {
       const { data: rows, error } = await supabase.rpc('preview_payroll', {
@@ -668,9 +668,15 @@ export default function Salary() {
         // 補發(manual_backpay)與加項(manual_bonus)都歸「微調加項」欄(對齊畫面「加項」呈現),不另列補發前月差額
         return { ...p, manual_bonus: bonus + backpay, manual_deduction: deduct, _adjust_note_add: noteAdd, _adjust_note_ded: noteDed }
       })
-      const { exportPayrollRegister } = await import('../../lib/exportPayrollRegister')
-      exportPayrollRegister(enriched, empMap, month, org?.name || '')
-      toast.success(`已匯出 ${month} 薪資報表（${list.length} 人）`)
+      if (which === 'financial') {
+        const { exportFinancialReport } = await import('../../lib/exportFinancialReport')
+        exportFinancialReport(enriched, empMap, month, org?.name || '')
+        toast.success(`已匯出 ${month} 財務報表（${list.length} 人）`)
+      } else {
+        const { exportPayrollRegister } = await import('../../lib/exportPayrollRegister')
+        exportPayrollRegister(enriched, empMap, month, org?.name || '')
+        toast.success(`已匯出 ${month} 薪資報表（${list.length} 人）`)
+      }
     } catch (err) {
       console.error('Export register failed:', err)
       toast.error('匯出報表失敗：' + (err.message || '未知錯誤'))
@@ -734,9 +740,15 @@ export default function Salary() {
                 </button>
               )}
               {canExport && (
-                <button className="btn btn-secondary" onClick={handleExportRegister} disabled={exportingReg}
+                <button className="btn btn-secondary" onClick={() => handleExportRegister('register')} disabled={exportingReg}
                   title="每門市一張工作表的完整薪資帳表（含加項/扣項/公司負擔），吃當前月份與門市篩選">
                   <FileSpreadsheet size={14} /> {exportingReg ? '產生中…' : '薪資報表'}
+                </button>
+              )}
+              {canExport && (
+                <button className="btn btn-secondary" onClick={() => handleExportRegister('financial')} disabled={exportingReg}
+                  title="財務用列表(各門市彙總,保險拆普通/就業/職災) + 各門市逐人明細,吃當前月份與門市篩選">
+                  <FileSpreadsheet size={14} /> {exportingReg ? '產生中…' : '財務報表'}
                 </button>
               )}
               {canBank && (

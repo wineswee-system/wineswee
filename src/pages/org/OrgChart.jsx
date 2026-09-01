@@ -105,18 +105,14 @@ export default function OrgChart() {
     }).map(s => s.supervisor_id)
   )
 
-  // 總部門市 id（名稱含「總部/總公司」）— 這些人算「部門層」，留在部門框；掛實體門市的才踢到門市卡
-  const hqStoreIds = new Set((stores || []).filter(s => /總部|總公司/.test(s.name || '')).map(s => s.id))
-  const inHqOrNoStore = (e) => !e.store_id || hqStoreIds.has(e.store_id)
-
-  // Get sub-managers (is_manager but not the dept manager_id) — 只留總部/無門市，店長等門市主管歸門市卡
+  // Get sub-managers (is_manager but not the dept manager_id) — 已在門市卡出現的(店長等)歸門市卡，不進部門框
   const subManagers = (dept) =>
     employees.filter(e =>
       (e.department_id === dept.id || e.dept === dept.name)
       && e.is_manager
       && e.id !== dept.manager_id
       && !sectionSupervisorIds.has(e.id)
-      && inHqOrNoStore(e)
+      && notInStoreCard(e)
     )
 
   // Get regular members (non-manager)
@@ -155,8 +151,8 @@ export default function OrgChart() {
       })
   }
 
-  // Dept members excluding store staff — 只留總部/無門市的人在部門框；掛實體門市的一律在門市卡顯示
-  const deptMembersExcludingStoreStaff = (dept) => members(dept).filter(inHqOrNoStore)
+  // Dept members excluding store staff — 已在門市卡出現的人不重複列在部門框下；其餘(總部/無門市)都出來
+  const deptMembersExcludingStoreStaff = (dept) => members(dept).filter(notInStoreCard)
 
   // Stores belonging to a department（只顯示「有負責人」的門市:有設 manager_id、或店裡有人職位含店長;都沒有→不畫)
   const hasLead = (s) => !!s.manager_id || employees.some(e => e.store_id === s.id && (e.position || '').includes('店長') && !(e.position || '').includes('副店長'))
@@ -171,6 +167,20 @@ export default function OrgChart() {
   // 部門可關閉「課級(督導層)」:use_sections=false → 當作沒課,門市直接攤平掛部門(不畫課/督導)
   const hasSectionLayer = (dept) => dept.use_sections !== false && deptSections(dept).length > 0
   const sectionStores = (sec) => stores.filter(s => s.section_id === sec.id && hasLead(s))
+
+  // 「已在門市卡出現的員工」id 集合 — 用來把門市人員從部門框剔除(避免重複)。
+  //   只算真的會畫成門市卡的據點:非 apex/稽核部門的 deptStores + 課別 sectionStores + 未分配門市。
+  //   (apex 執行長室的據點如威耀總部不畫卡、且會吃進所有 store_id=20 的總部同仁,故必須排除)
+  const storeCardEmpIds = new Set()
+  departments
+    .filter(d => d.name !== apexName && !auditDeptIds.has(d.id))
+    .forEach(d => {
+      deptStores(d).forEach(s => storeEmployees(s).forEach(e => storeCardEmpIds.add(e.id)))
+      deptSections(d).forEach(sec => sectionStores(sec).forEach(s => storeEmployees(s).forEach(e => storeCardEmpIds.add(e.id))))
+    })
+  unassignedStores.forEach(s => storeEmployees(s).forEach(e => storeCardEmpIds.add(e.id)))
+  const notInStoreCard = (e) => !storeCardEmpIds.has(e.id)
+
   const supervisorOf = (sec) => sec.supervisor_id ? employees.find(e => e.id === sec.supervisor_id) : null
   const storeManagerOf = (s) => s.manager_id ? employees.find(e => e.id === s.manager_id) : null
 

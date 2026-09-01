@@ -105,13 +105,18 @@ export default function OrgChart() {
     }).map(s => s.supervisor_id)
   )
 
-  // Get sub-managers (is_manager but not the dept manager_id)
+  // 總部門市 id（名稱含「總部/總公司」）— 這些人算「部門層」，留在部門框；掛實體門市的才踢到門市卡
+  const hqStoreIds = new Set((stores || []).filter(s => /總部|總公司/.test(s.name || '')).map(s => s.id))
+  const inHqOrNoStore = (e) => !e.store_id || hqStoreIds.has(e.store_id)
+
+  // Get sub-managers (is_manager but not the dept manager_id) — 只留總部/無門市，店長等門市主管歸門市卡
   const subManagers = (dept) =>
     employees.filter(e =>
       (e.department_id === dept.id || e.dept === dept.name)
       && e.is_manager
       && e.id !== dept.manager_id
       && !sectionSupervisorIds.has(e.id)
+      && inHqOrNoStore(e)
     )
 
   // Get regular members (non-manager)
@@ -150,8 +155,8 @@ export default function OrgChart() {
       })
   }
 
-  // Dept members excluding store staff — 有掛門市的(非主管)人在門市卡顯示,不放部門框(部門框只留純部門層/主管)
-  const deptMembersExcludingStoreStaff = (dept) => members(dept).filter(e => !e.store_id)
+  // Dept members excluding store staff — 只留總部/無門市的人在部門框；掛實體門市的一律在門市卡顯示
+  const deptMembersExcludingStoreStaff = (dept) => members(dept).filter(inHqOrNoStore)
 
   // Stores belonging to a department（只顯示「有負責人」的門市:有設 manager_id、或店裡有人職位含店長;都沒有→不畫)
   const hasLead = (s) => !!s.manager_id || employees.some(e => e.store_id === s.id && (e.position || '').includes('店長') && !(e.position || '').includes('副店長'))

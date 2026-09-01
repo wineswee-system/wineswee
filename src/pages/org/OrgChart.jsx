@@ -150,18 +150,19 @@ export default function OrgChart() {
     return members(dept).filter(e => !e.store_id || !deptStoreIds.has(e.store_id))
   }
 
-  // Stores belonging to a department
+  // Stores belonging to a department（只顯示「有負責人」的門市:有設 manager_id、或店裡有人職位含店長;都沒有→不畫)
+  const hasLead = (s) => !!s.manager_id || employees.some(e => e.store_id === s.id && (e.position || '').includes('店長') && !(e.position || '').includes('副店長'))
   const deptStores = (dept) =>
-    stores.filter(s => s.department_id === dept.id)
+    stores.filter(s => s.department_id === dept.id && hasLead(s))
 
   // Stores not assigned to any department（也要排除已掛「課別」的門市，否則掛課的門市會同時出現在課別樹與未分配）
-  const unassignedStores = stores.filter(s => !s.department_id && !s.section_id)
+  const unassignedStores = stores.filter(s => !s.department_id && !s.section_id && hasLead(s))
 
   // Sections (課) belonging to a department
   const deptSections = (dept) => sections.filter(sec => sec.department_id === dept.id)
   // 部門可關閉「課級(督導層)」:use_sections=false → 當作沒課,門市直接攤平掛部門(不畫課/督導)
   const hasSectionLayer = (dept) => dept.use_sections !== false && deptSections(dept).length > 0
-  const sectionStores = (sec) => stores.filter(s => s.section_id === sec.id)
+  const sectionStores = (sec) => stores.filter(s => s.section_id === sec.id && hasLead(s))
   const supervisorOf = (sec) => sec.supervisor_id ? employees.find(e => e.id === sec.supervisor_id) : null
   const storeManagerOf = (s) => s.manager_id ? employees.find(e => e.id === s.manager_id) : null
 

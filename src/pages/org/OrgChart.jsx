@@ -105,29 +105,22 @@ export default function OrgChart() {
     }).map(s => s.supervisor_id)
   )
 
-  // 任何門市的負責人 id 集合 —— 這些人顯示在門市卡,不該再列進部門框(避免重複 + 掛錯層)
-  const storeMgrIds = new Set(stores.map(s => s.manager_id).filter(Boolean))
-  // 部門「純部門層」人員條件:沒掛門市(store_id 空)且不是任何店負責人
-  const isDeptLevel = (e) => !e.store_id && !storeMgrIds.has(e.id)
-
-  // Get sub-managers (is_manager but not the dept manager_id;排除店負責人/門市人員)
+  // Get sub-managers (is_manager but not the dept manager_id)
   const subManagers = (dept) =>
     employees.filter(e =>
       (e.department_id === dept.id || e.dept === dept.name)
       && e.is_manager
       && e.id !== dept.manager_id
       && !sectionSupervisorIds.has(e.id)
-      && isDeptLevel(e)
     )
 
-  // Get regular members (non-manager;排除門市人員/店負責人)
+  // Get regular members (non-manager)
   const members = (dept) =>
     employees.filter(e =>
       (e.department_id === dept.id || e.dept === dept.name)
       && !e.is_manager
       && e.id !== dept.manager_id
       && !sectionSupervisorIds.has(e.id)
-      && isDeptLevel(e)
     )
 
   // Employees assigned to a store, with 負責人 first

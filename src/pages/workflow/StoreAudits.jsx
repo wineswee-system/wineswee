@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
 import { Link, useSearchParams } from 'react-router-dom'
-import { ClipboardCheck, Plus, Search, Settings, Trash2 } from 'lucide-react'
+import { ClipboardCheck, Plus, Search, Settings, Trash2, BarChart3 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -118,6 +118,12 @@ export default function StoreAudits() {
             <p>共 {list.length} 筆 · 待確認 {counts['待確認']} · 簽核中 {counts['申請中']}</p>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <Link to="/process/audit-report"
+              className="btn btn-secondary"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}
+              title="門市稽核月報表:分數排名+常見缺失">
+              <BarChart3 size={16} /> 月報表
+            </Link>
             <Link to="/process/settings/chains/edit?formType=store_audit&label=門市稽核&mode=single"
               className="btn btn-secondary"
               style={{ display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}

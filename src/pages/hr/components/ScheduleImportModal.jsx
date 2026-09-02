@@ -165,16 +165,33 @@ export default function ScheduleImportModal({ open, onClose, employees, stores, 
         row.employee = emp
 
         const absLine = lines.find(l => GRID_ABSENCE[l])
-        const timeLine = lines.find(l => TIME_LINE_RE.test(l))
+        // 收集所有時段(支援兩頭班:多行時段,或一行「11~14 / 18~22」)
+        const segs = []
+        for (const l of lines) {
+          for (const part of l.split(/\s*[\/／]\s*/)) {
+            if (TIME_LINE_RE.test(part)) {
+              const n = normalizeShift(part.trim())
+              if (n && n.type === 'time') segs.push(n)
+            }
+          }
+        }
 
-        if (timeLine) {
-          const norm = normalizeShift(timeLine)
-          if (!norm || norm.type !== 'time') { row.issue = `班別格式錯：${timeLine}`; rows.push(row); continue }
-          row.shift = norm.shift
-          row.actual_start = norm.start
-          row.actual_end = norm.end
+        if (segs.length >= 1) {
+          const s1 = segs[0]
+          row.actual_start = s1.start
+          row.actual_end = s1.end
           row.shift_type = 'time'
-          const storeLine = lines.find(l => l !== timeLine && l !== absLine && CJK_ONLY.test(l))
+          if (segs.length >= 2) {
+            // 兩頭班:shift=兩段合併、actual_*=第一段、shift_2/actual_*_2=第二段
+            const s2 = segs[1]
+            row.shift = `${s1.start}~${s1.end}\n${s2.start}~${s2.end}`
+            row.shift_2 = `${s2.start}~${s2.end}`
+            row.actual_start_2 = s2.start
+            row.actual_end_2 = s2.end
+          } else {
+            row.shift = s1.shift
+          }
+          const storeLine = lines.find(l => !TIME_LINE_RE.test(l) && l !== absLine && CJK_ONLY.test(l))
           row.source_store = resolveStore(storeLine) || emp.store || null
         } else if (absLine) {
           row.shift = GRID_ABSENCE[absLine]
@@ -298,6 +315,7 @@ export default function ScheduleImportModal({ open, onClose, employees, stores, 
     const rows = validRows.map(r => ({
       rowNum: r.rowNum, name: r.name, date: r.date, shift: r.shift,
       actual_start: r.actual_start, actual_end: r.actual_end, source_store: r.source_store,
+      shift_2: r.shift_2 || null, actual_start_2: r.actual_start_2 || null, actual_end_2: r.actual_end_2 || null,
     }))
     const { data: res, error: impErr } = await supabase.rpc('import_schedules', {
       p_rows: rows,

@@ -46,9 +46,34 @@ function normalizeShift(raw) {
   return { type: 'time', shift: label, start, end }
 }
 
+// ── 門市格子表(xlsx)支援 ──────────────────────────────────────
+// 格子表 = 第一欄姓名 × 日號欄(1..31),格子內「門市\n時間」或 休息/例假/休。
+// 系統 schedules.shift 對假別用完整字串:休息/例假/國定假/特休/補休…
+const GRID_ABSENCE = {
+  '休': '休息', '休息': '休息', '休假': '休息',
+  '例': '例假', '例假': '例假', '例假日': '例假',
+  '國定': '國定假', '國定假': '國定假', '國定假日': '國定假',
+  '特休': '特休', '特': '特休',
+  '補休': '補休', '補': '補休',
+  '病': '病', '事': '事', '婚': '婚', '喪': '喪', '公': '公',
+  '產': '產', '生': '生', '工傷': '工傷', '陪產': '陪產', '會議': '會議',
+}
+const CJK_ONLY = /^[一-鿿]+$/
+// 去掉姓名尾端的 (PT)/(工讀)/(兼職) 等括號註記,才能對到 DB 員工
+function stripPtSuffix(name) {
+  return String(name || '').replace(/\s*[（(]\s*(PT|pt|工讀|兼職|正職|職)\s*[）)]\s*$/, '').trim()
+}
+// 時間行判斷:含「數字-數字」或「數字~數字」
+const TIME_LINE_RE = /\d{1,2}\s*[-~～]\s*\d{1,2}/
+
 export default function ScheduleImportModal({ open, onClose, employees, stores, orgId, onImported }) {
   const [parsed, setParsed] = useState([])
   const [importing, setImporting] = useState(false)
+  // 門市格子表用:該表沒有年月,由使用者選(預設本月)
+  const [gridYm, setGridYm] = useState(() => {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+  })
 
   if (!open) return null
 
@@ -68,6 +93,102 @@ export default function ScheduleImportModal({ open, onClose, employees, stores, 
     e.target.value = ''
     const text = (await file.text()).replace(/^﻿/, '')
     parseCsv(text)
+  }
+
+  // ── 門市格子表 xlsx ──
+  const handleXlsxFile = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+    if (!/^\d{4}-\d{2}$/.test(gridYm)) { toast.error('請先選擇年月'); return }
+    try {
+      const XLSX = await import('xlsx')
+      const wb = XLSX.read(new Uint8Array(await file.arrayBuffer()), { type: 'array' })
+      const ws = wb.Sheets[wb.SheetNames[0]]
+      const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
+      parseGrid(raw)
+    } catch (err) {
+      toast.error('xlsx 解析失敗：' + err.message)
+    }
+  }
+
+  // 門市名解析:格子前綴(信義)→ 對到 stores 主檔(信義安和)。回傳正式店名或 null
+  const resolveStore = (prefix) => {
+    if (!prefix) return null
+    const list = stores || []
+    const hit = list.find(s => s.name === prefix)
+      || list.find(s => s.name.includes(prefix) || prefix.includes(s.name))
+    return hit ? hit.name : null
+  }
+
+  const parseGrid = (raw) => {
+    const [year, mm] = gridYm.split('-')
+    // 1) 找日號列(整列多為 1..31)
+    let dayRowIdx = -1
+    for (let ri = 0; ri < Math.min(raw.length, 6); ri++) {
+      const dayLike = (raw[ri] || []).slice(1)
+        .filter(c => { const v = String(c).trim(); return /^\d{1,2}$/.test(v) && +v >= 1 && +v <= 31 })
+      if (dayLike.length >= 20) { dayRowIdx = ri; break }
+    }
+    if (dayRowIdx < 0) { toast.error('找不到日期列(1~31)，請確認是「門市格子表」格式'); return }
+
+    // 2) 欄index → 日號(只認 1..31,忽略末欄合計數字)
+    const colDay = []
+    const hdr = raw[dayRowIdx] || []
+    for (let c = 1; c < hdr.length; c++) {
+      const v = String(hdr[c]).trim()
+      if (/^\d{1,2}$/.test(v) && +v >= 1 && +v <= 31) colDay[c] = +v
+    }
+
+    const rows = []
+    for (let ri = dayRowIdx + 1; ri < raw.length; ri++) {
+      const r = raw[ri] || []
+      const rawName = String(r[0] || '').trim()
+      if (!rawName) continue
+      if (/^[一二三四五六日\s]+$/.test(rawName)) continue  // 星期列
+      const name = stripPtSuffix(rawName)
+      const empMatches = (employees || []).filter(e => e.name === name)
+
+      for (let c = 1; c < r.length; c++) {
+        const day = colDay[c]
+        if (!day) continue
+        const cell = String(r[c] || '').trim()
+        if (!cell) continue  // 空白 = 未排,略過(不當休息)
+        const date = `${year}-${mm}-${String(day).padStart(2, '0')}`
+        const lines = cell.split('\n').map(l => l.trim()).filter(Boolean)
+        const row = { rowNum: `${day}`, name, date, shiftRaw: cell.replace(/\n/g, ' '), issue: null }
+
+        if (empMatches.length === 0) { row.issue = '找不到員工'; rows.push(row); continue }
+        if (empMatches.length > 1) { row.issue = '員工重名'; rows.push(row); continue }
+        const emp = empMatches[0]
+        row.employee_id = emp.id
+        row.employee = emp
+
+        const absLine = lines.find(l => GRID_ABSENCE[l])
+        const timeLine = lines.find(l => TIME_LINE_RE.test(l))
+
+        if (timeLine) {
+          const norm = normalizeShift(timeLine)
+          if (!norm || norm.type !== 'time') { row.issue = `班別格式錯：${timeLine}`; rows.push(row); continue }
+          row.shift = norm.shift
+          row.actual_start = norm.start
+          row.actual_end = norm.end
+          row.shift_type = 'time'
+          const storeLine = lines.find(l => l !== timeLine && l !== absLine && CJK_ONLY.test(l))
+          row.source_store = resolveStore(storeLine) || emp.store || null
+        } else if (absLine) {
+          row.shift = GRID_ABSENCE[absLine]
+          row.shift_type = 'absence'
+          row.source_store = null
+        } else {
+          row.issue = `無法解析：${cell.replace(/\n/g, ' ')}`
+          rows.push(row); continue
+        }
+        rows.push(row)
+      }
+    }
+    if (rows.length === 0) { toast.error('沒有解析到任何班次'); return }
+    setParsed(rows)
   }
 
   const parseCsv = (text) => {
@@ -217,7 +338,7 @@ export default function ScheduleImportModal({ open, onClose, employees, stores, 
       }}>
         {/* Header */}
         <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>📤 匯入排班 CSV</h3>
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>📤 匯入排班（CSV / 門市格子表 xlsx）</h3>
           <button onClick={onClose} className="btn btn-secondary" style={{ padding: '4px 8px' }}>
             <X size={14} />
           </button>
@@ -230,9 +351,21 @@ export default function ScheduleImportModal({ open, onClose, employees, stores, 
             <button className="btn btn-secondary" onClick={handleDownloadTemplate}>
               <Download size={14} /> 下載 CSV 模板
             </button>
-            <label className="btn btn-primary" style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <label className="btn btn-secondary" style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
               <input type="file" accept=".csv,text/csv" onChange={handleFile} style={{ display: 'none' }} />
               <Upload size={14} /> 選 CSV 檔案
+            </label>
+
+            {/* 門市格子表 xlsx */}
+            <span style={{ width: 1, alignSelf: 'stretch', background: 'var(--border-medium)', margin: '0 4px' }} />
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 13, color: 'var(--text-secondary)' }}>
+              年月
+              <input type="month" value={gridYm} onChange={e => setGridYm(e.target.value)}
+                style={{ padding: '5px 8px', borderRadius: 6, border: '1px solid var(--border-medium)', background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: 13 }} />
+            </label>
+            <label className="btn btn-primary" style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              <input type="file" accept=".xlsx,.xls" onChange={handleXlsxFile} style={{ display: 'none' }} />
+              <Upload size={14} /> 選門市格子表 xlsx
             </label>
             {parsed.length > 0 && (
               <button className="btn btn-primary" onClick={handleImport} disabled={importing || validRows.length === 0}>
@@ -247,6 +380,9 @@ export default function ScheduleImportModal({ open, onClose, employees, stores, 
             <strong>班別格式：</strong>時段（<code>11~20</code> / <code>11:00~20:00</code>）或假別（休/補休/特休/病/事/會議/產 等）<br />
             <strong>門市：</strong>空白 = 用員工主店；填的話必須是員工授權的店（主店或可支援門市）<br />
             <strong>覆寫規則：</strong>同員工同日期會直接覆蓋舊資料
+            <hr style={{ border: 0, borderTop: '1px solid var(--border-subtle)', margin: '8px 0' }} />
+            <strong>門市格子表 xlsx：</strong>第一欄姓名 × 日號欄(1~31)，格子填「門市＋時間」(如 <code>信義 10~19</code>)或 <code>休息/例假</code>。
+            <strong>先選「年月」</strong>(檔案本身沒有年月) → 再選 xlsx。<code>(PT)</code> 自動去除對員工；空白格＝未排(略過)；門市前綴自動對主檔(信義→信義安和)。
           </div>
 
           {/* 預覽表 */}

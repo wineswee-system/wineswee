@@ -1733,6 +1733,9 @@ export default function Schedule() {
             <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 16px' }} onClick={exportGridXlsx}>
               📊 輸出 Excel
             </button>
+            <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 16px' }} onClick={() => setShowImportModal(true)}>
+              📥 匯入班表
+            </button>
             {/* 排班檢查按鈕：依 compliance state 顯示狀態 */}
             <button
               className="btn btn-secondary"

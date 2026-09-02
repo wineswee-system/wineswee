@@ -146,6 +146,31 @@ export default function InstanceDetailView({
   const [ctxMenu, setCtxMenu] = useState(null) // { task, x, y }
   const [editingAssigneeId, setEditingAssigneeId] = useState(null)
   const [editingDueDateId, setEditingDueDateId] = useState(null)
+  // 步驟任務列小標記:一次撈本 instance 全任務的 備註/附件/討論,讓清單上不用點進去就看得到
+  const [rowMeta, setRowMeta] = useState({})
+  const _stepIdsKey = instSteps.map(s => s.id).join(',')
+  useEffect(() => {
+    const ids = instSteps.map(s => s.id).filter(Boolean)
+    if (!ids.length) { setRowMeta({}); return }
+    let cancelled = false
+    ;(async () => {
+      const { supabase } = await import('../../../lib/supabase')
+      const [tRes, aRes, cRes] = await Promise.all([
+        supabase.from('tasks').select('id, notes').in('id', ids),
+        supabase.from('task_attachments').select('task_id').in('task_id', ids),
+        supabase.from('task_comments').select('task_id').in('task_id', ids),
+      ])
+      if (cancelled) return
+      const m = {}
+      for (const id of ids) m[id] = { note: false, att: 0, cmt: 0 }
+      for (const t of (tRes.data || [])) if (m[t.id] && t.notes && String(t.notes).trim()) m[t.id].note = true
+      for (const a of (aRes.data || [])) if (m[a.task_id]) m[a.task_id].att++
+      for (const c of (cRes.data || [])) if (m[c.task_id]) m[c.task_id].cmt++
+      setRowMeta(m)
+    })()
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [_stepIdsKey])
 
   const handleAddTask = () => {
     const errs = {}
@@ -602,6 +627,9 @@ export default function InstanceDetailView({
                             {step.title}
                           </div>
                         )}
+                        {rowMeta[step.id]?.note && <span title="有備註" style={{ fontSize: 12, flexShrink: 0 }}>📝</span>}
+                        {rowMeta[step.id]?.att > 0 && <span title={`附件 ${rowMeta[step.id].att} 個`} style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0, fontWeight: 700 }}>📎{rowMeta[step.id].att}</span>}
+                        {rowMeta[step.id]?.cmt > 0 && <span title={`討論 ${rowMeta[step.id].cmt} 則`} style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0, fontWeight: 700 }}>💬{rowMeta[step.id].cmt}</span>}
                       </div>
                     </td>
                     {/* Assignee — click to pick inline */}

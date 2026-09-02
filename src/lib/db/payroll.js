@@ -1,12 +1,12 @@
 import { supabase } from '../supabase'
 import { dedup } from './utils'
 
+// 註:payroll_runs 是「全域批次」(generate_payroll 建 run 只寫 pay_period/status/created_by,不設 org;
+//   org 分野在 payroll_records)。表無 organization_id 欄 → 不可對它加 org 篩選,否則 42703 炸整頁。
 export const getPayrollRuns = (orgId) =>
-  dedup(`payrollRuns:${orgId || 'all'}`, () => {
-    let q = supabase.from('payroll_runs').select('*').order('pay_period', { ascending: false })
-    if (orgId) q = q.eq('organization_id', orgId)
-    return q
-  })
+  dedup(`payrollRuns:${orgId || 'all'}`, () =>
+    supabase.from('payroll_runs').select('*').order('pay_period', { ascending: false })
+  )
 
 export const getPayrollRecords = (runId, orgId) => {
   let q = supabase.from('payroll_records').select('*').eq('payroll_run_id', runId).order('id').limit(1000)
@@ -14,10 +14,9 @@ export const getPayrollRecords = (runId, orgId) => {
   return q
 }
 
-export const updatePayrollRun = (id, data, orgId) => {
-  let q = supabase.from('payroll_runs').update(data).eq('id', id)
-  if (orgId) q = q.eq('organization_id', orgId)
-  return q.select().single()
+export const updatePayrollRun = (id, data) => {
+  // payroll_runs 無 organization_id 欄(全域批次),不可加 org 篩選
+  return supabase.from('payroll_runs').update(data).eq('id', id).select().single()
 }
 
 export const getLeaveStepSettings = () =>

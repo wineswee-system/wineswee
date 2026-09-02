@@ -151,7 +151,15 @@ export default function AuditReport() {
       R++
     })
     const ws = XLSX.utils.aoa_to_sheet(rows)
-    ws['!cols'] = [{ wch: 6 }, { wch: 15 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 42 }]
+    // 依內容自動配欄寬(中文字約算 1.8 寬;跳過標題/區塊/空白列;夾在 6~50)
+    const dw = (s) => { s = String(s ?? ''); let n = 0; for (const ch of s) n += ch.charCodeAt(0) > 255 ? 1.8 : 1; return n }
+    const colW = [0, 0, 0, 0, 0, 0]
+    rows.forEach((r) => {
+      if (!Array.isArray(r)) return
+      if (r.filter(x => x !== '' && x != null).length <= 1) return
+      r.forEach((v, c) => { if (c < 6) colW[c] = Math.max(colW[c], dw(v)) })
+    })
+    ws['!cols'] = colW.map(w => ({ wch: Math.min(50, Math.max(6, Math.round(w) + 2)) }))
     ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 5 } }, { s: { r: 1, c: 0 }, e: { r: 1, c: 5 } }]
     ws['!rows'] = rows.map((_, i) => ({ hpt: (i >= dataStart && i < dataStart + defs.length) ? 30 : (i === 0 ? 26 : 18) }))
     Object.entries(st).forEach(([k, s]) => { const [r, c] = k.split(',').map(Number); const a = XLSX.utils.encode_cell({ r, c }); if (!ws[a]) ws[a] = { t: 's', v: '' }; ws[a].s = s })

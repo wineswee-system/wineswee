@@ -166,12 +166,14 @@ export default function ScheduleImportModal({ open, onClose, employees, stores, 
 
         const absLine = lines.find(l => GRID_ABSENCE[l])
         // 收集所有時段(支援兩頭班:多行時段,或一行「11~14 / 18~22」)
+        // 2400 → 00:00(午夜,對齊系統慣例;跨午夜由 start>end 自動判)
+        const fixMid = t => (t === '24:00' ? '00:00' : t)
         const segs = []
         for (const l of lines) {
           for (const part of l.split(/\s*[\/／]\s*/)) {
             if (TIME_LINE_RE.test(part)) {
               const n = normalizeShift(part.trim())
-              if (n && n.type === 'time') segs.push(n)
+              if (n && n.type === 'time') { n.start = fixMid(n.start); n.end = fixMid(n.end); segs.push(n) }
             }
           }
         }
@@ -189,7 +191,7 @@ export default function ScheduleImportModal({ open, onClose, employees, stores, 
             row.actual_start_2 = s2.start
             row.actual_end_2 = s2.end
           } else {
-            row.shift = s1.shift
+            row.shift = `${s1.start}~${s1.end}`
           }
           const storeLine = lines.find(l => !TIME_LINE_RE.test(l) && l !== absLine && CJK_ONLY.test(l))
           row.source_store = resolveStore(storeLine) || emp.store || null

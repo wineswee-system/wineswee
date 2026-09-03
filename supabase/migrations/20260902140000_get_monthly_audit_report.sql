@@ -61,7 +61,8 @@ BEGIN
   FROM (
     SELECT COALESCE(NULLIF(btrim(i.category_name), ''), '(未分類)') AS name,
            count(*)::int AS cnt,
-           COALESCE(sum(i.deduct_score), 0)::int AS deduct
+           COALESCE(sum(i.deduct_score), 0)::int AS deduct,
+           count(DISTINCT a.store_name)::int AS stores
     FROM public.store_audit_items i
     JOIN public.store_audits a ON a.id = i.audit_id
     WHERE a.organization_id = p_org AND a.status = '已核准'

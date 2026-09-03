@@ -155,14 +155,15 @@ export default function AuditReport() {
     if (cats.length) {
       rows.push(['']); R++
       rows.push(['■ 缺失分類彙總（依扣分）', '', '', '', '', '']); put(R, 0, { font: { bold: true, sz: 13, color: { rgb: WINE } } }); R++
-      const h3 = ['分類', '次數', '扣分', '', '', '']
-      rows.push(h3);['分類', '次數', '扣分'].forEach((_, c) => put(R, c, { font: { bold: true, sz: 11, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: WINE } }, alignment: { horizontal: c === 0 ? 'left' : 'center', vertical: 'center' }, border })); R++
+      const h3 = ['分類', '次數', '涉及門市', '扣分', '', '']
+      rows.push(h3);['分類', '次數', '涉及門市', '扣分'].forEach((_, c) => put(R, c, { font: { bold: true, sz: 11, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: WINE } }, alignment: { horizontal: c === 0 ? 'left' : 'center', vertical: 'center' }, border })); R++
       cats.forEach((c, i) => {
-        rows.push([c.name, c.cnt, c.deduct, '', '', ''])
+        rows.push([c.name, c.cnt, (c.stores === scores.length && scores.length > 0) ? `${c.stores} 家全中` : `${c.stores} 家`, c.deduct, '', ''])
         const zeb = i % 2 ? { fgColor: { rgb: ZEBRA } } : undefined
         put(R, 0, { font: { bold: true, color: { rgb: INK } }, fill: zeb, alignment: { horizontal: 'left', vertical: 'center' }, border })
         put(R, 1, { font: { color: { rgb: SUB } }, fill: zeb, alignment: { horizontal: 'center' }, border })
-        put(R, 2, { font: { bold: true, color: { rgb: WINK } }, fill: zeb, alignment: { horizontal: 'center' }, border })
+        put(R, 2, { font: { color: { rgb: (c.stores === scores.length && scores.length > 0) ? RED : SUB } }, fill: zeb, alignment: { horizontal: 'center' }, border })
+        put(R, 3, { font: { bold: true, color: { rgb: WINK } }, fill: zeb, alignment: { horizontal: 'center' }, border })
         R++
       })
     }
@@ -280,12 +281,15 @@ export default function AuditReport() {
               <div className="ar-sec"><span className="mk" style={{ background: 'var(--wine-soft)' }}>🗂️</span><h2>缺失分類彙總</h2><span className="sub">依扣分</span></div>
               <div style={{ overflowX: 'auto' }}>
                 <table>
-                  <thead><tr><th className="l">分類</th><th style={{ width: 80 }}>次數</th><th className="l" style={{ width: 240 }}>扣分</th></tr></thead>
+                  <thead><tr><th className="l">分類</th><th style={{ width: 64 }}>次數</th><th style={{ width: 100 }}>涉及門市</th><th className="l" style={{ width: 220 }}>扣分</th></tr></thead>
                   <tbody>
                     {cats.map(c => (
                       <tr key={c.name}>
                         <td className="ar-l ar-store" style={{ fontSize: 14 }}>{c.name}</td>
                         <td className="ar-c ar-revi">{c.cnt}</td>
+                        <td className="ar-c">{c.stores === scores.length && scores.length > 0
+                          ? <span className="ar-pill ar-pd">{c.stores} 家全中</span>
+                          : <span className="ar-revi">{c.stores} 家</span>}</td>
                         <td><div className="ar-freq"><span className="ar-freqbar"><i style={{ width: (c.deduct / maxCatDeduct * 100) + '%' }} /></span><span className="ar-freqn" style={{ minWidth: 40, color: 'var(--wine-ink)' }}>{c.deduct}</span></div></td>
                       </tr>
                     ))}

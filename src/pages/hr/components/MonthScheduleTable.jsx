@@ -215,7 +215,7 @@ export default function MonthScheduleTable({
                       onClickEmployeeBadge={onClickEmployeeBadge}
                       lockedDates={lockedDates}
                       lockedStoreMonths={lockedStoreMonths}
-                      empHours={empHours}
+                      empHours={empHours} locations={locations} locations={locations}
                       onReorder={onReorder}
                     />
                   )
@@ -256,7 +256,7 @@ export default function MonthScheduleTable({
                     onClickEmployeeBadge={onClickEmployeeBadge}
                     lockedDates={lockedDates}
                     lockedStoreMonths={lockedStoreMonths}
-                    empHours={empHours}
+                    empHours={empHours} locations={locations}
                     onReorder={onReorder}
                   />
                 ))
@@ -350,6 +350,7 @@ function EmployeeRow({
   lockedStoreMonths = new Set(),  // Set<`${store_id}|${YYYY-MM}`> — 全門市模式:依本列員工的店該月是否鎖定
   onReorder,
   empHours = {},
+  locations = [],
 }) {
   const isDateLocked = (date) => {
     if (lockedDates && lockedDates.has(date)) return true  // 單店模式(或跨月共同鎖)

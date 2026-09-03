@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { ModalOverlay } from '../../../components/Modal'
 import Time24 from '../../../components/Time24'
 
-export default function ShiftEditPopup({ emp, date, shift, storeSettings, schedules, currentSchedule, handleSetShift, handleDeleteShift, onClose, shiftDefs = [] }) {
+export default function ShiftEditPopup({ emp, date, shift, storeSettings, schedules, currentSchedule, handleSetShift, handleDeleteShift, onClose, shiftDefs = [], activeStores = null }) {
   const dow = ['日', '一', '二', '三', '四', '五', '六'][new Date(date).getDay()]
   const dayNames = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
   const oh = storeSettings?.operating_hours?.[dayNames[new Date(date).getDay()]]
@@ -20,10 +20,14 @@ export default function ShiftEditPopup({ emp, date, shift, storeSettings, schedu
   // 手動改時間則清掉，退回用 起~迄 當名稱。
   const [pickedLabel, setPickedLabel] = useState(null)
 
-  const storeOptions = [
+  // 上班地點下拉:只留現有(active)門市;傳入 activeStores 才過濾(沒傳=不過濾,向後相容)。
+  //   保留目前這格已存的門市值,避免舊班(當時的店後來停用)在編輯時選項消失。
+  const _activeSet = Array.isArray(activeStores) ? new Set(activeStores) : null
+  const storeOptions = [...new Set([
     emp.store,
     ...(Array.isArray(emp.additional_stores) ? emp.additional_stores : []),
-  ].filter(Boolean)
+  ].filter(Boolean))]
+    .filter(s => !_activeSet || _activeSet.has(s) || s === currentSchedule?.source_store)
   const [sourceStore, setSourceStore] = useState(currentSchedule?.source_store || emp.store || '')
 
   const prevDateStr = (() => {

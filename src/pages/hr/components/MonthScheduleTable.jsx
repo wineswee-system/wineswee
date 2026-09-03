@@ -603,6 +603,7 @@ function EmployeeRow({
                 schedules={schedules}
                 shiftDefs={getStoreShifts ? getStoreShifts(emp.store, 'all') : []}
                 currentSchedule={schedules.find(s => s.employee === emp.name && s.date === date)}
+                activeStores={(locations || []).filter(l => l.is_active !== false).map(l => l.name)}
                 handleSetShift={handleSetShift} handleDeleteShift={handleDeleteShift}
                 onClose={() => setEditCell(null)}
               />

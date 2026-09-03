@@ -4438,9 +4438,12 @@ div.data-table > table {
    MODAL SHELL — 統一 modal 寬度系統
    ──────────────────────────────────────────────────────────────────── */
 .modal-shell {
+  /* ★ 對話框跟隨全站字級縮放（modal portal 到 body，在 #root 外拿不到 zoom，
+     否則會比主內容小一截）。寬高上限同步除以縮放，放大後仍不超出視窗。 */
+  zoom: var(--app-font-scale, 1);
   /* 寬度公式：min(理想, 螢幕-邊距) — 永不超出螢幕，永不超過理想 */
-  width: min(var(--modal-md), calc(100vw - var(--space-4) * 2));
-  max-height: min(90vh, calc(100vh - var(--space-4) * 2));
+  width: min(var(--modal-md), calc((100vw - var(--space-4) * 2) / var(--app-font-scale, 1)));
+  max-height: calc(min(90vh, 100vh - var(--space-4) * 2) / var(--app-font-scale, 1));
   display: flex;
   flex-direction: column;
   background: var(--bg-secondary);
@@ -4453,14 +4456,14 @@ div.data-table > table {
   container-type: inline-size;
   container-name: modal;
 }
-.modal-shell.modal-sm { width: min(var(--modal-sm), calc(100vw - var(--space-4) * 2)); }
-.modal-shell.modal-lg { width: min(var(--modal-lg), calc(100vw - var(--space-4) * 2)); }
-.modal-shell.modal-xl { width: min(var(--modal-xl), calc(100vw - var(--space-4) * 2)); }
+.modal-shell.modal-sm { width: min(var(--modal-sm), calc((100vw - var(--space-4) * 2) / var(--app-font-scale, 1))); }
+.modal-shell.modal-lg { width: min(var(--modal-lg), calc((100vw - var(--space-4) * 2) / var(--app-font-scale, 1))); }
+.modal-shell.modal-xl { width: min(var(--modal-xl), calc((100vw - var(--space-4) * 2) / var(--app-font-scale, 1))); }
 .modal-shell.modal-full {
-  width: 100vw;
-  max-width: 100vw;
-  height: 100vh;
-  max-height: 100vh;
+  width: calc(100vw / var(--app-font-scale, 1));
+  max-width: calc(100vw / var(--app-font-scale, 1));
+  height: calc(100vh / var(--app-font-scale, 1));
+  max-height: calc(100vh / var(--app-font-scale, 1));
   border-radius: 0;
   border: none;
 }
@@ -4468,8 +4471,8 @@ div.data-table > table {
 /* 手機/極窄螢幕 — modal 自動近全螢幕（活的：留 8px 邊讓使用者知道後面有 backdrop）*/
 @media (max-width: 480px) {
   .modal-shell:not(.modal-full) {
-    width: calc(100vw - var(--space-2) * 2);
-    max-height: calc(100vh - var(--space-2) * 2);
+    width: calc((100vw - var(--space-2) * 2) / var(--app-font-scale, 1));
+    max-height: calc((100vh - var(--space-2) * 2) / var(--app-font-scale, 1));
     border-radius: 12px;
   }
 }

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Search } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Search, BarChart3 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { toast } from '../../lib/toast'
@@ -193,7 +194,14 @@ export default function ExpenseQuery() {
   return (
     <div className="fade-in" style={{ padding: 16 }}>
       <div className="page-header" style={{ marginBottom: 12 }}>
-        <div className="page-header-row"><h2><span className="header-icon">💰</span> 費用查詢</h2></div>
+        <div className="page-header-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h2><span className="header-icon">💰</span> 費用查詢</h2>
+          <Link to="/process/expense-report" className="btn btn-secondary"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none', whiteSpace: 'nowrap' }}
+            title="非經常性費用單筆金額分析:平均、中位數、各科目/各月">
+            <BarChart3 size={16} /> 金額分析
+          </Link>
+        </div>
       </div>
 
       <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>

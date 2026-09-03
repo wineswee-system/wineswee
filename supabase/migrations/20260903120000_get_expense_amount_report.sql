@@ -21,6 +21,7 @@ BEGIN
            to_char(created_at, 'YYYY-MM')                                 AS ym
       FROM public.expense_requests
      WHERE organization_id = p_org AND deleted_at IS NULL
+       AND is_expense IS NOT FALSE          -- 排除「非費用」申請(is_expense=false;核准即完成不進核銷)
        AND status NOT IN ('已駁回', '核銷已退回')
        AND COALESCE(NULLIF(actual_amount, 0), estimated_amount) IS NOT NULL
        AND (p_from IS NULL OR created_at::date >= p_from)

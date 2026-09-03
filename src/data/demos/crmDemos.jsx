@@ -46,7 +46,7 @@ export const CRM_STEPS = [
               { stage: '議價', n: 3, color: '#7c3aed' },
               { stage: '成交', n: 2, color: '#059669' },
             ].map(s => (
-              <div key={s.stage} style={{ flex: 1, textAlign: 'center', padding: '8px 4px', borderRadius: 6, background: `${s.color}10`, fontSize: 10 }}>
+              <div key={s.stage} style={{ flex: 1, textAlign: 'center', padding: '8px 4px', borderRadius: 6, background: `${s.color}10`, fontSize: 11 }}>
                 <div style={{ fontWeight: 700, color: s.color, fontSize: 16 }}>{s.n}</div>
                 <div style={{ color: '#64748b', marginTop: 2 }}>{s.stage}</div>
               </div>

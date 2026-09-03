@@ -89,7 +89,7 @@ function QRModal({ session, orgName, storeName, storeCity, tableNumber, onClose,
     img{display:block;image-rendering:pixelated;image-rendering:crisp-edges}
     .cta{font-size:15px;font-weight:700;letter-spacing:3px;margin:8px 0 2px;color:#000}
     .expiry{font-size:11px;color:#000;margin-top:4px}
-    .foot{font-size:9px;color:#000;margin-top:10px;letter-spacing:1px}
+    .foot{font-size:11px;color:#000;margin-top:10px;letter-spacing:1px}
     @media print{
       *{outline:none!important}
       @page{margin:0;size:${pageW} auto}

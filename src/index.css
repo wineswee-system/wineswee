@@ -701,7 +701,7 @@ input, select, textarea {
 
 .nav-section-label {
   padding: 14px 18px 6px;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   color: var(--text-muted);
   text-transform: uppercase;
@@ -745,7 +745,7 @@ input, select, textarea {
 
 .nav-divider-label {
   padding: 12px 18px 4px;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   color: var(--text-muted);
   text-transform: uppercase;
@@ -881,7 +881,7 @@ input, select, textarea {
 }
 
 .sidebar-user-role {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-muted);
 }
 
@@ -1341,7 +1341,7 @@ div.data-table > table {
 
 .data-table thead th {
   padding: 11px 16px;
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--text-muted);
   text-transform: uppercase;
@@ -1571,7 +1571,7 @@ div.data-table > table {
 }
 
 .tab-item .tab-count {
-  font-size: 10px;
+  font-size: 11px;
   padding: 1px 6px;
   border-radius: var(--radius-full);
   background: var(--accent-cyan-dim);
@@ -1862,7 +1862,7 @@ div.data-table > table {
   flex-shrink: 0;
 }
 
-.avatar-sm { width: 26px; height: 26px; font-size: 10px; }
+.avatar-sm { width: 26px; height: 26px; font-size: 11px; }
 .avatar-lg { width: 40px; height: 40px; font-size: 15px; }
 
 /* ---- Grid Layouts ---- */
@@ -2026,7 +2026,7 @@ div.data-table > table {
   bottom: -20px;
   left: 50%;
   transform: translateX(-50%);
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-muted);
   white-space: nowrap;
 }
@@ -2345,7 +2345,7 @@ div.data-table > table {
   .dash-triple-row { grid-template-columns: 1fr; }
   .dash-welcome h1 { font-size: 22px; }
   .stat-card-value { font-size: 20px; }
-  .stat-card-label { font-size: 10px; }
+  .stat-card-label { font-size: 11px; }
   .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
   .data-table-wrapper {
     overflow-x: auto;
@@ -2487,7 +2487,7 @@ div.data-table > table {
   white-space: nowrap;
   border: 1px solid transparent;
 }
-.badge-ui-sm { padding: 2px 8px; font-size: 10px; }
+.badge-ui-sm { padding: 2px 8px; font-size: 11px; }
 .badge-ui-lg { padding: 5px 14px; font-size: 12px; }
 
 .badge-ui-dot {
@@ -3246,7 +3246,7 @@ div.data-table > table {
 .demo-ind-section { margin-bottom: 10px; }
 .demo-ind-section:last-child { margin-bottom: 0; }
 .demo-ind-label {
-  font-size: 10px; font-weight: 700;
+  font-size: 11px; font-weight: 700;
   text-transform: uppercase; letter-spacing: 0.05em;
   margin-bottom: 6px;
 }
@@ -4097,7 +4097,7 @@ div.data-table > table {
 .mock-table th {
   text-align: left;
   padding: 6px 8px;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   color: var(--text-muted);
   text-transform: uppercase;
@@ -4122,7 +4122,7 @@ div.data-table > table {
   color: var(--text-primary); line-height: 1;
 }
 .mock-stat-label {
-  font-size: 10px; color: var(--text-muted);
+  font-size: 11px; color: var(--text-muted);
   margin-top: 4px;
 }
 
@@ -4152,7 +4152,7 @@ div.data-table > table {
   flex: 1;
 }
 .mock-field-label {
-  font-size: 10px; font-weight: 600;
+  font-size: 11px; font-weight: 600;
   color: var(--text-muted); margin-bottom: 3px;
 }
 .mock-field-value {
@@ -4628,7 +4628,7 @@ div.data-table > table {
   .form-table-calc-row [data-label]::before {
     content: attr(data-label);
     display: block;
-    font-size: 10px;
+    font-size: 11px;
     color: var(--text-muted);
     font-weight: 600;
     margin-bottom: 3px;
@@ -4637,7 +4637,7 @@ div.data-table > table {
   .form-table-cell-total::before {
     content: "小計";
     display: block;
-    font-size: 10px;
+    font-size: 11px;
     color: var(--text-muted);
     font-weight: 600;
     margin-bottom: 3px;

@@ -803,7 +803,7 @@
 .ws .sec-head .numeral{position:relative}
 .ws .sec-head{position:relative}
 .ws .sec-light .sec-head::after,.ws .sec-cream .sec-head::after{content:"◆";position:absolute;left:0;bottom:-18px;
-  font-size:10.4px;color:var(--gold);opacity:.6}
+  font-size:11px;color:var(--gold);opacity:.6}
 /* 金色分隔飾條(區塊之間) */
 .ws .goldrule{display:flex;align-items:center;justify-content:center;gap:16px;padding:0;height:0}
 .ws .goldrule::before,.ws .goldrule::after{content:"";height:1px;width:min(30vw,220px);
@@ -948,10 +948,10 @@
 .ws .rail-ic:hover{background:var(--wine);color:var(--gold-hi);border-color:var(--wine);transform:translateY(-3px)}
 .ws .rail-line:hover{background:#06c755;color:#fff;border-color:#06c755}
 .ws .rail-top{margin-top:6px;width:42px;height:42px;border-radius:50%;border:1px solid var(--gold);background:var(--wine);
-  color:var(--gold-hi);font-family:var(--display);font-size:10.4px;letter-spacing:.12em;cursor:pointer;
+  color:var(--gold-hi);font-family:var(--display);font-size:11px;letter-spacing:.12em;cursor:pointer;
   display:flex;flex-direction:column;align-items:center;justify-content:center;
   opacity:0;visibility:hidden;transform:translateY(12px);transition:.35s cubic-bezier(.19,1,.22,1)}
-.ws .rail-top span{font-size:9.2px;line-height:1}
+.ws .rail-top span{font-size:11px;line-height:1}
 .ws .rail-top.on{opacity:1;visibility:visible;transform:none}
 .ws .rail-top:hover{background:var(--wine-2)}
 @media(max-width:768px){

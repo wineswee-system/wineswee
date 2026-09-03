@@ -19,7 +19,7 @@ export const ANALYTICS_STEPS = [
               <div key={i} style={{ flex: 1, background: i === 5 ? '#2563eb' : '#2563eb30', borderRadius: 3, height: `${h}%` }} />
             ))}
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#94a3b8', marginTop: 4 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#94a3b8', marginTop: 4 }}>
             <span>11月</span><span>12月</span><span>1月</span><span>2月</span><span>3月</span><span>4月</span>
           </div>
         </MockCard>

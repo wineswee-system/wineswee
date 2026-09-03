@@ -86,8 +86,13 @@ export default function AuditReport() {
   const scores = data?.scores || []
   const defs = data?.deficiencies || []
   const cats = data?.categories || []
+  const improve = data?.improvement || []
   const maxCnt = defs.reduce((m, d) => Math.max(m, d.cnt || 0), 1)
   const maxCatDeduct = cats.reduce((m, c) => Math.max(m, c.deduct || 0), 1)
+  const impTot = improve.reduce((a, x) => a + (x.first_bad || 0), 0)
+  const impFix = improve.reduce((a, x) => a + (x.improved || 0), 0)
+  const impRate = impTot ? Math.round(impFix * 100 / impTot) : 0
+  const rateBand = (r) => r >= 80 ? 'hi' : r >= 60 ? 'mid' : 'lo'
 
   // 摘要
   const auditCount = scores.reduce((s, x) => s + (x.audit_count || 0), 0)
@@ -152,6 +157,22 @@ export default function AuditReport() {
       put(R, 4, { font: { sz: 10, color: { rgb: SUB } }, fill: zeb, alignment: { horizontal: 'left', vertical: 'center', wrapText: true }, border })
       R++
     })
+    if (improve.length) {
+      rows.push(['']); R++
+      rows.push([`■ 複評改善追蹤（整體改善 ${impRate}%）`, '', '', '', '', '']); put(R, 0, { font: { bold: true, sz: 13, color: { rgb: GREEN } } }); R++
+      const hi = ['門市', '第一次扣分', '已改善', '改善率', '', '']
+      rows.push(hi);['門市', '第一次扣分', '已改善', '改善率'].forEach((_, c) => put(R, c, { font: { bold: true, sz: 11, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: GREEN } }, alignment: { horizontal: c === 0 ? 'left' : 'center', vertical: 'center' }, border })); R++
+      improve.forEach((x, i) => {
+        rows.push([x.store_name, `${x.first_bad} 項`, `${x.improved} 項`, `${x.rate}%`, '', ''])
+        const zeb = i % 2 ? { fgColor: { rgb: ZEBRA } } : undefined
+        const rc = x.rate >= 80 ? GREEN : x.rate >= 60 ? AMBER : RED
+        put(R, 0, { font: { bold: true, color: { rgb: INK } }, fill: zeb, alignment: { horizontal: 'left', vertical: 'center' }, border })
+        put(R, 1, { font: { color: { rgb: SUB } }, fill: zeb, alignment: { horizontal: 'center' }, border })
+        put(R, 2, { font: { color: { rgb: SUB } }, fill: zeb, alignment: { horizontal: 'center' }, border })
+        put(R, 3, { font: { bold: true, color: { rgb: rc } }, fill: zeb, alignment: { horizontal: 'center' }, border })
+        R++
+      })
+    }
     if (cats.length) {
       rows.push(['']); R++
       rows.push(['■ 缺失分類彙總（依扣分）', '', '', '', '', '']); put(R, 0, { font: { bold: true, sz: 13, color: { rgb: WINE } } }); R++
@@ -274,6 +295,34 @@ export default function AuditReport() {
               </div>
             )}
           </div>
+
+          {/* 複評改善追蹤 */}
+          {improve.length > 0 && (
+            <div className="ar-card">
+              <div className="ar-sec"><span className="mk" style={{ background: 'var(--green-soft)' }}>🔧</span><h2>複評改善追蹤</h2><span className="sub">整體改善 {impRate}%</span></div>
+              <div style={{ fontSize: 11, color: 'var(--muted)', padding: '2px 0 8px' }}>第一次稽核被扣分的項目,複評時已修好的比例(僅列當月稽核 2 次以上門市)</div>
+              <div style={{ overflowX: 'auto' }}>
+                <table>
+                  <thead><tr>
+                    <th className="l">門市</th><th style={{ width: 90 }}>第一次扣分</th><th style={{ width: 80 }}>已改善</th><th className="l" style={{ width: 200 }}>改善率</th>
+                  </tr></thead>
+                  <tbody>
+                    {improve.map(x => {
+                      const bd = rateBand(x.rate)
+                      return (
+                        <tr key={x.store_name}>
+                          <td className="ar-l ar-store">{x.store_name}</td>
+                          <td className="ar-c ar-revi">{x.first_bad} 項</td>
+                          <td className="ar-c ar-revi">{x.improved} 項</td>
+                          <td><div className="ar-avg"><span className="ar-bar"><i className={'ar-b' + bd} style={{ width: x.rate + '%' }} /></span><span className={'ar-avgn ar-' + bd}>{x.rate}%</span></div></td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
           {/* 缺失分類彙總 */}
           {cats.length > 0 && (

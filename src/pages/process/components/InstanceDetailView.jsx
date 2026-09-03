@@ -156,14 +156,15 @@ export default function InstanceDetailView({
     ;(async () => {
       const { supabase } = await import('../../../lib/supabase')
       const [tRes, aRes, cRes] = await Promise.all([
-        supabase.from('tasks').select('id, notes').in('id', ids),
+        supabase.from('tasks').select('id, notes, description').in('id', ids),
         supabase.from('task_attachments').select('task_id').in('task_id', ids),
         supabase.from('task_comments').select('task_id').in('task_id', ids),
       ])
       if (cancelled) return
       const m = {}
       for (const id of ids) m[id] = { note: false, att: 0, cmt: 0 }
-      for (const t of (tRes.data || [])) if (m[t.id] && t.notes && String(t.notes).trim()) m[t.id].note = true
+      // 「備註/說明」UI 存在 description;notes 是另一路徑 → 兩欄任一有值都算有備註
+      for (const t of (tRes.data || [])) if (m[t.id] && ((t.notes && String(t.notes).trim()) || (t.description && String(t.description).trim()))) m[t.id].note = true
       for (const a of (aRes.data || [])) if (m[a.task_id]) m[a.task_id].att++
       for (const c of (cRes.data || [])) if (m[c.task_id]) m[c.task_id].cmt++
       setRowMeta(m)

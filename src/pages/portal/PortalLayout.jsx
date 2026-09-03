@@ -24,7 +24,7 @@ export default function PortalLayout() {
           }}>S</div>
           <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>SME OPS</span>
           <span style={{
-            fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 20,
+            fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 20,
             background: 'var(--accent-green-dim)', color: 'var(--accent-green)',
           }}>員工 Portal</span>
         </div>

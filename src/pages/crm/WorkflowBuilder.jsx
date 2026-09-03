@@ -650,14 +650,14 @@ export default function WorkflowBuilder() {
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>{tpl.description}</div>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   <span style={{
-                    fontSize: 10, padding: '1px 8px', borderRadius: 99,
+                    fontSize: 11, padding: '1px 8px', borderRadius: 99,
                     background: 'var(--accent-cyan-dim, rgba(6,182,212,0.12))', color: 'var(--accent-cyan)',
                   }}>
                     {getTriggerLabel(tpl.trigger)}
                   </span>
                   {tpl.steps.map((s, j) => (
                     <span key={j} style={{
-                      fontSize: 10, padding: '1px 8px', borderRadius: 99,
+                      fontSize: 11, padding: '1px 8px', borderRadius: 99,
                       background: `${ACTION_COLORS[s.action] || 'var(--accent-blue)'}18`,
                       color: ACTION_COLORS[s.action] || 'var(--accent-blue)',
                     }}>

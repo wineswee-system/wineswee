@@ -247,7 +247,7 @@ export default function CompTimeBalance() {
                           <div style={{ fontWeight: 700, color: 'var(--accent-green)' }}>{l.remaining.toFixed(1)}h</div>
                           <div style={{ color: urgent ? 'var(--accent-orange)' : 'var(--text-secondary)' }}>
                             {l.expires_at}
-                            {urgent && <span style={{ fontSize: 10, marginLeft: 4 }}>（{days}天）</span>}
+                            {urgent && <span style={{ fontSize: 11, marginLeft: 4 }}>（{days}天）</span>}
                           </div>
                           <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                             凍結金額 ${Number(l.frozen_ot_amount).toFixed(0)}

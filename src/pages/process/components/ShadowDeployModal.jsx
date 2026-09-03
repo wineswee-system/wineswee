@@ -319,7 +319,7 @@ export default function ShadowDeployModal({ template, checklists = [], approvalC
                 />
               ))}
               {steps.length > 10 && (
-                <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>+{steps.length - 10}</span>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>+{steps.length - 10}</span>
               )}
             </div>
 

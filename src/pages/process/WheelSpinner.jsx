@@ -376,14 +376,14 @@ function SlotMachine({ names, pickWinners, pickCount, onDrop, onReveal, beep, di
               <Mascot mood={reveal ? 'win' : spinning ? 'spin' : 'idle'} size={reveal ? 74 : 84} key={reveal ? 'w:' + reveal.name : spinning ? 'spin' : 'idle'} />
               {reveal ? (
                 <div className="ws-win" key={reveal.name} style={{ marginTop: 2 }}>
-                  <div style={{ fontSize: 10, letterSpacing: 3, color: '#ffcf3a', fontWeight: 800 }}>🎉 中 獎</div>
+                  <div style={{ fontSize: 11, letterSpacing: 3, color: '#ffcf3a', fontWeight: 800 }}>🎉 中 獎</div>
                   <div style={{ fontSize: 21, fontWeight: 900, color: '#fff', margin: '2px 0', textShadow: '0 2px 10px rgba(0,0,0,.6)', wordBreak: 'break-all' }}>{reveal.name}</div>
                   <div style={{ fontSize: 11, fontWeight: 700, color: '#ffd79f' }}>{reveal.caption}</div>
                 </div>
               ) : (
                 <div style={{ marginTop: 2, animation: spinning ? 'wsTitlePulse .5s ease-in-out infinite' : 'none' }}>
                   <div style={{ fontSize: 14, fontWeight: 900, color: '#ffcf3a', letterSpacing: 1, textShadow: '0 0 10px rgba(255,207,58,.6)' }}>{spinning ? '抽選中…' : '幸運小瑪莉'}</div>
-                  {!spinning && <div style={{ fontSize: 10, color: '#9fb4cf', marginTop: 2 }}>{names.length < 1 ? '請先輸入名單' : credits < 1 ? '投幣後開始' : '按開始抽選'}</div>}
+                  {!spinning && <div style={{ fontSize: 11, color: '#9fb4cf', marginTop: 2 }}>{names.length < 1 ? '請先輸入名單' : credits < 1 ? '投幣後開始' : '按開始抽選'}</div>}
                 </div>
               )}
             </div>
@@ -398,7 +398,7 @@ function SlotMachine({ names, pickWinners, pickCount, onDrop, onReveal, beep, di
               {/* 硬幣 */}
               <div className={'ws-coin' + (coinAnim ? ' drop' : '')} onClick={insertCoin} title="投幣"
                 style={{ width: 42, height: 42, borderRadius: '50%', background: 'radial-gradient(circle at 35% 30%,#ffe98a,#f5b301 55%,#b9820a)', border: '3px solid #d99a06', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: 22, color: '#7a5300', textShadow: '0 1px 0 rgba(255,255,255,.4)', boxShadow: '0 4px 8px rgba(0,0,0,.28)' }}>$</div>
-              <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700 }}>👆 投幣</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700 }}>👆 投幣</div>
             </div>
           </div>
         </div>

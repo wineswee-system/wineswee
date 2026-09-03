@@ -17,7 +17,7 @@ function WhsTag({ whs }) {
   const c = WHS_COLORS[label] || WHS_COLORS['標準工時']
   return (
     <span style={{
-      fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 6, flexShrink: 0,
+      fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, flexShrink: 0,
       background: c.bg, color: c.color, border: `1px solid ${c.border}`,
     }}>{label}</span>
   )
@@ -67,7 +67,7 @@ function analyzeGap(lastDate, newStart) {
 }
 
 function GapChip({ gap, loading }) {
-  if (loading) return <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>⋯ 讀取中</span>
+  if (loading) return <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>⋯ 讀取中</span>
   if (!gap) return null
   const map = {
     'no-history': { label: 'ℹ 尚無排班記錄', bg: 'rgba(100,116,139,0.12)', color: '#94a3b8' },
@@ -76,7 +76,7 @@ function GapChip({ gap, loading }) {
     'overlap':    { label: `✗ 重疊 ${gap.days} 天`, bg: 'rgba(239,68,68,0.12)', color: '#ef4444' },
   }
   const c = map[gap.type]
-  return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: c.bg, color: c.color }}>{c.label}</span>
+  return <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: c.bg, color: c.color }}>{c.label}</span>
 }
 
 export default function CreateScheduleWizard({ open, onClose, locations, mode, onComplete }) {
@@ -556,7 +556,7 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
                     height: 4, borderRadius: 4, marginBottom: 6, transition: 'background 0.2s',
                     background: step >= n ? 'var(--accent-cyan)' : 'var(--border-medium)',
                   }} />
-                  <div style={{ fontSize: 10, fontWeight: step === n ? 700 : 400, color: step >= n ? 'var(--accent-cyan)' : 'var(--text-muted)' }}>
+                  <div style={{ fontSize: 11, fontWeight: step === n ? 700 : 400, color: step >= n ? 'var(--accent-cyan)' : 'var(--text-muted)' }}>
                     {n}. {label}
                   </div>
                 </div>
@@ -708,7 +708,7 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
                           <div style={{ textAlign: 'center', minWidth: 90 }}>
                             <div style={timelineLabel}>新排班結束</div>
                             <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)' }}>{selectedPeriod.end}</div>
-                            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>共 {days} 天</div>
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>共 {days} 天</div>
                           </div>
                         </div>
                       </div>
@@ -742,7 +742,7 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
               <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>👥 員工假別設定</div>
               <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                 已核准希望休自動帶入（標示
-                <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 4, margin: '0 3px',
+                <span style={{ fontSize: 11, fontWeight: 700, padding: '1px 5px', borderRadius: 4, margin: '0 3px',
                   background: 'rgba(34,211,238,0.12)', color: 'var(--accent-cyan)', border: '1px solid rgba(34,211,238,0.25)' }}>希</span>
                 ）· 點擊「+」新增 · 完成後儲存為草稿排班
               </div>
@@ -768,7 +768,7 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
                       {store.name}
                       {empCount != null && (
                         <span style={{
-                          marginLeft: 6, fontSize: 10, fontWeight: 600,
+                          marginLeft: 6, fontSize: 11, fontWeight: 600,
                           padding: '1px 6px', borderRadius: 10,
                           background: isActive ? 'rgba(34,211,238,0.12)' : 'var(--bg-secondary)',
                           color: isActive ? 'var(--accent-cyan)' : 'var(--text-muted)',
@@ -842,7 +842,7 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
                               return (
                                 <th key={d} style={{ ...thStyle, width: 30, minWidth: 30, padding: '3px 0', color: we ? '#ef4444' : 'var(--text-muted)' }}>
                                   <div style={{ fontWeight: 700, fontSize: 11 }}>{dt.getUTCDate()}</div>
-                                  <div style={{ fontSize: 9 }}>{WK[dow]}</div>
+                                  <div style={{ fontSize: 11 }}>{WK[dow]}</div>
                                 </th>
                               )
                             })}
@@ -859,7 +859,7 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
                               <tr key={emp.id} style={{ background: ri % 2 !== 0 ? 'rgba(0,0,0,0.02)' : 'transparent' }}>
                                 <td style={{ padding: '6px 10px', borderBottom: '1px solid var(--border-light)', position: 'sticky', left: 0, zIndex: 1, background: rowBg, whiteSpace: 'nowrap' }}>
                                   <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{emp.name}</div>
-                                  <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{emp.employment_type}</div>
+                                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{emp.employment_type}</div>
                                 </td>
                                 {periodDates.map((d, ci) => {
                                   const isRest = restSet.has(d); const isLeave = leaveSet.has(d)
@@ -880,7 +880,7 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
                                         outlineOffset: foc ? '-2px' : '-1px',
                                         position: (foc || sel) ? 'relative' : undefined, zIndex: (foc || sel) ? 1 : undefined,
                                       }}>
-                                      {isRest ? '🌙' : isLeave ? '🛑' : (isWish ? <span style={{ fontSize: 9, color: 'var(--accent-cyan)', fontWeight: 700 }}>希</span> : '')}
+                                      {isRest ? '🌙' : isLeave ? '🛑' : (isWish ? <span style={{ fontSize: 11, color: 'var(--accent-cyan)', fontWeight: 700 }}>希</span> : '')}
                                     </td>
                                   )
                                 })}
@@ -995,6 +995,6 @@ function SummaryRow({ label, children }) {
 }
 
 const labelStyle    = { fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 8 }
-const timelineLabel = { fontSize: 10, color: 'var(--text-muted)', marginBottom: 3 }
+const timelineLabel = { fontSize: 11, color: 'var(--text-muted)', marginBottom: 3 }
 const thStyle       = { padding: '8px 14px', textAlign: 'left', fontWeight: 700, color: 'var(--text-muted)', fontSize: 11, borderBottom: '1px solid var(--border-medium)' }
 const warnBox       = { padding: '8px 12px', borderRadius: 8, fontSize: 11, color: 'var(--accent-orange)', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)' }

@@ -288,7 +288,7 @@ export default function Outbound() {
                                   <div>
                                     <div style={{ fontFamily: 'monospace', fontWeight: 600, color: isExpired ? 'var(--accent-red)' : 'var(--text-primary)' }}>{fefo.lot_number}</div>
                                     {fefo.expiry_date && (
-                                      <div style={{ fontSize: 10, color: isExpired ? 'var(--accent-red)' : isExpiringSoon ? 'var(--accent-orange)' : 'var(--text-muted)' }}>
+                                      <div style={{ fontSize: 11, color: isExpired ? 'var(--accent-red)' : isExpiringSoon ? 'var(--accent-orange)' : 'var(--text-muted)' }}>
                                         效期 {fefo.expiry_date}
                                       </div>
                                     )}

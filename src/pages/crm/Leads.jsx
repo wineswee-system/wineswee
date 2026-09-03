@@ -264,11 +264,11 @@ export default function Leads() {
                       <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 4 }}>{lead.name}</div>
                       {lead.company && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 2 }}>{lead.company}</div>}
                       <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>
-                        {lead.source && <span style={{ background: colors.dim, color: colors.accent, padding: '1px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600, marginRight: 4 }}>{lead.source}</span>}
+                        {lead.source && <span style={{ background: colors.dim, color: colors.accent, padding: '1px 6px', borderRadius: 4, fontSize: 11, fontWeight: 600, marginRight: 4 }}>{lead.source}</span>}
                         {lead.assigned_to || '未指派'}
                       </div>
                       {lead.score > 0 && (
-                        <div style={{ fontSize: 10, color: 'var(--accent-purple)', fontWeight: 600, marginBottom: 4 }}>分數：{lead.score}</div>
+                        <div style={{ fontSize: 11, color: 'var(--accent-purple)', fontWeight: 600, marginBottom: 4 }}>分數：{lead.score}</div>
                       )}
                       <select className="form-input" style={{ fontSize: 11, padding: '2px 6px', width: '100%' }} value={lead.stage} onChange={e => handleStageChange(lead.id, e.target.value)}>
                         {STAGES.map(s => <option key={s}>{s}</option>)}
@@ -323,10 +323,10 @@ export default function Leads() {
                     <tr key={lead.id}>
                       <td style={{ fontWeight: 600 }}>
                         {lead.name}
-                        {lead.email && <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{lead.email}</div>}
+                        {lead.email && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{lead.email}</div>}
                       </td>
                       <td style={{ fontSize: 12 }}>{lead.company || '-'}</td>
-                      <td><span style={{ fontSize: 10, fontWeight: 600, background: colors.dim, color: colors.accent, padding: '1px 6px', borderRadius: 4 }}>{lead.source || '-'}</span></td>
+                      <td><span style={{ fontSize: 11, fontWeight: 600, background: colors.dim, color: colors.accent, padding: '1px 6px', borderRadius: 4 }}>{lead.source || '-'}</span></td>
                       <td>{lead.assigned_to || '-'}</td>
                       <td style={{ fontWeight: 600, color: 'var(--accent-purple)' }}>{lead.score || 0}</td>
                       <td>

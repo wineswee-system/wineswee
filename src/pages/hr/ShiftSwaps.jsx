@@ -178,7 +178,7 @@ export default function ShiftSwaps() {
                     <td>{r.swap_date || '—'}</td>
                     <td>
                       <span style={{ padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700, background: s.bg, color: s.color }}>{r.status}</span>
-                      {(r.reject_reason || r.peer_reject_reason) && <div style={{ fontSize: 10, color: 'var(--accent-red)', marginTop: 2 }}>{r.reject_reason || r.peer_reject_reason}</div>}
+                      {(r.reject_reason || r.peer_reject_reason) && <div style={{ fontSize: 11, color: 'var(--accent-red)', marginTop: 2 }}>{r.reject_reason || r.peer_reject_reason}</div>}
                     </td>
                     <td style={{ fontSize: 12 }}>{r.created_at?.slice(0, 16).replace('T', ' ')}</td>
                     <td onClick={(e) => e.stopPropagation()}>

@@ -185,7 +185,7 @@ export default function TenantAdmin() {
                   <td style={{ fontWeight: 600 }}>
                     <Building2 size={13} style={{ marginRight: 4, verticalAlign: -2, color: 'var(--accent-cyan)' }} />
                     {t.name}
-                    {activeTenant?.id === t.id && <span style={{ fontSize: 10, color: 'var(--accent-green)', marginLeft: 6 }}>● 目前</span>}
+                    {activeTenant?.id === t.id && <span style={{ fontSize: 11, color: 'var(--accent-green)', marginLeft: 6 }}>● 目前</span>}
                   </td>
                   <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{t.tax_id}</td>
                   <td><span className={`badge ${planColor[t.plan] || 'badge-neutral'}`}>{t.plan}</span></td>
@@ -193,7 +193,7 @@ export default function TenantAdmin() {
                   <td><span className={`badge ${statusColor[t.status] || 'badge-neutral'}`}>{t.status}</span></td>
                   <td>
                     <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
-                      {(t.features || []).map(f => <span key={f} style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}>{f}</span>)}
+                      {(t.features || []).map(f => <span key={f} style={{ fontSize: 11, padding: '1px 6px', borderRadius: 4, background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}>{f}</span>)}
                     </div>
                   </td>
                   <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t.created_at?.slice(0, 10)}</td>

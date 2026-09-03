@@ -233,7 +233,7 @@ function AlertCard({ alert, navigate }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
           <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{alert.title}</span>
           <span style={{
-            fontSize: 10, padding: '2px 8px', borderRadius: 10,
+            fontSize: 11, padding: '2px 8px', borderRadius: 10,
             background: `var(--accent-${sev.accent}-dim)`, color: `var(--accent-${sev.accent})`,
             fontWeight: 700,
           }}>{CATEGORY_LABEL[alert.category] || alert.category}</span>

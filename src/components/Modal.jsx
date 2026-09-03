@@ -193,7 +193,7 @@ export function Field({ label, children, error, errorMsg, required, hint }) {
       <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4, marginBottom: 5 }}>
         <span>{label}</span>
         {required && <span style={{ color: 'var(--accent-red)', fontWeight: 700 }} aria-label="必填">*</span>}
-        {hint && <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 400, opacity: 0.7 }}>· {hint}</span>}
+        {hint && <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400, opacity: 0.7 }}>· {hint}</span>}
       </label>
       {children}
       {error && errorMsg && <div className="field-error-msg">⚠ {errorMsg}</div>}

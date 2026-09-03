@@ -266,7 +266,7 @@ export default function OrgManagement() {
                           const mod = ALL_MODULES.find(m => m.key === f)
                           return (
                             <span key={f} style={{
-                              fontSize: 10, padding: '1px 6px', borderRadius: 4,
+                              fontSize: 11, padding: '1px 6px', borderRadius: 4,
                               background: mod ? mod.color + '22' : 'var(--bg-tertiary)',
                               color: mod ? mod.color : 'var(--text-secondary)',
                               border: `1px solid ${mod ? mod.color + '44' : 'transparent'}`
@@ -309,12 +309,12 @@ export default function OrgManagement() {
                               <div style={{ maxHeight: 150, overflow: 'auto', fontSize: 12 }}>
                                 {orgUsers[t.id].map(u => (
                                   <div key={u.id} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '3px 0', borderBottom: '1px solid var(--border-color)' }}>
-                                    <div style={{ width: 24, height: 24, borderRadius: '50%', background: 'var(--accent-cyan)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 600 }}>
+                                    <div style={{ width: 24, height: 24, borderRadius: '50%', background: 'var(--accent-cyan)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 600 }}>
                                       {u.name?.[0]}
                                     </div>
                                     <span style={{ fontWeight: 500 }}>{u.name}</span>
                                     <span style={{ color: 'var(--text-muted)' }}>{u.email}</span>
-                                    <span className={`badge ${u.role === 'admin' ? 'badge-purple' : 'badge-neutral'}`} style={{ fontSize: 10 }}>{u.role || '一般'}</span>
+                                    <span className={`badge ${u.role === 'admin' ? 'badge-purple' : 'badge-neutral'}`} style={{ fontSize: 11 }}>{u.role || '一般'}</span>
                                   </div>
                                 ))}
                               </div>

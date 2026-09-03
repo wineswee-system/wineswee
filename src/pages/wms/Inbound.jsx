@@ -276,7 +276,7 @@ export default function Inbound() {
                             <tr key={item.id} style={highlightItem === item.id ? { background: 'rgba(34,197,94,0.15)', transition: 'background 0.3s' } : {}}>
                               <td style={{ fontFamily: 'monospace' }}>{item.sku_code}</td>
                               <td>{item.sku_name}</td>
-                              <td>{item.expected_qty}{hasUom && <span style={{ color: 'var(--text-muted)', fontSize: 10, marginLeft: 4 }}>件</span>}</td>
+                              <td>{item.expected_qty}{hasUom && <span style={{ color: 'var(--text-muted)', fontSize: 11, marginLeft: 4 }}>件</span>}</td>
                               <td>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                   <input
@@ -288,7 +288,7 @@ export default function Inbound() {
                                     onBlur={e => updateItemQty(o.id, item.id, Number(e.target.value), uomQty)}
                                   />
                                   {hasUom && (
-                                    <div style={{ fontSize: 10, lineHeight: 1.3 }}>
+                                    <div style={{ fontSize: 11, lineHeight: 1.3 }}>
                                       <div style={{ color: 'var(--accent-cyan)', fontWeight: 600 }}>{item.purchase_uom}</div>
                                       <div style={{ color: 'var(--text-muted)' }}>={displayInput * uomQty} {item.unit || '件'}</div>
                                     </div>
@@ -334,7 +334,7 @@ export default function Inbound() {
                           <div key={lc.id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', background: 'var(--accent-orange-dim)', borderRadius: 8, fontSize: 12 }}>
                             <span style={{ color: 'var(--accent-orange)', fontWeight: 600 }}>{LANDED_TYPES[lc.cost_type]}</span>
                             <span style={{ fontWeight: 700 }}>NT${Number(lc.amount).toLocaleString()}</span>
-                            <span style={{ color: 'var(--text-muted)', fontSize: 10 }}>{LANDED_ALLOC[lc.allocation_method]}</span>
+                            <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{LANDED_ALLOC[lc.allocation_method]}</span>
                           </div>
                         ))}
                       </div>

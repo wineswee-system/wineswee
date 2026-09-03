@@ -330,7 +330,7 @@ export default function Departments() {
             <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8, fontWeight: 600 }}>
               {editingSection ? `編輯：${editingSection.name}` : '新增課別'}
               {editingSection && (
-                <button className="btn btn-sm btn-secondary" style={{ marginLeft: 8, fontSize: 10, padding: '2px 6px' }} onClick={() => { setEditingSection(null); setSecForm({ name: '', supervisor_id: '', sort_order: 0 }) }}>
+                <button className="btn btn-sm btn-secondary" style={{ marginLeft: 8, fontSize: 11, padding: '2px 6px' }} onClick={() => { setEditingSection(null); setSecForm({ name: '', supervisor_id: '', sort_order: 0 }) }}>
                   <X size={10} /> 取消編輯
                 </button>
               )}

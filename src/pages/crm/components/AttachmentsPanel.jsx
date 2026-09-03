@@ -113,7 +113,7 @@ export default function AttachmentsPanel({ entityType, entityId }) {
                 >
                   {att.file_name}
                 </div>
-                <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                   {formatSize(att.file_size)} · {new Date(att.created_at).toLocaleDateString('zh-TW')}
                 </div>
               </div>

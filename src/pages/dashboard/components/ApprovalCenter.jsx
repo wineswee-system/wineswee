@@ -539,7 +539,7 @@ function PendingApprovalsView() {
                 <span style={{
                   position: 'absolute', top: 6, right: 8,
                   background: g.color, color: '#fff',
-                  fontSize: 10, fontWeight: 700,
+                  fontSize: 11, fontWeight: 700,
                   padding: '1px 6px', borderRadius: 10, minWidth: 18, textAlign: 'center',
                 }}>{count}</span>
               )}
@@ -573,7 +573,7 @@ function PendingApprovalsView() {
                   <span style={{
                     background: isActive ? 'rgba(255,255,255,0.25)' : activeGroupDef.color,
                     color: '#fff',
-                    fontSize: 10, fontWeight: 700,
+                    fontSize: 11, fontWeight: 700,
                     padding: '1px 6px', borderRadius: 8,
                   }}>{cnt}</span>
                 )}

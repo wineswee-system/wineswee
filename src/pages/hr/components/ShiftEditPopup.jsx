@@ -188,7 +188,7 @@ export default function ShiftEditPopup({ emp, date, shift, storeSettings, schedu
           ))}
         </div>
 
-        <div style={{ fontSize: 9, color: 'var(--text-muted)', textAlign: 'center', marginBottom: 4 }}>
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center', marginBottom: 4 }}>
           ⌨ 1-5=班別 / E=例 R=休 S=特休 B=病 / Enter=確認 / Del=刪除 / Esc=關
         </div>
 

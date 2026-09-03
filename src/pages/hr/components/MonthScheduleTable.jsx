@@ -100,27 +100,27 @@ export default function MonthScheduleTable({
       {/* Shift Legend — simplified when viewing all stores */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
         {storeFilter && getStoreShifts(storeFilter).map(d => (
-          <span key={d.id} style={{ padding: '2px 8px', borderRadius: 5, fontSize: 10, fontWeight: 600, ...getShiftStyle(d.name) }}>
+          <span key={d.id} style={{ padding: '2px 8px', borderRadius: 5, fontSize: 11, fontWeight: 600, ...getShiftStyle(d.name) }}>
             {d.name}
           </span>
         ))}
-        <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 4 }}>|</span>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 4 }}>|</span>
         {absenceOptions.map(a => (
-          <span key={a.value} style={{ fontSize: 10, color: getAbsenceConfig(a.value)?.color || '#666' }}>
+          <span key={a.value} style={{ fontSize: 11, color: getAbsenceConfig(a.value)?.color || '#666' }}>
             {a.icon}{a.label}
           </span>
         ))}
         {/* 格子標記說明 */}
-        <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 4 }}>|</span>
-        <span style={{ fontSize: 10, color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: 3 }}
+        <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 4 }}>|</span>
+        <span style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: 3 }}
           title="格子右上角橘點：該員工那天有一張還在跑簽核（待審核/審核中）的整天請假單">
           <span style={{ color: 'var(--accent-orange)' }}>●</span>待審核請假
         </span>
-        <span style={{ fontSize: 10, color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: 3 }}
+        <span style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: 3 }}
           title="格子左上角紫字：該員工當天跨店支援，顯示去支援的門市首字">
           <span style={{ padding: '0 3px', borderRadius: 3, fontWeight: 700, background: 'var(--accent-purple-dim)', color: 'var(--accent-purple)' }}>店</span>跨店支援
         </span>
-        <span style={{ fontSize: 10, color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: 3 }}
+        <span style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: 3 }}
           title="灰底斜體：該日不在此員工的在職區間（尚未入職或已離職），不列入排班/合規檢查">
           <span style={{ color: 'var(--text-muted)', fontStyle: 'italic', opacity: 0.55 }}>未入職/已離職</span>
         </span>
@@ -153,10 +153,10 @@ export default function MonthScheduleTable({
                       borderLeft: weekSepDates?.has(date) ? '3px solid var(--accent-red)' : '1px solid var(--border-medium)',
                       background: isHoliday ? 'rgba(239,68,68,0.08)' : isWeekend ? 'rgba(99,102,241,0.05)' : undefined,
                     }}>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: isHoliday ? 'var(--accent-red)' : isWeekend ? '#818cf8' : 'var(--text-primary)' }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: isHoliday ? 'var(--accent-red)' : isWeekend ? '#818cf8' : 'var(--text-primary)' }}>
                         {dayNum}
                       </div>
-                      <div style={{ fontSize: 9, color: isHoliday ? 'var(--accent-red)' : isWeekend ? '#818cf8' : 'var(--text-muted)' }}>
+                      <div style={{ fontSize: 11, color: isHoliday ? 'var(--accent-red)' : isWeekend ? '#818cf8' : 'var(--text-muted)' }}>
                         {dow}
                       </div>
                     </th>
@@ -165,7 +165,7 @@ export default function MonthScheduleTable({
                 <th style={{
                   position: 'sticky', right: 0, zIndex: 11, background: 'var(--bg-card)',
                   padding: '6px 8px', textAlign: 'center', minWidth: 50,
-                  borderBottom: '2px solid var(--border-medium)', fontSize: 10, fontWeight: 700,
+                  borderBottom: '2px solid var(--border-medium)', fontSize: 11, fontWeight: 700,
                 }}>
                   <div>出勤/休</div>
                   <div style={{ color: 'var(--accent-purple)', marginTop: 1 }}>工時</div>
@@ -272,8 +272,8 @@ export default function MonthScheduleTable({
               const totPct = totRev > 0 ? (totHours * avgHourly / totRev * 100) : null
               const pctColor = (p) => p == null ? 'var(--text-muted)' : p > 40 ? 'var(--accent-red)' : p > 30 ? 'var(--accent-orange)' : 'var(--accent-green)'
               const stickyL = { position: 'sticky', left: 0, zIndex: 5, background: 'var(--bg-card)', padding: '4px 10px', textAlign: 'left', fontWeight: 700, fontSize: 11, borderTop: '2px solid var(--border-medium)', whiteSpace: 'nowrap' }
-              const stickyR = { position: 'sticky', right: 0, zIndex: 5, background: 'var(--bg-card)', padding: '4px 6px', textAlign: 'center', fontWeight: 700, fontSize: 10, borderTop: '2px solid var(--border-medium)' }
-              const cell = { textAlign: 'center', padding: '3px 1px', fontSize: 9, borderTop: '2px solid var(--border-medium)', borderLeft: '1px solid var(--border-subtle)' }
+              const stickyR = { position: 'sticky', right: 0, zIndex: 5, background: 'var(--bg-card)', padding: '4px 6px', textAlign: 'center', fontWeight: 700, fontSize: 11, borderTop: '2px solid var(--border-medium)' }
+              const cell = { textAlign: 'center', padding: '3px 1px', fontSize: 11, borderTop: '2px solid var(--border-medium)', borderLeft: '1px solid var(--border-subtle)' }
               return (
                 <tfoot>
                   <tr style={{ background: 'var(--bg-secondary)' }}>
@@ -293,7 +293,7 @@ export default function MonthScheduleTable({
                   <tr style={{ background: 'var(--bg-secondary)' }}>
                     <td style={stickyL} title="人事成本 = 總工時 × 時薪；比 = 成本 ÷ 預估業績">
                       人事成本比
-                      <div style={{ fontWeight: 400, fontSize: 10, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 3, marginTop: 1 }}>
+                      <div style={{ fontWeight: 400, fontSize: 11, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 3, marginTop: 1 }}>
                         時薪 {onSaveWage && canEditSchedule
                           ? <WageInput value={avgHourly} onSave={onSaveWage} />
                           : <span>${avgHourly}</span>}
@@ -394,13 +394,13 @@ function EmployeeRow({
               style={{ cursor: 'grab', color: 'var(--text-muted)', fontSize: 11, lineHeight: '11px', userSelect: 'none' }}
             >⠿</span>
           )}
-          <span>{emp.name}{isPT && <span style={{ fontSize: 9, color: '#818cf8', marginLeft: 2 }}>(PT)</span>}</span>
+          <span>{emp.name}{isPT && <span style={{ fontSize: 11, color: '#818cf8', marginLeft: 2 }}>(PT)</span>}</span>
           {(v.errors > 0 || v.warnings > 0) && (
             <span
               onClick={() => onClickEmployeeBadge?.(emp.name)}
               title={v.errors > 0 ? `${v.errors} 個違規（點開只看 ${emp.name} 的）` : `${v.warnings} 個提醒（點開只看 ${emp.name} 的）`}
               style={{
-                fontSize: 9, padding: '1px 5px', borderRadius: 8, fontWeight: 700, cursor: 'pointer',
+                fontSize: 11, padding: '1px 5px', borderRadius: 8, fontWeight: 700, cursor: 'pointer',
                 background: v.errors > 0 ? 'rgba(239,68,68,0.18)' : 'rgba(245,158,11,0.18)',
                 color: v.errors > 0 ? '#dc2626' : '#d97706',
                 lineHeight: '14px',
@@ -429,7 +429,7 @@ function EmployeeRow({
             }}
             title={isBeforeJoin ? `${emp.join_date} 入職` : `${emp.resign_date} 離職`}>
               <span style={{
-                fontSize: 9, color: 'var(--text-muted)', opacity: 0.55,
+                fontSize: 11, color: 'var(--text-muted)', opacity: 0.55,
                 fontStyle: 'italic',
               }}>
                 {isBeforeJoin ? '未入職' : '已離職'}
@@ -512,7 +512,7 @@ function EmployeeRow({
             {isRest ? (
               <span style={{
                 display: 'inline-block', padding: '1px 3px', borderRadius: 3,
-                fontSize: 9, fontWeight: 600,
+                fontSize: 11, fontWeight: 600,
                 color: absenceCfg?.color || 'var(--text-muted)',
                 background: (absenceCfg?.color || '#6b7280') + '15',
               }}>
@@ -537,7 +537,7 @@ function EmployeeRow({
                 return isTimeRange ? (
                   <span style={{
                     display: 'inline-block', padding: '1px 2px', borderRadius: 3,
-                    fontSize: 9, fontWeight: 600, lineHeight: 1.15,
+                    fontSize: 11, fontWeight: 600, lineHeight: 1.15,
                     ...getShiftStyle(shift),
                   }}>
                     <div>{label.split('~')[0]}</div>
@@ -548,7 +548,7 @@ function EmployeeRow({
                     title={absCfg ? `${absCfg.label}（${payLabel}）` : undefined}
                     style={{
                       display: 'inline-block', padding: '1px 3px', borderRadius: 3,
-                      fontSize: 9, fontWeight: 600, ...getShiftStyle(shift),
+                      fontSize: 11, fontWeight: 600, ...getShiftStyle(shift),
                       whiteSpace: 'nowrap',
                     }}>
                     {absCfg ? `${absCfg.icon}${absCfg.label}` : label}
@@ -556,9 +556,9 @@ function EmployeeRow({
                 )
               })()
             ) : offReq ? (
-              <span style={{ fontSize: 9, color: 'var(--accent-orange)' }}>申</span>
+              <span style={{ fontSize: 11, color: 'var(--accent-orange)' }}>申</span>
             ) : (
-              <span style={{ fontSize: 9, color: 'var(--border-medium)' }}>·</span>
+              <span style={{ fontSize: 11, color: 'var(--border-medium)' }}>·</span>
             )}
 
             {/* 待審核請假 — 橘點提示 */}
@@ -615,14 +615,14 @@ function EmployeeRow({
       <td style={{
         position: 'sticky', right: 0, zIndex: 5, background: 'var(--bg-card)',
         textAlign: 'center', padding: '4px 6px', borderLeft: '1px solid var(--border-light)',
-        fontSize: 10, fontWeight: 600,
+        fontSize: 11, fontWeight: 600,
       }}>
         <div>
           <span style={{ color: 'var(--accent-cyan)' }}>{workDays}</span>
           <span style={{ color: 'var(--text-muted)' }}>/</span>
           <span style={{ color: 'var(--text-muted)' }}>{restDays}</span>
         </div>
-        <div style={{ color: 'var(--accent-purple)', fontSize: 10, fontWeight: 700, marginTop: 1 }}>
+        <div style={{ color: 'var(--accent-purple)', fontSize: 11, fontWeight: 700, marginTop: 1 }}>
           {(empHours[emp.name] || 0) > 0 ? `${(empHours[emp.name]).toFixed(1)}h` : '·'}
         </div>
       </td>
@@ -643,7 +643,7 @@ function WageInput({ value, onSave }) {
       title="每小時均薪(用於人事成本比試算)"
       style={{
         width: 46, border: '1px solid var(--border-medium)', borderRadius: 4,
-        background: 'var(--bg-primary)', textAlign: 'center', fontSize: 10,
+        background: 'var(--bg-primary)', textAlign: 'center', fontSize: 11,
         color: 'var(--text-primary)', padding: '1px 2px', outline: 'none', MozAppearance: 'textfield',
       }}
     />
@@ -666,7 +666,7 @@ function RevenueInput({ value, onSave, disabled }) {
       title="單位：千（打 100 = 100,000）"
       style={{
         width: '100%', border: 'none', background: 'transparent', textAlign: 'center',
-        fontSize: 9, color: 'var(--text-primary)', padding: '2px 0', outline: 'none',
+        fontSize: 11, color: 'var(--text-primary)', padding: '2px 0', outline: 'none',
         MozAppearance: 'textfield',
       }}
     />

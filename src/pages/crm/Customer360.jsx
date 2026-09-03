@@ -345,16 +345,16 @@ export default function Customer360() {
                               <div style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
                                   <div style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.4 }}>
-                                    <span style={{ color: tp.color, fontSize: 10, fontWeight: 700, marginRight: 6, padding: '1px 6px', borderRadius: 4, background: `${tp.color}15` }}>{tp.label}</span>
+                                    <span style={{ color: tp.color, fontSize: 11, fontWeight: 700, marginRight: 6, padding: '1px 6px', borderRadius: 4, background: `${tp.color}15` }}>{tp.label}</span>
                                     {item.title}
                                   </div>
-                                  <span style={{ fontSize: 10, color: 'var(--text-muted)', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                                  <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap', flexShrink: 0 }}>
                                     {item.date ? new Date(item.date).toLocaleString('zh-TW', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}
                                   </span>
                                 </div>
                                 {item.detail && <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2, lineHeight: 1.4 }}>{item.detail.slice(0, 120)}</div>}
                                 {(item.assignee || item.status) && (
-                                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
+                                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
                                     {item.assignee && <span>{item.assignee}</span>}
                                     {item.status && <span style={{ marginLeft: 8 }}>{item.status}</span>}
                                   </div>
@@ -470,7 +470,7 @@ export default function Customer360() {
                               }}
                             >
                               {c.coupons?.code ?? c.code} · {c.coupons?.name ?? c.name}
-                              {c.used_at && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 400 }}>已使用</span>}
+                              {c.used_at && <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 400 }}>已使用</span>}
                             </div>
                           ))}
                         </div>

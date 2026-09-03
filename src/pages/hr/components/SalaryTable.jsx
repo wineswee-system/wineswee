@@ -196,7 +196,7 @@ export default function SalaryTable({ filtered, adjByRecord = {}, computing = fa
                     <td style={{ fontWeight: 800, color: 'var(--accent-green)', fontSize: 15 }}>
                       {fmt(r.net_salary)}
                       {r._is_computed && Math.abs(n(r.net_salary) - savedNet) > 1 && (
-                        <div style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-muted)' }}>
+                        <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-muted)' }}>
                           存檔 {fmt(savedNet)}
                         </div>
                       )}
@@ -222,7 +222,7 @@ export default function SalaryTable({ filtered, adjByRecord = {}, computing = fa
                               ) : (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                                   {!detail && (
-                                    <div style={{ fontSize: 10, color: 'var(--accent-orange)', marginBottom: 2 }}>
+                                    <div style={{ fontSize: 11, color: 'var(--accent-orange)', marginBottom: 2 }}>
                                       ⚠ 無法取得系統計算過程，以下為存檔彙總值
                                     </div>
                                   )}
@@ -245,7 +245,7 @@ export default function SalaryTable({ filtered, adjByRecord = {}, computing = fa
                                       <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', borderRadius: 7, background: 'var(--bg-card)', fontSize: 13 }}>
                                         <div>
                                           <span style={{ color: 'var(--text-secondary)' }}>{item.label}</span>
-                                          {item.note && <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{item.note}</div>}
+                                          {item.note && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{item.note}</div>}
                                         </div>
                                         <span style={{ color: item.value === 0 ? 'var(--text-muted)' : item.color, fontWeight: 600 }}>
                                           {item.value === 0 ? '—' : `${item.sign} ${fmt(item.value)}`}
@@ -259,7 +259,7 @@ export default function SalaryTable({ filtered, adjByRecord = {}, computing = fa
                                     <span style={{ color: 'var(--accent-green)', fontWeight: 800 }}>{fmt(shownNet)}</span>
                                   </div>
                                   {detail && Math.abs(shownNet - savedNet) > 1 && (
-                                    <div style={{ fontSize: 10, color: 'var(--accent-orange)', textAlign: 'right' }}>
+                                    <div style={{ fontSize: 11, color: 'var(--accent-orange)', textAlign: 'right' }}>
                                       ⚠ 此為引擎現算值，存檔為 {fmt(savedNet)}（尚未寫回；重跑批次計薪→儲存才會落地並同步薪資條/LINE）
                                     </div>
                                   )}
@@ -304,7 +304,7 @@ export default function SalaryTable({ filtered, adjByRecord = {}, computing = fa
                                         <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 10px', borderRadius: 7, background: 'var(--bg-card)', fontSize: 12 }}>
                                           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                                             <span style={{ color: 'var(--text-secondary)' }}>{ot.date}</span>
-                                            <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: 'var(--glass-light)', color: 'var(--text-muted)' }}>{OT_CAT_LABEL[ot.category] || ot.category}</span>
+                                            <span style={{ fontSize: 11, padding: '1px 6px', borderRadius: 4, background: 'var(--glass-light)', color: 'var(--text-muted)' }}>{OT_CAT_LABEL[ot.category] || ot.category}</span>
                                             <span style={{ color: 'var(--text-muted)' }}>{n(ot.hours)} 小時</span>
                                             {ot._rate_label && <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{ot._rate_label}</span>}
                                           </div>
@@ -326,7 +326,7 @@ export default function SalaryTable({ filtered, adjByRecord = {}, computing = fa
                                         <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 10px', borderRadius: 7, background: 'var(--bg-card)', fontSize: 12 }}>
                                           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                                             <span style={{ color: 'var(--text-secondary)' }}>{lv.date}</span>
-                                            <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: 'var(--glass-light)', color: 'var(--text-muted)' }}>{lv.type}</span>
+                                            <span style={{ fontSize: 11, padding: '1px 6px', borderRadius: 4, background: 'var(--glass-light)', color: 'var(--text-muted)' }}>{lv.type}</span>
                                           </div>
                                           <span style={{ color: 'var(--text-muted)', fontWeight: 600, whiteSpace: 'nowrap' }}>{(() => { const dh = n(lv.hours) || (n(lv.days) || 0) * 8; return dh > 0 ? `${dh} 小時${lv.days ? ` · ${lv.days} 天` : ''}` : '-' })()}</span>
                                         </div>

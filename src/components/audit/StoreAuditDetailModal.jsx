@@ -405,7 +405,7 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
                           <img src={d.signature_data_url} alt="簽名" style={{ height: 30, background: '#fff', borderRadius: 4, border: '1px solid var(--border)' }} />
                           <span style={{ color: 'var(--accent-green)', flex: 1 }}>✓ 已簽</span>
-                          <button className="btn btn-sm btn-secondary" style={{ fontSize: 10, padding: '2px 6px' }} onClick={() => setSigningIdx(idx)}>重簽</button>
+                          <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '2px 6px' }} onClick={() => setSigningIdx(idx)}>重簽</button>
                         </div>
                       ) : (
                         <button className="btn btn-sm btn-primary" style={{ width: '100%', fontSize: 11, padding: '4px' }} onClick={() => setSigningIdx(idx)}>
@@ -443,7 +443,7 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
                   const current = isApproving && i === audit.current_step
                   return (
                     <div key={cs.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 6, background: current ? 'var(--accent-orange-dim)' : 'transparent', fontSize: 12 }}>
-                      <div style={{ width: 18, height: 18, borderRadius: '50%', background: done ? 'var(--accent-green)' : current ? 'var(--accent-orange)' : 'var(--bg-primary)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700 }}>
+                      <div style={{ width: 18, height: 18, borderRadius: '50%', background: done ? 'var(--accent-green)' : current ? 'var(--accent-orange)' : 'var(--bg-primary)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>
                         {done ? '✓' : i + 1}
                       </div>
                       <span style={{ flex: 1 }}>{cs.label || cs.role_name || `第 ${i+1} 關`}</span>
@@ -542,7 +542,7 @@ function ItemRow({ item, editable, maxDeduct, onChange }) {
         <div style={{ minWidth: 0 }}>
           {item.is_star && <Star size={12} style={{ color: 'var(--accent-orange)', verticalAlign: 'middle', marginRight: 4 }} fill="var(--accent-orange)" />}
           {item.item_text}
-          {item.is_star && <span style={{ fontSize: 10, color: 'var(--accent-orange)', marginLeft: 4 }}>可開罰</span>}
+          {item.is_star && <span style={{ fontSize: 11, color: 'var(--accent-orange)', marginLeft: 4 }}>可開罰</span>}
         </div>
         {editable ? (
           <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
@@ -636,7 +636,7 @@ function AuditPhotos({ auditId, photos, editable, onChange }) {
               ) : (
                 <a href={url} target="_blank" rel="noreferrer" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', gap: 4, textDecoration: 'none', color: 'var(--accent-cyan)' }}>
                   <Paperclip size={22} />
-                  <span style={{ fontSize: 10, fontWeight: 700 }}>{ext}</span>
+                  <span style={{ fontSize: 11, fontWeight: 700 }}>{ext}</span>
                 </a>
               )}
               {editable && (

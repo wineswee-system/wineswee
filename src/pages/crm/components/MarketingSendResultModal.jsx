@@ -38,19 +38,19 @@ export default function MarketingSendResultModal({ sendResult, onClose }) {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 12 }}>
           <div style={{ padding: 10, borderRadius: 8, background: 'var(--accent-green-dim)', textAlign: 'center' }}>
             <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--accent-green)' }}>{sendResult.openRate}%</div>
-            <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>開啟率</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>開啟率</div>
           </div>
           <div style={{ padding: 10, borderRadius: 8, background: 'var(--accent-purple-dim)', textAlign: 'center' }}>
             <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--accent-purple)' }}>{sendResult.clickRate}%</div>
-            <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>點擊率</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>點擊率</div>
           </div>
           <div style={{ padding: 10, borderRadius: 8, background: 'var(--accent-red-dim)', textAlign: 'center' }}>
             <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--accent-red)' }}>{sendResult.bounceRate}%</div>
-            <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>退信率</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>退信率</div>
           </div>
           <div style={{ padding: 10, borderRadius: 8, background: 'var(--accent-orange-dim)', textAlign: 'center' }}>
             <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--accent-orange)' }}>{sendResult.unsubRate}%</div>
-            <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>退訂率</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>退訂率</div>
           </div>
         </div>
       )}
@@ -69,7 +69,7 @@ export default function MarketingSendResultModal({ sendResult, onClose }) {
               </div>
               <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>{sendResult.abResult.subjectA}</div>
               <div style={{ fontSize: 20, fontWeight: 800, color: sendResult.abResult.winner === 'A' ? 'var(--accent-green)' : 'var(--text-secondary)' }}>{sendResult.abResult.openRateA}%</div>
-              <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>開啟率</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>開啟率</div>
             </div>
             <div style={{ padding: 10, borderRadius: 8, background: sendResult.abResult.winner === 'B' ? 'var(--accent-green-dim)' : 'var(--bg-card)', border: `1px solid ${sendResult.abResult.winner === 'B' ? 'var(--accent-green)' : 'var(--border-subtle)'}`, textAlign: 'center' }}>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>
@@ -78,7 +78,7 @@ export default function MarketingSendResultModal({ sendResult, onClose }) {
               </div>
               <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>{sendResult.abResult.subjectB}</div>
               <div style={{ fontSize: 20, fontWeight: 800, color: sendResult.abResult.winner === 'B' ? 'var(--accent-green)' : 'var(--text-secondary)' }}>{sendResult.abResult.openRateB}%</div>
-              <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>開啟率</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>開啟率</div>
             </div>
           </div>
           <div style={{ textAlign: 'center', marginTop: 10, fontSize: 13, fontWeight: 700, color: 'var(--accent-green)' }}>

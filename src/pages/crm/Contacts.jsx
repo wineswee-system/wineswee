@@ -555,13 +555,13 @@ export default function Contacts() {
                                           <div style={{ flex: 1 }}>
                                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
                                               <span style={{ fontWeight: 600 }}>
-                                                <span style={{ color: tp.color, fontSize: 10, fontWeight: 700, marginRight: 4 }}>{tp.label}</span>
+                                                <span style={{ color: tp.color, fontSize: 11, fontWeight: 700, marginRight: 4 }}>{tp.label}</span>
                                                 {int.title}
                                               </span>
-                                              <span style={{ color: 'var(--text-muted)', fontSize: 10, flexShrink: 0 }}>{formatDate(int.date)}</span>
+                                              <span style={{ color: 'var(--text-muted)', fontSize: 11, flexShrink: 0 }}>{formatDate(int.date)}</span>
                                             </div>
                                             {int.detail && <div style={{ color: 'var(--text-secondary)', fontSize: 11 }}>{int.detail}</div>}
-                                            {int.status && <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{int.status}</span>}
+                                            {int.status && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{int.status}</span>}
                                           </div>
                                         </div>
                                       )

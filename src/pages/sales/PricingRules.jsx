@@ -139,7 +139,7 @@ export default function PricingRules() {
             <div style={{ flex: 1 }}>
               <span style={{ fontWeight: 700, marginRight: 12 }}>{pl.name}</span>
               <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{pl.currency}</span>
-              {pl.is_default && <span style={{ marginLeft: 8, padding: '1px 6px', borderRadius: 3, fontSize: 10, fontWeight: 600, background: 'var(--accent-blue-dim)', color: 'var(--accent-blue)' }}>預設</span>}
+              {pl.is_default && <span style={{ marginLeft: 8, padding: '1px 6px', borderRadius: 3, fontSize: 11, fontWeight: 600, background: 'var(--accent-blue-dim)', color: 'var(--accent-blue)' }}>預設</span>}
               {pl.valid_from && <span style={{ marginLeft: 12, fontSize: 11, color: 'var(--text-secondary)' }}>{pl.valid_from} ~ {pl.valid_to || '...'}</span>}
             </div>
             <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 12, fontWeight: 600, background: pl.status === '啟用' ? 'var(--accent-green-dim)' : 'var(--accent-red-dim)', color: pl.status === '啟用' ? 'var(--accent-green)' : 'var(--accent-red)' }}>{pl.status}</span>

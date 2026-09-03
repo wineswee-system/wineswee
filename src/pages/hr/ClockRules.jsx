@@ -215,7 +215,7 @@ export default function ClockRules() {
                   <tr key={store.id}>
                     <td>
                       <div style={{ fontWeight: 600 }}>{store.name}</div>
-                      <span className={`badge ${store.store_type === 'headquarters' ? 'badge-purple' : 'badge-cyan'}`} style={{ fontSize: 10, marginTop: 2 }}>
+                      <span className={`badge ${store.store_type === 'headquarters' ? 'badge-purple' : 'badge-cyan'}`} style={{ fontSize: 11, marginTop: 2 }}>
                         {store.store_type === 'headquarters' ? '總部' : '門市'}
                       </span>
                     </td>
@@ -224,7 +224,7 @@ export default function ClockRules() {
                       {hasGPS ? (
                         <div>
                           <span className="badge badge-success" style={{ fontSize: 11 }}><span className="badge-dot" />{store.clock_radius || 150} m</span>
-                          <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 3 }}>{parseFloat(store.lat).toFixed(5)}, {parseFloat(store.lng).toFixed(5)}</div>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3 }}>{parseFloat(store.lat).toFixed(5)}, {parseFloat(store.lng).toFixed(5)}</div>
                         </div>
                       ) : <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>未設定</span>}
                     </td>
@@ -232,7 +232,7 @@ export default function ClockRules() {
                       {hasWifi ? (
                         <div>
                           <span className="badge" style={{ fontSize: 11, background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)' }}>{store.allowed_wifi.length} 組 IP</span>
-                          <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 3, maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={store.allowed_wifi.join(', ')}>{store.allowed_wifi.join(', ')}</div>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3, maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={store.allowed_wifi.join(', ')}>{store.allowed_wifi.join(', ')}</div>
                         </div>
                       ) : <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>未設定</span>}
                     </td>

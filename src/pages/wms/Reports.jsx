@@ -178,7 +178,7 @@ export default function WMSReports() {
             style={{ fontSize: 13 }} onClick={() => setActiveTab(tab.key)}>
             {tab.label}
             {tab.key === 'deadstock' && deadStock.length > 0 && (
-              <span className="badge badge-danger" style={{ marginLeft: 6, fontSize: 10 }}>{deadStock.length}</span>
+              <span className="badge badge-danger" style={{ marginLeft: 6, fontSize: 11 }}>{deadStock.length}</span>
             )}
           </button>
         ))}

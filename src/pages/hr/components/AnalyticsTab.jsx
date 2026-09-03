@@ -73,12 +73,12 @@ export default function AnalyticsTab({ filtered, schedules, weekDates, shiftDefs
         <div className="stat-card" style={{ '--card-accent': 'var(--accent-orange)', '--card-accent-dim': 'var(--accent-orange-dim)' }}>
           <div className="stat-card-label">預估人力成本</div>
           <div className="stat-card-value">NT$ {totalCost.toLocaleString()}</div>
-          <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>時薪 NT${rate}</div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>時薪 NT${rate}</div>
         </div>
         <div className="stat-card" style={{ '--card-accent': budget > 0 && totalCost > budget ? 'var(--accent-red)' : 'var(--accent-green)', '--card-accent-dim': budget > 0 && totalCost > budget ? 'var(--accent-red-dim)' : 'var(--accent-green-dim)' }}>
           <div className="stat-card-label">預算使用率</div>
           <div className="stat-card-value">{budget > 0 ? Math.round(totalCost / budget * 100) + '%' : '未設定'}</div>
-          {budget > 0 && <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>預算 NT${budget.toLocaleString()}</div>}
+          {budget > 0 && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>預算 NT${budget.toLocaleString()}</div>}
         </div>
       </div>
 
@@ -155,7 +155,7 @@ export default function AnalyticsTab({ filtered, schedules, weekDates, shiftDefs
                         <td style={{ fontWeight: 600 }}>{es.name}</td>
                         <td>
                           <span style={{
-                            padding: '2px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600,
+                            padding: '2px 6px', borderRadius: 4, fontSize: 11, fontWeight: 600,
                             background: es.isPT ? 'rgba(251,191,36,0.12)' : 'rgba(34,211,238,0.12)',
                             color: es.isPT ? '#f59e0b' : 'var(--accent-cyan)',
                           }}>
@@ -177,7 +177,7 @@ export default function AnalyticsTab({ filtered, schedules, weekDates, shiftDefs
                               background: isOver ? 'var(--accent-red)' : isWarning ? '#f59e0b' : 'var(--accent-green)',
                             }} />
                           </div>
-                          <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
                             上限 {effectiveCap}h
                           </div>
                         </td>
@@ -222,7 +222,7 @@ export default function AnalyticsTab({ filtered, schedules, weekDates, shiftDefs
                   <td style={{ fontWeight: 600 }}>{e.name}</td>
                   <td>
                     <span style={{
-                      padding: '2px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600,
+                      padding: '2px 6px', borderRadius: 4, fontSize: 11, fontWeight: 600,
                       background: e.isPT ? 'rgba(251,191,36,0.12)' : 'rgba(34,211,238,0.12)',
                       color: e.isPT ? '#f59e0b' : 'var(--accent-cyan)',
                     }}>

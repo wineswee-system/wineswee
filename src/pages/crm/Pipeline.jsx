@@ -423,8 +423,8 @@ export default function Pipeline() {
                           成交率 {o.probability}% · {o.expected_close || '未設定'}
                           {stale && <span style={{ color: 'var(--accent-orange)', fontWeight: 600 }}> · 停滯{staleDays(o)}天</span>}
                         </div>
-                        {o.win_reason && <div style={{ fontSize: 10, color: 'var(--accent-green)', marginBottom: 4 }}><Trophy size={10} /> {o.win_reason}</div>}
-                        {o.loss_reason && <div style={{ fontSize: 10, color: 'var(--accent-red)', marginBottom: 4 }}><XCircle size={10} /> {o.loss_reason}</div>}
+                        {o.win_reason && <div style={{ fontSize: 11, color: 'var(--accent-green)', marginBottom: 4 }}><Trophy size={10} /> {o.win_reason}</div>}
+                        {o.loss_reason && <div style={{ fontSize: 11, color: 'var(--accent-red)', marginBottom: 4 }}><XCircle size={10} /> {o.loss_reason}</div>}
                         <select className="form-input" style={{ fontSize: 11, padding: '2px 6px', width: '100%' }} value={o.stage} onChange={e => handleStageChange(o.id, e.target.value)}>
                           {STAGES.map(s => <option key={s}>{s}</option>)}
                         </select>
@@ -472,7 +472,7 @@ export default function Pipeline() {
                         </select>
                       </td>
                       <td>
-                        <button className="btn btn-sm" style={{ fontSize: 10, padding: '2px 6px', color: 'var(--accent-purple)' }} onClick={() => generateQuote(o)} title="產生報價單">
+                        <button className="btn btn-sm" style={{ fontSize: 11, padding: '2px 6px', color: 'var(--accent-purple)' }} onClick={() => generateQuote(o)} title="產生報價單">
                           <FileText size={12} />
                         </button>
                       </td>

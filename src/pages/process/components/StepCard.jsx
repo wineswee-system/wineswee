@@ -81,20 +81,20 @@ export default function StepCard({ step, index, total, isActive, onClick, onMove
         <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 3, flexWrap: 'wrap' }}>
           {step.role && (
             <span style={{
-              fontSize: 10, padding: '1px 6px', borderRadius: 4,
+              fontSize: 11, padding: '1px 6px', borderRadius: 4,
               background: 'var(--bg-secondary)', color: 'var(--text-muted)',
             }}>
               {step.role}
             </span>
           )}
           {step.priority && (
-            <span style={{ fontSize: 10, fontWeight: 700, color: PRIORITY_COLOR[step.priority] || 'var(--text-muted)' }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: PRIORITY_COLOR[step.priority] || 'var(--text-muted)' }}>
               ● {step.priority}
             </span>
           )}
           {badges.map((b, i) => (
             <span key={i} style={{
-              fontSize: 10, display: 'flex', alignItems: 'center', gap: 2,
+              fontSize: 11, display: 'flex', alignItems: 'center', gap: 2,
               color: b.color, background: 'var(--glass-light)',
               padding: '1px 5px', borderRadius: 4,
             }}>

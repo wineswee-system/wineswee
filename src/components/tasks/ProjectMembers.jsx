@@ -123,7 +123,7 @@ export default function ProjectMembers({ projectId, employees = [], currentUser,
             </div>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 13, fontWeight: 600 }}>{m.employee_full_name || m.employee_name}</div>
-              <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                 {m.employee_dept || ''} {m.employee_email ? `· ${m.employee_email}` : ''}
               </div>
             </div>

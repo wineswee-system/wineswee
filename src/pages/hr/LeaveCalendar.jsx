@@ -191,18 +191,18 @@ export default function LeaveCalendar() {
                       {day}
                     </span>
                     {onLeave.length > 0 && (
-                      <span style={{ fontSize: 10, background: onLeave.length >= 3 ? 'var(--accent-red)' : 'var(--accent-orange)', color: '#fff', borderRadius: 8, padding: '1px 6px', fontWeight: 600 }}>
+                      <span style={{ fontSize: 11, background: onLeave.length >= 3 ? 'var(--accent-red)' : 'var(--accent-orange)', color: '#fff', borderRadius: 8, padding: '1px 6px', fontWeight: 600 }}>
                         {onLeave.length}人
                       </span>
                     )}
                   </div>
-                  {holiday && <div style={{ fontSize: 10, color: 'var(--accent-orange)', fontWeight: 600, marginBottom: 2 }}>{holiday}</div>}
+                  {holiday && <div style={{ fontSize: 11, color: 'var(--accent-orange)', fontWeight: 600, marginBottom: 2 }}>{holiday}</div>}
                   {onLeave.slice(0, 3).map((l, i) => (
-                    <div key={i} style={{ fontSize: 10, padding: '1px 4px', marginBottom: 1, borderRadius: 3, background: 'rgba(6,182,212,0.1)', color: 'var(--accent-cyan)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <div key={i} style={{ fontSize: 11, padding: '1px 4px', marginBottom: 1, borderRadius: 3, background: 'rgba(6,182,212,0.1)', color: 'var(--accent-cyan)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {l.employee} · {l.type}
                     </div>
                   ))}
-                  {onLeave.length > 3 && <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>+{onLeave.length - 3} 人</div>}
+                  {onLeave.length > 3 && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>+{onLeave.length - 3} 人</div>}
                 </div>
               )
             })}

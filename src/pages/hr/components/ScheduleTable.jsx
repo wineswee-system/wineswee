@@ -198,7 +198,7 @@ export default function ScheduleTable({
                           />
                         ) : null}
                         {getOffRequest(emp.name, date) && !shift && (
-                          <div style={{ fontSize: 9, color: 'var(--accent-orange)', marginBottom: 2 }}>
+                          <div style={{ fontSize: 11, color: 'var(--accent-orange)', marginBottom: 2 }}>
                             <CalendarOff size={10} style={{ verticalAlign: -1 }} /> 希望休
                           </div>
                         )}
@@ -220,7 +220,7 @@ export default function ScheduleTable({
                               findCoverCandidates(emp.name, date, shift)
                             }} style={{
                               background: 'none', border: 'none', cursor: 'pointer',
-                              color: 'var(--text-muted)', fontSize: 10, padding: 1, opacity: 0.4, lineHeight: 1,
+                              color: 'var(--text-muted)', fontSize: 11, padding: 1, opacity: 0.4, lineHeight: 1,
                             }}>🔄</button>
                           )}
                         </div>
@@ -344,7 +344,7 @@ function ShiftEditPopup({ emp, date, shift, shiftDefs, SHIFT_TYPES, storeFilter,
         if (storeShifts.length === 0) return null
         return (
           <>
-          <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 3, fontWeight: 600 }}>📋 門市班別</div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 3, fontWeight: 600 }}>📋 門市班別</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 3, marginBottom: 6 }}>
             {storeShifts.map(sd => {
               const isActive = startTime === sd.start_time?.slice(0,5) && endTime === sd.end_time?.slice(0,5)
@@ -366,7 +366,7 @@ function ShiftEditPopup({ emp, date, shift, shiftDefs, SHIFT_TYPES, storeFilter,
       })()}
 
       {/* Quick presets (彈性班次) */}
-      <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 3, fontWeight: 600 }}>⚡ 彈性班次</div>
+      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 3, fontWeight: 600 }}>⚡ 彈性班次</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 3, marginBottom: 8 }}>
         {quickPresets.map(p => (
           <button key={p.label} onClick={() => { setStartTime(p.start); setEndTime(p.end) }}
@@ -374,7 +374,7 @@ function ShiftEditPopup({ emp, date, shift, shiftDefs, SHIFT_TYPES, storeFilter,
               padding: '4px 2px', borderRadius: 6, border: '1px solid var(--border-medium)',
               background: startTime === p.start && endTime === p.end ? 'rgba(34,211,238,0.15)' : 'var(--bg-card)',
               color: startTime === p.start && endTime === p.end ? 'var(--accent-cyan)' : 'var(--text-muted)',
-              fontSize: 10, fontWeight: 600, cursor: 'pointer',
+              fontSize: 11, fontWeight: 600, cursor: 'pointer',
             }}>
             {p.label}
           </button>

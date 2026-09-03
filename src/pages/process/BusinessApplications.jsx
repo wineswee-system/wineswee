@@ -173,7 +173,7 @@ function FormGroup({ title, desc, items, navigate }) {
                     {f.name}
                     {f.tag && (
                       <span style={{
-                        padding: '2px 6px', borderRadius: 4, fontSize: 10, fontWeight: 700,
+                        padding: '2px 6px', borderRadius: 4, fontSize: 11, fontWeight: 700,
                         background: 'var(--accent-orange-dim)', color: 'var(--accent-orange)',
                       }}>{f.tag}</span>
                     )}

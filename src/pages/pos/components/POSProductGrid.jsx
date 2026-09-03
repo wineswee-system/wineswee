@@ -67,7 +67,7 @@ export default function POSProductGrid({
                     <div style={{ fontSize: 12, color: 'var(--accent-purple)', fontWeight: 500 }}>
                       NT${combo.price}
                     </div>
-                    <div style={{ fontSize: 10, background: 'var(--accent-purple)', color: '#fff',
+                    <div style={{ fontSize: 11, background: 'var(--accent-purple)', color: '#fff',
                                   borderRadius: 4, padding: '1px 5px', alignSelf: 'flex-start' }}>
                       套餐
                     </div>
@@ -113,7 +113,7 @@ export default function POSProductGrid({
                   {hasVariants && (
                     <span style={{
                       position: 'absolute', top: 4, right: 4,
-                      fontSize: 9, background: 'var(--accent-cyan-dim)',
+                      fontSize: 11, background: 'var(--accent-cyan-dim)',
                       color: 'var(--accent-cyan)', borderRadius: 4,
                       padding: '1px 4px', fontWeight: 600
                     }}>

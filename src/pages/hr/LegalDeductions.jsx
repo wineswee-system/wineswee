@@ -238,7 +238,7 @@ export default function LegalDeductions() {
           }}>
             <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>{c.label}</div>
             <div style={{ fontSize: 20, fontWeight: 700, color: c.color }}>{c.value}</div>
-            {c.sublabel && <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>{c.sublabel}</div>}
+            {c.sublabel && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{c.sublabel}</div>}
           </div>
         ))}
       </div>
@@ -286,7 +286,7 @@ export default function LegalDeductions() {
                       {item.deduction_type === 'percent' ? (
                         <>
                           <span style={{ fontWeight: 600, color: 'var(--accent-purple)' }}>{item.monthly_percent}%</span>
-                          <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>月薪百分比</div>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>月薪百分比</div>
                         </>
                       ) : (
                         <span>{fmt(item.monthly_amount)}</span>

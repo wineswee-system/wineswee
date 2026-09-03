@@ -92,15 +92,15 @@ export default function WMSOverview() {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
                   <div style={{ textAlign: 'center', padding: '8px 4px', borderRadius: 8, background: 'var(--glass-light)' }}>
                     <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--accent-orange)' }}>{s.pendingInbound || 0}</div>
-                    <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>待到貨</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>待到貨</div>
                   </div>
                   <div style={{ textAlign: 'center', padding: '8px 4px', borderRadius: 8, background: 'var(--glass-light)' }}>
                     <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--accent-cyan)' }}>{s.pendingOutbound || 0}</div>
-                    <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>待揀貨</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>待揀貨</div>
                   </div>
                   <div style={{ textAlign: 'center', padding: '8px 4px', borderRadius: 8, background: 'var(--glass-light)' }}>
                     <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--accent-green)' }}>{(s.totalQty || 0).toLocaleString()}</div>
-                    <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>在庫總數</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>在庫總數</div>
                   </div>
                 </div>
 

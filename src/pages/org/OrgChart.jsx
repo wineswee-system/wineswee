@@ -260,7 +260,7 @@ export default function OrgChart() {
                   {execBoardMembers.map(emp => (
                     <div key={emp.id} style={{ textAlign: 'center' }}>
                       {emp.position && (
-                        <div style={{ fontSize: 10, color: 'var(--accent-purple)', fontWeight: 700, letterSpacing: 1 }}>{emp.position}</div>
+                        <div style={{ fontSize: 11, color: 'var(--accent-purple)', fontWeight: 700, letterSpacing: 1 }}>{emp.position}</div>
                       )}
                       <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--accent-purple)' }}>{labelOf(emp)}</div>
                     </div>
@@ -492,7 +492,7 @@ export default function OrgChart() {
                               }}>
                                 {labelOf(emp)}
                                 {emp.position && (
-                                  <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 400 }}>
+                                  <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>
                                     {emp.position}
                                   </div>
                                 )}
@@ -571,7 +571,7 @@ export default function OrgChart() {
                         }}>
                           <div style={{ fontWeight: 700, color, fontSize: 13 }}>
                             {sec.name}
-                            <span style={{ fontSize: 10, fontWeight: 600, opacity: 0.85, marginLeft: 6 }}>· {sectionHeadcount(sec)} 人</span>
+                            <span style={{ fontSize: 11, fontWeight: 600, opacity: 0.85, marginLeft: 6 }}>· {sectionHeadcount(sec)} 人</span>
                           </div>
                           {supe && (
                             <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>
@@ -657,7 +657,7 @@ export default function OrgChart() {
                                               lineHeight: 1.3,
                                             }}>
                                               {labelOf(emp)}
-                                              <div style={{ fontSize: 9, fontWeight: 500, opacity: 0.9 }}>儲備幹部</div>
+                                              <div style={{ fontSize: 11, fontWeight: 500, opacity: 0.9 }}>儲備幹部</div>
                                             </div>
                                           ))}
                                         </div>

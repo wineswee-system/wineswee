@@ -15,12 +15,12 @@ function InteractiveLinePhone() {
   return (
     <div className="demo-line-phone-col">
       <div className="demo-phone" style={{ background: '#e8e8e8' }}>
-        <div className="demo-phone-top"><span>SME OPS</span><span style={{ opacity: 0.6, fontSize: 10 }}>官方帳號</span></div>
+        <div className="demo-phone-top"><span>SME OPS</span><span style={{ opacity: 0.6, fontSize: 11 }}>官方帳號</span></div>
         <div className="demo-phone-chat">
           <div className="demo-msg-r">{activeScreen === 'clock' ? '打卡' : activeScreen === 'salary' ? '薪資' : activeScreen === 'leave' ? '請假' : '庫存'}</div>
           <div className="demo-msg-l" key={activeScreen}>
             <div style={{ background: s.headerBg, padding: '10px 14px' }}>
-              <div style={{ fontSize: 10, color: `${s.headerColor}99`, fontWeight: 600 }}>{s.header}</div>
+              <div style={{ fontSize: 11, color: `${s.headerColor}99`, fontWeight: 600 }}>{s.header}</div>
               <div style={{ fontSize: 15, fontWeight: 700, color: s.headerColor, marginTop: 2 }}>{s.title}</div>
             </div>
             <div style={{ padding: '8px 14px', fontSize: 11, color: '#555' }}>
@@ -73,21 +73,21 @@ export default function DemoLineSection() {
                 <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'rgba(8,145,178,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, color: '#0891B2' }}>王</div>
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>午安，王小明</div>
-                  <div style={{ fontSize: 10, color: '#94a3b8' }}>研發部 · 資深工程師</div>
+                  <div style={{ fontSize: 11, color: '#94a3b8' }}>研發部 · 資深工程師</div>
                 </div>
               </div>
             </div>
             <div style={{ padding: '8px 12px', display: 'flex', gap: 6 }}>
               <div style={{ flex: 1, background: '#fff', border: '1px solid rgba(0,0,0,0.06)', borderRadius: 8, padding: '7px 10px' }}>
-                <div style={{ fontSize: 9, color: '#94a3b8' }}>出勤</div>
+                <div style={{ fontSize: 11, color: '#94a3b8' }}>出勤</div>
                 <div style={{ fontSize: 11, fontWeight: 700, color: '#0891B2' }}>已上班</div>
               </div>
               <div style={{ flex: 1, background: '#fff', border: '1px solid rgba(0,0,0,0.06)', borderRadius: 8, padding: '7px 10px' }}>
-                <div style={{ fontSize: 9, color: '#94a3b8' }}>待辦</div>
+                <div style={{ fontSize: 11, color: '#94a3b8' }}>待辦</div>
                 <div style={{ fontSize: 11, fontWeight: 700, color: '#EA580C' }}>3 項任務</div>
               </div>
               <div style={{ flex: 1, background: '#fff', border: '1px solid rgba(0,0,0,0.06)', borderRadius: 8, padding: '7px 10px' }}>
-                <div style={{ fontSize: 9, color: '#94a3b8' }}>假單</div>
+                <div style={{ fontSize: 11, color: '#94a3b8' }}>假單</div>
                 <div style={{ fontSize: 11, fontWeight: 700, color: '#059669' }}>已核准</div>
               </div>
             </div>
@@ -95,7 +95,7 @@ export default function DemoLineSection() {
               <div style={{ background: 'linear-gradient(135deg, rgba(234,88,12,0.08), rgba(220,38,38,0.08))', border: '1px solid rgba(234,88,12,0.15)', borderRadius: 10, padding: '10px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
                   <div style={{ fontSize: 12, fontWeight: 700, color: '#1e293b' }}>點我下班打卡</div>
-                  <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 1 }}>上班 08:52</div>
+                  <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 1 }}>上班 08:52</div>
                 </div>
                 <div style={{ width: 32, height: 32, borderRadius: 8, background: 'linear-gradient(135deg, #fb923c, #f87171)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, color: '#fff' }}>👋</div>
               </div>
@@ -115,14 +115,14 @@ export default function DemoLineSection() {
                 ].map(m => (
                   <div key={m.label} style={{ background: '#fff', border: '1px solid rgba(0,0,0,0.05)', borderRadius: 8, padding: '8px 4px', textAlign: 'center' }}>
                     <div style={{ width: 28, height: 28, borderRadius: 7, background: m.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, margin: '0 auto 3px' }}>{m.icon}</div>
-                    <div style={{ fontSize: 9, fontWeight: 600, color: '#64748b' }}>{m.label}</div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b' }}>{m.label}</div>
                   </div>
                 ))}
               </div>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', background: '#fff', borderTop: '1px solid rgba(0,0,0,0.06)', padding: '6px 0' }}>
               {['首頁', '打卡', '請假', '庫存'].map((t, i) => (
-                <div key={t} style={{ textAlign: 'center', fontSize: 9, color: i === 0 ? '#0891B2' : '#94a3b8', fontWeight: 500 }}>{t}</div>
+                <div key={t} style={{ textAlign: 'center', fontSize: 11, color: i === 0 ? '#0891B2' : '#94a3b8', fontWeight: 500 }}>{t}</div>
               ))}
             </div>
           </div>
@@ -135,11 +135,11 @@ export default function DemoLineSection() {
         {/* Phone 3: 主管簽核 + Rich Menu */}
         <div className="demo-line-phone-col">
           <div className="demo-phone" style={{ background: '#e8e8e8' }}>
-            <div className="demo-phone-top"><span>SME OPS</span><span style={{ opacity: 0.6, fontSize: 10 }}>官方帳號</span></div>
+            <div className="demo-phone-top"><span>SME OPS</span><span style={{ opacity: 0.6, fontSize: 11 }}>官方帳號</span></div>
             <div className="demo-phone-chat" style={{ minHeight: 160 }}>
               <div className="demo-msg-l" style={{ width: '82%' }}>
                 <div style={{ background: '#FEF3C7', padding: '10px 14px' }}>
-                  <div style={{ fontSize: 10, color: '#92400E', fontWeight: 600 }}>簽核通知</div>
+                  <div style={{ fontSize: 11, color: '#92400E', fontWeight: 600 }}>簽核通知</div>
                   <div style={{ fontSize: 13, fontWeight: 700, color: '#78350F', marginTop: 2 }}>李美玲 申請特休假</div>
                 </div>
                 <div style={{ padding: '8px 14px', fontSize: 11, color: '#555' }}>
@@ -168,7 +168,7 @@ export default function DemoLineSection() {
               ].map(m => (
                 <div key={m.label} style={{ background: '#fff', padding: '10px 6px', textAlign: 'center', borderRight: '1px solid rgba(0,0,0,0.04)', borderTop: '1px solid rgba(0,0,0,0.04)' }}>
                   <div style={{ width: 30, height: 30, borderRadius: 8, background: `${m.color}12`, border: `1px solid ${m.color}20`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, margin: '0 auto 3px' }}>{m.icon}</div>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: '#1e293b' }}>{m.label}</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#1e293b' }}>{m.label}</div>
                 </div>
               ))}
             </div>

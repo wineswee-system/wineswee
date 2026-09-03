@@ -92,7 +92,7 @@ export default function ActivityTimeline({ entityType, entityId }) {
               <Icon size={14} style={{ color: meta.color, marginTop: 2, flexShrink: 0 }} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 12, fontWeight: 600, textDecoration: done ? 'line-through' : 'none' }}>{a.subject}</div>
-                <div style={{ fontSize: 10, color: 'var(--text-muted)', display: 'flex', gap: 8 }}>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', gap: 8 }}>
                   {a.assignee && <span>{a.assignee}</span>}
                   {a.due_date && <span><Clock size={9} style={{ verticalAlign: -1 }} /> {new Date(a.due_date).toLocaleDateString('zh-TW', { month: 'short', day: 'numeric' })}</span>}
                 </div>

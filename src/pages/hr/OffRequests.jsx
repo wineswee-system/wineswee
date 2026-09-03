@@ -122,11 +122,11 @@ export default function OffRequests() {
                     <td style={{ fontSize: 12 }}>{r.created_at?.slice(0, 16).replace('T', ' ')}</td>
                     <td>
                       <span style={{ padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700, background: s.bg, color: s.color }}>{r.status}</span>
-                      {r.reject_reason && <div style={{ fontSize: 10, color: 'var(--accent-red)', marginTop: 2 }}>{r.reject_reason}</div>}
+                      {r.reject_reason && <div style={{ fontSize: 11, color: 'var(--accent-red)', marginTop: 2 }}>{r.reject_reason}</div>}
                     </td>
                     <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                       {r.approver_name || '—'}
-                      {r.approved_at && <div style={{ fontSize: 10 }}>{r.approved_at.slice(0, 10)}</div>}
+                      {r.approved_at && <div style={{ fontSize: 11 }}>{r.approved_at.slice(0, 10)}</div>}
                     </td>
                     <td onClick={(e) => e.stopPropagation()}>
                       {canDeleteAll && (

@@ -435,7 +435,7 @@ export default function HrTabContent({
                   <div style={{ position: 'relative', flexShrink: 0 }}>
                     <img src={form.passbook_image_url} alt="存摺封面" style={{ width: 120, height: 80, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--border-subtle)' }} />
                     <a href={form.passbook_image_url} target="_blank" rel="noopener noreferrer"
-                      style={{ position: 'absolute', top: 4, right: 4, background: 'rgba(0,0,0,0.55)', borderRadius: 4, padding: '2px 5px', color: '#fff', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 3, fontSize: 10 }}>
+                      style={{ position: 'absolute', top: 4, right: 4, background: 'rgba(0,0,0,0.55)', borderRadius: 4, padding: '2px 5px', color: '#fff', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 3, fontSize: 11 }}>
                       <Eye size={10} /> 查看
                     </a>
                   </div>
@@ -564,7 +564,7 @@ export default function HrTabContent({
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span style={{ fontSize: 13, fontWeight: 600 }}>{d.name}</span>
                     <span className="badge badge-cyan" style={{ fontSize: 11 }}>{d.relationship || '—'}</span>
-                    {d.health_ins && <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 3, background: 'var(--accent-green-dim)', color: 'var(--accent-green)', fontWeight: 600 }}>健保</span>}
+                    {d.health_ins && <span style={{ fontSize: 11, padding: '1px 6px', borderRadius: 3, background: 'var(--accent-green-dim)', color: 'var(--accent-green)', fontWeight: 600 }}>健保</span>}
                   </div>
                   {deleteDependent && <button onClick={() => deleteDependent(d.id)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', opacity: 0.5 }}><Trash2 size={13} /></button>}
                 </div>

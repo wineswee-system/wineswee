@@ -689,7 +689,7 @@ export default function LineIntegration() {
                         <tr key={key}>
                           <td>
                             <div style={{ fontWeight: 600 }}>{c.display_name || '—'}</div>
-                            <div><span className={`badge ${badge}`} style={{ fontSize: 10 }}>{badgeLabel}</span></div>
+                            <div><span className={`badge ${badge}`} style={{ fontSize: 11 }}>{badgeLabel}</span></div>
                           </td>
                           <td style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--text-muted)' }}>
                             {c.line_user_id?.slice(0, 14)}…

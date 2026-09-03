@@ -110,12 +110,12 @@ export default function MarketingCampaignsTab({
                     <tr>
                       <td style={{ fontWeight: 600 }}>
                         {c.name}
-                        {c._abTest && <span className="badge badge-info" style={{ marginLeft: 6, fontSize: 10 }}>A/B</span>}
+                        {c._abTest && <span className="badge badge-info" style={{ marginLeft: 6, fontSize: 11 }}>A/B</span>}
                       </td>
                       <td style={{ fontSize: 12 }}>{locations.find(l => l.id === c.location_id)?.name || '-'}</td>
                       <td style={{ fontSize: 12 }}>
                         {c.type}
-                        <span className={`badge ${chConfigured ? 'badge-success' : 'badge-info'}`} style={{ marginLeft: 6, fontSize: 9 }}>
+                        <span className={`badge ${chConfigured ? 'badge-success' : 'badge-info'}`} style={{ marginLeft: 6, fontSize: 11 }}>
                           <span className="badge-dot"></span>{chConfigured ? '已設定' : '模擬模式'}
                         </span>
                       </td>
@@ -192,7 +192,7 @@ export default function MarketingCampaignsTab({
                                     <td style={{ padding: '4px 8px' }}>{log.channel || chType}</td>
                                     <td style={{ padding: '4px 8px' }}>{log.recipient || '-'}</td>
                                     <td style={{ padding: '4px 8px' }}>
-                                      <span className={`badge ${log.status === 'sent' ? 'badge-success' : log.status === 'simulated' ? 'badge-info' : log.status === 'failed' ? 'badge-error' : 'badge-warning'}`} style={{ fontSize: 10 }}>
+                                      <span className={`badge ${log.status === 'sent' ? 'badge-success' : log.status === 'simulated' ? 'badge-info' : log.status === 'failed' ? 'badge-error' : 'badge-warning'}`} style={{ fontSize: 11 }}>
                                         <span className="badge-dot"></span>
                                         {log.status === 'sent' ? '已發送' : log.status === 'simulated' ? '模擬' : log.status === 'failed' ? '失敗' : '排隊中'}
                                       </span>

@@ -144,7 +144,7 @@ export default function BankImportModal({ onClose }) {
                     const missing = !b?.bank_account
                     return (
                       <tr key={e.id}>
-                        <td style={{ fontWeight: 600 }}>{e.name}{e.status === '離職' && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 600, padding: '1px 5px', borderRadius: 4, background: 'var(--accent-orange-dim)', color: 'var(--accent-orange)' }}>離職</span>}</td>
+                        <td style={{ fontWeight: 600 }}>{e.name}{e.status === '離職' && <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 600, padding: '1px 5px', borderRadius: 4, background: 'var(--accent-orange-dim)', color: 'var(--accent-orange)' }}>離職</span>}</td>
                         <td>{b?.bank_code || (missing ? <span style={{ color: 'var(--accent-red)' }}>—</span> : '')}</td>
                         <td>{b?.bank_branch || ''}</td>
                         <td style={{ fontFamily: 'monospace' }}>

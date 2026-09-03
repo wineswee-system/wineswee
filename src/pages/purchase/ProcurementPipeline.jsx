@@ -245,11 +245,11 @@ export default function ProcurementPipeline() {
                           {stale && <Clock size={13} style={{ color: 'var(--accent-orange)' }} title={`停滯 ${staleDays(item)} 天`} />}
                         </div>
                         <div style={{ display: 'flex', gap: 4, marginBottom: 6, flexWrap: 'wrap' }}>
-                          <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: pri.bg, color: pri.color, fontWeight: 600 }}>
+                          <span style={{ fontSize: 11, padding: '1px 6px', borderRadius: 4, background: pri.bg, color: pri.color, fontWeight: 600 }}>
                             {item.priority}
                           </span>
                           {item.department && (
-                            <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: 'var(--bg-tertiary)', color: 'var(--text-muted)' }}>
+                            <span style={{ fontSize: 11, padding: '1px 6px', borderRadius: 4, background: 'var(--bg-tertiary)', color: 'var(--text-muted)' }}>
                               {item.department}
                             </span>
                           )}

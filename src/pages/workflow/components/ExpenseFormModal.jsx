@@ -107,7 +107,7 @@ function AcceptanceUnitsField({ stores, selected = [], onChange }) {
         <span style={{ color: selected.length ? 'var(--text-primary)' : 'var(--text-muted)' }}>
           {selected.length ? selected.join('、') : '選填，可多選'}
         </span>
-        <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{open ? '▲' : '▼'}</span>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{open ? '▲' : '▼'}</span>
       </button>
       {open && (
         <div style={{

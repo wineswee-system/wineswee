@@ -146,7 +146,7 @@ export default function PreferencesTab({
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <span style={{ fontWeight: 700, fontSize: 14 }}>{emp.name}</span>
                     {isPT && <span style={{
-                      fontSize: 10, fontWeight: 700, color: '#f59e0b',
+                      fontSize: 11, fontWeight: 700, color: '#f59e0b',
                       background: 'rgba(251,191,36,0.12)', padding: '1px 6px', borderRadius: 4,
                     }}>PT</span>}
                   </div>
@@ -270,7 +270,7 @@ export default function PreferencesTab({
                                   handleAvailSave(emp.name, dow, e.target.value, end)
                                 }}
                               />
-                              <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>~</span>
+                              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>~</span>
                               <input type="time" className="form-input"
                                 style={{ width: 85, padding: '2px 4px', fontSize: 11 }}
                                 defaultValue={slot?.end || '00:00'}
@@ -281,7 +281,7 @@ export default function PreferencesTab({
                               />
                               {slot && (
                                 <button onClick={() => handleAvailDelete(emp.name, dow)}
-                                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 10, color: 'var(--accent-red)' }}>
+                                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, color: 'var(--accent-red)' }}>
                                   清除
                                 </button>
                               )}

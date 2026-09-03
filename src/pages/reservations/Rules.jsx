@@ -123,26 +123,26 @@ export default function Rules() {
                   <div key={i} style={{ background: 'var(--bg-tertiary)', borderRadius: 10, padding: '12px 10px', border: `1px solid ${isClosed ? 'var(--accent-red-dim)' : r ? 'var(--accent-cyan)' : 'var(--border-primary)'}`, opacity: isClosed ? 0.65 : 1 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                       <span style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)' }}>星期{d}</span>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', fontSize: 10, color: 'var(--text-muted)' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', fontSize: 11, color: 'var(--text-muted)' }}>
                         <input type="checkbox" checked={isClosed} onChange={e => upsertDay(i, { is_closed: e.target.checked })}/> 公休
                       </label>
                     </div>
                     {!isClosed && (
                       <>
                         <div style={{ marginBottom: 6 }}>
-                          <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 2 }}>開始</div>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 2 }}>開始</div>
                           <input type="time" value={r?.open_time || effective.open_time}
                             onChange={e => upsertDay(i, { open_time: e.target.value })}
                             style={{ ...inp, fontSize: 12, padding: '4px 6px' }}/>
                         </div>
                         <div>
-                          <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 2 }}>結束</div>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 2 }}>結束</div>
                           <input type="time" value={r?.close_time || effective.close_time}
                             onChange={e => upsertDay(i, { close_time: e.target.value })}
                             style={{ ...inp, fontSize: 12, padding: '4px 6px' }}/>
                         </div>
                         {r && (
-                          <button onClick={() => delRule(r.id)} style={{ marginTop: 8, padding: '2px 4px', border: 'none', background: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 10, textDecoration: 'underline' }}>重設為預設</button>
+                          <button onClick={() => delRule(r.id)} style={{ marginTop: 8, padding: '2px 4px', border: 'none', background: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 11, textDecoration: 'underline' }}>重設為預設</button>
                         )}
                       </>
                     )}

@@ -231,7 +231,7 @@ export default function EmployeeFormModal({
                 <option value="super_admin">超級管理員</option>
               )}
             </select>
-            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
               影響系統內可進的頁面與按鈕。未指定則依職稱自動判定。
             </div>
           </Field>
@@ -242,7 +242,7 @@ export default function EmployeeFormModal({
               options={empOptions(employees.filter(e => e.status === '在職'))}
               placeholder="搜尋姓名 / 職稱 / 部門 / 門市..."
             />
-            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
               簽核流程「直屬主管」這關會解析到這個人。
             </div>
           </Field>

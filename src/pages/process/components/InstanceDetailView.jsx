@@ -505,7 +505,7 @@ export default function InstanceDetailView({
                       <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.3, marginBottom: 6 }}>{step.title}</div>
                       <div style={{ display: 'flex', gap: 6, fontSize: 11, color: 'var(--text-muted)', flexWrap: 'wrap', alignItems: 'center' }}>
                         {step.task_code && (
-                          <span style={{ padding: '1px 5px', borderRadius: 3, background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)', fontWeight: 700, fontSize: 10 }}>
+                          <span style={{ padding: '1px 5px', borderRadius: 3, background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)', fontWeight: 700, fontSize: 11 }}>
                             {step.task_code}
                           </span>
                         )}
@@ -575,7 +575,7 @@ export default function InstanceDetailView({
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         {step.task_code && (
-                          <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)', border: '1px solid rgba(6,182,212,0.2)', flexShrink: 0, letterSpacing: '0.03em' }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)', border: '1px solid rgba(6,182,212,0.2)', flexShrink: 0, letterSpacing: '0.03em' }}>
                             {step.task_code}
                           </span>
                         )}

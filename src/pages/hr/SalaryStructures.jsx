@@ -495,7 +495,7 @@ export default function SalaryStructures() {
                 <Field label="本月件數">
                   <input className="form-input" type="number" value={form.current_piece_count} onChange={e => set('current_piece_count', e.target.value)} placeholder="0" />
                   {Number(form.current_piece_count) > 0 && Number(form.piece_rate) > 0 && (
-                    <div style={{ fontSize: 10, color: 'var(--accent-cyan)', marginTop: 2 }}>
+                    <div style={{ fontSize: 11, color: 'var(--accent-cyan)', marginTop: 2 }}>
                       預估月薪：NT$ {(Number(form.current_piece_count) * Number(form.piece_rate)).toLocaleString()}
                     </div>
                   )}
@@ -505,11 +505,11 @@ export default function SalaryStructures() {
               <>
                 <Field label="本薪 (合約名義)">
                   <input className="form-input" type="number" value={form.base_salary} onChange={e => set('base_salary', e.target.value)} placeholder="0" />
-                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>合約上的薪資</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>合約上的薪資</div>
                 </Field>
                 <Field label="申報底薪 (投保用)">
                   <input className="form-input" type="number" value={form.base_insured} onChange={e => set('base_insured', e.target.value)} placeholder="留空＝自動 min(本薪+津貼, 45,800)" />
-                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>勞健保 / 勞退提撥基準</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>勞健保 / 勞退提撥基準</div>
                 </Field>
               </>
             )}
@@ -531,7 +531,7 @@ export default function SalaryStructures() {
             </Field>
             <Field label="伙食津貼">
               <input className="form-input" type="number" value={form.meal_allowance} onChange={e => set('meal_allowance', e.target.value)} placeholder="0" />
-              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>NT$ 3,000 以下免稅</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>NT$ 3,000 以下免稅</div>
             </Field>
             <Field label="交通津貼">
               <input className="form-input" type="number" value={form.transport_allowance} onChange={e => set('transport_allowance', e.target.value)} placeholder="0" />
@@ -544,7 +544,7 @@ export default function SalaryStructures() {
             </Field>
             <Field label="投保級距 ID (選填)">
               <input className="form-input" type="number" value={form.insurance_grade_id} onChange={e => set('insurance_grade_id', e.target.value)} placeholder="—" />
-              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>之後接 insurance_grades 表</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>之後接 insurance_grades 表</div>
             </Field>
             <Field label="年終獎金月數">
               <input className="form-input" type="number" value={form.year_end_bonus_months} onChange={e => set('year_end_bonus_months', e.target.value)} placeholder="0" step="0.5" />

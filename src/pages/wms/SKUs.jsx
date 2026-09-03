@@ -215,7 +215,7 @@ export default function SKUs() {
                       {s.variant_attributes && (
                         <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>
                           {Object.entries(s.variant_attributes).map(([k, v]) => (
-                            <span key={k} className="badge badge-neutral" style={{ marginRight: 4, fontSize: 10 }}>{k}: {v}</span>
+                            <span key={k} className="badge badge-neutral" style={{ marginRight: 4, fontSize: 11 }}>{k}: {v}</span>
                           ))}
                         </div>
                       )}
@@ -291,7 +291,7 @@ export default function SKUs() {
                       <tr key={v.id}>
                         <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{v.code}</td>
                         <td>{v.variant_attributes && Object.entries(v.variant_attributes).map(([k, val]) => (
-                          <span key={k} className="badge badge-cyan" style={{ marginRight: 4, fontSize: 10 }}>{k}: {val}</span>
+                          <span key={k} className="badge badge-cyan" style={{ marginRight: 4, fontSize: 11 }}>{k}: {val}</span>
                         ))}</td>
                         <td><span className={`badge ${v.status === '啟用' ? 'badge-success' : 'badge-neutral'}`}>{v.status}</span></td>
                       </tr>

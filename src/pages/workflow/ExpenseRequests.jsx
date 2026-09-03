@@ -992,7 +992,7 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
                       <span>
                         {fmtCur(r.estimated_amount, r.currency)}
                         {r.currency && r.currency !== 'TWD' && (
-                          <span style={{ fontSize: 10, fontWeight: 600, marginLeft: 4, padding: '1px 5px', borderRadius: 3,
+                          <span style={{ fontSize: 11, fontWeight: 600, marginLeft: 4, padding: '1px 5px', borderRadius: 3,
                             color: 'var(--accent-orange)', background: 'var(--accent-orange-dim)' }}>{r.currency}</span>
                         )}
                       </span>
@@ -1206,7 +1206,7 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
                   預估金額
                   {showDetail.currency && showDetail.currency !== 'TWD' && (
-                    <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 5px', borderRadius: 3,
+                    <span style={{ fontSize: 11, fontWeight: 700, padding: '1px 5px', borderRadius: 3,
                       color: 'var(--accent-orange)', background: 'var(--accent-orange-dim)' }}>{showDetail.currency}</span>
                   )}
                 </div>

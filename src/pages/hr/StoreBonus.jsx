@@ -415,7 +415,7 @@ export default function StoreBonus() {
                       title={`當月工時 ${Number(e.work_hours || 0)}h`}>
                       {Number(e.net_bonus).toLocaleString()}
                       {e.eligible === false && e.ineligible_reason && (
-                        <div style={{ fontSize: 10, color: 'var(--accent-red)', fontWeight: 600 }}>⚠ {e.ineligible_reason}</div>
+                        <div style={{ fontSize: 11, color: 'var(--accent-red)', fontWeight: 600 }}>⚠ {e.ineligible_reason}</div>
                       )}
                     </td>
                   </tr>

@@ -597,7 +597,7 @@ export default function Service() {
                               <span className="badge-dot"></span>
                               {sla.status === 'on_track' ? '正常' : sla.status === 'warning' ? '即將逾期' : '已逾期'}
                             </span>
-                            <span style={{ fontSize: 10, color: slaColor(sla.status), fontWeight: 600 }}>
+                            <span style={{ fontSize: 11, color: slaColor(sla.status), fontWeight: 600 }}>
                               <Clock size={10} style={{ verticalAlign: 'middle', marginRight: 2 }} />
                               剩餘 {sla.remainingHours}h
                             </span>

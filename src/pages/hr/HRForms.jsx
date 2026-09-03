@@ -147,7 +147,7 @@ export default function HRForms() {
                         {f.name}
                         {f.tag && (
                           <span style={{
-                            fontSize: 9, padding: '1px 6px', borderRadius: 4,
+                            fontSize: 11, padding: '1px 6px', borderRadius: 4,
                             background: 'var(--accent-orange)', color: '#fff', fontWeight: 700,
                           }}>{f.tag}</span>
                         )}

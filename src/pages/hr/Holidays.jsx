@@ -152,7 +152,7 @@ export default function Holidays() {
                       }}>
                         <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--accent-cyan)', minWidth: 28 }}>{day}日</span>
                         <span style={{
-                          padding: '1px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600,
+                          padding: '1px 6px', borderRadius: 4, fontSize: 11, fontWeight: 600,
                           background: h.type === '國定' ? 'var(--accent-red-dim)' : 'var(--accent-blue-dim)',
                           color: h.type === '國定' ? 'var(--accent-red)' : 'var(--accent-blue)',
                         }}>🏛️</span>

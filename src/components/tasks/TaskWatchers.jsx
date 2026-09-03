@@ -73,7 +73,7 @@ export default function TaskWatchers({ taskId, employees = [], currentUser, onCh
           }}>
             <span>{w.employees?.name || w.employee_name}</span>
             {w.role === 'collaborator' && (
-              <span style={{ fontSize: 9, color: 'var(--accent-purple)' }}>協作</span>
+              <span style={{ fontSize: 11, color: 'var(--accent-purple)' }}>協作</span>
             )}
             <button
               onClick={() => remove(w.id)}

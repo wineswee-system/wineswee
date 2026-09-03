@@ -342,7 +342,7 @@ export default function LMSAdmin() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         {course.title}
                         {course.is_required && (
-                          <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--accent-red)',
+                          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent-red)',
                             background: 'var(--accent-red-dim)', padding: '1px 6px', borderRadius: 3 }}>必修</span>
                         )}
                       </div>

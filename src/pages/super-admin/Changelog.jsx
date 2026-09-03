@@ -316,7 +316,7 @@ export default function Changelog() {
                       onClick={() => hasDiff && toggleExpand(log.id)}>
                       <td>
                         <div style={{ fontSize: 12 }}>{formatTime(log.time)}</div>
-                        <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{timeAgo(log.time)}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{timeAgo(log.time)}</div>
                       </td>
                       <td>
                         {log.organizations?.name
@@ -337,7 +337,7 @@ export default function Changelog() {
                       <td>
                         {hasDiff && (
                           <div>
-                            {log.field_name && <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 4 }}>{log.field_name}</div>}
+                            {log.field_name && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{log.field_name}</div>}
                             <DiffBadge oldVal={log.old_value} newVal={log.new_value} />
                           </div>
                         )}

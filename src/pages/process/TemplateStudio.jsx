@@ -488,7 +488,7 @@ export default function TemplateStudio() {
           {/* Template metadata */}
           <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0 }}>
             <div style={{
-              fontSize: 10, fontWeight: 700, color: 'var(--text-muted)',
+              fontSize: 11, fontWeight: 700, color: 'var(--text-muted)',
               textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 10,
             }}>
               範本資訊
@@ -642,7 +642,7 @@ export default function TemplateStudio() {
 
               {/* Who can deploy */}
               <div style={{ marginBottom: 8 }}>
-                <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 4 }}>誰可以部署</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 4 }}>誰可以部署</div>
                 <div style={{ display: 'flex', gap: 5 }}>
                   {[{ value: 'all', label: '所有人' }, { value: 'departments', label: '指定部門' }].map(opt => (
                     <button
@@ -670,7 +670,7 @@ export default function TemplateStudio() {
               {/* Department picker — only when restricted */}
               {(tpl.permissions?.deploy_access) === 'departments' && (
                 <div style={{ marginBottom: 8 }}>
-                  <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 4 }}>允許部門</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 4 }}>允許部門</div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 3, maxHeight: 120, overflowY: 'auto' }}>
                     {departments.map(dept => {
                       const checked = (tpl.permissions?.allowed_departments || []).includes(dept.id)
@@ -693,7 +693,7 @@ export default function TemplateStudio() {
                       )
                     })}
                     {departments.length === 0 && (
-                      <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>無部門資料</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>無部門資料</div>
                     )}
                   </div>
                 </div>
@@ -730,7 +730,7 @@ export default function TemplateStudio() {
               display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10,
             }}>
               <span style={{
-                fontSize: 10, fontWeight: 700, color: 'var(--text-muted)',
+                fontSize: 11, fontWeight: 700, color: 'var(--text-muted)',
                 textTransform: 'uppercase', letterSpacing: 0.6,
               }}>
                 步驟
@@ -814,7 +814,7 @@ export default function TemplateStudio() {
                   <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                     <History size={12} /> 版本記錄
                   </span>
-                  <span style={{ fontSize: 10, opacity: 0.7 }}>{showVersions ? '▲' : '▼'}</span>
+                  <span style={{ fontSize: 11, opacity: 0.7 }}>{showVersions ? '▲' : '▼'}</span>
                 </button>
 
                 {showVersions && (
@@ -835,10 +835,10 @@ export default function TemplateStudio() {
                                 <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-primary)' }}>
                                   v{v.version_number}
                                 </div>
-                                <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
+                                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
                                   {v.changed_by} · {new Date(v.changed_at).toLocaleString('zh-TW', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                                 </div>
-                                <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 2 }}>
+                                <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>
                                   {(v.steps?.length || 0)} 步驟
                                 </div>
                               </div>
@@ -847,7 +847,7 @@ export default function TemplateStudio() {
                                   type="button"
                                   onClick={() => handleRestore(v)}
                                   style={{
-                                    fontSize: 10, padding: '3px 8px', borderRadius: 5, fontWeight: 600,
+                                    fontSize: 11, padding: '3px 8px', borderRadius: 5, fontWeight: 600,
                                     border: '1px solid var(--accent-orange)', background: 'var(--accent-orange-dim)',
                                     color: 'var(--accent-orange)', cursor: 'pointer',
                                   }}
@@ -858,7 +858,7 @@ export default function TemplateStudio() {
                                   type="button"
                                   onClick={() => setDiffVersion(prev => prev?.id === v.id ? null : v)}
                                   style={{
-                                    fontSize: 10, padding: '3px 8px', borderRadius: 5, fontWeight: 600,
+                                    fontSize: 11, padding: '3px 8px', borderRadius: 5, fontWeight: 600,
                                     border: '1px solid var(--accent-blue)',
                                     background: diffVersion?.id === v.id ? 'var(--accent-blue)' : 'var(--accent-blue-dim)',
                                     color: diffVersion?.id === v.id ? '#fff' : 'var(--accent-blue)',

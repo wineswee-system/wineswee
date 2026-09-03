@@ -308,7 +308,7 @@ export default function StoreSettingsTab({
                     <td>{d.end_time?.slice(0, 5)}</td>
                     <td>{brk}分鐘{d.manual_break ? ' ✍手動' : ''}</td>
                     <td style={{ color: 'var(--text-primary)', fontWeight: 700 }}>{wh.toFixed(1)}h</td>
-                    <td style={{ fontSize: 10 }}>
+                    <td style={{ fontSize: 11 }}>
                       {d.employee_type === 'pt' ? '兼職' : d.employee_type === 'full_time' ? '正職' : '全部'}
                       {d.day_type && d.day_type !== 'all' ? ` · ${d.day_type === 'weekday' ? '平日' : '假日'}` : ''}
                     </td>
@@ -434,7 +434,7 @@ export default function StoreSettingsTab({
                     left: `${Math.max(0, barStart)}%`, width: `${Math.min(barWidth, 100 - barStart)}%`,
                     background: `rgba(34,211,238,${0.15 + s.required_count * 0.1})`,
                     borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 10, fontWeight: 700, color: 'var(--accent-cyan)',
+                    fontSize: 11, fontWeight: 700, color: 'var(--accent-cyan)',
                   }}>
                     {s.required_count}人
                   </div>

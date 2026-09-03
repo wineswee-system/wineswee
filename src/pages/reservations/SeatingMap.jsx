@@ -321,18 +321,18 @@ export default function SeatingMap() {
                     }}
                   >
                     <div style={{ fontSize: 14, fontWeight: 700, color: ts.text }}>{table.table_number}</div>
-                    <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>{table.capacity}人</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>{table.capacity}人</div>
                     {!editMode && res && (
                       <>
                         <div style={{ fontSize: 11, fontWeight: 600, color: ts.text, marginTop: 3, maxWidth: 78, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {res.guest_name}
                         </div>
                         {(status === 'seated' || status === 'expiring') ? (
-                          <div style={{ fontSize: 10, color: status === 'expiring' ? 'var(--accent-orange)' : 'var(--text-muted)', fontWeight: status === 'expiring' ? 700 : 400 }}>
+                          <div style={{ fontSize: 11, color: status === 'expiring' ? 'var(--accent-orange)' : 'var(--text-muted)', fontWeight: status === 'expiring' ? 700 : 400 }}>
                             {remainLabel(res)}
                           </div>
                         ) : (
-                          <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{res.slot_time.slice(0,5)}</div>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{res.slot_time.slice(0,5)}</div>
                         )}
                       </>
                     )}

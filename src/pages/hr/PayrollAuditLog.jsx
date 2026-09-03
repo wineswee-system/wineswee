@@ -268,7 +268,7 @@ export default function PayrollAuditLog() {
                         <td>{log.employee_name || '—'}</td>
                         <td>
                           <span style={{
-                            padding: '1px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600,
+                            padding: '1px 6px', borderRadius: 4, fontSize: 11, fontWeight: 600,
                             background: 'var(--bg-card)', color: 'var(--text-secondary)',
                           }}>
                             {SOURCE_LABEL[log.source_type] || log.source_type}
@@ -287,19 +287,19 @@ export default function PayrollAuditLog() {
                         <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                           {log.reason || <span style={{ fontStyle: 'italic' }}>(無理由)</span>}
                           {log._flags.includes('high_impact') && (
-                            <span style={{ marginLeft: 6, padding: '1px 5px', borderRadius: 4, fontSize: 10, fontWeight: 600,
+                            <span style={{ marginLeft: 6, padding: '1px 5px', borderRadius: 4, fontSize: 11, fontWeight: 600,
                               color: 'var(--accent-orange)', background: 'var(--accent-orange-dim)' }}>
                               <AlertTriangle size={9} /> 大金額
                             </span>
                           )}
                           {log._flags.includes('no_reason') && !log.reason && (
-                            <span style={{ marginLeft: 6, padding: '1px 5px', borderRadius: 4, fontSize: 10, fontWeight: 600,
+                            <span style={{ marginLeft: 6, padding: '1px 5px', borderRadius: 4, fontSize: 11, fontWeight: 600,
                               color: 'var(--accent-red)', background: 'var(--accent-red-dim)' }}>
                               無理由
                             </span>
                           )}
                           {isSuper && (
-                            <span style={{ marginLeft: 6, padding: '1px 5px', borderRadius: 4, fontSize: 10, fontWeight: 600,
+                            <span style={{ marginLeft: 6, padding: '1px 5px', borderRadius: 4, fontSize: 11, fontWeight: 600,
                               color: 'var(--text-muted)', background: 'var(--bg-tertiary)' }}>
                               <RotateCcw size={9} /> 已被取代
                             </span>

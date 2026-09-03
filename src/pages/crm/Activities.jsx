@@ -252,12 +252,12 @@ export default function Activities() {
                       </td>
                       <td style={{ fontWeight: 600 }}>
                         {a.subject}
-                        {a.entity_type && <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 6 }}>({a.entity_type} #{a.entity_id})</span>}
+                        {a.entity_type && <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 6 }}>({a.entity_type} #{a.entity_id})</span>}
                       </td>
                       <td>{a.assignee || '-'}</td>
                       <td style={{ color: overdue_ ? 'var(--accent-red)' : 'var(--text-secondary)', fontSize: 12, fontWeight: overdue_ ? 700 : 400 }}>
                         {a.due_date ? new Date(a.due_date).toLocaleString('zh-TW', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}
-                        {overdue_ && <span style={{ marginLeft: 4, fontSize: 10 }}>逾期</span>}
+                        {overdue_ && <span style={{ marginLeft: 4, fontSize: 11 }}>逾期</span>}
                       </td>
                       <td>
                         <span className={`badge ${a.status === 'completed' ? 'badge-success' : a.status === 'cancelled' ? 'badge-neutral' : overdue_ ? 'badge-danger' : 'badge-info'}`}>
@@ -333,7 +333,7 @@ export default function Activities() {
                         }}
                       >
                         <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.subject}</div>
-                        {a.due_date && <div style={{ color: 'var(--text-muted)', fontSize: 10 }}>{new Date(a.due_date).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}</div>}
+                        {a.due_date && <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>{new Date(a.due_date).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}</div>}
                       </div>
                     )
                   })}

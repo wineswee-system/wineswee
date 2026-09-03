@@ -223,7 +223,7 @@ export default function MySchedule() {
                         {isRest ? (absConfig?.icon || '😴') : ''} {isRest ? shift : formatShiftLabel(shift)}
                       </div>
                       {!isRest && (
-                        <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 2, fontFamily: 'monospace' }}>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, fontFamily: 'monospace' }}>
                           <Clock size={8} style={{ verticalAlign: -1 }} />{' '}
                           {sched?.actual_start?.slice(0, 5) || def?.start_time?.slice(0, 5) || ''}~{sched?.actual_end?.slice(0, 5) || def?.end_time?.slice(0, 5) || ''}
                         </div>
@@ -519,7 +519,7 @@ function SwapRequestForm({ empName, monthDates, schedules, shiftDefs }) {
             <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid var(--border-subtle)', fontSize: 12 }}>
               <span>{s.date?.slice(5)} {s.requester}({s.requester_shift}) ↔ {s.target}({s.target_shift})</span>
               <span style={{
-                padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 700,
+                padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 700,
                 background: s.status === 'approved' ? 'rgba(52,211,153,0.12)' : s.status === 'rejected' ? 'rgba(239,68,68,0.1)' : 'rgba(251,191,36,0.12)',
                 color: s.status === 'approved' ? '#10b981' : s.status === 'rejected' ? '#ef4444' : '#f59e0b',
               }}>

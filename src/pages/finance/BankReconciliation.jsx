@@ -364,7 +364,7 @@ export default function BankReconciliation() {
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0 }}>
                   <ArrowRight size={18} style={{ color: confidenceColor(pair.confidence) }} />
                   <span style={{
-                    fontSize: 10, fontWeight: 700, color: confidenceColor(pair.confidence),
+                    fontSize: 11, fontWeight: 700, color: confidenceColor(pair.confidence),
                     padding: '1px 6px', borderRadius: 4, background: `${confidenceColor(pair.confidence)}18`,
                   }}>
                     {pair.confidence} ({pair.confidenceScore}%)
@@ -381,7 +381,7 @@ export default function BankReconciliation() {
                 {/* Reasons */}
                 <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'flex-end' }}>
                   {pair.reasons.map((r, ri) => (
-                    <span key={ri} style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: 'var(--bg-card)', color: 'var(--text-secondary)' }}>{r}</span>
+                    <span key={ri} style={{ fontSize: 11, padding: '1px 6px', borderRadius: 4, background: 'var(--bg-card)', color: 'var(--text-secondary)' }}>{r}</span>
                   ))}
                 </div>
 

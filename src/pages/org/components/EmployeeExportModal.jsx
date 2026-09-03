@@ -155,7 +155,7 @@ export default function EmployeeExportModal({ open, onClose, employees = [], org
               <div key={g.group} style={{ marginBottom: 12, padding: '10px 12px', borderRadius: 10, background: 'var(--bg-card)', border: '1px solid var(--border-subtle)' }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, cursor: 'pointer', marginBottom: 8 }}>
                   <input type="checkbox" checked={g.cols.every(c => cols.has(c.key))} onChange={() => toggleGroup(g)} />
-                  {g.group}{g.group === '機敏資料' && <span style={{ fontSize: 10, color: 'var(--accent-red)', fontWeight: 600 }}>（含身分證／薪資，請留意）</span>}
+                  {g.group}{g.group === '機敏資料' && <span style={{ fontSize: 11, color: 'var(--accent-red)', fontWeight: 600 }}>（含身分證／薪資，請留意）</span>}
                 </label>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                   {g.cols.map(c => (
@@ -188,7 +188,7 @@ export default function EmployeeExportModal({ open, onClose, employees = [], org
                   <input type="checkbox" checked={empIds.has(e.id)} onChange={() => toggleEmp(e.id)} />
                   <span style={{ fontWeight: 600 }}>{e.name}</span>
                   <span style={{ color: 'var(--text-muted)', fontFamily: 'monospace', fontSize: 11 }}>{e.employee_number || ''}</span>
-                  {e.status === '離職' && <span style={{ fontSize: 10, color: 'var(--accent-red)' }}>離職</span>}
+                  {e.status === '離職' && <span style={{ fontSize: 11, color: 'var(--accent-red)' }}>離職</span>}
                 </label>
               ))}
               {shownEmps.length === 0 && <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>查無同仁</div>}

@@ -474,7 +474,7 @@ export default function Sidebar() {
                 position: 'absolute', top: -3, right: mentionCount > 0 ? 10 : -3,
                 minWidth: 15, height: 15, padding: '0 3px',
                 borderRadius: 8, background: 'var(--accent-red)', color: '#fff',
-                fontSize: 9, fontWeight: 700, lineHeight: '15px', textAlign: 'center',
+                fontSize: 11, fontWeight: 700, lineHeight: '15px', textAlign: 'center',
               }}>{totalPending > 99 ? '99+' : totalPending}</span>
             )}
             {mentionCount > 0 && (
@@ -482,7 +482,7 @@ export default function Sidebar() {
                 position: 'absolute', top: -3, right: -3,
                 minWidth: 15, height: 15, padding: '0 3px',
                 borderRadius: 8, background: 'var(--accent-blue)', color: '#fff',
-                fontSize: 9, fontWeight: 700, lineHeight: '15px', textAlign: 'center',
+                fontSize: 11, fontWeight: 700, lineHeight: '15px', textAlign: 'center',
               }}>@{mentionCount > 99 ? '99+' : mentionCount}</span>
             )}
           </button>

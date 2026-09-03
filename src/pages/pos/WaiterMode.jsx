@@ -2222,7 +2222,7 @@ img{display:block;margin:0 auto}
                 <div key={item.id} style={S.itemCard(inCart)} onClick={() => addItem(item)}>
                   {qty > 0 && <span style={S.cartBadge}>×{qty}</span>}
                   {hasVariants && qty === 0 && (
-                    <span style={{ position: 'absolute', top: 6, left: 8, fontSize: 10, color: 'var(--text-muted)' }}>選項</span>
+                    <span style={{ position: 'absolute', top: 6, left: 8, fontSize: 11, color: 'var(--text-muted)' }}>選項</span>
                   )}
                   {item.image_url && <img src={item.image_url} alt={item.name} style={S.itemImg} />}
                   <div style={S.cardBody}>
@@ -2327,7 +2327,7 @@ img{display:block;margin:0 auto}
             </div>
 
             {/* URL */}
-            <div style={{ fontSize: 10, color: 'var(--text-muted)', wordBreak: 'break-all', textAlign: 'center', maxWidth: 270, lineHeight: 1.5 }}>{qrUrl}</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', wordBreak: 'break-all', textAlign: 'center', maxWidth: 270, lineHeight: 1.5 }}>{qrUrl}</div>
 
             {/* Actions */}
             <div style={{ display: 'flex', gap: 8, width: '100%' }}>

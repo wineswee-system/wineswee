@@ -284,7 +284,7 @@ export default function TaskRelationsTab({
                   <span style={{ flex: 1, fontWeight: 600 }}>{inst.template_name}</span>
                   {inst.store && <span style={{ color: 'var(--text-muted)' }}>{inst.store}</span>}
                   <span style={{
-                    padding: '1px 6px', borderRadius: 3, fontSize: 10, fontWeight: 700,
+                    padding: '1px 6px', borderRadius: 3, fontSize: 11, fontWeight: 700,
                     color: iColor,
                     background: inst.status === '已完成' ? 'var(--accent-green-dim)' : 'var(--accent-cyan-dim)',
                   }}>{inst.status}</span>

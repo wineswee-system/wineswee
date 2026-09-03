@@ -238,7 +238,7 @@ export default function ProcurementWorkflow() {
                                   }}>
                                     <div style={{ fontWeight: 600, marginBottom: 2 }}>{step.role || `步驟 ${idx + 1}`}</div>
                                     {step.approver && <div style={{ color: 'var(--text-muted)', fontSize: 11 }}><User size={10} /> {step.approver}</div>}
-                                    {step.condition && <div style={{ color: 'var(--accent-orange)', fontSize: 10, marginTop: 2 }}>{step.condition}</div>}
+                                    {step.condition && <div style={{ color: 'var(--accent-orange)', fontSize: 11, marginTop: 2 }}>{step.condition}</div>}
                                   </div>
                                   {idx < steps.length - 1 && <ArrowRight size={16} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />}
                                 </React.Fragment>

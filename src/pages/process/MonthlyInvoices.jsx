@@ -314,7 +314,7 @@ export default function MonthlyInvoices() {
                   ))}
                   {pickedCount < MAX_FILES && (
                     <label style={{ width: 64, height: 64, borderRadius: 6, border: '1px dashed var(--border)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--text-muted)', gap: 2 }}>
-                      <Paperclip size={18} /><span style={{ fontSize: 10 }}>加檔案</span>
+                      <Paperclip size={18} /><span style={{ fontSize: 11 }}>加檔案</span>
                       <input type="file" accept="image/*,application/pdf" multiple onChange={onPickFiles} style={{ display: 'none' }} />
                     </label>
                   )}

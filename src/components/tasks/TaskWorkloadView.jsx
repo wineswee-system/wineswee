@@ -209,7 +209,7 @@ export default function TaskWorkloadView({ tasks = [], employees = [], onTaskCli
                     }}
                   >
                     <div>{`${d.getMonth() + 1}/${d.getDate()}`}</div>
-                    <div style={{ fontSize: 10, opacity: 0.75 }}>週{DOW[d.getDay()]}</div>
+                    <div style={{ fontSize: 11, opacity: 0.75 }}>週{DOW[d.getDay()]}</div>
                   </th>
                 )
               })}
@@ -246,7 +246,7 @@ export default function TaskWorkloadView({ tasks = [], employees = [], onTaskCli
                       {emp.name}
                     </div>
                     {(emp.dept || emp.position) && (
-                      <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>
                         {emp.dept || emp.position}
                       </div>
                     )}
@@ -380,7 +380,7 @@ export default function TaskWorkloadView({ tasks = [], employees = [], onTaskCli
               </span>
               <span
                 style={{
-                  fontSize: 10,
+                  fontSize: 11,
                   color: 'var(--text-muted)',
                   background: 'var(--bg-secondary)',
                   padding: '2px 6px',
@@ -390,7 +390,7 @@ export default function TaskWorkloadView({ tasks = [], employees = [], onTaskCli
                 {t.status}
               </span>
               {t.due_date && selected.dateKey === 'overdue' && (
-                <span style={{ fontSize: 10, color: 'var(--accent-red)' }}>{t.due_date}</span>
+                <span style={{ fontSize: 11, color: 'var(--accent-red)' }}>{t.due_date}</span>
               )}
             </div>
           ))}

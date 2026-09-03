@@ -320,7 +320,7 @@ export default function DripCampaignBuilder({
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                       {ctaVariations.map((cta, i) => (
                         <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', fontSize: 12, border: '1px solid var(--border-subtle)', borderRadius: 6, cursor: 'pointer', background: 'var(--bg-secondary)' }}>
-                          <span className={`badge ${cta.style === 'urgent' ? 'badge-danger' : cta.style === 'primary' ? 'badge-success' : 'badge-info'}`} style={{ fontSize: 10 }}>{cta.style}</span>
+                          <span className={`badge ${cta.style === 'urgent' ? 'badge-danger' : cta.style === 'primary' ? 'badge-success' : 'badge-info'}`} style={{ fontSize: 11 }}>{cta.style}</span>
                           <span>{cta.text}</span>
                         </div>
                       ))}
@@ -382,7 +382,7 @@ export default function DripCampaignBuilder({
                         <div style={{ height: 6, borderRadius: 3, background: 'var(--bg-tertiary)', overflow: 'hidden' }}>
                           <div style={{ width: `${(item.score / item.max) * 100}%`, height: '100%', borderRadius: 3, background: (item.score / item.max) >= 0.7 ? '#22c55e' : (item.score / item.max) >= 0.4 ? '#f59e0b' : '#ef4444', transition: 'width 0.3s' }} />
                         </div>
-                        <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 2 }}>{item.suggestion}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>{item.suggestion}</div>
                       </div>
                     ))}
                   </div>
@@ -400,7 +400,7 @@ export default function DripCampaignBuilder({
                         <div style={{ width: '60%', height: 8, borderRadius: 4, background: preset.primaryColor }} />
                       </div>
                       <div style={{ fontSize: 12, fontWeight: 600 }}>{preset.nameZh}</div>
-                      <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 2 }}>{preset.layoutDescription.substring(0, 16)}...</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>{preset.layoutDescription.substring(0, 16)}...</div>
                     </div>
                   ))}
                 </div>
@@ -446,7 +446,7 @@ export default function DripCampaignBuilder({
                     <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#6366f1', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 12, fontWeight: 700 }}>B</div>
                     <div>
                       <div style={{ fontSize: 12, fontWeight: 600, color: '#1e293b' }}>我們的品牌</div>
-                      <div style={{ fontSize: 10, color: '#94a3b8' }}>noreply@brand.com</div>
+                      <div style={{ fontSize: 11, color: '#94a3b8' }}>noreply@brand.com</div>
                     </div>
                   </div>
                   <div style={{ padding: '12px 16px', borderBottom: '1px solid #f1f5f9' }}>

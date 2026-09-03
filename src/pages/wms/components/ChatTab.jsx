@@ -49,7 +49,7 @@ export default function ChatTab({ skus, stockLevels, transactions, warehouses })
               {msg.suggestions && msg.suggestions.length > 0 && (
                 <div style={{ marginTop: 8, display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                   {msg.suggestions.map((s, j) => (
-                    <button key={j} className="btn btn-secondary" style={{ fontSize: 10, padding: '2px 6px' }}
+                    <button key={j} className="btn btn-secondary" style={{ fontSize: 11, padding: '2px 6px' }}
                       onClick={() => { setChatInput(s) }}>{s}</button>
                   ))}
                 </div>

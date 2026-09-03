@@ -235,9 +235,9 @@ export default function ProjectTemplateModal({ tpl, onClose, onSubmit, saving = 
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 1, flexShrink: 0 }}>
                   <button type="button" onClick={() => moveWorkflow(wi, -1)} disabled={wi === 0}
-                    title="流程上移" style={{ background: 'none', border: 'none', padding: 0, fontSize: 9, lineHeight: 1, cursor: wi === 0 ? 'default' : 'pointer', color: wi === 0 ? 'var(--border-subtle)' : 'var(--text-muted)' }}>▲</button>
+                    title="流程上移" style={{ background: 'none', border: 'none', padding: 0, fontSize: 11, lineHeight: 1, cursor: wi === 0 ? 'default' : 'pointer', color: wi === 0 ? 'var(--border-subtle)' : 'var(--text-muted)' }}>▲</button>
                   <button type="button" onClick={() => moveWorkflow(wi, 1)} disabled={wi === form.workflows.length - 1}
-                    title="流程下移" style={{ background: 'none', border: 'none', padding: 0, fontSize: 9, lineHeight: 1, cursor: wi === form.workflows.length - 1 ? 'default' : 'pointer', color: wi === form.workflows.length - 1 ? 'var(--border-subtle)' : 'var(--text-muted)' }}>▼</button>
+                    title="流程下移" style={{ background: 'none', border: 'none', padding: 0, fontSize: 11, lineHeight: 1, cursor: wi === form.workflows.length - 1 ? 'default' : 'pointer', color: wi === form.workflows.length - 1 ? 'var(--border-subtle)' : 'var(--text-muted)' }}>▼</button>
                 </div>
                 <input className="form-input" style={{ flex: 1, fontSize: 13, fontWeight: 600 }}
                   value={wf.name}
@@ -280,9 +280,9 @@ export default function ProjectTemplateModal({ tpl, onClose, onSubmit, saving = 
                         </select>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                           <button type="button" onClick={() => moveTask(wi, ti, -1)} disabled={ti === 0}
-                            title="上移" style={{ background: 'none', border: 'none', padding: 2, fontSize: 10, lineHeight: 1, cursor: ti === 0 ? 'default' : 'pointer', color: ti === 0 ? 'var(--border-subtle)' : 'var(--text-muted)' }}>▲</button>
+                            title="上移" style={{ background: 'none', border: 'none', padding: 2, fontSize: 11, lineHeight: 1, cursor: ti === 0 ? 'default' : 'pointer', color: ti === 0 ? 'var(--border-subtle)' : 'var(--text-muted)' }}>▲</button>
                           <button type="button" onClick={() => moveTask(wi, ti, 1)} disabled={ti === wf.tasks.length - 1}
-                            title="下移" style={{ background: 'none', border: 'none', padding: 2, fontSize: 10, lineHeight: 1, cursor: ti === wf.tasks.length - 1 ? 'default' : 'pointer', color: ti === wf.tasks.length - 1 ? 'var(--border-subtle)' : 'var(--text-muted)' }}>▼</button>
+                            title="下移" style={{ background: 'none', border: 'none', padding: 2, fontSize: 11, lineHeight: 1, cursor: ti === wf.tasks.length - 1 ? 'default' : 'pointer', color: ti === wf.tasks.length - 1 ? 'var(--border-subtle)' : 'var(--text-muted)' }}>▼</button>
                           <button type="button" onClick={() => removeTask(wi, ti)}
                             disabled={wf.tasks.length === 1}
                             style={{

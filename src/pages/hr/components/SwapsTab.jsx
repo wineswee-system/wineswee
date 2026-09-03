@@ -145,17 +145,17 @@ export default function SwapsTab({ swaps, setSwaps }) {
                     <span className="badge-dot"></span>{s.status}
                   </span>
                   {s.status === '待主管核准' && s.peer_response === '同意' && (
-                    <div style={{ fontSize: 10, color: 'var(--accent-green)', marginTop: 2 }}>
+                    <div style={{ fontSize: 11, color: 'var(--accent-green)', marginTop: 2 }}>
                       ✓ 對方已同意 {s.peer_responded_at?.slice(11, 16)}
                     </div>
                   )}
                   {s.peer_reject_reason && (
-                    <div style={{ fontSize: 10, color: 'var(--accent-red)', marginTop: 2 }}>
+                    <div style={{ fontSize: 11, color: 'var(--accent-red)', marginTop: 2 }}>
                       對方拒絕：{s.peer_reject_reason}
                     </div>
                   )}
                   {s.reject_reason && (
-                    <div style={{ fontSize: 10, color: 'var(--accent-red)', marginTop: 2 }}>
+                    <div style={{ fontSize: 11, color: 'var(--accent-red)', marginTop: 2 }}>
                       駁回：{s.reject_reason}
                     </div>
                   )}

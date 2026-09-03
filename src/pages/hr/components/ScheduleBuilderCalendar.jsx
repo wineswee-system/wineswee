@@ -149,7 +149,7 @@ export default function ScheduleBuilderCalendar({
                       }}>{date.slice(8)}</span>
                       {inRange && workCount > 0 && (
                         <span style={{
-                          fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 5,
+                          fontSize: 11, fontWeight: 700, padding: '1px 5px', borderRadius: 5,
                           background: understaffed ? 'rgba(239,68,68,0.15)' : 'rgba(34,211,238,0.12)',
                           color: understaffed ? 'var(--accent-red)' : 'var(--accent-cyan)',
                         }}>{workCount}人</span>
@@ -159,21 +159,21 @@ export default function ScheduleBuilderCalendar({
                     {inRange && groups.slice(0, 3).map(g => (
                       <div key={g.shift} style={{ display: 'flex', alignItems: 'center', gap: 3, marginBottom: 2, flexWrap: 'wrap' }}>
                         <span style={{
-                          fontSize: 9, fontWeight: 700, padding: '1px 4px', borderRadius: 4, flexShrink: 0,
+                          fontSize: 11, fontWeight: 700, padding: '1px 4px', borderRadius: 4, flexShrink: 0,
                           background: g.isAbsence ? 'var(--glass-medium)' : g.color ? hexToDim(g.color) : 'rgba(34,211,238,0.12)',
                           color: g.isAbsence ? 'var(--text-muted)' : g.color || 'var(--accent-cyan)',
                         }}>{g.shift}</span>
-                        <span style={{ fontSize: 9, color: 'var(--text-muted)', lineHeight: 1.2 }}>
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.2 }}>
                           {g.employees.slice(0, 2).map(e => e.name).join('、')}
                           {g.employees.length > 2 ? `+${g.employees.length - 2}` : ''}
                         </span>
                       </div>
                     ))}
                     {inRange && groups.length > 3 && (
-                      <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>+{groups.length - 3} 更多</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>+{groups.length - 3} 更多</div>
                     )}
                     {inRange && groups.length === 0 && (
-                      <div style={{ fontSize: 9, color: 'var(--border-medium)', marginTop: 2 }}>未排班</div>
+                      <div style={{ fontSize: 11, color: 'var(--border-medium)', marginTop: 2 }}>未排班</div>
                     )}
                   </div>
                 )
@@ -297,7 +297,7 @@ export default function ScheduleBuilderCalendar({
                         opacity: inRange ? 1 : 0.3,
                       }}>
                         <div style={{ fontWeight: 700 }}>{date.slice(8)}</div>
-                        <div style={{ fontSize: 9 }}>{DAY_LABELS[dow]}</div>
+                        <div style={{ fontSize: 11 }}>{DAY_LABELS[dow]}</div>
                       </th>
                     )
                   })}

@@ -471,7 +471,7 @@ export default function ScheduleBuilderGrid({
           >
             <div>{shift.name}</div>
             {(shift.start_time || shift.end_time) && (
-              <div style={{ fontSize: 9, fontWeight: 400, opacity: 0.75, marginTop: 1 }}>
+              <div style={{ fontSize: 11, fontWeight: 400, opacity: 0.75, marginTop: 1 }}>
                 {shift.start_time?.slice(0, 5)}~{shift.end_time?.slice(0, 5)}
               </div>
             )}
@@ -479,13 +479,13 @@ export default function ScheduleBuilderGrid({
         ))}
 
         {paletteShifts.length === 0 && (
-          <div style={{ fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic', lineHeight: 1.5 }}>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic', lineHeight: 1.5 }}>
             尚未設定班別<br />請到門市設定新增
           </div>
         )}
 
         <div style={{ borderTop: '1px solid var(--border-light)', paddingTop: 8, marginTop: 2 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 5 }}>休假</div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 5 }}>休假</div>
           {[
             { label: '例假', color: '#dc2626', bg: 'rgba(220,38,38,0.12)' },
             { label: '休息', color: 'var(--text-muted)', bg: 'var(--glass-medium)' },
@@ -535,9 +535,9 @@ export default function ScheduleBuilderGrid({
                     color: isWeekend ? 'var(--accent-orange)' : 'var(--text-muted)',
                   }}>
                     <div style={{ fontWeight: 700 }}>{date.slice(8)}</div>
-                    <div style={{ fontSize: 9 }}>{DAY_LABELS[dow]}</div>
+                    <div style={{ fontSize: 11 }}>{DAY_LABELS[dow]}</div>
                     <div style={{
-                      marginTop: 2, fontSize: 9, fontWeight: 700,
+                      marginTop: 2, fontSize: 11, fontWeight: 700,
                       color: understaffed ? 'var(--accent-red)' : staffCount > 0 ? 'var(--accent-green)' : 'transparent',
                     }}>
                       {staffCount || 0}人
@@ -555,7 +555,7 @@ export default function ScheduleBuilderGrid({
                 <tr key={emp.id}>
                   <td style={{ ...tdEmp, background: rowBg }}>
                     <div>{emp.name}</div>
-                    <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 1 }}>{emp.employment_type}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>{emp.employment_type}</div>
                   </td>
 
                   {dates.map(date => {
@@ -642,8 +642,8 @@ export default function ScheduleBuilderGrid({
                               }
                               return /~/.test(label) ? (
                                 <>
-                                  <span style={{ fontSize: 9 }}>{label.split('~')[0]}</span>
-                                  <span style={{ fontSize: 9 }}>{label.split('~')[1]}</span>
+                                  <span style={{ fontSize: 11 }}>{label.split('~')[0]}</span>
+                                  <span style={{ fontSize: 11 }}>{label.split('~')[1]}</span>
                                 </>
                               ) : label
                             })()}
@@ -695,7 +695,7 @@ export default function ScheduleBuilderGrid({
 }
 
 const kbdStyle = {
-  fontFamily: 'monospace', fontSize: 10, padding: '1px 5px',
+  fontFamily: 'monospace', fontSize: 11, padding: '1px 5px',
   background: 'var(--bg-card)', border: '1px solid var(--border-medium)',
   borderRadius: 4, color: 'var(--text-secondary)',
 }
@@ -711,12 +711,12 @@ const thEmp = {
   minWidth: 84, whiteSpace: 'nowrap',
 }
 const thDate = {
-  padding: '5px 2px', textAlign: 'center', fontSize: 10, minWidth: 44,
+  padding: '5px 2px', textAlign: 'center', fontSize: 11, minWidth: 44,
   borderBottom: '1px solid var(--border-medium)',
   background: 'var(--bg-card)', position: 'sticky', top: 0, zIndex: 3,
 }
 const thSummary = {
-  padding: '5px 8px', textAlign: 'center', fontSize: 10, color: 'var(--text-muted)',
+  padding: '5px 8px', textAlign: 'center', fontSize: 11, color: 'var(--text-muted)',
   borderBottom: '1px solid var(--border-medium)', background: 'var(--bg-card)',
   position: 'sticky', top: 0, right: 0, zIndex: 4,
 }

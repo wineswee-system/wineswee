@@ -78,7 +78,7 @@ function StepIndicator({ current, labels }) {
                 {done ? <CheckCircle2 size={13} /> : i + 1}
               </div>
               <div style={{
-                fontSize: 10, fontWeight: active ? 700 : 400, whiteSpace: 'nowrap',
+                fontSize: 11, fontWeight: active ? 700 : 400, whiteSpace: 'nowrap',
                 color: active ? 'var(--accent-cyan)' : done ? 'var(--accent-green)' : 'var(--text-muted)',
               }}>
                 {label}
@@ -187,7 +187,7 @@ function Step2Assign({ form, setForm, steps, employees, departments }) {
               {step.role && (
                 <span style={{
                   display: 'inline-block', marginTop: 2,
-                  fontSize: 10, padding: '1px 6px', borderRadius: 4,
+                  fontSize: 11, padding: '1px 6px', borderRadius: 4,
                   background: 'var(--bg-card)', color: 'var(--text-muted)',
                 }}>
                   {step.role}

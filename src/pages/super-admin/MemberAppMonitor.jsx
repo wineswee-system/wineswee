@@ -239,7 +239,7 @@ function ErrorsTab({ profile }) {
                         {l.stack_trace && (
                           <div style={{ marginBottom: 10 }}>
                             <strong>Stack Trace：</strong>
-                            <pre style={{ background: '#1e1e1e', color: '#d4d4d4', padding: 10, borderRadius: 6, fontSize: 10, marginTop: 4, overflow: 'auto', maxHeight: 180 }}>
+                            <pre style={{ background: '#1e1e1e', color: '#d4d4d4', padding: 10, borderRadius: 6, fontSize: 11, marginTop: 4, overflow: 'auto', maxHeight: 180 }}>
                               {l.stack_trace}
                             </pre>
                           </div>

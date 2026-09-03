@@ -528,7 +528,7 @@ function EmployeeRow({
           <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
             {employee?.dept || '-'} · {employee?.store || '-'}
             {hasAdjustments && (
-              <span style={{ marginLeft: 8, padding: '1px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600,
+              <span style={{ marginLeft: 8, padding: '1px 6px', borderRadius: 4, fontSize: 11, fontWeight: 600,
                 color: 'var(--accent-cyan)', background: 'var(--accent-cyan-dim)' }}>
                 {adjustments.length} 筆調整
               </span>
@@ -631,7 +631,7 @@ function EmployeeAdjustmentBody({ record, sourceData, adjustments, onSave, onDel
             <div key={lv.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 8px', borderBottom: '1px solid var(--border-subtle)' }}>
               <div style={{ flex: 1 }}>
                 <div>{lv.start_date}{lv.end_date !== lv.start_date ? ` ~ ${lv.end_date}` : ''} {lv.type} {days}天</div>
-                <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{lv.reason || '無原因'}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{lv.reason || '無原因'}</div>
               </div>
               <select
                 className="form-input"
@@ -654,7 +654,7 @@ function EmployeeAdjustmentBody({ record, sourceData, adjustments, onSave, onDel
                 <option value="paid">不扣薪</option>
               </select>
               {adj && (
-                <button className="btn btn-secondary" style={{ fontSize: 10, padding: '2px 6px' }}
+                <button className="btn btn-secondary" style={{ fontSize: 11, padding: '2px 6px' }}
                   onClick={() => onDelete(adj.id)}>
                   <RotateCcw size={10} /> 還原
                 </button>
@@ -764,11 +764,11 @@ function InlineEditRow({ label, currentValue, originalValue, suffix, step, adjus
       <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{suffix}</span>
       {isChanged && (
         <>
-          <span style={{ fontSize: 10, color: 'var(--text-muted)', maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <span style={{ fontSize: 11, color: 'var(--text-muted)', maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             原 {originalValue}{suffix}{adjustment?.reason ? ` · ${adjustment.reason}` : ''}
           </span>
           {onRestore && (
-            <button className="btn btn-secondary" style={{ fontSize: 10, padding: '2px 6px' }} onClick={onRestore}>
+            <button className="btn btn-secondary" style={{ fontSize: 11, padding: '2px 6px' }} onClick={onRestore}>
               <RotateCcw size={10} /> 還原
             </button>
           )}
@@ -794,7 +794,7 @@ function ManualEntries({ existing, onAdd, onRemove }) {
     <div>
       {existing.map(e => (
         <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderBottom: '1px solid var(--border-subtle)' }}>
-          <span style={{ padding: '1px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600,
+          <span style={{ padding: '1px 6px', borderRadius: 4, fontSize: 11, fontWeight: 600,
             color: e.source_type === 'manual_deduction' ? 'var(--accent-red)' : 'var(--accent-green)',
             background: e.source_type === 'manual_deduction' ? 'var(--accent-red-dim)' : 'var(--accent-green-dim)' }}>
             {e.source_type === 'manual_deduction' ? '- 扣項' : '+ 加項'}
@@ -805,7 +805,7 @@ function ManualEntries({ existing, onAdd, onRemove }) {
           <span style={{ fontWeight: 600 }}>
             {fmt(Number(e.new_value?.amount || 0))}
           </span>
-          <button className="btn btn-secondary" style={{ fontSize: 10, padding: '2px 6px' }}
+          <button className="btn btn-secondary" style={{ fontSize: 11, padding: '2px 6px' }}
             onClick={() => onRemove(e.id)}>
             <X size={10} />
           </button>

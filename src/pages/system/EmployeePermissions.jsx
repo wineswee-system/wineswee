@@ -713,7 +713,7 @@ const { error } = await supabase.rpc('admin_force_logout', { p_emp_id: selectedE
                         {[e.dept, e.position].filter(Boolean).join(' · ')}
                       </div>
                     </div>
-                    <span className={`badge ${roleColor[e.role] || 'badge-neutral'}`} style={{ fontSize: 10 }}>{roleLbl}</span>
+                    <span className={`badge ${roleColor[e.role] || 'badge-neutral'}`} style={{ fontSize: 11 }}>{roleLbl}</span>
                   </button>
                 </div>
               )

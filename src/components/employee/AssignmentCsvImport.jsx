@@ -233,17 +233,17 @@ export default function AssignmentCsvImport({ employees, departments, stores, on
                     <tr key={p.idx} style={{ background: p.issues.length ? 'var(--accent-red-dim, #fee)' : undefined }}>
                       <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>{p.idx + 1}</td>
                       <td>
-                        <div style={{ fontSize: 12 }}>{p.emp?.name || p.raw.name} <code style={{ fontSize: 10, color: 'var(--text-muted)' }}>{p.raw.employee_number}</code></div>
+                        <div style={{ fontSize: 12 }}>{p.emp?.name || p.raw.name} <code style={{ fontSize: 11, color: 'var(--text-muted)' }}>{p.raw.employee_number}</code></div>
                         {p.issues.map((m, i) => (
-                          <div key={i} style={{ fontSize: 10, color: 'var(--accent-red)' }}>
+                          <div key={i} style={{ fontSize: 11, color: 'var(--accent-red)' }}>
                             <AlertTriangle size={9} /> {m}
                           </div>
                         ))}
                       </td>
                       <td style={{ fontSize: 12 }}>
-                        {p.dept?.name && <span className="badge badge-cyan" style={{ fontSize: 10 }}>部門 {p.dept.name}</span>}
-                        {p.store?.name && <span className="badge badge-purple" style={{ fontSize: 10 }}>門市 {p.store.name}</span>}
-                        {p.autoOpsDept && <div style={{ fontSize: 10, color: 'var(--accent-cyan)', marginTop: 2 }}>自動對應為營運部</div>}
+                        {p.dept?.name && <span className="badge badge-cyan" style={{ fontSize: 11 }}>部門 {p.dept.name}</span>}
+                        {p.store?.name && <span className="badge badge-purple" style={{ fontSize: 11 }}>門市 {p.store.name}</span>}
+                        {p.autoOpsDept && <div style={{ fontSize: 11, color: 'var(--accent-cyan)', marginTop: 2 }}>自動對應為營運部</div>}
                         {!p.dept && !p.store && <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{p.raw.department || '—'}</span>}
                       </td>
                       <td style={{ fontSize: 12 }}>{p.raw.position}</td>

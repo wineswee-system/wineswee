@@ -256,15 +256,15 @@ export default function Severance() {
                     <td style={{ textAlign: 'right', fontFamily: 'monospace' }}>{fmt(r.average_monthly_wage)}</td>
                     <td style={{ textAlign: 'right', fontFamily: 'monospace' }}>
                       {fmt(r.severance_amount)}
-                      <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{Number(r.severance_months || 0).toFixed(2)} 月</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{Number(r.severance_months || 0).toFixed(2)} 月</div>
                     </td>
                     <td style={{ textAlign: 'right', fontFamily: 'monospace', fontSize: 12 }}>
                       {r.notice_paid ? <span style={{ color: 'var(--text-muted)' }}>已預告</span> : fmt(r.notice_wage)}
-                      <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{r.notice_days} 日</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{r.notice_days} 日</div>
                     </td>
                     <td style={{ textAlign: 'right', fontFamily: 'monospace', fontSize: 12 }}>
                       {Number(r.unused_leave_wage || 0) > 0 ? fmt(r.unused_leave_wage) : '—'}
-                      {Number(r.unused_leave_days || 0) > 0 && <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{r.unused_leave_days} 天</div>}
+                      {Number(r.unused_leave_days || 0) > 0 && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{r.unused_leave_days} 天</div>}
                     </td>
                     <td style={{ textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: 'var(--accent-cyan)' }}>{fmt(r.total_amount)}</td>
                     <td><span style={{ padding: '3px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700, background: sb.bg, color: sb.color }}>{sb.text}</span></td>
@@ -377,13 +377,13 @@ export default function Severance() {
                 <div><span style={{ color: 'var(--text-muted)' }}>到職日：</span>{calcResult.join_date}</div>
                 <div><span style={{ color: 'var(--text-muted)' }}>服務年資：</span><b>{calcResult.service_label}</b> ({Number(calcResult.service_years).toFixed(2)} 年)</div>
                 <div><span style={{ color: 'var(--text-muted)' }}>平均月薪：</span><b style={{ fontFamily: 'monospace' }}>{fmt(calcResult.average_monthly_wage)}</b>
-                  <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 6 }}>
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 6 }}>
                     ({calcResult.avg_wage_source === 'manual' ? '手動' : calcResult.avg_wage_source === 'payroll_6m_avg' ? '近 6 月平均' : '薪資結構'})
                   </span>
                 </div>
               </div>
               <div style={{ borderTop: '1px dashed var(--border-medium)', marginTop: 12, paddingTop: 12, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 13 }}>
-                <div><span style={{ color: 'var(--text-muted)' }}>資遣月數：</span><b>{Number(calcResult.severance_months).toFixed(2)} 月</b> <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>(封頂 6)</span></div>
+                <div><span style={{ color: 'var(--text-muted)' }}>資遣月數：</span><b>{Number(calcResult.severance_months).toFixed(2)} 月</b> <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>(封頂 6)</span></div>
                 <div><span style={{ color: 'var(--text-muted)' }}>資遣金：</span><b style={{ fontFamily: 'monospace', color: 'var(--accent-cyan)' }}>{fmt(calcResult.severance_amount)}</b></div>
                 <div><span style={{ color: 'var(--text-muted)' }}>預告天數：</span><b>{calcResult.notice_days} 日</b></div>
                 <div><span style={{ color: 'var(--text-muted)' }}>預告工資：</span><b style={{ fontFamily: 'monospace' }}>{fmt(calcResult.notice_wage)}</b></div>

@@ -246,7 +246,7 @@ export default function TaskApprovalTab({
             <option value="sequential">🔀 依序（一位審完再換下一位）</option>
           </select>
           {(form.confirmation_mode === 'sequential') && (
-            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
               依序模式：同一時間只有一位在「待審批」，前一位回應後自動換下一位（依優先度 高→中→低）。
             </div>
           )}
@@ -281,7 +281,7 @@ export default function TaskApprovalTab({
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                   <span style={{ fontSize: 13, fontWeight: 600 }}>👤 {c.approver}</span>
                   <span style={{
-                    fontSize: 10, padding: '1px 6px', borderRadius: 3,
+                    fontSize: 11, padding: '1px 6px', borderRadius: 3,
                     border: `1px solid ${priColor}`, color: priColor, fontWeight: 700,
                   }}>{pri}</span>
                   <span style={{
@@ -486,7 +486,7 @@ export default function TaskApprovalTab({
                         isActive ? 'var(--accent-purple)' : 'var(--border-medium)',
                       border: isActive ? '3px solid var(--accent-purple-dim)' : 'none',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      color: '#fff', fontSize: 10, zIndex: 1,
+                      color: '#fff', fontSize: 11, zIndex: 1,
                     }}>
                       {isDone ? '✓' : isRejected ? '✗' : i + 1}
                     </div>

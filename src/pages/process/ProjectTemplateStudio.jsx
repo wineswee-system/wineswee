@@ -94,7 +94,7 @@ function MiniStepList({ steps, onStepsChange }) {
         gridTemplateColumns: '20px 1fr 96px 52px 28px',
         gap: 6,
         padding: '0 0 5px',
-        fontSize: 10,
+        fontSize: 11,
         fontWeight: 700,
         color: 'var(--text-muted)',
         textTransform: 'uppercase',
@@ -127,7 +127,7 @@ function MiniStepList({ steps, onStepsChange }) {
               style={{
                 background: 'none', border: 'none', padding: '1px',
                 color: i === 0 ? 'var(--border-subtle)' : 'var(--text-muted)',
-                cursor: i === 0 ? 'default' : 'pointer', fontSize: 9, lineHeight: 1,
+                cursor: i === 0 ? 'default' : 'pointer', fontSize: 11, lineHeight: 1,
               }}
               title="上移"
             >▲</button>
@@ -138,7 +138,7 @@ function MiniStepList({ steps, onStepsChange }) {
               style={{
                 background: 'none', border: 'none', padding: '1px',
                 color: i === steps.length - 1 ? 'var(--border-subtle)' : 'var(--text-muted)',
-                cursor: i === steps.length - 1 ? 'default' : 'pointer', fontSize: 9, lineHeight: 1,
+                cursor: i === steps.length - 1 ? 'default' : 'pointer', fontSize: 11, lineHeight: 1,
               }}
               title="下移"
             >▼</button>
@@ -359,7 +359,7 @@ function WorkflowRow({ wf, index, allWorkflows, onUpdate, onRemove, isExpanded, 
           {/* Inline step list */}
           <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px dashed var(--border-subtle)' }}>
             <div style={{
-              fontSize: 10, fontWeight: 700, color: 'var(--text-muted)',
+              fontSize: 11, fontWeight: 700, color: 'var(--text-muted)',
               textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8,
             }}>
               步驟
@@ -676,7 +676,7 @@ export default function ProjectTemplateStudio() {
           {/* Basic settings block */}
           <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0 }}>
             <div style={{
-              fontSize: 10, fontWeight: 700, color: 'var(--text-muted)',
+              fontSize: 11, fontWeight: 700, color: 'var(--text-muted)',
               textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 10,
             }}>
               專案設定
@@ -768,7 +768,7 @@ export default function ProjectTemplateStudio() {
               display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10,
             }}>
               <span style={{
-                fontSize: 10, fontWeight: 700, color: 'var(--text-muted)',
+                fontSize: 11, fontWeight: 700, color: 'var(--text-muted)',
                 textTransform: 'uppercase', letterSpacing: 0.6,
               }}>
                 工作流程
@@ -794,7 +794,7 @@ export default function ProjectTemplateStudio() {
                     width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
                     background: isActive ? 'var(--accent-cyan)' : 'var(--bg-secondary)',
                     color: isActive ? '#fff' : 'var(--text-muted)',
-                    fontSize: 10, fontWeight: 700,
+                    fontSize: 11, fontWeight: 700,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                   }}>
                     {i + 1}
@@ -806,7 +806,7 @@ export default function ProjectTemplateStudio() {
                     }}>
                       {wf.name || <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>（未命名）</span>}
                     </div>
-                    <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{wf.steps.length} 步驟</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{wf.steps.length} 步驟</div>
                   </div>
                   {isActive
                     ? <ChevronDown size={13} style={{ color: 'var(--accent-cyan)', flexShrink: 0 }} />
@@ -862,7 +862,7 @@ export default function ProjectTemplateStudio() {
                 {tab.label}
                 {tab.count > 0 && (
                   <span style={{
-                    fontSize: 10, fontWeight: 700,
+                    fontSize: 11, fontWeight: 700,
                     background: activeTab === tab.id ? 'var(--accent-cyan-dim)' : 'var(--bg-card)',
                     color: activeTab === tab.id ? 'var(--accent-cyan)' : 'var(--text-muted)',
                     padding: '1px 6px', borderRadius: 10,
@@ -943,7 +943,7 @@ export default function ProjectTemplateStudio() {
                   <div style={{
                     display: 'grid', gridTemplateColumns: '1fr 140px 36px',
                     gap: 8, padding: '4px 0 8px',
-                    fontSize: 10, fontWeight: 700, color: 'var(--text-muted)',
+                    fontSize: 11, fontWeight: 700, color: 'var(--text-muted)',
                     textTransform: 'uppercase', letterSpacing: 0.4,
                   }}>
                     <span>里程碑名稱</span>
@@ -1017,7 +1017,7 @@ export default function ProjectTemplateStudio() {
                     background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)',
                   }}>
                     <div style={{
-                      fontSize: 10, fontWeight: 700, color: 'var(--text-muted)',
+                      fontSize: 11, fontWeight: 700, color: 'var(--text-muted)',
                       textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10,
                     }}>
                       時間軸預覽

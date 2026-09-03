@@ -143,7 +143,7 @@ export default function StaffDashboard({ profile }) {
                       opacity: isPast && !isToday ? 0.5 : 1,
                     }}>
                       <div style={{ fontWeight: isToday ? 700 : 500, fontSize: 11, color: isToday ? 'var(--accent-cyan)' : 'var(--text-muted)' }}>{d}</div>
-                      <div style={{ fontSize: 10, fontWeight: 600, marginTop: 2, color: isRest ? '#10b981' : sched ? 'var(--text-primary)' : 'var(--border-medium)' }}>
+                      <div style={{ fontSize: 11, fontWeight: 600, marginTop: 2, color: isRest ? '#10b981' : sched ? 'var(--text-primary)' : 'var(--border-medium)' }}>
                         {sched?.shift || '·'}
                       </div>
                     </div>
@@ -220,7 +220,7 @@ export default function StaffDashboard({ profile }) {
                   <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{l.start_date?.slice(5)} ~ {l.end_date?.slice(5)}</div>
                 </div>
                 <span style={{
-                  padding: '2px 8px', borderRadius: 6, fontSize: 10, fontWeight: 600,
+                  padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 600,
                   background: l.status === '已核准' ? 'rgba(16,185,129,0.1)' : l.status === '待審核' ? 'rgba(245,158,11,0.1)' : 'rgba(239,68,68,0.1)',
                   color: l.status === '已核准' ? '#10b981' : l.status === '待審核' ? '#f59e0b' : '#ef4444',
                 }}>{l.status}</span>
@@ -234,7 +234,7 @@ export default function StaffDashboard({ profile }) {
                   <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{f.started_at?.slice(0, 10)}</div>
                 </div>
                 <span style={{
-                  padding: '2px 8px', borderRadius: 6, fontSize: 10, fontWeight: 600,
+                  padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 600,
                   background: f.status === '已完成' ? 'rgba(16,185,129,0.1)' : 'rgba(59,130,246,0.1)',
                   color: f.status === '已完成' ? '#10b981' : '#3b82f6',
                 }}>{f.status}</span>
@@ -253,7 +253,7 @@ export default function StaffDashboard({ profile }) {
               <div key={i} style={{ padding: '8px 0', borderBottom: '1px solid var(--border-light)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span style={{
-                    padding: '1px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600,
+                    padding: '1px 6px', borderRadius: 4, fontSize: 11, fontWeight: 600,
                     background: 'rgba(34,211,238,0.1)', color: 'var(--accent-cyan)',
                   }}>{a.tag}</span>
                   <span style={{ fontSize: 13, fontWeight: 500 }}>{a.title}</span>

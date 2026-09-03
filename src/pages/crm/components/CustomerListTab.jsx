@@ -175,7 +175,7 @@ function CustomerExpandedDetail({
                 {breakdown.length > 0 && (
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
                     {breakdown.map((b, i) => (
-                      <span key={i} style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: 'var(--glass-light)', color: 'var(--text-muted)' }}>
+                      <span key={i} style={{ fontSize: 11, padding: '1px 6px', borderRadius: 4, background: 'var(--glass-light)', color: 'var(--text-muted)' }}>
                         {b.label} +{b.points}
                       </span>
                     ))}

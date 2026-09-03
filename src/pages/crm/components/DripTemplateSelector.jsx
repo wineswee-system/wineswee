@@ -21,8 +21,8 @@ export default function DripTemplateSelector({ onApplyTemplate, onClose }) {
                 <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>{tmpl.name}</div>
                 <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 8, lineHeight: 1.5 }}>{tmpl.description}</div>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  <span className="badge badge-info" style={{ fontSize: 10 }}>{triggerInfo?.name}</span>
-                  <span className="badge badge-success" style={{ fontSize: 10 }}>{tmpl.steps.length} 步驟</span>
+                  <span className="badge badge-info" style={{ fontSize: 11 }}>{triggerInfo?.name}</span>
+                  <span className="badge badge-success" style={{ fontSize: 11 }}>{tmpl.steps.length} 步驟</span>
                 </div>
                 <button className="btn btn-primary" style={{ width: '100%', marginTop: 10, fontSize: 12 }}>使用此範本</button>
               </div>

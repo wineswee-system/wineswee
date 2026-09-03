@@ -43,7 +43,7 @@ export default function ActiveInstancesList({ instances, getStats, onSelect, onA
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
                   <ChevronRight size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
                   {inst.workflow_code && (
-                    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: 'var(--accent-purple-dim)', color: 'var(--accent-purple)', border: '1px solid rgba(168,85,247,0.2)', flexShrink: 0, letterSpacing: '0.03em' }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: 'var(--accent-purple-dim)', color: 'var(--accent-purple)', border: '1px solid rgba(168,85,247,0.2)', flexShrink: 0, letterSpacing: '0.03em' }}>
                       {inst.workflow_code}
                     </span>
                   )}
@@ -98,7 +98,7 @@ export default function ActiveInstancesList({ instances, getStats, onSelect, onA
                   display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
                 }}>
                   <div style={{ fontSize: 11, fontWeight: 800, color: accent, lineHeight: 1 }}>{stats.pct}%</div>
-                  <div style={{ fontSize: 9, color: 'var(--text-muted)', lineHeight: 1, marginTop: 2 }}>{stats.completed}/{stats.total}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1, marginTop: 2 }}>{stats.completed}/{stats.total}</div>
                 </div>
               </div>
 

@@ -113,7 +113,7 @@ function CandidateCard({ c, onSelect, onStageChange }) {
         <div style={{ marginTop: 6, display: 'flex', gap: 4, flexWrap: 'wrap' }}>
           {c.tags.slice(0, 4).map(t => (
             <span key={t} style={{
-              padding: '1px 6px', borderRadius: 8, fontSize: 10, fontWeight: 600,
+              padding: '1px 6px', borderRadius: 8, fontSize: 11, fontWeight: 600,
               background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)',
             }}>{t}</span>
           ))}
@@ -121,7 +121,7 @@ function CandidateCard({ c, onSelect, onStageChange }) {
       )}
       <div style={{ marginTop: 8, display: 'flex', gap: 4, flexWrap: 'wrap' }}>
         {(ALLOWED_NEXT[c.stage] || []).slice(0, 2).map(s => (
-          <button key={s} className="btn btn-ghost" style={{ fontSize: 10, padding: '2px 6px' }}
+          <button key={s} className="btn btn-ghost" style={{ fontSize: 11, padding: '2px 6px' }}
             onClick={e => { e.stopPropagation(); onStageChange(c.id, s) }}>
             → {s}
           </button>
@@ -348,7 +348,7 @@ function CandidatePanel({ c, interviews, allInterviews, jobs = [], evalTemplates
                         <div style={{ width: 90, fontSize: 12, color: 'var(--text-secondary)' }}>
                           {d.label}
                           {d.weight && d.weight !== 1 && (
-                            <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 4 }}>×{d.weight}</span>
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 4 }}>×{d.weight}</span>
                           )}
                         </div>
                         <div style={{ display: 'flex', gap: 2 }}>
@@ -419,7 +419,7 @@ function CandidatePanel({ c, interviews, allInterviews, jobs = [], evalTemplates
               {iv.note && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{iv.note}</div>}
               <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
                 {RESULTS.filter(r => r !== iv.result).map(r => (
-                  <button key={r} className="btn btn-ghost" style={{ fontSize: 10, padding: '2px 6px' }}
+                  <button key={r} className="btn btn-ghost" style={{ fontSize: 11, padding: '2px 6px' }}
                     onClick={async () => {
                       await updateInterview(iv.id, { result: r })
                       onRefreshInterviews()
@@ -1204,9 +1204,9 @@ export default function Recruitment() {
                       <td>
                         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                            <button className="btn btn-sm btn-secondary" style={{ padding: '0 5px', fontSize: 9, lineHeight: 1.1 }} title="上移"
+                            <button className="btn btn-sm btn-secondary" style={{ padding: '0 5px', fontSize: 11, lineHeight: 1.1 }} title="上移"
                               disabled={filteredJobs[0]?.id === j.id} onClick={() => moveJob(j, -1)}>▲</button>
-                            <button className="btn btn-sm btn-secondary" style={{ padding: '0 5px', fontSize: 9, lineHeight: 1.1 }} title="下移"
+                            <button className="btn btn-sm btn-secondary" style={{ padding: '0 5px', fontSize: 11, lineHeight: 1.1 }} title="下移"
                               disabled={filteredJobs[filteredJobs.length - 1]?.id === j.id} onClick={() => moveJob(j, 1)}>▼</button>
                           </div>
                           <button className="btn btn-sm btn-secondary" onClick={() => openEditJob(j)}>

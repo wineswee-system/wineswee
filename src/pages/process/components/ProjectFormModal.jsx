@@ -244,7 +244,7 @@ export default function ProjectFormModal({
                 <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', borderRadius: 6, background: 'var(--glass-light)', marginBottom: 4, fontSize: 12 }}>
                   <CheckSquare size={11} style={{ color: 'var(--accent-blue)', flexShrink: 0 }} />
                   <span style={{ flex: 1 }}>{t.title}{t.assignee && <span style={{ color: 'var(--text-muted)' }}> · {t.assignee}</span>}{t.store && <span style={{ color: 'var(--text-muted)' }}> · {t.store}</span>}{t.due_date && <span style={{ color: 'var(--text-muted)' }}> 截止 {t.due_date}</span>}</span>
-                  <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 3, background: 'var(--glass-light)', color: PRIORITY_COLORS[t.priority] }}>{t.priority}</span>
+                  <span style={{ fontSize: 11, padding: '1px 5px', borderRadius: 3, background: 'var(--glass-light)', color: PRIORITY_COLORS[t.priority] }}>{t.priority}</span>
                   <button onClick={() => setPendingTasks(p => p.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-red)', padding: 2 }}><X size={12} /></button>
                 </div>
               ))}

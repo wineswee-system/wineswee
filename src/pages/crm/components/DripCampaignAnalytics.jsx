@@ -33,7 +33,7 @@ export default function DripCampaignAnalytics({ campaign, metrics, onClose }) {
                 <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
                   <div style={{ fontSize: 14, fontWeight: 700 }}>{item.value}</div>
                   <div style={{ width: '70%', height: `${pct}%`, minHeight: 12, background: item.color, borderRadius: '6px 6px 0 0', transition: 'height 0.5s' }} />
-                  <div style={{ fontSize: 10, color: 'var(--text-secondary)', textAlign: 'center', marginTop: 4 }}>{item.label}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-secondary)', textAlign: 'center', marginTop: 4 }}>{item.label}</div>
                 </div>
               )
             })}

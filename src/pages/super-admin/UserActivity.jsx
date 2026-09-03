@@ -335,7 +335,7 @@ export default function UserActivity() {
                             <AIcon size={10} style={{ marginRight: 2 }} />{meta.label}
                           </span>
                           {l.module && <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{l.module}</span>}
-                          {l.tenants?.name && <span className="badge badge-neutral" style={{ fontSize: 10 }}>{l.tenants.name}</span>}
+                          {l.tenants?.name && <span className="badge badge-neutral" style={{ fontSize: 11 }}>{l.tenants.name}</span>}
                           <span style={{ fontSize: 11, color: 'var(--text-secondary)', marginLeft: 'auto' }}>
                             {new Date(l.created_at).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                           </span>

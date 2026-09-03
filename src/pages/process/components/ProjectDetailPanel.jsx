@@ -433,14 +433,14 @@ export default function ProjectDetailPanel({
             display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0',
             borderBottom: '1px solid var(--border-subtle)', fontSize: 13,
           }}>
-            <span style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0 }}>er-{e.id}</span>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>er-{e.id}</span>
             <span style={{ flex: 1, fontWeight: 500 }}>{e.title}</span>
             <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{e.employee}</span>
             <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent-cyan)', minWidth: 80, textAlign: 'right' }}>
               {fmt(e.actual_amount ?? e.estimated_amount)}
             </span>
             <span style={{
-              fontSize: 10, fontWeight: 600, padding: '2px 6px', borderRadius: 4,
+              fontSize: 11, fontWeight: 600, padding: '2px 6px', borderRadius: 4,
               color: EXPENSE_STATUS_COLOR[e.status] || 'var(--text-muted)',
               background: 'var(--glass-light)', whiteSpace: 'nowrap',
             }}>{displaySettleStatus(e.status)}</span>
@@ -565,7 +565,7 @@ export default function ProjectDetailPanel({
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }} onClick={() => toggleWf(w.id)}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
-                  <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700 }}>#</span>
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700 }}>#</span>
                   <input
                     key={w.project_order}
                     type="number" min="1"
@@ -588,7 +588,7 @@ export default function ProjectDetailPanel({
                   </div>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
                     {w.started_by && `${w.started_by} · `}{w.started_at?.slice(0, 10)}
-                    <span style={{ marginLeft: 6, padding: '1px 5px', borderRadius: 3, fontSize: 10, fontWeight: 600, color: wColor, background: wColorBg }}>{w.status}</span>
+                    <span style={{ marginLeft: 6, padding: '1px 5px', borderRadius: 3, fontSize: 11, fontWeight: 600, color: wColor, background: wColorBg }}>{w.status}</span>
                   </div>
                 </div>
               </div>
@@ -601,10 +601,10 @@ export default function ProjectDetailPanel({
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <div style={{ textAlign: 'right' }}>
                     <div style={{ fontSize: 16, fontWeight: 800, color: wPct === 100 ? 'var(--accent-green)' : 'var(--accent-cyan)', lineHeight: 1 }}>{wPct}%</div>
-                    <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{wDone}/{wTotal}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{wDone}/{wTotal}</div>
                   </div>
                   <div style={{ width: 40, height: 40, borderRadius: '50%', background: `conic-gradient(${wPct === 100 ? 'var(--accent-green)' : 'var(--accent-cyan)'} ${wPct * 3.6}deg, var(--border-medium) 0deg)`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700 }}>{wPct}%</div>
+                    <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>{wPct}%</div>
                   </div>
                 </div>
                 {/* Workflow kebab menu */}
@@ -697,7 +697,7 @@ export default function ProjectDetailPanel({
                     onClick={() => setSelectedTask(t)}
                   >
                     <GripVertical size={12} style={{ color: 'var(--text-muted)', cursor: 'grab', flexShrink: 0, opacity: 0.4 }} onClick={e => e.stopPropagation()} />
-                    <span style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0 }}>tk-{t.id}</span>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>tk-{t.id}</span>
                     <span style={{
                       flex: 1, fontWeight: 500, lineHeight: 1.4,
                       textDecoration: t.status === '已完成' ? 'line-through' : 'none',
@@ -706,11 +706,11 @@ export default function ProjectDetailPanel({
                     <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap', minWidth: 60 }}>{t.assignee || '—'}</span>
                     <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap', minWidth: 60 }}>{t.due_date || '—'}</span>
                     {t.work_order_id ? (
-                      <span title="已指派其他部門（跨部門工單），對方完成後自動關閉" style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 5, background: 'var(--accent-blue-dim)', color: 'var(--accent-blue)', whiteSpace: 'nowrap', flexShrink: 0 }}>🏢 工單</span>
+                      <span title="已指派其他部門（跨部門工單），對方完成後自動關閉" style={{ fontSize: 11, fontWeight: 700, padding: '2px 6px', borderRadius: 5, background: 'var(--accent-blue-dim)', color: 'var(--accent-blue)', whiteSpace: 'nowrap', flexShrink: 0 }}>🏢 工單</span>
                     ) : (t.status !== '已完成' && onTaskWorkOrder && (
                       <button onClick={(e) => { e.stopPropagation(); setWoForm({ target_department_id: '', expected_due_date: t.due_date || '', priority: t.priority === '高' ? 'high' : t.priority === '低' ? 'low' : 'medium' }); setWoTask(t) }}
                         title="指派給其他部門（開跨部門工單，對方完成後任務自動關閉）"
-                        style={{ fontSize: 10, fontWeight: 600, padding: '3px 7px', borderRadius: 5, border: '1px solid var(--border-medium)', background: 'var(--bg-secondary)', color: 'var(--accent-cyan)', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                        style={{ fontSize: 11, fontWeight: 600, padding: '3px 7px', borderRadius: 5, border: '1px solid var(--border-medium)', background: 'var(--bg-secondary)', color: 'var(--accent-cyan)', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
                         🏢 派他部門
                       </button>
                     ))}
@@ -765,7 +765,7 @@ export default function ProjectDetailPanel({
                     onClick={() => setSelectedTask(t)}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
-                      <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700 }}>#</span>
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700 }}>#</span>
                       <input
                         key={t.project_order}
                         type="number" min="1"
@@ -776,17 +776,17 @@ export default function ProjectDetailPanel({
                         placeholder="—"
                       />
                     </div>
-                    <span style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0 }}>tk-{t.id}</span>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>tk-{t.id}</span>
                     <span style={{ flex: 1, fontWeight: 500, lineHeight: 1.4, textDecoration: t.status === '已完成' ? 'line-through' : 'none', color: t.status === '已完成' ? 'var(--text-muted)' : 'var(--text-primary)' }}>{t.title}</span>
-                    <span style={{ fontSize: 10, fontWeight: 600, color: PRIORITY_COLORS[t.priority], minWidth: 20 }}>{t.priority}</span>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: PRIORITY_COLORS[t.priority], minWidth: 20 }}>{t.priority}</span>
                     <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap', minWidth: 60 }}>{t.assignee || '—'}</span>
                     <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap', minWidth: 60 }}>{t.due_date || '—'}</span>
                     {t.work_order_id ? (
-                      <span title="已指派其他部門（跨部門工單），對方完成後自動關閉" style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 5, background: 'var(--accent-blue-dim)', color: 'var(--accent-blue)', whiteSpace: 'nowrap', flexShrink: 0 }}>🏢 工單</span>
+                      <span title="已指派其他部門（跨部門工單），對方完成後自動關閉" style={{ fontSize: 11, fontWeight: 700, padding: '2px 6px', borderRadius: 5, background: 'var(--accent-blue-dim)', color: 'var(--accent-blue)', whiteSpace: 'nowrap', flexShrink: 0 }}>🏢 工單</span>
                     ) : (t.status !== '已完成' && onTaskWorkOrder && (
                       <button onClick={(e) => { e.stopPropagation(); setWoForm({ target_department_id: '', expected_due_date: t.due_date || '', priority: t.priority === '高' ? 'high' : t.priority === '低' ? 'low' : 'medium' }); setWoTask(t) }}
                         title="指派給其他部門（開跨部門工單，對方完成後任務自動關閉）"
-                        style={{ fontSize: 10, fontWeight: 600, padding: '3px 7px', borderRadius: 5, border: '1px solid var(--border-medium)', background: 'var(--bg-secondary)', color: 'var(--accent-cyan)', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                        style={{ fontSize: 11, fontWeight: 600, padding: '3px 7px', borderRadius: 5, border: '1px solid var(--border-medium)', background: 'var(--bg-secondary)', color: 'var(--accent-cyan)', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
                         🏢 派他部門
                       </button>
                     ))}

@@ -238,7 +238,7 @@ export default function FormBindingsPicker({ value = [], onChange, readonly = fa
                 }}>
                   <span>{groupName}</span>
                   <span style={{
-                    fontSize: 10, fontWeight: 600, padding: '1px 7px',
+                    fontSize: 11, fontWeight: 600, padding: '1px 7px',
                     borderRadius: 8, background: 'var(--bg-card)', color: 'var(--text-muted)',
                   }}>{items.length}</span>
                 </div>

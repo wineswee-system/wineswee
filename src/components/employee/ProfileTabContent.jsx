@@ -130,7 +130,7 @@ export default function ProfileTabContent({
                 </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, background: la.is_primary ? 'var(--accent-green-dim)' : 'var(--glass-light)', color: la.is_primary ? 'var(--accent-green)' : 'var(--text-muted)', fontWeight: 600 }}>
+                <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 4, background: la.is_primary ? 'var(--accent-green-dim)' : 'var(--glass-light)', color: la.is_primary ? 'var(--accent-green)' : 'var(--text-muted)', fontWeight: 600 }}>
                   {la.line_channels?.name || la.channel_id}{la.is_primary ? ' · 主要' : ''}
                 </span>
                 <button onClick={async () => {
@@ -159,7 +159,7 @@ export default function ProfileTabContent({
               )}
               {newLineChannel && unboundLineUsers.length > 0 && (
                 <button type="button" onClick={() => { setManualLineInput(m => !m); setNewLineUserId('') }}
-                  style={{ background: 'none', border: 'none', color: 'var(--accent-cyan)', cursor: 'pointer', fontSize: 10, textAlign: 'left', padding: 0 }}>
+                  style={{ background: 'none', border: 'none', color: 'var(--accent-cyan)', cursor: 'pointer', fontSize: 11, textAlign: 'left', padding: 0 }}>
                   {manualLineInput ? '← 從系統已知名單選擇' : '✏️ 手動輸入 LINE ID'}
                 </button>
               )}

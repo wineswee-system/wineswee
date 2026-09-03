@@ -179,7 +179,7 @@ export default function InsuranceGradeMonitor() {
                     <td style={{ fontWeight: 600 }}>{emp.name}</td>
                     <td>
                       <span style={{ padding: '2px 7px', borderRadius: 4, fontSize: 11, fontWeight: 600, background: EMP_TYPE_DIM[empType] || 'var(--accent-green-dim)', color: EMP_TYPE_COLOR[empType] || 'var(--accent-green)' }}>{empType}</span>
-                      {!managed && <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>{cfg.na}</div>}
+                      {!managed && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{cfg.na}</div>}
                     </td>
                     <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{emp.dept || emp.store || '—'}</td>
                     <td>NT$ {(emp.base_salary || 0).toLocaleString()}</td>

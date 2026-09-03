@@ -244,7 +244,7 @@ export default function DatabaseAdmin() {
                       <td>{t.label}</td>
                       <td>
                         <span style={{
-                          padding: '2px 8px', borderRadius: 6, fontSize: 10, fontWeight: 600,
+                          padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 600,
                           background: `${MODULE_COLORS[t.module]}15`, color: MODULE_COLORS[t.module],
                         }}>{t.module}</span>
                       </td>
@@ -279,7 +279,7 @@ export default function DatabaseAdmin() {
                                       <th key={col} style={{
                                         padding: '6px 8px', textAlign: 'left', fontWeight: 600,
                                         color: 'var(--text-secondary)', borderBottom: '1px solid var(--border-subtle)',
-                                        whiteSpace: 'nowrap', fontSize: 10,
+                                        whiteSpace: 'nowrap', fontSize: 11,
                                       }}>{col}</th>
                                     ))}
                                   </tr>
@@ -294,7 +294,7 @@ export default function DatabaseAdmin() {
                                           color: 'var(--text-secondary)',
                                         }}>
                                           {val === null ? <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>null</span> :
-                                           typeof val === 'object' ? <span style={{ color: 'var(--accent-purple)', fontSize: 10 }}>{JSON.stringify(val).slice(0, 60)}...</span> :
+                                           typeof val === 'object' ? <span style={{ color: 'var(--accent-purple)', fontSize: 11 }}>{JSON.stringify(val).slice(0, 60)}...</span> :
                                            String(val)}
                                         </td>
                                       ))}
@@ -303,7 +303,7 @@ export default function DatabaseAdmin() {
                                 </tbody>
                               </table>
                             )}
-                            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 8 }}>
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>
                               顯示最新 20 筆（共 {count} 筆）
                             </div>
                           </div>

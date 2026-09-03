@@ -79,7 +79,7 @@ function TypeBadge({ type }) {
   const label = FIELD_TYPES.find(t => t.value === type)?.label || type
   return (
     <span style={{
-      fontSize: 10, fontWeight: 600,
+      fontSize: 11, fontWeight: 600,
       color: theme.color,
       background: theme.bg,
       padding: '1px 6px', borderRadius: 4,
@@ -174,7 +174,7 @@ function FieldPreview({ field }) {
 function SectionLabel({ children, style }) {
   return (
     <div style={{
-      fontSize: 10, fontWeight: 700, color: 'var(--text-muted)',
+      fontSize: 11, fontWeight: 700, color: 'var(--text-muted)',
       textTransform: 'uppercase', letterSpacing: 0.7,
       ...style,
     }}>

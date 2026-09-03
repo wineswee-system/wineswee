@@ -87,7 +87,7 @@ export default function AiDraftReviewPanel({
                 const isWeekend = [5, 6].includes(new Date(d).getDay()) // Fri + Sat
                 return (
                   <th key={d} style={{ textAlign: 'center', padding: '6px 2px', color: isWeekend ? 'var(--accent-red)' : 'var(--text-muted)', minWidth: viewMode === 'month' ? 40 : 70, fontSize: viewMode === 'month' ? 10 : 12 }}>
-                    {d.slice(5)}<br /><span style={{ fontSize: 9 }}>{dow}</span>
+                    {d.slice(5)}<br /><span style={{ fontSize: 11 }}>{dow}</span>
                   </th>
                 )
               })}

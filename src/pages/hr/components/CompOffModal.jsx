@@ -56,7 +56,7 @@ export default function CompOffModal({ employees, activeDates, schedules, onAssi
                   return (
                     <th key={d} style={{ padding: '4px 2px', textAlign: 'center', minWidth: 36, color: dow === 0 || dow === 6 ? 'var(--accent-red)' : 'var(--text-muted)' }}>
                       <div>{parseInt(d.slice(8))}</div>
-                      <div style={{ fontSize: 10 }}>{dows[dow]}</div>
+                      <div style={{ fontSize: 11 }}>{dows[dow]}</div>
                     </th>
                   )
                 })}
@@ -67,7 +67,7 @@ export default function CompOffModal({ employees, activeDates, schedules, onAssi
                 <tr key={emp.name}>
                   <td style={{ padding: '4px 8px', fontWeight: 600, whiteSpace: 'nowrap', position: 'sticky', left: 0, background: 'var(--bg-card)', zIndex: 1 }}>
                     {emp.name}
-                    <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 4 }}>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 4 }}>
                       {emp.employment_type === '兼職' || emp.employment_type === 'PT' ? 'PT' : ''}
                     </span>
                   </td>
@@ -82,7 +82,7 @@ export default function CompOffModal({ employees, activeDates, schedules, onAssi
                         <button
                           onClick={() => !isAlreadyCompOff && toggle(emp.name, date)}
                           style={{
-                            width: 34, height: 28, borderRadius: 6, fontSize: 10, fontWeight: 600,
+                            width: 34, height: 28, borderRadius: 6, fontSize: 11, fontWeight: 600,
                             border: isSelected ? '2px solid #3b82f6' : '1px solid var(--border-subtle)',
                             background: isAlreadyCompOff ? 'rgba(59,130,246,0.15)' : isSelected ? 'rgba(59,130,246,0.2)' : 'transparent',
                             color: isAlreadyCompOff ? '#3b82f6' : isSelected ? '#3b82f6' : 'var(--text-muted)',

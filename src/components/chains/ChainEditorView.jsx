@@ -129,7 +129,7 @@ export default function ChainEditorView({
           <div style={{ width: 24, height: 24, borderRadius: '50%', background: 'var(--accent-cyan)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>👤</div>
           <div>
             <div style={{ fontWeight: 700, fontSize: 13 }}>申請人</div>
-            <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>送出表單者，自動帶</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>送出表單者，自動帶</div>
           </div>
         </div>
 
@@ -259,7 +259,7 @@ export default function ChainEditorView({
               }}>
                 {preview.ok ? <CheckCircle2 size={12} /> : <AlertCircle size={12} />}
                 本關會由：{preview.text}
-                {preview.dynamic && <span style={{ fontSize: 9, marginLeft: 4, padding: '1px 5px', borderRadius: 3, background: 'rgba(255,255,255,0.4)' }}>動態</span>}
+                {preview.dynamic && <span style={{ fontSize: 11, marginLeft: 4, padding: '1px 5px', borderRadius: 3, background: 'rgba(255,255,255,0.4)' }}>動態</span>}
               </div>
             </div>
           )
@@ -278,7 +278,7 @@ export default function ChainEditorView({
           <div style={{ width: 24, height: 24, borderRadius: '50%', background: 'var(--accent-green)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>✅</div>
           <div>
             <div style={{ fontWeight: 700, fontSize: 13 }}>簽核完成</div>
-            <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>所有關卡通過後通知申請人</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>所有關卡通過後通知申請人</div>
           </div>
         </div>
       </div>

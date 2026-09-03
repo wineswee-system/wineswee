@@ -715,7 +715,7 @@ export default function StockCount() {
                       </td>
                       <td>
                         {diff !== 0 && selectedCount?.status !== '已調帳' ? (
-                          <button className="btn btn-secondary" style={{ fontSize: 10, padding: '2px 6px' }} onClick={() => handleVarianceAdjust(v)}>
+                          <button className="btn btn-secondary" style={{ fontSize: 11, padding: '2px 6px' }} onClick={() => handleVarianceAdjust(v)}>
                             <CheckCircle size={10} /> 調整
                           </button>
                         ) : (

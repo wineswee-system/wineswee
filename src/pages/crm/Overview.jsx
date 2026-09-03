@@ -294,9 +294,9 @@ export default function CRMOverview() {
                     {/* Weighted (foreground bar) */}
                     <div style={{ position: 'absolute', bottom: 0, left: '15%', width: '70%', height: `${Math.max(4, (f.weighted / maxVal) * 100)}%`, background: 'var(--accent-cyan)', borderRadius: '4px 4px 0 0', transition: 'height 0.3s' }} />
                   </div>
-                  <div style={{ fontSize: 10, color: 'var(--text-muted)', textAlign: 'center' }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center' }}>
                     <div>{f.label.replace(/\d{4}年/, '')}</div>
-                    <div style={{ fontSize: 9 }}>{f.dealCount} 筆</div>
+                    <div style={{ fontSize: 11 }}>{f.dealCount} 筆</div>
                   </div>
                 </div>
               ))}
@@ -333,7 +333,7 @@ export default function CRMOverview() {
                 </div>
                 <div style={{ textAlign: 'right', flexShrink: 0 }}>
                   <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--accent-green)' }}>$ {(c.clv || 0).toLocaleString()}</div>
-                  <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>已消費 $ {(c.totalSpent || 0).toLocaleString()}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>已消費 $ {(c.totalSpent || 0).toLocaleString()}</div>
                 </div>
                 {/* Sparkline-style bar indicator */}
                 <div style={{ width: 60, height: 8, background: 'var(--glass-light)', borderRadius: 4, flexShrink: 0 }}>

@@ -43,7 +43,7 @@ function Progress({ paid, target, small }) {
       <div style={{ height: 6, borderRadius: 3, background: 'var(--bg-secondary)', overflow: 'hidden' }}>
         <div style={{ width: `${pct}%`, height: '100%', background: done ? 'var(--accent-green)' : 'var(--accent-cyan)', transition: 'width .2s' }} />
       </div>
-      {!done && target > 0 && <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 3 }}>還差 {fmt(target - paid)}</div>}
+      {!done && target > 0 && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3 }}>還差 {fmt(target - paid)}</div>}
     </div>
   )
 }
@@ -415,7 +415,7 @@ function FranchiseTab({ orgId, profile, franchises, ffInvestors, ffPays, deposit
                       <InvestorPicker value={a.investor_id} onChange={v => setAlloc(i, 'investor_id', v)}
                         investors={eligibleInvestors} addInvestor={addInvestor} noAdd exclude={pickedIds.filter(id => id !== a.investor_id)} />
                       <input className="form-input" type="number" value={a.amount} onChange={e => setAlloc(i, 'amount', e.target.value)} placeholder="分攤金額" style={{ width: 140 }} />
-                      {n(a.amount) > 0 && <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>三期 {stageTargets(a.amount).map(fmt).join(' / ')}</span>}
+                      {n(a.amount) > 0 && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>三期 {stageTargets(a.amount).map(fmt).join(' / ')}</span>}
                       {allocs.length > 1 && <button className="btn btn-secondary" style={{ padding: '5px 8px' }} onClick={() => setAllocs(prev => prev.filter((_, idx) => idx !== i))}><X size={13} /></button>}
                     </div>
                   ))}

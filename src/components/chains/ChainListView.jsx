@@ -66,7 +66,7 @@ export default function ChainListView({ chainsList, mode, shortStepDesc, onNew, 
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
                     <span style={{ fontWeight: 700, fontSize: 15 }}>{c.name}</span>
                     {c.is_active === false && (
-                      <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: 'var(--accent-red-dim)', color: 'var(--accent-red)', fontWeight: 700 }}>停用</span>
+                      <span style={{ fontSize: 11, padding: '1px 6px', borderRadius: 4, background: 'var(--accent-red-dim)', color: 'var(--accent-red)', fontWeight: 700 }}>停用</span>
                     )}
                   </div>
                   {c.description && (

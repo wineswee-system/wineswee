@@ -104,7 +104,7 @@ export default function NotesPanel({ entityType, entityId }) {
               <>
                 <div style={{ fontSize: 12, lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{note.content}</div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
-                  <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                     {note.author} · {new Date(note.created_at).toLocaleString('zh-TW', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                   </span>
                   <div style={{ display: 'flex', gap: 4 }}>

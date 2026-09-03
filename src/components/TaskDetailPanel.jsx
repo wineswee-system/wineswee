@@ -981,14 +981,14 @@ function SubtasksTab({ task, linkedChecklists, checklistItemsMap, setChecklistIt
                   background: child.status === '已完成' ? 'var(--accent-green)' : 'transparent',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
                 }}>
-                  {child.status === '已完成' && <span style={{ color: '#fff', fontSize: 10, lineHeight: 1 }}>✓</span>}
+                  {child.status === '已完成' && <span style={{ color: '#fff', fontSize: 11, lineHeight: 1 }}>✓</span>}
                 </div>
                 <span style={{ flex: 1, fontSize: 13, color: child.status === '已完成' ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: child.status === '已完成' ? 'line-through' : 'none' }}>
                   {child.title}
                 </span>
                 {child.assignee && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>👤 {child.assignee}</span>}
                 {child.due_date && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>📅 {child.due_date.slice(5)}</span>}
-                <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 3, background: 'var(--bg-secondary)', color: 'var(--text-muted)' }}>tk-{child.id}</span>
+                <span style={{ fontSize: 11, padding: '1px 5px', borderRadius: 3, background: 'var(--bg-secondary)', color: 'var(--text-muted)' }}>tk-{child.id}</span>
               </div>
             ))}
             {addingChild && (
@@ -1044,7 +1044,7 @@ function SubtasksTab({ task, linkedChecklists, checklistItemsMap, setChecklistIt
                     background: item.checked ? 'var(--accent-green)' : 'transparent',
                     display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1,
                   }}>
-                    {item.checked && <span style={{ color: '#fff', fontSize: 10, lineHeight: 1 }}>✓</span>}
+                    {item.checked && <span style={{ color: '#fff', fontSize: 11, lineHeight: 1 }}>✓</span>}
                   </div>
                   <span style={{
                     fontSize: 13, lineHeight: 1.4,

@@ -80,13 +80,13 @@ export default function MarketingUnsubscribeTab({
               <div key={c.id} style={{ padding: '8px 12px', borderRadius: 8, background: 'var(--glass-light)', border: '1px solid var(--border-subtle)', fontSize: 12 }}>
                 <div style={{ fontWeight: 700, marginBottom: 4 }}>{c.name}</div>
                 <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                  <span style={{ padding: '1px 6px', borderRadius: 4, fontSize: 10, background: (emailUnsub || allUnsub) ? 'var(--accent-red-dim)' : 'var(--accent-green-dim)', color: (emailUnsub || allUnsub) ? 'var(--accent-red)' : 'var(--accent-green)' }}>
+                  <span style={{ padding: '1px 6px', borderRadius: 4, fontSize: 11, background: (emailUnsub || allUnsub) ? 'var(--accent-red-dim)' : 'var(--accent-green-dim)', color: (emailUnsub || allUnsub) ? 'var(--accent-red)' : 'var(--accent-green)' }}>
                     Email {(emailUnsub || allUnsub) ? '已退訂' : '正常'}
                   </span>
-                  <span style={{ padding: '1px 6px', borderRadius: 4, fontSize: 10, background: (smsUnsub || allUnsub) ? 'var(--accent-red-dim)' : 'var(--accent-green-dim)', color: (smsUnsub || allUnsub) ? 'var(--accent-red)' : 'var(--accent-green)' }}>
+                  <span style={{ padding: '1px 6px', borderRadius: 4, fontSize: 11, background: (smsUnsub || allUnsub) ? 'var(--accent-red-dim)' : 'var(--accent-green-dim)', color: (smsUnsub || allUnsub) ? 'var(--accent-red)' : 'var(--accent-green)' }}>
                     SMS {(smsUnsub || allUnsub) ? '已退訂' : '正常'}
                   </span>
-                  <span style={{ padding: '1px 6px', borderRadius: 4, fontSize: 10, background: (lineUnsub || allUnsub) ? 'var(--accent-red-dim)' : 'var(--accent-green-dim)', color: (lineUnsub || allUnsub) ? 'var(--accent-red)' : 'var(--accent-green)' }}>
+                  <span style={{ padding: '1px 6px', borderRadius: 4, fontSize: 11, background: (lineUnsub || allUnsub) ? 'var(--accent-red-dim)' : 'var(--accent-green-dim)', color: (lineUnsub || allUnsub) ? 'var(--accent-red)' : 'var(--accent-green)' }}>
                     LINE {(lineUnsub || allUnsub) ? '已退訂' : '正常'}
                   </span>
                 </div>

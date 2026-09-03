@@ -239,7 +239,7 @@ export default function WorkflowDagView({ steps, instanceId }) {
                       <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.35, flex: 1 }}>
                         {step.title}
                       </div>
-                      <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4,
+                      <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 6px', borderRadius: 4,
                         background: 'var(--bg-secondary)', color, flexShrink: 0, whiteSpace: 'nowrap' }}>
                         {step.status}
                       </span>
@@ -260,7 +260,7 @@ export default function WorkflowDagView({ steps, instanceId }) {
                           return (
                             <span key={d.id} style={{
                               display: 'inline-flex', alignItems: 'center', gap: 4,
-                              fontSize: 10, padding: '2px 6px', borderRadius: 4,
+                              fontSize: 11, padding: '2px 6px', borderRadius: 4,
                               background: isTrig ? 'var(--accent-purple-dim)' : 'var(--accent-cyan-dim)',
                               color:      isTrig ? 'var(--accent-purple)'     : 'var(--accent-cyan)',
                               border:     `1px solid ${isTrig ? 'rgba(168,85,247,0.2)' : 'rgba(6,182,212,0.2)'}`,
@@ -284,7 +284,7 @@ export default function WorkflowDagView({ steps, instanceId }) {
                         onClick={e => { e.stopPropagation(); setLinking(step.id) }}
                         style={{
                           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
-                          width: '100%', fontSize: 10, padding: '3px 0', borderRadius: 5,
+                          width: '100%', fontSize: 11, padding: '3px 0', borderRadius: 5,
                           background: 'none', border: '1px dashed var(--border-medium)',
                           cursor: 'pointer', color: 'var(--text-muted)',
                           transition: 'border-color 0.1s, color 0.1s',

@@ -79,7 +79,7 @@ export default function TaskCalendar({ tasks, onTaskClick, onDayClick }) {
                     key={t.id}
                     onClick={(e) => { e.stopPropagation(); onTaskClick?.(t) }}
                     style={{
-                      fontSize: 10, padding: '2px 5px', borderRadius: 3, cursor: 'pointer',
+                      fontSize: 11, padding: '2px 5px', borderRadius: 3, cursor: 'pointer',
                       background: `color-mix(in srgb, ${PRIORITY_COLORS[t.priority] || '#64748b'} 18%, transparent)`,
                       color: PRIORITY_COLORS[t.priority] || 'var(--text-primary)',
                       borderLeft: `2px solid ${PRIORITY_COLORS[t.priority] || '#64748b'}`,
@@ -92,7 +92,7 @@ export default function TaskCalendar({ tasks, onTaskClick, onDayClick }) {
                   </div>
                 ))}
                 {dayTasks.length > 3 && (
-                  <div style={{ fontSize: 10, color: 'var(--text-muted)', padding: '0 5px' }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', padding: '0 5px' }}>
                     +{dayTasks.length - 3} more
                   </div>
                 )}

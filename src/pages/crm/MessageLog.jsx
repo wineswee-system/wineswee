@@ -166,7 +166,7 @@ export default function MessageLog() {
             fontSize: 12
           }}>
             {CHANNEL_ICON[ch.key]} {ch.name}
-            <span className={`badge ${ch.configured ? 'badge-success' : 'badge-info'}`} style={{ fontSize: 9 }}>
+            <span className={`badge ${ch.configured ? 'badge-success' : 'badge-info'}`} style={{ fontSize: 11 }}>
               <span className="badge-dot"></span>{ch.configured ? '已設定' : '模擬模式'}
             </span>
           </div>
@@ -286,14 +286,14 @@ export default function MessageLog() {
                           {log.subject || '-'}
                         </td>
                         <td>
-                          <span className={`badge ${st.badge}`} style={{ fontSize: 10 }}>
+                          <span className={`badge ${st.badge}`} style={{ fontSize: 11 }}>
                             <span className="badge-dot"></span>{st.label}
                           </span>
                         </td>
                         <td>
                           <button
                             className="btn"
-                            style={{ fontSize: 10, padding: '2px 8px', background: 'var(--glass-light)', color: 'var(--text-muted)', border: '1px solid var(--border-medium)' }}
+                            style={{ fontSize: 11, padding: '2px 8px', background: 'var(--glass-light)', color: 'var(--text-muted)', border: '1px solid var(--border-medium)' }}
                             onClick={(e) => { e.stopPropagation(); setExpandedRow(isExpanded ? null : log.id) }}
                           >
                             {isExpanded ? <ChevronUp size={11} /> : <ChevronDown size={11} />} 詳情

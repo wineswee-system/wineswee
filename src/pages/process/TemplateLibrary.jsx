@@ -62,7 +62,7 @@ function StepDots({ steps }) {
         />
       ))}
       {extra > 0 && (
-        <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 500 }}>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>
           +{extra}更多
         </span>
       )}
@@ -805,7 +805,7 @@ export default function TemplateLibrary() {
                             <div style={{
                               width: 18, height: 18, borderRadius: '50%', flexShrink: 0,
                               background: 'var(--bg-secondary)', color: 'var(--text-muted)',
-                              fontSize: 10, fontWeight: 700,
+                              fontSize: 11, fontWeight: 700,
                               display: 'flex', alignItems: 'center', justifyContent: 'center',
                             }}>
                               {i + 1}
@@ -831,7 +831,7 @@ export default function TemplateLibrary() {
                       <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
                         {visibleTags.map(tag => (
                           <span key={tag} style={{
-                            fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 10,
+                            fontSize: 11, fontWeight: 600, padding: '2px 7px', borderRadius: 10,
                             background: 'var(--accent-purple-dim)', color: 'var(--accent-purple)',
                             border: '1px solid var(--accent-purple)',
                           }}>
@@ -839,7 +839,7 @@ export default function TemplateLibrary() {
                           </span>
                         ))}
                         {extraTags > 0 && (
-                          <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 500 }}>
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>
                             +{extraTags} 更多
                           </span>
                         )}

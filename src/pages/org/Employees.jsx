@@ -462,7 +462,7 @@ export default function Employees() {
     return (
       <th onClick={() => toggleSort(sk)} style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}>
         {label}
-        <span style={{ marginLeft: 4, fontSize: 10, color: active ? 'var(--accent-cyan)' : 'var(--text-muted)', opacity: active ? 1 : 0.5 }}>
+        <span style={{ marginLeft: 4, fontSize: 11, color: active ? 'var(--accent-cyan)' : 'var(--text-muted)', opacity: active ? 1 : 0.5 }}>
           {active ? (sortDir === 'asc' ? '▲' : '▼') : '⇅'}
         </span>
       </th>
@@ -562,7 +562,7 @@ export default function Employees() {
                         <div style={{
                           width: 22, height: 22, borderRadius: '50%', background: m.avatar || AVATARS[m.id % AVATARS.length],
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          fontSize: 10, fontWeight: 700, color: '#fff',
+                          fontSize: 11, fontWeight: 700, color: '#fff',
                         }}>{m.name?.[0]}</div>
                         {m.name}
                       </button>
@@ -701,7 +701,7 @@ export default function Employees() {
                   <td style={{ fontSize: 12 }}>
                     {e.join_date}
                     {e.resign_date && statusFilter !== '離職' && (
-                      <div style={{ fontSize: 10, color: 'var(--accent-red)', marginTop: 2 }}>離職：{e.resign_date}</div>
+                      <div style={{ fontSize: 11, color: 'var(--accent-red)', marginTop: 2 }}>離職：{e.resign_date}</div>
                     )}
                   </td>
                   {statusFilter === '離職' && (

@@ -147,7 +147,7 @@ export default function Demo() {
           }}>S</div>
           <span style={{ fontSize: 15, fontWeight: 700, letterSpacing: '-0.3px' }}>SME OPS</span>
           <span style={{
-            fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 20,
+            fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 20,
             background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)',
             border: '1px solid rgba(34,211,238,0.3)', marginLeft: 4,
           }}>DEMO</span>
@@ -318,7 +318,7 @@ export default function Demo() {
                 </div>
                 <div>
                   <div style={{ fontWeight: 700, fontSize: 15 }}>{m.title}</div>
-                  <div style={{ fontSize: 10, color: m.color, fontWeight: 600, letterSpacing: '1px', marginTop: 2 }}>{m.tag}</div>
+                  <div style={{ fontSize: 11, color: m.color, fontWeight: 600, letterSpacing: '1px', marginTop: 2 }}>{m.tag}</div>
                 </div>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>

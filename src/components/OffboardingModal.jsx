@@ -194,7 +194,7 @@ export default function OffboardingModal({
                         background: active ? 'var(--accent-cyan-dim)' : 'var(--glass-light)',
                       }}>
                       <div style={{ fontSize: 12, fontWeight: 700, color: active ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>{m.label}</div>
-                      <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>{m.desc}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>{m.desc}</div>
                     </button>
                   )
                 })}

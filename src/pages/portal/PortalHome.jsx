@@ -538,7 +538,7 @@ export default function PortalHome() {
                 <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
                   {r.date?.slice(5) /* MM-DD */}
                 </div>
-                <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                   {new Date(r.date).toLocaleDateString('zh-TW', { weekday: 'short' })}
                 </div>
               </div>
@@ -548,13 +548,13 @@ export default function PortalHome() {
                 {r.hours != null && <span style={{ color: 'var(--text-muted)' }}>{r.hours}h</span>}
                 {showInTag && (
                   <span style={{
-                    padding: '1px 7px', borderRadius: 5, fontSize: 10, fontWeight: 700,
+                    padding: '1px 7px', borderRadius: 5, fontSize: 11, fontWeight: 700,
                     background: inMode.dim, color: inMode.color,
                   }}>{inMode.icon} 上{inMode.label}</span>
                 )}
                 {showOutTag && (
                   <span style={{
-                    padding: '1px 7px', borderRadius: 5, fontSize: 10, fontWeight: 700,
+                    padding: '1px 7px', borderRadius: 5, fontSize: 11, fontWeight: 700,
                     background: outMode.dim, color: outMode.color,
                   }}>{outMode.icon} 下{outMode.label}</span>
                 )}

@@ -351,7 +351,7 @@ export default function Resignation() {
                             <span key={st.id} style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                               {idx > 0 && <ArrowRight size={9} style={{ color: 'var(--text-muted)' }} />}
                               <span style={{
-                                fontSize: 10, padding: '1px 6px', borderRadius: 4, fontWeight: 600,
+                                fontSize: 11, padding: '1px 6px', borderRadius: 4, fontWeight: 600,
                                 background: idx < (r.current_step || 0) ? 'var(--accent-green-dim)' :
                                             idx === (r.current_step || 0) && r.status === '申請中' ? 'var(--accent-orange-dim)' :
                                             'var(--glass-light)',
@@ -366,7 +366,7 @@ export default function Resignation() {
                         </div>
                       )}
                     </td>
-                    <td><span style={{ padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700, background: s.bg, color: s.color }}>{r.status}</span>{r.reject_reason && <div style={{ fontSize: 10, color: 'var(--accent-red)', marginTop: 2 }}>{r.reject_reason}</div>}</td>
+                    <td><span style={{ padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700, background: s.bg, color: s.color }}>{r.status}</span>{r.reject_reason && <div style={{ fontSize: 11, color: 'var(--accent-red)', marginTop: 2 }}>{r.reject_reason}</div>}</td>
                     <td onClick={(ev) => ev.stopPropagation()}>
                       <div style={{ display: 'flex', gap: 4 }}>
                         {myTurn && (

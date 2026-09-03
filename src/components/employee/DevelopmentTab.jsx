@@ -178,10 +178,10 @@ export default function DevelopmentTab({ employee }) {
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span style={{ fontSize: 13, fontWeight: 700 }}>{plan.skill_name}</span>
-                  <span style={{ padding: '1px 8px', borderRadius: 10, fontSize: 10, fontWeight: 600, color: isHard ? 'var(--accent-cyan)' : 'var(--accent-purple)', background: isHard ? 'var(--accent-cyan-dim)' : 'var(--accent-purple-dim)' }}>
+                  <span style={{ padding: '1px 8px', borderRadius: 10, fontSize: 11, fontWeight: 600, color: isHard ? 'var(--accent-cyan)' : 'var(--accent-purple)', background: isHard ? 'var(--accent-cyan-dim)' : 'var(--accent-purple-dim)' }}>
                     {isHard ? '🔧 硬技能' : '🤝 軟技能'}
                   </span>
-                  <span style={{ padding: '1px 8px', borderRadius: 10, fontSize: 10, fontWeight: 600, color: st.color, background: st.bg }}>
+                  <span style={{ padding: '1px 8px', borderRadius: 10, fontSize: 11, fontWeight: 600, color: st.color, background: st.bg }}>
                     {plan.status}
                   </span>
                 </div>
@@ -193,7 +193,7 @@ export default function DevelopmentTab({ employee }) {
               </div>
               <div style={{ display: 'flex', gap: 4 }}>
                 {plan.status !== '已完成' && (
-                  <select className="form-input" style={{ fontSize: 10, padding: '2px 4px', width: 70 }}
+                  <select className="form-input" style={{ fontSize: 11, padding: '2px 4px', width: 70 }}
                     value={plan.status} onChange={e => handleStatusChange(plan.id, e.target.value)}>
                     <option value="規劃中">規劃中</option>
                     <option value="進行中">進行中</option>

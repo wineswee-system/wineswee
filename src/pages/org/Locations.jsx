@@ -215,7 +215,7 @@ export default function Locations() {
                       <span style={{ color: 'var(--text-muted)' }}>未設定</span>
                     )}
                     {s.allowed_wifi?.length > 0 && (
-                      <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>WiFi: {s.allowed_wifi.length} 組</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>WiFi: {s.allowed_wifi.length} 組</div>
                     )}
                   </td>
                   <td>

@@ -201,7 +201,7 @@ export default function Bins() {
                               <div key={bin.id} style={{ background: 'var(--bg-main)', borderRadius: 8, border: '1px solid var(--border)', padding: 10, position: 'relative' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                                   <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 12 }}>{bin.code}</span>
-                                  <span style={{ fontSize: 10, padding: '1px 4px', borderRadius: 3, background: `color-mix(in srgb, ${statusColor(bin.status)} 15%, transparent)`, color: statusColor(bin.status), fontWeight: 600, cursor: 'pointer' }} onClick={() => toggleBinStatus(bin)}>{bin.status}</span>
+                                  <span style={{ fontSize: 11, padding: '1px 4px', borderRadius: 3, background: `color-mix(in srgb, ${statusColor(bin.status)} 15%, transparent)`, color: statusColor(bin.status), fontWeight: 600, cursor: 'pointer' }} onClick={() => toggleBinStatus(bin)}>{bin.status}</span>
                                 </div>
                                 <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4 }}>{bin.current_qty} / {bin.max_capacity}</div>
                                 <div style={{ height: 4, background: 'var(--border)', borderRadius: 2, overflow: 'hidden' }}>

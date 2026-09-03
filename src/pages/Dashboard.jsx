@@ -547,7 +547,7 @@ function AdminDashboard({ profile }) {
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                           {(w.active_instances || 0) > 0 && (
-                            <span className="badge badge-info" style={{ fontSize: 10 }}>
+                            <span className="badge badge-info" style={{ fontSize: 11 }}>
                               <span className="badge-dot"></span>{w.active_instances} 進行中
                             </span>
                           )}

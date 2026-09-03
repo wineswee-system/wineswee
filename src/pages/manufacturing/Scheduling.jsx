@@ -127,7 +127,7 @@ export default function Scheduling() {
                 color: isToday ? 'var(--accent-blue)' : isWeekend ? 'var(--text-secondary)' : 'var(--text-primary)',
               }}>
                 <div>{d.toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}</div>
-                <div style={{ fontSize: 10, opacity: 0.7 }}>{['日', '一', '二', '三', '四', '五', '六'][d.getDay()]}</div>
+                <div style={{ fontSize: 11, opacity: 0.7 }}>{['日', '一', '二', '三', '四', '五', '六'][d.getDay()]}</div>
               </div>
             )
           })}
@@ -150,7 +150,7 @@ export default function Scheduling() {
                 <div style={{ fontSize: 13, fontWeight: 600 }}>{order.mo_number || `MO-${order.id}`}</div>
                 <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
                   {order.product_name} x{order.quantity}
-                  <span style={{ marginLeft: 8, padding: '1px 6px', borderRadius: 3, fontSize: 10, fontWeight: 600, background: `color-mix(in srgb, ${statusColor(order.status)} 15%, transparent)`, color: statusColor(order.status) }}>{order.status}</span>
+                  <span style={{ marginLeft: 8, padding: '1px 6px', borderRadius: 3, fontSize: 11, fontWeight: 600, background: `color-mix(in srgb, ${statusColor(order.status)} 15%, transparent)`, color: statusColor(order.status) }}>{order.status}</span>
                 </div>
               </div>
               <div style={{ display: 'flex', flex: 1, position: 'relative', alignItems: 'center' }}>

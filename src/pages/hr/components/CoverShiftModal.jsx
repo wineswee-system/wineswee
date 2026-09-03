@@ -104,7 +104,7 @@ export default function CoverShiftModal({ coverModal, setCoverModal, coverLoadin
                     </div>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
                       {c.store || '—'} · {c.position || c.dept}
-                      {c.isPT && <span className="badge badge-cyan" style={{ marginLeft: 6, fontSize: 10 }}>PT</span>}
+                      {c.isPT && <span className="badge badge-cyan" style={{ marginLeft: 6, fontSize: 11 }}>PT</span>}
                       {c.wouldLoseRest && <span style={{ color: 'var(--accent-orange)', marginLeft: 6 }}>⚠ 僅剩 {c.restDays} 天休</span>}
                     </div>
                   </div>

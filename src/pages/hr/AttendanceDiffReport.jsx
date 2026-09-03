@@ -413,7 +413,7 @@ export default function AttendanceDiffReport() {
                   <td>
                     {r.employee_name}
                     {r.is_resigned && (
-                      <span style={{ marginLeft: 6, padding: '1px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600, background: 'var(--accent-orange-dim)', color: 'var(--accent-orange)' }}>離職</span>
+                      <span style={{ marginLeft: 6, padding: '1px 6px', borderRadius: 4, fontSize: 11, fontWeight: 600, background: 'var(--accent-orange-dim)', color: 'var(--accent-orange)' }}>離職</span>
                     )}
                   </td>
                   <td style={{ color: 'var(--text-secondary)' }}>{r.store_name || '—'}</td>

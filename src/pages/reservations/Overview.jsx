@@ -124,7 +124,7 @@ export default function Overview() {
             {/* Hour header */}
             <div style={{ display: 'flex', marginLeft: 72, marginBottom: 4 }}>
               {hourLabels.map(h => (
-                <div key={h} style={{ flex: 1, fontSize: 10, color: 'var(--text-muted)' }}>{h}:00</div>
+                <div key={h} style={{ flex: 1, fontSize: 11, color: 'var(--text-muted)' }}>{h}:00</div>
               ))}
             </div>
             {tables.length === 0 && (
@@ -136,7 +136,7 @@ export default function Overview() {
                 <div key={table.id} style={{ display: 'flex', alignItems: 'center', height: 40, marginBottom: 4 }}>
                   <div style={{ width: 68, flexShrink: 0, fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600 }}>
                     {table.table_number}
-                    <span style={{ color: 'var(--text-muted)', fontWeight: 400, fontSize: 10, display: 'block' }}>{table.capacity}人</span>
+                    <span style={{ color: 'var(--text-muted)', fontWeight: 400, fontSize: 11, display: 'block' }}>{table.capacity}人</span>
                   </div>
                   <div style={{ flex: 1, position: 'relative', height: 28, background: 'var(--bg-tertiary)', borderRadius: 6 }}>
                     {hourLabels.map(h => (
@@ -152,7 +152,7 @@ export default function Overview() {
                       return (
                         <div key={res.id} title={`${res.guest_name} (${res.guest_count}人)`}
                           style={{ position: 'absolute', left: `${pct(s)}%`, width: `${pct(e) - pct(s)}%`, top: 2, bottom: 2, background: sc.color, borderRadius: 4, display: 'flex', alignItems: 'center', padding: '0 5px', overflow: 'hidden' }}>
-                          <span style={{ fontSize: 10, color: '#fff', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{res.guest_name}</span>
+                          <span style={{ fontSize: 11, color: '#fff', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{res.guest_name}</span>
                         </div>
                       )
                     })}

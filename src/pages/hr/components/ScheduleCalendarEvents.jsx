@@ -90,7 +90,7 @@ export default function ScheduleCalendarEvents({ selectedMonth, monthDates, holi
       {showForm && (
         <div style={{ display: 'flex', gap: 8, alignItems: 'end', flexWrap: 'wrap', marginBottom: 10, padding: '8px 12px', borderRadius: 8, background: 'var(--glass-light)' }}>
           <div>
-            <label style={{ fontSize: 10, color: 'var(--text-muted)', display: 'block', marginBottom: 2 }}>日期</label>
+            <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 2 }}>日期</label>
             <select className="form-input" style={{ width: 100, padding: '5px 6px', fontSize: 12 }}
               value={newEvent.date} onChange={e => setNewEvent(prev => ({ ...prev, date: e.target.value }))}>
               <option value="">選日期</option>
@@ -102,19 +102,19 @@ export default function ScheduleCalendarEvents({ selectedMonth, monthDates, holi
             </select>
           </div>
           <div>
-            <label style={{ fontSize: 10, color: 'var(--text-muted)', display: 'block', marginBottom: 2 }}>類別</label>
+            <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 2 }}>類別</label>
             <select className="form-input" style={{ width: 110, padding: '5px 6px', fontSize: 12 }}
               value={newEvent.category} onChange={e => setNewEvent(prev => ({ ...prev, category: e.target.value }))}>
               {Object.entries(EVENT_CATEGORIES).map(([k, v]) => <option key={k} value={k}>{v.icon} {k}</option>)}
             </select>
           </div>
           <div style={{ flex: 1, minWidth: 140 }}>
-            <label style={{ fontSize: 10, color: 'var(--text-muted)', display: 'block', marginBottom: 2 }}>活動名稱</label>
+            <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 2 }}>活動名稱</label>
             <input className="form-input" type="text" placeholder="例：包場、週年慶" style={{ width: '100%', padding: '5px 8px', fontSize: 12 }}
               value={newEvent.title} onChange={e => setNewEvent(prev => ({ ...prev, title: e.target.value }))} />
           </div>
           <div>
-            <label style={{ fontSize: 10, color: 'var(--text-muted)', display: 'block', marginBottom: 2 }}>計薪比照</label>
+            <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 2 }}>計薪比照</label>
             <select className="form-input" style={{ width: 170, padding: '5px 6px', fontSize: 12 }}
               value={newEvent.pay_class} onChange={e => setNewEvent(prev => ({ ...prev, pay_class: e.target.value }))}>
               {Object.entries(PAY_CLASS_OPTS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
@@ -178,11 +178,11 @@ export default function ScheduleCalendarEvents({ selectedMonth, monthDates, holi
             }}>
               {cat?.icon || '📌'} {day}({dow}) {ev.title}
               {PAY_CLASS_SHORT[ev.pay_class] && (
-                <span style={{ fontSize: 10, opacity: 0.85 }}>· {PAY_CLASS_SHORT[ev.pay_class]}</span>
+                <span style={{ fontSize: 11, opacity: 0.85 }}>· {PAY_CLASS_SHORT[ev.pay_class]}</span>
               )}
               <button onClick={() => handleDelete(ev.id)} style={{
                 background: 'none', border: 'none', cursor: 'pointer', padding: 0,
-                color: 'inherit', fontSize: 10, opacity: 0.6, lineHeight: 1,
+                color: 'inherit', fontSize: 11, opacity: 0.6, lineHeight: 1,
               }}>✕</button>
             </span>
           )

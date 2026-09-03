@@ -144,12 +144,12 @@ export default function ChangelogPanel({ tables, targetId, orgId: orgIdProp, cur
                         background: cfg.dim, color: cfg.color,
                       }}>{log.action}</span>
                       {log.target_table && (
-                        <span style={{ fontSize: 10, color: 'var(--text-muted)', background: 'var(--bg-secondary)', padding: '1px 5px', borderRadius: 3 }}>
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)', background: 'var(--bg-secondary)', padding: '1px 5px', borderRadius: 3 }}>
                           {log.target_table}
                         </span>
                       )}
                       {hasDiff && (
-                        <span style={{ fontSize: 10, color: 'var(--accent-orange)', marginLeft: 'auto' }}>
+                        <span style={{ fontSize: 11, color: 'var(--accent-orange)', marginLeft: 'auto' }}>
                           {isOpen ? '▲' : '▼'}
                         </span>
                       )}
@@ -159,7 +159,7 @@ export default function ChangelogPanel({ tables, targetId, orgId: orgIdProp, cur
                       <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 2 }}>{log.target}</div>
                     )}
 
-                    <div style={{ fontSize: 10, color: 'var(--text-muted)', display: 'flex', gap: 8 }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', gap: 8 }}>
                       <span>{formatTime(log.time)}</span>
                       <span>{timeAgo(log.time)}</span>
                     </div>
@@ -171,7 +171,7 @@ export default function ChangelogPanel({ tables, targetId, orgId: orgIdProp, cur
                         borderLeft: '2px solid var(--accent-orange)',
                       }}>
                         {log.field_name && (
-                          <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 4 }}>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>
                             欄位：<strong style={{ color: 'var(--text-secondary)' }}>{log.field_name}</strong>
                           </div>
                         )}

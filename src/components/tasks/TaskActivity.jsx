@@ -95,7 +95,7 @@ export default function TaskActivity({ taskId, compact = false, limit = 50, refr
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 12, lineHeight: 1.4 }}>{describe(it)}</div>
-              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
                 {formatWhen(it.created_at)}
               </div>
             </div>

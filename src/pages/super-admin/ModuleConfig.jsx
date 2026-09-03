@@ -239,14 +239,14 @@ export default function ModuleConfig() {
                     <td style={{ fontWeight: 600, position: 'sticky', left: 0, background: isDirty ? 'var(--accent-amber-dim, rgba(251,191,36,0.08))' : 'var(--bg-card)', zIndex: 1 }}>
                       <Building2 size={13} style={{ marginRight: 4, verticalAlign: -2, color: 'var(--accent-cyan)' }} />
                       {t.name}
-                      {isDirty && <span style={{ color: 'var(--accent-amber)', fontSize: 10, marginLeft: 4 }}>*</span>}
+                      {isDirty && <span style={{ color: 'var(--accent-amber)', fontSize: 11, marginLeft: 4 }}>*</span>}
                     </td>
                     <td>
                       <span className={`badge ${
                         t.plan === '企業' ? 'badge-danger' :
                         t.plan === '專業' ? 'badge-purple' :
                         t.plan === '標準' ? 'badge-info' : 'badge-neutral'
-                      }`} style={{ fontSize: 10 }}>{t.plan}</span>
+                      }`} style={{ fontSize: 11 }}>{t.plan}</span>
                     </td>
                     {ALL_MODULES.map(m => {
                       const enabled = features.includes(m.key)
@@ -272,7 +272,7 @@ export default function ModuleConfig() {
                       <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                         <button
                           className="btn btn-ghost"
-                          style={{ fontSize: 10, padding: '3px 6px' }}
+                          style={{ fontSize: 11, padding: '3px 6px' }}
                           onClick={() => applyPlanDefaults(t.id, t.plan)}
                           title="重置為方案預設模組"
                         >
@@ -281,7 +281,7 @@ export default function ModuleConfig() {
                         {isDirty && (
                           <button
                             className="btn btn-primary"
-                            style={{ fontSize: 10, padding: '3px 8px' }}
+                            style={{ fontSize: 11, padding: '3px 8px' }}
                             onClick={() => saveModules(t.id)}
                             disabled={isSaving}
                           >
@@ -315,7 +315,7 @@ export default function ModuleConfig() {
                   const included = modules.includes(m.key)
                   return (
                     <span key={m.key} style={{
-                      fontSize: 10, padding: '1px 6px', borderRadius: 4,
+                      fontSize: 11, padding: '1px 6px', borderRadius: 4,
                       background: included ? m.color + '22' : 'var(--bg-tertiary)',
                       color: included ? m.color : 'var(--text-muted)',
                       textDecoration: included ? 'none' : 'line-through',

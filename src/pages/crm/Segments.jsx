@@ -397,7 +397,7 @@ export default function Segments() {
               >
                 <div style={{ fontSize: 22, fontWeight: 700, color }}>{rfmCounts[key] ?? 0}</div>
                 <div style={{ fontSize: 11, color, fontWeight: 600, marginTop: 2 }}>{label}</div>
-                <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>{key}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>{key}</div>
               </div>
             ))}
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '10px 18px', minWidth: 88 }}>
@@ -448,7 +448,7 @@ export default function Segments() {
                         const logic = seg.logic || 'and'
                         return (
                           <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                            {i > 0 && <span style={{ fontSize: 10, fontWeight: 700, color: logic === 'or' ? 'var(--accent-orange)' : 'var(--accent-purple)', padding: '0 2px' }}>{logic === 'or' ? 'OR' : 'AND'}</span>}
+                            {i > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: logic === 'or' ? 'var(--accent-orange)' : 'var(--accent-purple)', padding: '0 2px' }}>{logic === 'or' ? 'OR' : 'AND'}</span>}
                             <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600, background: 'var(--accent-blue-dim)', color: 'var(--accent-blue)' }}>
                               {field?.label || r.field} {r.operator} {r.value}
                             </span>

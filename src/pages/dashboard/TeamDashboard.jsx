@@ -89,7 +89,7 @@ function PendingRow({ item, onClick }) {
     >
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
         <span style={{
-          fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 6,
+          fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 6,
           background: item.kindColor + '20', color: item.kindColor, flexShrink: 0,
         }}>{item.kindLabel}</span>
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -109,14 +109,14 @@ function PendingRow({ item, onClick }) {
                   transition: 'width .3s',
                 }} />
               </div>
-              <span style={{ fontSize: 10, fontWeight: 700, color: item.kindColor, minWidth: 30, textAlign: 'right' }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: item.kindColor, minWidth: 30, textAlign: 'right' }}>
                 {p.current}/{p.total} 關
               </span>
             </div>
           )}
         </div>
         {isOverdue && (
-          <span style={{ fontSize: 10, fontWeight: 700, color: C.red, flexShrink: 0 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: C.red, flexShrink: 0 }}>
             🚨 {item.daysOpen}天
           </span>
         )}
@@ -177,7 +177,7 @@ function TeamMemberCard({ emp, status, leaveType }) {
       <div style={{ fontSize: 12, fontWeight: 600, textAlign: 'center', whiteSpace: 'nowrap', maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis' }}>
         {emp.name}
       </div>
-      <div style={{ fontSize: 10, color: meta.color, fontWeight: 600 }}>{label}</div>
+      <div style={{ fontSize: 11, color: meta.color, fontWeight: 600 }}>{label}</div>
     </div>
   )
 }
@@ -291,21 +291,21 @@ function WorkflowProgressCard({ w, tasks, days, onJump, index }) {
                   width: 18, height: 18, borderRadius: '50%',
                   background: meta.color, color: '#fff',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 10, fontWeight: 700, flexShrink: 0,
+                  fontSize: 11, fontWeight: 700, flexShrink: 0,
                 }}>{t.step_order}</span>
                 <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
                   <span style={{ color: 'var(--text-primary)', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {t.title}
                   </span>
                   {t.assignee && (
-                    <span style={{ color: C.muted, fontSize: 10 }}>{t.assignee}</span>
+                    <span style={{ color: C.muted, fontSize: 11 }}>{t.assignee}</span>
                   )}
                 </div>
-                <span style={{ color: meta.color, fontWeight: 700, fontSize: 10, flexShrink: 0 }}>
+                <span style={{ color: meta.color, fontWeight: 700, fontSize: 11, flexShrink: 0 }}>
                   {t.status}
                 </span>
                 {overdue && (
-                  <span style={{ color: C.red, fontSize: 10, fontWeight: 700, flexShrink: 0 }}>逾期</span>
+                  <span style={{ color: C.red, fontSize: 11, fontWeight: 700, flexShrink: 0 }}>逾期</span>
                 )}
               </div>
             )
@@ -1398,9 +1398,9 @@ export default function TeamDashboard() {
             <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 90 }}>
               {bm.map((m, i) => (
                 <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-                  <div style={{ fontSize: 10, color: C.muted }}>{Number(m.count) || 0}</div>
+                  <div style={{ fontSize: 11, color: C.muted }}>{Number(m.count) || 0}</div>
                   <div style={{ width: '70%', height: `${(Number(m.count) / maxC) * 60}px`, minHeight: Number(m.count) > 0 ? 3 : 0, background: C.cyan, borderRadius: 3 }} />
-                  <div style={{ fontSize: 9, color: C.muted }}>{String(m.month).slice(5)}</div>
+                  <div style={{ fontSize: 11, color: C.muted }}>{String(m.month).slice(5)}</div>
                 </div>
               ))}
             </div>
@@ -1546,7 +1546,7 @@ export default function TeamDashboard() {
                     onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.borderSubtle }}
                   >
                     <span style={{
-                      fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 6, flexShrink: 0,
+                      fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 6, flexShrink: 0,
                       background: t.priority === '高' ? C.redDim : t.priority === '低' ? C.greenDim : C.orangeDim,
                       color: t.priority === '高' ? C.red : t.priority === '低' ? C.green : C.orange,
                     }}>{t.priority || '中'}</span>

@@ -555,9 +555,9 @@ export default function OvertimeExceptionImport() {
                             : <span style={{ fontSize: 11, color: 'var(--accent-red)' }}>{r.issue}</span>}
                         </td>
                         <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>{r.rowNum}</td>
-                        <td>{r.name} {r.employee?.employee_number && <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>({r.employee.employee_number})</span>}</td>
+                        <td>{r.name} {r.employee?.employee_number && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>({r.employee.employee_number})</span>}</td>
                         <td style={{ fontSize: 11 }}>{r.employee?.store || r.employee?.stores?.name || r.employee?.dept || r.employee?.departments?.name || '—'}</td>
-                        <td>{r.date} {r.rowMonth !== month && <span style={{ fontSize: 10, color: 'var(--accent-orange)' }}>不同月</span>}</td>
+                        <td>{r.date} {r.rowMonth !== month && <span style={{ fontSize: 11, color: 'var(--accent-orange)' }}>不同月</span>}</td>
                         <td style={{ textAlign: 'right' }}>{r.hours}</td>
                         <td>
                           {r.realCategory

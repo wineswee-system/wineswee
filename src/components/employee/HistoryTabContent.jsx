@@ -80,7 +80,7 @@ export default function HistoryTabContent({
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                       <div style={{ fontSize: 14, fontWeight: 700 }}>
                         {wf.template_name}
-                        {wf.priority && <span style={{ marginLeft: 6, fontSize: 10, padding: '2px 6px', borderRadius: 4, background: 'var(--bg-tertiary)', color: 'var(--text-muted)' }}>優先：{wf.priority}</span>}
+                        {wf.priority && <span style={{ marginLeft: 6, fontSize: 11, padding: '2px 6px', borderRadius: 4, background: 'var(--bg-tertiary)', color: 'var(--text-muted)' }}>優先：{wf.priority}</span>}
                       </div>
                       <span style={{ fontSize: 12, fontWeight: 700, color: wfColor }}>{wf.status}</span>
                     </div>
@@ -107,7 +107,7 @@ export default function HistoryTabContent({
                             <span style={{ color: 'var(--text-muted)' }}>{t.assignee || '—'}</span>
                           </div>
                         ))}
-                        {wfTasks.length > 5 && <div style={{ fontSize: 10, color: 'var(--text-muted)', textAlign: 'center', marginTop: 4 }}>...另有 {wfTasks.length - 5} 個步驟</div>}
+                        {wfTasks.length > 5 && <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center', marginTop: 4 }}>...另有 {wfTasks.length - 5} 個步驟</div>}
                       </div>
                     )}
                   </div>
@@ -138,7 +138,7 @@ export default function HistoryTabContent({
                 <tbody>
                   {assignments.map(a => (
                     <tr key={a.id} style={{ opacity: a.is_active ? 1 : 0.7 }}>
-                      <td><span className={`badge ${a.department_type === '主要' ? 'badge-cyan' : 'badge-neutral'}`} style={{ fontSize: 10 }}>{a.department_type}</span></td>
+                      <td><span className={`badge ${a.department_type === '主要' ? 'badge-cyan' : 'badge-neutral'}`} style={{ fontSize: 11 }}>{a.department_type}</span></td>
                       <td style={{ fontSize: 12 }}>{a.departments?.name || '—'}</td>
                       <td style={{ fontSize: 12 }}>{a.stores?.name || '—'}</td>
                       <td style={{ fontSize: 12 }}>{a.position || '—'}</td>
@@ -148,7 +148,7 @@ export default function HistoryTabContent({
                       <td style={{ fontSize: 12 }}>{a.avg_weekly_hours || 0}</td>
                       <td style={{ fontSize: 11, whiteSpace: 'nowrap' }}>{a.start_date}</td>
                       <td style={{ fontSize: 11, whiteSpace: 'nowrap' }}>{a.end_date || '—'}</td>
-                      <td><span className={`badge ${a.is_active ? 'badge-success' : 'badge-neutral'}`} style={{ fontSize: 10 }}>{a.is_active ? '是' : '否'}</span></td>
+                      <td><span className={`badge ${a.is_active ? 'badge-success' : 'badge-neutral'}`} style={{ fontSize: 11 }}>{a.is_active ? '是' : '否'}</span></td>
                       <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>{a.updated_by_emp?.name || '—'}</td>
                     </tr>
                   ))}
@@ -253,7 +253,7 @@ export default function HistoryTabContent({
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span style={{ fontSize: 13, fontWeight: 600 }}>{d.name}</span>
                     <span className="badge badge-cyan" style={{ fontSize: 11 }}>{d.relationship || '—'}</span>
-                    {d.health_ins && <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 3, background: 'var(--accent-green-dim)', color: 'var(--accent-green)', fontWeight: 600 }}>健保</span>}
+                    {d.health_ins && <span style={{ fontSize: 11, padding: '1px 6px', borderRadius: 3, background: 'var(--accent-green-dim)', color: 'var(--accent-green)', fontWeight: 600 }}>健保</span>}
                   </div>
                   <button onClick={() => deleteDependent(d.id)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', opacity: 0.5 }}><Trash2 size={13} /></button>
                 </div>

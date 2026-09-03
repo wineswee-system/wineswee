@@ -584,7 +584,7 @@ function TimelineDot({ step, index, isLast }) {
       }}>
         {step.label}
         {step.archival && (
-          <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-muted)', padding: '1px 6px', borderRadius: 4, background: 'var(--bg-card)', border: '1px solid var(--border-subtle)' }}>
+          <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-muted)', padding: '1px 6px', borderRadius: 4, background: 'var(--bg-card)', border: '1px solid var(--border-subtle)' }}>
             存檔
           </span>
         )}

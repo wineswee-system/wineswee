@@ -43,7 +43,7 @@ export default function DuplicateMergeTab({ duplicates, dupScanning, runDuplicat
                 }}>
                   {dup.score}
                 </div>
-                <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 3 }}>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3 }}>
                   {dup.reasons.join('、')}
                 </div>
               </div>

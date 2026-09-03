@@ -143,7 +143,7 @@ export default function BatchPayrollModal({ month, batchPreview, batchSaving, on
                     const sev = SEVERITY_STYLE[a.severity] || SEVERITY_STYLE.medium
                     return (
                       <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 6, padding: '6px 10px', background: 'var(--bg-card)', borderRadius: 6, borderLeft: `3px solid ${sev.color}` }}>
-                        <span style={{ padding: '1px 6px', borderRadius: 8, fontSize: 10, fontWeight: 600, color: sev.color, background: sev.bg, whiteSpace: 'nowrap' }}>
+                        <span style={{ padding: '1px 6px', borderRadius: 8, fontSize: 11, fontWeight: 600, color: sev.color, background: sev.bg, whiteSpace: 'nowrap' }}>
                           {a.severity === 'high' ? '高' : a.severity === 'medium' ? '中' : '低'}
                         </span>
                         <div style={{ flex: 1 }}>
@@ -256,7 +256,7 @@ export default function BatchPayrollModal({ month, batchPreview, batchSaving, on
                                 p.join_date   ? `入職 ${p.join_date}`   : null,
                                 p.resign_date ? `離職 ${p.resign_date}` : null,
                               ].filter(Boolean).join(' · ')}
-                              style={{ marginLeft: 4, padding: '1px 5px', borderRadius: 4, fontSize: 9, background: 'var(--accent-orange-dim)', color: 'var(--accent-orange)', fontWeight: 600 }}
+                              style={{ marginLeft: 4, padding: '1px 5px', borderRadius: 4, fontSize: 11, background: 'var(--accent-orange-dim)', color: 'var(--accent-orange)', fontWeight: 600 }}
                             >
                               {p.salary_actual_wd}/{p.salary_total_wd}日
                             </span>
@@ -268,7 +268,7 @@ export default function BatchPayrollModal({ month, batchPreview, batchSaving, on
                           <button
                             onClick={() => setFormulaPayroll(p)}
                             title="看完整計算公式"
-                            style={{ padding: '2px 6px', border: '1px solid var(--accent-cyan)', background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)', borderRadius: 4, cursor: 'pointer', fontSize: 10, display: 'inline-flex', alignItems: 'center', gap: 3 }}
+                            style={{ padding: '2px 6px', border: '1px solid var(--accent-cyan)', background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)', borderRadius: 4, cursor: 'pointer', fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 3 }}
                           >
                             <FunctionSquare size={10} /> 看
                           </button>

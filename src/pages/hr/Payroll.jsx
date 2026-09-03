@@ -557,7 +557,7 @@ ${rec.notes ? `<div style="margin-top:12px;padding:8px;background:#f5f5f5;border
                                       <td style={{ padding: '10px 14px', fontWeight: 600 }}>
                                         {emp?.name || `#${rec.employee_id}`}
                                         {rec.is_final_settlement && (
-                                          <span style={{ marginLeft: 6, padding: '1px 6px', borderRadius: 4, fontSize: 10, background: 'var(--accent-orange-dim)', color: 'var(--accent-orange)' }}>離職結算</span>
+                                          <span style={{ marginLeft: 6, padding: '1px 6px', borderRadius: 4, fontSize: 11, background: 'var(--accent-orange-dim)', color: 'var(--accent-orange)' }}>離職結算</span>
                                         )}
                                       </td>
                                       <td style={{ padding: '10px 14px', color: 'var(--accent-green)' }}>{fmt(rec.gross_salary)}</td>

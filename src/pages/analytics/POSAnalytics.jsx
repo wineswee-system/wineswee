@@ -87,9 +87,9 @@ export default function POSAnalytics() {
           <table style={{ borderCollapse: 'separate', borderSpacing: 2, minWidth: 700 }}>
             <thead>
               <tr>
-                <th style={{ padding: 4, fontSize: 10, color: 'var(--text-muted)' }}></th>
+                <th style={{ padding: 4, fontSize: 11, color: 'var(--text-muted)' }}></th>
                 {Array.from({ length: 24 }, (_, h) => (
-                  <th key={h} style={{ padding: 4, fontSize: 10, color: 'var(--text-muted)', minWidth: 22, textAlign: 'center' }}>{h}</th>
+                  <th key={h} style={{ padding: 4, fontSize: 11, color: 'var(--text-muted)', minWidth: 22, textAlign: 'center' }}>{h}</th>
                 ))}
               </tr>
             </thead>

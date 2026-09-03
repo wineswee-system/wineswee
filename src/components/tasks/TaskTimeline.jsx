@@ -24,7 +24,7 @@ function GanttRow({ task, offset, span, dayLabels, hovered, setHovered, onTaskCl
         }}
       >
         <div style={{ fontWeight: 600 }}>{task.title}</div>
-        <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{task.assignee || '未指派'}</div>
+        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{task.assignee || '未指派'}</div>
       </div>
       <div style={{ position: 'relative', flex: 1, height: 44 }}>
         {dayLabels.map((d, i) => {
@@ -39,7 +39,7 @@ function GanttRow({ task, offset, span, dayLabels, hovered, setHovered, onTaskCl
             width: span * DAY_PX - 4, height: 24,
             background: PRIORITY_COLORS[task.priority] || '#64748b',
             borderRadius: 4, cursor: 'pointer', display: 'flex',
-            alignItems: 'center', padding: '0 6px', fontSize: 10,
+            alignItems: 'center', padding: '0 6px', fontSize: 11,
             color: '#fff', fontWeight: 600, whiteSpace: 'nowrap',
             overflow: 'hidden', textOverflow: 'ellipsis',
             opacity: task.status === '已完成' ? 0.5 : 1,
@@ -148,14 +148,14 @@ export default function TaskTimeline({ tasks, dependencies = [], onTaskClick, gr
               <div
                 key={i}
                 style={{
-                  width: DAY_PX, textAlign: 'center', fontSize: 10,
+                  width: DAY_PX, textAlign: 'center', fontSize: 11,
                   padding: '6px 0', color: 'var(--text-muted)',
                   background: isWeekend ? 'var(--bg-secondary)' : 'transparent',
                   borderLeft: isMonthStart ? '1px solid var(--accent-cyan)' : 'none',
                 }}
               >
                 <div style={{ fontWeight: 600 }}>{d.getDate()}</div>
-                {isMonthStart && <div style={{ color: 'var(--accent-cyan)', fontSize: 9 }}>{d.getMonth() + 1}月</div>}
+                {isMonthStart && <div style={{ color: 'var(--accent-cyan)', fontSize: 11 }}>{d.getMonth() + 1}月</div>}
               </div>
             )
           })}

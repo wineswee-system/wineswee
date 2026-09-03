@@ -306,7 +306,7 @@ export default function Tables() {
                     <div style={{ fontSize: 13, fontWeight: 700, color: isD ? '#fff' : 'var(--accent-cyan)', pointerEvents: 'none', letterSpacing: 0.5 }}>
                       {t.table_number}
                     </div>
-                    <div style={{ fontSize: 10, color: isD ? 'rgba(255,255,255,0.75)' : 'var(--text-muted)', pointerEvents: 'none', marginTop: 2 }}>
+                    <div style={{ fontSize: 11, color: isD ? 'rgba(255,255,255,0.75)' : 'var(--text-muted)', pointerEvents: 'none', marginTop: 2 }}>
                       {t.capacity}人
                     </div>
                   </div>

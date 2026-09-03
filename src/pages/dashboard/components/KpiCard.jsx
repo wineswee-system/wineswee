@@ -31,7 +31,7 @@ export default function KpiCard({ icon: Icon, label, value, suffix, sub, subColo
         </div>
         {badge && (
           <span style={{
-            fontSize: 10, padding: '2px 8px', borderRadius: 12, fontWeight: 700,
+            fontSize: 11, padding: '2px 8px', borderRadius: 12, fontWeight: 700,
             background: C.redDim, color: C.red,
           }}>{badge}</span>
         )}
@@ -42,7 +42,7 @@ export default function KpiCard({ icon: Icon, label, value, suffix, sub, subColo
         </div>
         <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>{label}</div>
         {sub && (
-          <div style={{ fontSize: 10, color: subColor || C.muted, marginTop: 4, fontWeight: 600 }}>{sub}</div>
+          <div style={{ fontSize: 11, color: subColor || C.muted, marginTop: 4, fontWeight: 600 }}>{sub}</div>
         )}
       </div>
     </div>

@@ -83,7 +83,7 @@ export default function PermissionFeatureRow({ feature: f, empPerms: permByCode,
           }
           return (
             <span style={{
-              fontSize: 10, fontWeight: 600,
+              fontSize: 11, fontWeight: 600,
               padding: '2px 8px', borderRadius: 4,
               color: badge.color, background: badge.bg,
               border: `1px solid ${badge.color}`,
@@ -96,7 +96,7 @@ export default function PermissionFeatureRow({ feature: f, empPerms: permByCode,
         // 非 override：顯示「角色預設」/「無」
         return (
           <span style={{
-            fontSize: 10, fontWeight: 600,
+            fontSize: 11, fontWeight: 600,
             padding: '2px 8px', borderRadius: 4,
             color: badge.color, background: badge.bg,
             border: `1px solid ${badge.color}`,

@@ -51,7 +51,7 @@ const MODE_TAG = {
 }
 function ClockModeTags({ inMode, outMode }) {
   const tagStyle = (m) => ({
-    padding: '2px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600,
+    padding: '2px 6px', borderRadius: 4, fontSize: 11, fontWeight: 600,
     background: MODE_TAG[m].dim, color: MODE_TAG[m].color, whiteSpace: 'nowrap',
   })
   const showIn  = inMode  && inMode  !== 'normal' && MODE_TAG[inMode]
@@ -896,10 +896,10 @@ export default function Attendance() {
                         : c.rejected ? <span className="badge badge-danger"><span className="badge-dot"></span>駁回</span>
                         : null
                       if (!badge) return <span style={{ color: 'var(--text-muted)' }}>-</span>
-                      return <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'flex-start' }} title={`補打卡 · ${label}`}>{badge}<span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>{label}</span></div>
+                      return <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'flex-start' }} title={`補打卡 · ${label}`}>{badge}<span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{label}</span></div>
                     })()}</div>
                     <div style={{ padding: '4px 8px' }}>{isNotClocked || isOvertime ? <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{isOvertime ? '加班單' : '-'}</span> : locationBadge(r)}</div>
-                    <div style={{ padding: '4px 8px', fontSize: 10, fontFamily: 'monospace', color: 'var(--text-secondary)' }}>
+                    <div style={{ padding: '4px 8px', fontSize: 11, fontFamily: 'monospace', color: 'var(--text-secondary)' }}>
                       {!isNotClocked && r.clock_in_lat != null && r.clock_in_lng != null ? (
                         <a
                           href={`https://www.google.com/maps?q=${r.clock_in_lat},${r.clock_in_lng}`}

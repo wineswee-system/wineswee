@@ -107,7 +107,7 @@ export default function TaskContextMenu({
                 onMouseEnter={hi} onMouseLeave={lo}
                 onClick={() => { onStatusChange?.(task.id, s.v); onClose() }}>
                 <span style={{ color: s.color }}>{s.icon}</span> {s.v}
-                {task.status === s.v && <span style={{ marginLeft: 'auto', fontSize: 10, color: s.color }}>●</span>}
+                {task.status === s.v && <span style={{ marginLeft: 'auto', fontSize: 11, color: s.color }}>●</span>}
               </button>
             ))}
           </SubMenu>
@@ -133,7 +133,7 @@ export default function TaskContextMenu({
                   onMouseEnter={hi} onMouseLeave={lo}
                   onClick={() => { onAssign?.(task.id, name); onClose() }}>
                   👤 {name}
-                  {task.assignee === name && <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--accent-cyan)' }}>●</span>}
+                  {task.assignee === name && <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--accent-cyan)' }}>●</span>}
                 </button>
               ))}
             </SubMenu>

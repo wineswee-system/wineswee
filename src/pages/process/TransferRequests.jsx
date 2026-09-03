@@ -378,7 +378,7 @@ export default function TransferRequests() {
                   {r.status}
                 </span>
                 {r.status === '已駁回' && r.reject_reason && (
-                  <div style={{ fontSize: 10, color: 'var(--accent-red)', marginTop: 2 }}>{r.reject_reason.slice(0, 30)}</div>
+                  <div style={{ fontSize: 11, color: 'var(--accent-red)', marginTop: 2 }}>{r.reject_reason.slice(0, 30)}</div>
                 )}
               </div>
               <div style={{ padding: '10px 8px' }} onClick={(e) => e.stopPropagation()}>
@@ -587,7 +587,7 @@ function TransferFormModal({ form, setForm, editingId, stores, autoApplicantId, 
                 {a.file.type.startsWith('image/') ? (
                   <img src={a.preview} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 ) : (
-                  <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-card)', fontSize: 10, color: 'var(--text-muted)' }}>
+                  <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-card)', fontSize: 11, color: 'var(--text-muted)' }}>
                     {(a.file.name.split('.').pop() || '?').toUpperCase()}
                   </div>
                 )}
@@ -881,7 +881,7 @@ function TransferDetailModal({ row, stores, empMap, profile, userRole, onClose, 
                 <div key={i} style={{ position: 'relative', width: 60, height: 60, borderRadius: 6, overflow: 'hidden', border: '1px solid var(--border-medium)' }}>
                   {a.file.type.startsWith('image/')
                     ? <img src={a.preview} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-card)', fontSize: 9, color: 'var(--text-muted)' }}>
+                    : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-card)', fontSize: 11, color: 'var(--text-muted)' }}>
                         {(a.file.name.split('.').pop() || '?').toUpperCase()}
                       </div>}
                   <button onClick={() => setReceiptFiles(prev => prev.filter((_, j) => j !== i))}

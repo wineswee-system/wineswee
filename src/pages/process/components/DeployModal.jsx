@@ -412,7 +412,7 @@ export default function DeployModal({
                   <div>
                     <div style={{ fontSize: 13, fontWeight: 600 }}>
                       Step {i + 1}：{step.title}
-                      {hasOverride && <span style={{ marginLeft: 6, fontSize: 9, padding: '1px 5px', borderRadius: 3, background: 'var(--accent-cyan)', color: '#fff' }}>已覆寫</span>}
+                      {hasOverride && <span style={{ marginLeft: 6, fontSize: 11, padding: '1px 5px', borderRadius: 3, background: 'var(--accent-cyan)', color: '#fff' }}>已覆寫</span>}
                     </div>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                       預設角色：{step.role || '-'} · 截止：{dueDate} {override.due_time || batch.due_time || '17:00'}
@@ -451,7 +451,7 @@ export default function DeployModal({
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
                       <div>
                         <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}>
-                          截止時間 {!override.due_time && <span style={{ fontSize: 9 }}>(預設)</span>}
+                          截止時間 {!override.due_time && <span style={{ fontSize: 11 }}>(預設)</span>}
                         </label>
                         <input className="form-input" type="time" style={{ width: '100%', fontSize: 12 }}
                           value={override.due_time || batch.due_time || '17:00'}
@@ -459,7 +459,7 @@ export default function DeployModal({
                       </div>
                       <div>
                         <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}>
-                          提醒 {!override.reminder_preset && <span style={{ fontSize: 9 }}>(預設)</span>}
+                          提醒 {!override.reminder_preset && <span style={{ fontSize: 11 }}>(預設)</span>}
                         </label>
                         <select className="form-input" style={{ width: '100%', fontSize: 12 }}
                           value={override.reminder_preset || batch.reminder_preset || '1hr'}
@@ -469,7 +469,7 @@ export default function DeployModal({
                       </div>
                       <div>
                         <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}>
-                          優先度 {!override.priority && <span style={{ fontSize: 9 }}>(預設)</span>}
+                          優先度 {!override.priority && <span style={{ fontSize: 11 }}>(預設)</span>}
                         </label>
                         <select className="form-input" style={{ width: '100%', fontSize: 12 }}
                           value={override.priority || batch.priority || '中'}

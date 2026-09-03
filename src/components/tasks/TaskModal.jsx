@@ -320,7 +320,7 @@ export default function TaskModal({
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
             {task.task_code && (
               <span style={{
-                fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4,
+                fontSize: 11, fontWeight: 700, padding: '2px 6px', borderRadius: 4,
                 background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)',
                 border: '1px solid rgba(6,182,212,0.2)', flexShrink: 0,
               }}>

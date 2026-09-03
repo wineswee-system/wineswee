@@ -15,6 +15,7 @@ DECLARE
   v_end   date := (make_date(p_year, p_month, 1) + INTERVAL '1 month - 1 day')::date;
   v_scores json;
   v_def    json;
+  v_cats   json;
 BEGIN
   IF p_org IS NULL OR NOT public._same_org_or_super(p_org) THEN RETURN NULL; END IF;
 
@@ -55,7 +56,22 @@ BEGIN
     LIMIT 15
   ) d;
 
-  RETURN json_build_object('year', p_year, 'month', p_month, 'scores', v_scores, 'deficiencies', v_def);
+  -- 缺失「分類」彙總(當月未通過/扣分項,依 category_name 聚合)
+  SELECT COALESCE(json_agg(row_to_json(g) ORDER BY g.deduct DESC), '[]'::json) INTO v_cats
+  FROM (
+    SELECT COALESCE(NULLIF(btrim(i.category_name), ''), '(未分類)') AS name,
+           count(*)::int AS cnt,
+           COALESCE(sum(i.deduct_score), 0)::int AS deduct
+    FROM public.store_audit_items i
+    JOIN public.store_audits a ON a.id = i.audit_id
+    WHERE a.organization_id = p_org AND a.status = '已核准'
+      AND a.audit_date BETWEEN v_start AND v_end
+      AND (i.passed = false OR i.deduct_score > 0)
+    GROUP BY 1
+  ) g;
+
+  RETURN json_build_object('year', p_year, 'month', p_month,
+    'scores', v_scores, 'deficiencies', v_def, 'categories', v_cats);
 END $fn$;
 
 REVOKE ALL ON FUNCTION public.get_monthly_audit_report(int,int,int) FROM PUBLIC;

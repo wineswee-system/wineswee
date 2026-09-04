@@ -647,9 +647,8 @@ export default function Attendance() {
     const r = editModal
     if (!editReason.trim()) { alert('請填寫調整原因'); return }
     setSaving(true)
-    const payload = {}
-    if (editClockIn) payload.clock_in = editClockIn
-    if (editClockOut) payload.clock_out = editClockOut
+    // WYSIWYG:直接寫 modal 內的值,空字串 = 清除該筆上/下班(讓「單獨刪上班或下班」生效)
+    const payload = { clock_in: editClockIn || null, clock_out: editClockOut || null }
     const dateChanged = editDate && editDate !== r.date   // 跨日班把整筆搬到正確那天
     if (dateChanged) payload.date = editDate
     // 工時：有手動填就用手動值（固定不浮動）；沒填才自動算（扣休息）
@@ -671,6 +670,9 @@ export default function Attendance() {
       }
 
       if (net > 0) { payload.total_hours = net; payload.hours = net }
+    } else {
+      // 缺一邊打卡(或兩邊都清空)且沒手動工時 → 工時歸零(無法計算)
+      payload.total_hours = null; payload.hours = null
     }
     const { error } = await supabase.from('attendance_records').update(payload).eq('id', r.id)
     if (error) { setSaving(false); setClockMsg({ type: 'error', text: '儲存失敗：' + error.message }); return }
@@ -694,6 +696,32 @@ export default function Attendance() {
     cancelEdit()
   }
 
+  // 刪除整筆打卡紀錄(需原因)。稽核用 attendance_clock_edits(FK 是 CASCADE →
+  //   刪 record 會連稽核一起刪,所以稽核列寫 attendance_record_id=null 讓它留存)。
+  const deleteRecord = async () => {
+    const r = editModal
+    if (!r?.id) { alert('此列無實體紀錄可刪(可能是加班單/未打卡列)'); return }
+    if (!editReason.trim()) { alert('請填寫刪除原因'); return }
+    if (!window.confirm(`確定刪除整筆打卡?\n${r.employee}｜${r.date}｜上班 ${r.clock_in || '—'} / 下班 ${r.clock_out || '—'}\n此動作無法復原。`)) return
+    setSaving(true)
+    const editorEmp = employees.find(e => e.name === profile?.name)
+    await supabase.from('attendance_clock_edits').insert({
+      attendance_record_id: null,   // FK CASCADE → 不綁 record 才不會被連帶刪掉
+      employee: r.employee, date: r.date,
+      old_clock_in: r.clock_in || null, new_clock_in: null,
+      old_clock_out: r.clock_out || null, new_clock_out: null,
+      reason: `【刪除整筆】${editReason.trim()}`,
+      edited_by: profile?.name || '', edited_by_id: editorEmp?.id || null,
+      organization_id: profile?.organization_id || null,
+    })
+    const { error } = await supabase.from('attendance_records').delete().eq('id', r.id)
+    if (error) { setSaving(false); setClockMsg({ type: 'error', text: '刪除失敗：' + error.message }); return }
+    setRecords(prev => prev.filter(rec => rec.id !== r.id))
+    setClockMsg({ type: 'success', text: `已刪除 ${r.employee} ${r.date} 的打卡紀錄` })
+    setSaving(false)
+    cancelEdit()
+  }
+
   const openBackfill = async () => {
     setBfEmpId(''); setBfDate(''); setBfIn(''); setBfOut(''); setBfReason('')
     setBackfillOpen(true)
@@ -708,12 +736,12 @@ export default function Attendance() {
   }
 
   const saveBackfill = async () => {
-    if (!bfEmpId || !bfDate || !bfIn) { alert('請選員工、日期、上班時間'); return }
+    if (!bfEmpId || !bfDate || (!bfIn && !bfOut)) { alert('請選員工、日期，且上班或下班至少填一個'); return }
     if (!bfReason.trim()) { alert('請填補登原因'); return }
     setBfSaving(true)
     const emp = allEmps.find(e => String(e.id) === String(bfEmpId))
     const { data, error } = await supabase.rpc('hr_backfill_attendance', {
-      p_emp_id: Number(bfEmpId), p_date: bfDate, p_clock_in: bfIn,
+      p_emp_id: Number(bfEmpId), p_date: bfDate, p_clock_in: bfIn || null,
       p_clock_out: bfOut || null, p_reason: bfReason.trim(), p_actor_id: profile?.id ?? null,
     })
     setBfSaving(false)
@@ -1184,7 +1212,7 @@ export default function Attendance() {
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 8 }}>
               <div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>上班打卡 <span style={{ color: 'var(--accent-red)' }}>*</span></div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>上班打卡 <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>（上/下班至少填一個）</span></div>
                 <input type="time" value={bfIn} onChange={e => setBfIn(e.target.value)} className="form-input" style={{ width: '100%' }} />
               </div>
               <div>
@@ -1237,15 +1265,19 @@ export default function Attendance() {
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
               <div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>上班打卡</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>上班打卡</span>
+                  {editClockIn && <button type="button" onClick={() => setEditClockIn('')} style={{ background: 'none', border: 'none', color: 'var(--accent-red)', fontSize: 11, cursor: 'pointer', padding: 0 }}>✕ 清除</button>}
+                </div>
                 <input type="time" value={editClockIn} onChange={e => setEditClockIn(e.target.value)}
                   className="form-input" style={{ width: '100%' }} />
               </div>
               <div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>
-                  下班打卡{editClockIn && editClockOut && editClockOut < editClockIn && (
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>下班打卡{editClockIn && editClockOut && editClockOut < editClockIn && (
                     <span style={{ color: 'var(--accent-cyan)', marginLeft: 4 }}>· 隔天</span>
-                  )}
+                  )}</span>
+                  {editClockOut && <button type="button" onClick={() => setEditClockOut('')} style={{ background: 'none', border: 'none', color: 'var(--accent-red)', fontSize: 11, cursor: 'pointer', padding: 0 }}>✕ 清除</button>}
                 </div>
                 <input type="time" value={editClockOut} onChange={e => setEditClockOut(e.target.value)}
                   className="form-input" style={{ width: '100%' }} />
@@ -1276,6 +1308,24 @@ export default function Attendance() {
               </button>
               <button className="btn btn-secondary" style={{ flex: 1 }} onClick={cancelEdit}>取消</button>
             </div>
+
+            {/* 刪除整筆(需填上方原因) */}
+            {editModal?.id && (
+              <div style={{ marginBottom: 24 }}>
+                <button
+                  onClick={deleteRecord}
+                  disabled={saving}
+                  style={{
+                    width: '100%', padding: '9px 14px', borderRadius: 8, fontSize: 13, fontWeight: 600,
+                    cursor: saving ? 'not-allowed' : 'pointer',
+                    background: 'var(--accent-red-dim)', color: 'var(--accent-red)',
+                    border: '1px solid var(--accent-red)',
+                  }}
+                >
+                  🗑 刪除整筆打卡紀錄（需填上方原因）
+                </button>
+              </div>
+            )}
 
             {/* 調整紀錄 */}
             <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 16 }}>

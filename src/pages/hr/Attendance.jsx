@@ -646,9 +646,14 @@ export default function Attendance() {
   const saveEdit = async () => {
     const r = editModal
     if (!editReason.trim()) { alert('請填寫調整原因'); return }
+    // 兩邊都清空 → 不留「空的異常列」,直接刪整筆(deleteRecord 會再確認+寫稽核)
+    if (r?.id && !editClockIn && !editClockOut) { return deleteRecord() }
     setSaving(true)
     // WYSIWYG:直接寫 modal 內的值,空字串 = 清除該筆上/下班(讓「單獨刪上班或下班」生效)
     const payload = { clock_in: editClockIn || null, clock_out: editClockOut || null }
+    // 清掉哪一邊,對應的 GPS/地點/距離也一起清(不留孤兒座標→避免變空的異常列)
+    if (!editClockIn) Object.assign(payload, { clock_in_lat: null, clock_in_lng: null, clock_in_location: null, clock_in_distance_m: null, clock_in_ip: null })
+    if (!editClockOut) Object.assign(payload, { clock_out_lat: null, clock_out_lng: null, clock_out_ip: null, clock_out_time: null })
     const dateChanged = editDate && editDate !== r.date   // 跨日班把整筆搬到正確那天
     if (dateChanged) payload.date = editDate
     // 工時：有手動填就用手動值（固定不浮動）；沒填才自動算（扣休息）

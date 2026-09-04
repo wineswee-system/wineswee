@@ -45,8 +45,7 @@ BEGIN
     ) VALUES (
       p_emp_id, v_emp.name, p_date, v_ci, v_co,
       COALESCE(v_net, 0), COALESCE(v_net, 0), '正常', 'hr_backfill',
-      CASE WHEN v_ci IS NOT NULL THEN 'normal' END,
-      CASE WHEN v_co IS NOT NULL THEN 'normal' END,
+      'normal', 'normal',   -- 兩欄 NOT NULL(預設 normal),不可給 null
       v_org, v_emp.store_id
     ) RETURNING id INTO v_rec_id;
   ELSE

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Save, KeyRound } from 'lucide-react'
+import { Save, KeyRound, Trash2, AlertTriangle, X } from 'lucide-react'
 import InputModal from './ui/InputModal'
 import { supabase } from '../lib/supabase'
 import { updateEmployee } from '../lib/db'
@@ -35,6 +35,26 @@ const MAIN_TABS = [
 export default function EmployeeDetail({ employee, employees: allEmployees, stores, departments, onUpdate, onClose, clickY }) {
   const { hasPermission, profile } = useAuth()
   const isAdmin = hasPermission('org.employee.edit')
+
+  // 徹底刪除(連根拔起)— 報到當天不錄用/誤建空帳號用;輸入姓名防呆 + 後端 admin/super + 有薪資紀錄擋
+  const [showPurge, setShowPurge] = useState(false)
+  const [purgeInput, setPurgeInput] = useState('')
+  const [purging, setPurging] = useState(false)
+  const handlePurge = async () => {
+    if (purgeInput.trim() !== employee.name) { toast.error('姓名不符,請輸入完整姓名確認'); return }
+    setPurging(true)
+    const { data, error } = await supabase.rpc('purge_employee', { p_emp_id: employee.id })
+    setPurging(false)
+    if (error) { toast.error('刪除失敗:' + error.message); return }
+    if (!data?.ok) {
+      toast.error(data?.message || (data?.error === 'HAS_PAYROLL' ? '已有薪資紀錄,請改用「離職」' : data?.error === 'NO_PERMISSION' ? '無權限(限 admin/super)' : '刪除失敗'))
+      return
+    }
+    toast.success(`已徹底刪除「${data.name}」`)
+    setShowPurge(false)
+    onUpdate?.()
+    onClose?.()
+  }
 
   // 重設此員工的 LIFF 薪資密碼（清 line_pin_hash，員工下次查薪資重新設定）
   const handleResetSalaryPin = async () => {
@@ -543,6 +563,13 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
                   <KeyRound size={12} /> 重設薪資密碼
                 </button>
               )}
+              {isAdmin && (
+                <button className="btn btn-secondary" onClick={() => { setPurgeInput(''); setShowPurge(true) }}
+                  style={{ fontSize: 12, padding: '6px 14px', borderRadius: 8, color: 'var(--accent-red)', borderColor: 'var(--accent-red)' }}
+                  title="徹底刪除此員工(連根拔起,不留紀錄)—報到當天不錄用/誤建帳號用">
+                  <Trash2 size={12} /> 徹底刪除
+                </button>
+              )}
               <button className="btn btn-primary" onClick={handleSave} disabled={saving} style={{ fontSize: 12, padding: '6px 16px', borderRadius: 8 }}>
                 <Save size={12} /> {saving ? '...' : '更新'}
               </button>
@@ -707,6 +734,35 @@ export default function EmployeeDetail({ employee, employees: allEmployees, stor
             pendingSaveRef.current = null
           }}
         />
+      )}
+
+      {showPurge && (
+        <div onMouseDown={e => { if (e.target === e.currentTarget) setShowPurge(false) }}
+          style={{ position: 'fixed', inset: 0, zIndex: 10001, background: 'rgba(0,0,0,.5)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div style={{ background: 'var(--bg-card)', borderRadius: 16, padding: 24, width: 'min(420px, 100%)', border: '1px solid var(--border-medium)', boxShadow: '0 20px 60px rgba(0,0,0,.4)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+              <span style={{ width: 34, height: 34, borderRadius: 9, background: 'var(--accent-red-dim)', display: 'grid', placeItems: 'center' }}><AlertTriangle size={18} style={{ color: 'var(--accent-red)' }} /></span>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: 'var(--accent-red)' }}>徹底刪除員工</h3>
+              <button onClick={() => setShowPurge(false)} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}><X size={18} /></button>
+            </div>
+            <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7, margin: '0 0 12px' }}>
+              將把「<b style={{ color: 'var(--text-primary)' }}>{employee.name}</b>」連同排班、薪資結構、派工、職位歷史等<b style={{ color: 'var(--text-primary)' }}>全部資料連根刪除、不留紀錄</b>。<b style={{ color: 'var(--accent-red)' }}>此動作無法復原。</b><br />
+              <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>(僅適用於報到當天不錄用/誤建帳號;已有薪資紀錄者系統會擋,請改用「離職」。)</span>
+            </p>
+            <label style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>請輸入員工姓名「{employee.name}」以確認:</label>
+            <input autoFocus value={purgeInput} onChange={e => setPurgeInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && purgeInput.trim() === employee.name && !purging) handlePurge() }}
+              placeholder={employee.name}
+              style={{ width: '100%', marginTop: 6, padding: '9px 12px', borderRadius: 9, border: '1.5px solid var(--border-medium)', background: 'var(--bg-input)', color: 'var(--text-primary)', fontSize: 14, boxSizing: 'border-box' }} />
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+              <button className="btn btn-secondary" onClick={() => setShowPurge(false)} disabled={purging}>取消</button>
+              <button className="btn" onClick={handlePurge} disabled={purging || purgeInput.trim() !== employee.name}
+                style={{ background: purgeInput.trim() === employee.name ? 'var(--accent-red)' : 'var(--bg-secondary)', color: purgeInput.trim() === employee.name ? '#fff' : 'var(--text-muted)', cursor: (purging || purgeInput.trim() !== employee.name) ? 'not-allowed' : 'pointer' }}>
+                <Trash2 size={13} /> {purging ? '刪除中…' : '徹底刪除'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

@@ -501,6 +501,9 @@ serve(async (req: Request) => {
         clock_out_time:  now.toISOString(),
         total_hours:     netHours,
         clock_out_mode:  clockMode,
+        clock_out_lat:   lat ?? null,   // ★ 下班座標(原本漏寫→後台只看得到上班座標)
+        clock_out_lng:   lng ?? null,
+        clock_out_ip:    resolvedIP ?? null,
         // 狀態:outing→外出;normal 工時<=0 → 標「異常」讓後台看得見(不再一律偽裝正常);其餘不動(維持 clock_in 寫入的正常)
         ...(clockMode === 'outing'
           ? { status: '外出' }

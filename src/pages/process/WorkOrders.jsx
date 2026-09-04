@@ -198,10 +198,10 @@ export default function WorkOrders() {
             <thead><tr>
               <th style={{ width: 55 }}>單號</th><th>主旨</th>
               <th>{tab === 'sent' ? '目標部門' : '申請'}</th>
-              <th>承辦人</th><th>優先</th><th>期望 / 排定</th><th>狀態</th>
+              <th>承辦人</th><th>優先</th><th>申請日</th><th>期望 / 排定</th><th>狀態</th>
             </tr></thead>
             <tbody>
-              {filtered.length === 0 && <tr><td colSpan={7} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 24 }}>
+              {filtered.length === 0 && <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 24 }}>
                 {tab === 'sent' ? '你還沒開過工單' : tab === 'inbox' ? '目前沒有待你部門處理的工單 🎉' : '尚無工單'}
               </td></tr>}
               {filtered.map(o => {
@@ -220,6 +220,7 @@ export default function WorkOrders() {
                     </td>
                     <td style={{ fontSize: 12 }}>{o.assignee_name || <span style={{ color: 'var(--text-muted)' }}>未指派</span>}</td>
                     <td><span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: pr.dim, color: pr.color }}>{pr.label}</span></td>
+                    <td style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{o.created_at?.slice(0, 10)}</td>
                     <td style={{ fontSize: 11 }}>
                       <div>{o.expected_due_date}</div>
                       {o.scheduled_due_date
@@ -380,6 +381,7 @@ function WorkOrderDetail({ order: o, me, isAdmin, employees, storeName, onClose,
       <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 10 }}>{o.title}</div>
 
       <Row label="申請">{o.requester_department_name} · {o.requester_name}</Row>
+      <Row label="申請日">{o.created_at ? o.created_at.slice(0, 16).replace('T', ' ') : '—'}</Row>
       <Row label="目標部門"><Building2 size={12} style={{ verticalAlign: -1, marginRight: 4, color: 'var(--accent-blue)' }} />{o.target_department_name}</Row>
       <Row label="承辦人">{o.assignee_name || <span style={{ color: 'var(--text-muted)' }}>未指派</span>}</Row>
       <Row label="期望完成">{o.expected_due_date}</Row>

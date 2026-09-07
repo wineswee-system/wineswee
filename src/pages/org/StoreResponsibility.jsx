@@ -13,6 +13,7 @@ export default function StoreResponsibility() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [addRow, setAddRow] = useState(null)   // 正在加人的 store_id
+  const [addEdit, setAddEdit] = useState(false) // 加人時是否同時給排班編輯權
   const [busy, setBusy] = useState(false)
 
   const load = async () => {
@@ -29,15 +30,15 @@ export default function StoreResponsibility() {
   useEffect(() => { load() }, [])
 
   // 開關:加/移除某人對某店的額外存取(寫 user_stores)
-  const setAccess = async (empId, storeId, grant) => {
+  const setAccess = async (empId, storeId, grant, canEdit = false) => {
     setBusy(true)
     const { data: res, error: err } = await supabase.rpc('set_store_extra_access', {
-      p_employee_id: Number(empId), p_store_id: Number(storeId), p_grant: grant,
+      p_employee_id: Number(empId), p_store_id: Number(storeId), p_grant: grant, p_can_edit: canEdit,
     })
     setBusy(false)
     if (err || !res?.ok) { toast.error('操作失敗：' + (err?.message || res?.error || '未知')); return }
-    toast.success(grant ? '已加入' : '已移除')
-    setAddRow(null)
+    toast.success(grant ? (canEdit ? '已加入（可排班）' : '已加入（僅看）') : '已移除')
+    setAddRow(null); setAddEdit(false)
     load()
   }
 
@@ -114,6 +115,7 @@ export default function StoreResponsibility() {
                   <th style={{ minWidth: 110 }}>門市</th>
                   <th style={{ minWidth: 90 }}>店負責人</th>
                   <th style={{ minWidth: 80 }}>區督導</th>
+                  <th style={{ minWidth: 130 }}>可排班</th>
                   <th style={{ minWidth: 160 }}>額外可存取</th>
                   <th style={{ minWidth: 120 }}>缺口</th>
                 </tr></thead>
@@ -136,10 +138,24 @@ export default function StoreResponsibility() {
                         </td>
                         <td style={{ fontSize: 12 }}>{s.supervisor?.name || <span style={{ color: 'var(--text-muted)' }}>—</span>}</td>
                         <td style={{ fontSize: 12 }}>
+                          {(s.schedulers || []).length > 0
+                            ? <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                                {s.schedulers.map((n, i) => <Chip key={i} tone="cyan">{n}</Chip>)}
+                                <span style={{ fontSize: 11, color: 'var(--text-muted)', alignSelf: 'center' }}>＋全店</span>
+                              </div>
+                            : (s.is_active
+                                ? <Chip tone="red">⚠ 僅全店的人能排</Chip>
+                                : <span style={{ color: 'var(--text-muted)' }}>—</span>)}
+                        </td>
+                        <td style={{ fontSize: 12 }}>
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
                             {(s.extra || []).map(e => (
                               <span key={e.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 4px 2px 8px', borderRadius: 12, fontSize: 12, fontWeight: 600, background: 'var(--bg-secondary)', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
-                                {e.name}{!e.can_schedule && <span style={{ opacity: 0.6, fontWeight: 400 }}>(僅看)</span>}
+                                {e.name}
+                                {e.can_schedule
+                                  ? <span style={{ opacity: 0.6, fontWeight: 400, color: 'var(--accent-cyan)' }}>(可排)</span>
+                                  : <button onClick={() => setAccess(e.id, s.store_id, true, true)} disabled={busy} title="給排班編輯權"
+                                      style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--accent-cyan)', padding: 0, fontSize: 11, fontWeight: 600, textDecoration: 'underline' }}>僅看→改可排</button>}
                                 <button onClick={() => setAccess(e.id, s.store_id, false)} disabled={busy} title="移除存取"
                                   style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--accent-red)', padding: 0, display: 'flex', lineHeight: 1 }}>
                                   <XIcon size={12} />
@@ -147,20 +163,24 @@ export default function StoreResponsibility() {
                               </span>
                             ))}
                             {addRow === s.store_id ? (
-                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                                 <div style={{ minWidth: 190 }}>
-                                  <SearchableSelect value="" onChange={v => v && setAccess(v, s.store_id, true)}
+                                  <SearchableSelect value="" onChange={v => v && setAccess(v, s.store_id, true, addEdit)}
                                     options={empOptions(employees.filter(emp => {
                                       const ex = new Set([s.manager?.id, s.supervisor?.id, ...(s.extra || []).map(x => x.id)].filter(Boolean))
                                       return !ex.has(emp.id)
                                     }), { keyBy: 'id' })}
                                     placeholder="搜尋員工加入…" />
                                 </div>
-                                <button onClick={() => setAddRow(null)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 12 }}>取消</button>
+                                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 12, color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                                  <input type="checkbox" checked={addEdit} onChange={e => setAddEdit(e.target.checked)} style={{ accentColor: 'var(--accent-cyan)' }} />
+                                  給排班編輯權
+                                </label>
+                                <button onClick={() => { setAddRow(null); setAddEdit(false) }} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 12 }}>取消</button>
                               </span>
                             ) : (
                               <button className="btn btn-secondary" style={{ fontSize: 11, padding: '2px 8px', display: 'inline-flex', alignItems: 'center', gap: 3 }}
-                                onClick={() => setAddRow(s.store_id)} disabled={busy}>
+                                onClick={() => { setAddRow(s.store_id); setAddEdit(false) }} disabled={busy}>
                                 <Plus size={11} /> 加人
                               </button>
                             )}
@@ -175,7 +195,7 @@ export default function StoreResponsibility() {
                     )
                   })}
                   {stores.length === 0 && (
-                    <tr><td colSpan={5} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 24 }}>尚無門市資料</td></tr>
+                    <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 24 }}>尚無門市資料</td></tr>
                   )}
                 </tbody>
               </table>

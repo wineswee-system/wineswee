@@ -251,7 +251,6 @@ export const groupNav = {
         { icon: Building, label: '公司', path: '/org/companies' },
         { icon: ClipboardList, label: '部門', path: '/org/departments' },
         { icon: MapPin, label: '門市', path: '/org/locations' },
-        { icon: ShieldCheck, label: '門市權責', path: '/org/store-responsibility' },
         { icon: UserCircle, label: '員工', path: '/org/employees' },
       ]
     },
@@ -284,6 +283,7 @@ export const groupNav = {
         { icon: Workflow, label: '工時/假別單位', path: '/hr/work-unit-settings' },
         { icon: CalendarDays, label: '假日管理', path: '/hr/holidays' },
         { icon: Upload, label: '排班總表匯入', path: '/hr/schedule-xlsx-import' },
+        { icon: ShieldCheck, label: '門市權責', path: '/org/store-responsibility' },
       ]
     },
     {

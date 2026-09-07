@@ -60,6 +60,44 @@ function StoreSelect({ value, onChange, stores, error }) {
   )
 }
 
+// 供應商下拉(叫貨用)— 從 suppliers 主檔挑,或「其他(自填)」保留自訂。
+// 沿用 StoreSelect 同套模式:value 不在主檔清單但非空 → 自動切「其他」顯示 input(編輯舊單/自填單也吃)。
+function SupplierSelect({ value, onChange, supplierNames }) {
+  const [isOther, setIsOther] = useState(() => !!value && !supplierNames.includes(value))
+  useEffect(() => {
+    if (value && !supplierNames.includes(value)) setIsOther(true)
+  }, [value, supplierNames])
+  const selectValue = isOther ? '__OTHER__' : (value || '')
+  return (
+    <div>
+      <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>供應商/廠商</label>
+      <select
+        value={selectValue}
+        onChange={e => {
+          const v = e.target.value
+          if (v === '__OTHER__') { setIsOther(true); onChange('') }
+          else { setIsOther(false); onChange(v) }
+        }}
+        style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }}
+      >
+        <option value="">— 請選擇廠商 —</option>
+        {supplierNames.map(n => <option key={n} value={n}>{n}</option>)}
+        <option value="__OTHER__">其他（自填）</option>
+      </select>
+      {isOther && (
+        <input
+          type="text"
+          value={value || ''}
+          onChange={e => onChange(e.target.value)}
+          placeholder="請輸入廠商名稱"
+          autoFocus
+          style={{ width: '100%', marginTop: 6, padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }}
+        />
+      )}
+    </div>
+  )
+}
+
 // 驗收人 — 直接指定一位員工(可含自己),存 settle_assignee_id。
 // (舊制「選部門→部門主管/營運部→門市店長」已改為直接選人;既有單仍由 trigger 走 dept/store fallback。)
 function SettleAssigneeField({ employees, assigneeId, onChange, error }) {
@@ -362,13 +400,15 @@ export default function ExpenseFormModal({
               用 auto-fit minmax — 寬夠就兩欄、不夠就自動降一欄，不需要 media query */}
           {isExpense && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-              <div>
-                <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>供應商/廠商{isOrder ? '（打字選廠商）' : ''}</label>
-                <input type="text" value={form.supplier} onChange={e => set('supplier', e.target.value)} placeholder={isOrder ? '選 / 打廠商名稱' : '選填'}
-                  list={isOrder ? 'er-supplier-list' : undefined}
-                  style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }} />
-                {isOrder && <datalist id="er-supplier-list">{supplierList.map(s => <option key={s} value={s} />)}</datalist>}
-              </div>
+              {isOrder ? (
+                <SupplierSelect value={form.supplier} onChange={v => set('supplier', v)} supplierNames={supplierList} />
+              ) : (
+                <div>
+                  <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>供應商/廠商</label>
+                  <input type="text" value={form.supplier} onChange={e => set('supplier', e.target.value)} placeholder="選填"
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)' }} />
+                </div>
+              )}
               {isOrder && (
                 <div>
                   <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>帳務月份<span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>（算哪個月的帳）</span></label>

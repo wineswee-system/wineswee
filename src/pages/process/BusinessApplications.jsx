@@ -60,7 +60,7 @@ const COLOR_MAP = {
 
 export default function BusinessApplications() {
   const navigate = useNavigate()
-  const { profile, hasPermission } = useAuth()
+  const { profile, hasPermission, isSuperAdmin } = useAuth()
   const [customExpense, setCustomExpense] = useState([])
   const [customNonExpense, setCustomNonExpense] = useState([])
   const [loading, setLoading] = useState(true)
@@ -101,8 +101,13 @@ export default function BusinessApplications() {
 
   if (loading) return <LoadingSpinner />
 
-  const expenseGroup = [...FIXED_EXPENSE, ...customExpense]
-  const nonExpenseGroup = [...FIXED_NON_EXPENSE, ...(hasPermission('repair_order.manage') ? FIXED_REPAIR : []), ...customNonExpense]
+  // 「門市報修申請單」自訂表單(scope=business_expense):僅 super_admin 可見,其餘角色隱藏此卡
+  const hideRepairForm = (c) => c.name === '門市報修申請單'
+  const visibleCustomExpense = isSuperAdmin ? customExpense : customExpense.filter(c => !hideRepairForm(c))
+  const visibleCustomNonExpense = isSuperAdmin ? customNonExpense : customNonExpense.filter(c => !hideRepairForm(c))
+
+  const expenseGroup = [...FIXED_EXPENSE, ...visibleCustomExpense]
+  const nonExpenseGroup = [...FIXED_NON_EXPENSE, ...(hasPermission('repair_order.manage') ? FIXED_REPAIR : []), ...visibleCustomNonExpense]
   const collectionGroup = hasPermission('collection.manage') ? FIXED_COLLECTION : []
 
   return (

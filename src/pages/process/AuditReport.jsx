@@ -160,16 +160,18 @@ export default function AuditReport() {
     if (improve.length) {
       rows.push(['']); R++
       rows.push([`■ 複評改善追蹤（整體改善 ${impRate}%）`, '', '', '', '', '']); put(R, 0, { font: { bold: true, sz: 13, color: { rgb: GREEN } } }); R++
-      const hi = ['門市', '第一次扣分', '已改善', '改善率', '', '']
-      rows.push(hi);['門市', '第一次扣分', '已改善', '改善率'].forEach((_, c) => put(R, c, { font: { bold: true, sz: 11, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: GREEN } }, alignment: { horizontal: c === 0 ? 'left' : 'center', vertical: 'center' }, border })); R++
+      const hi = ['門市', '初評缺失', '複評仍缺失', '已改善', '改善率', '']
+      rows.push(hi);['門市', '初評缺失', '複評仍缺失', '已改善', '改善率'].forEach((_, c) => put(R, c, { font: { bold: true, sz: 11, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: GREEN } }, alignment: { horizontal: c === 0 ? 'left' : 'center', vertical: 'center' }, border })); R++
       improve.forEach((x, i) => {
-        rows.push([x.store_name, `${x.first_bad} 項`, `${x.improved} 項`, `${x.rate}%`, '', ''])
+        const stillBad = (x.first_bad || 0) - (x.improved || 0)
+        rows.push([x.store_name, `${x.first_bad} 項`, `${stillBad} 項`, `${x.improved} 項`, `${x.rate}%`, ''])
         const zeb = i % 2 ? { fgColor: { rgb: ZEBRA } } : undefined
         const rc = x.rate >= 80 ? GREEN : x.rate >= 60 ? AMBER : RED
         put(R, 0, { font: { bold: true, color: { rgb: INK } }, fill: zeb, alignment: { horizontal: 'left', vertical: 'center' }, border })
         put(R, 1, { font: { color: { rgb: SUB } }, fill: zeb, alignment: { horizontal: 'center' }, border })
-        put(R, 2, { font: { color: { rgb: SUB } }, fill: zeb, alignment: { horizontal: 'center' }, border })
-        put(R, 3, { font: { bold: true, color: { rgb: rc } }, fill: zeb, alignment: { horizontal: 'center' }, border })
+        put(R, 2, { font: { bold: true, color: { rgb: stillBad > 0 ? RED : SUB } }, fill: zeb, alignment: { horizontal: 'center' }, border })
+        put(R, 3, { font: { bold: true, color: { rgb: GREEN } }, fill: zeb, alignment: { horizontal: 'center' }, border })
+        put(R, 4, { font: { bold: true, color: { rgb: rc } }, fill: zeb, alignment: { horizontal: 'center' }, border })
         R++
       })
     }
@@ -300,20 +302,22 @@ export default function AuditReport() {
           {improve.length > 0 && (
             <div className="ar-card">
               <div className="ar-sec"><span className="mk" style={{ background: 'var(--green-soft)' }}>🔧</span><h2>複評改善追蹤</h2><span className="sub">整體改善 {impRate}%</span></div>
-              <div style={{ fontSize: 11, color: 'var(--muted)', padding: '2px 0 8px' }}>第一次稽核被扣分的項目,複評時已修好的比例(僅列當月稽核 2 次以上門市)</div>
+              <div style={{ fontSize: 11, color: 'var(--muted)', padding: '2px 0 8px' }}>初評(第一次稽核)被扣分的項目,到複評(第二次)時還沒改 vs 已修好。改善率 = 已改善 ÷ 初評缺失(僅列當月稽核 2 次以上門市)</div>
               <div style={{ overflowX: 'auto' }}>
                 <table>
                   <thead><tr>
-                    <th className="l">門市</th><th style={{ width: 90 }}>第一次扣分</th><th style={{ width: 80 }}>已改善</th><th className="l" style={{ width: 200 }}>改善率</th>
+                    <th className="l">門市</th><th style={{ width: 78 }}>初評缺失</th><th style={{ width: 90 }}>複評仍缺失</th><th style={{ width: 72 }}>已改善</th><th className="l" style={{ width: 180 }}>改善率</th>
                   </tr></thead>
                   <tbody>
                     {improve.map(x => {
                       const bd = rateBand(x.rate)
+                      const stillBad = (x.first_bad || 0) - (x.improved || 0)
                       return (
                         <tr key={x.store_name}>
                           <td className="ar-l ar-store">{x.store_name}</td>
                           <td className="ar-c ar-revi">{x.first_bad} 項</td>
-                          <td className="ar-c ar-revi">{x.improved} 項</td>
+                          <td className="ar-c" style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: stillBad > 0 ? 'var(--red)' : 'var(--muted)' }}>{stillBad} 項</td>
+                          <td className="ar-c" style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: 'var(--green)' }}>{x.improved} 項</td>
                           <td><div className="ar-avg"><span className="ar-bar"><i className={'ar-b' + bd} style={{ width: x.rate + '%' }} /></span><span className={'ar-avgn ar-' + bd}>{x.rate}%</span></div></td>
                         </tr>
                       )

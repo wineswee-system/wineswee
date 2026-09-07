@@ -243,7 +243,7 @@ export default function WorkOrders() {
               🔗 這是<b>任務綁定</b>的工單 —— 主旨/說明沿用任務內容，只要選目標部門即可。對方完成後，任務的這項綁定自動完成。
             </div>
           )}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: 12 }}>
             <Field label="目標部門" required>
               <select className="form-input" style={{ width: '100%' }} value={form.target_department_id} onChange={e => set('target_department_id', e.target.value)}>
                 <option value="">請選擇…</option>
@@ -269,7 +269,7 @@ export default function WorkOrders() {
               </Field>
             </>
           )}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 150px), 1fr))', gap: 12 }}>
             <Field label="優先級" required>
               <select className="form-input" style={{ width: '100%' }} value={form.priority} onChange={e => set('priority', e.target.value)}>
                 <option value="high">高</option><option value="medium">中</option><option value="low">低</option>
@@ -423,7 +423,7 @@ function WorkOrderDetail({ order: o, me, isAdmin, employees, orgId, myName, stor
           accepting ? (
             <div style={{ padding: 12, borderRadius: 8, background: 'var(--bg-secondary)', border: '1px solid var(--border-medium)', display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div style={{ fontSize: 13, fontWeight: 600 }}>受理工單</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 180px), 1fr))', gap: 10 }}>
                 <div>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>指派承辦人</div>
                   <SearchableSelect value={acceptForm.assignee_id} onChange={v => setAcceptForm(f => ({ ...f, assignee_id: v || '' }))}

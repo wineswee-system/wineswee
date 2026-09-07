@@ -160,18 +160,19 @@ export default function AuditReport() {
     if (improve.length) {
       rows.push(['']); R++
       rows.push([`■ 複評改善追蹤（整體改善 ${impRate}%）`, '', '', '', '', '']); put(R, 0, { font: { bold: true, sz: 13, color: { rgb: GREEN } } }); R++
-      const hi = ['門市', '初評缺失', '複評仍缺失', '已改善', '改善率', '']
-      rows.push(hi);['門市', '初評缺失', '複評仍缺失', '已改善', '改善率'].forEach((_, c) => put(R, c, { font: { bold: true, sz: 11, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: GREEN } }, alignment: { horizontal: c === 0 ? 'left' : 'center', vertical: 'center' }, border })); R++
+      const hi = ['門市', '初評缺失', '已改善', '複評仍缺失', '複評新增', '改善率']
+      rows.push(hi); hi.forEach((_, c) => put(R, c, { font: { bold: true, sz: 11, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: GREEN } }, alignment: { horizontal: c === 0 ? 'left' : 'center', vertical: 'center' }, border })); R++
       improve.forEach((x, i) => {
         const stillBad = (x.first_bad || 0) - (x.improved || 0)
-        rows.push([x.store_name, `${x.first_bad} 項`, `${stillBad} 項`, `${x.improved} 項`, `${x.rate}%`, ''])
+        rows.push([x.store_name, `${x.first_bad} 項`, `${x.improved} 項`, `${stillBad} 項`, `${x.new_bad || 0} 項`, `${x.rate}%`])
         const zeb = i % 2 ? { fgColor: { rgb: ZEBRA } } : undefined
         const rc = x.rate >= 80 ? GREEN : x.rate >= 60 ? AMBER : RED
         put(R, 0, { font: { bold: true, color: { rgb: INK } }, fill: zeb, alignment: { horizontal: 'left', vertical: 'center' }, border })
         put(R, 1, { font: { color: { rgb: SUB } }, fill: zeb, alignment: { horizontal: 'center' }, border })
-        put(R, 2, { font: { bold: true, color: { rgb: stillBad > 0 ? RED : SUB } }, fill: zeb, alignment: { horizontal: 'center' }, border })
-        put(R, 3, { font: { bold: true, color: { rgb: GREEN } }, fill: zeb, alignment: { horizontal: 'center' }, border })
-        put(R, 4, { font: { bold: true, color: { rgb: rc } }, fill: zeb, alignment: { horizontal: 'center' }, border })
+        put(R, 2, { font: { bold: true, color: { rgb: GREEN } }, fill: zeb, alignment: { horizontal: 'center' }, border })
+        put(R, 3, { font: { bold: true, color: { rgb: stillBad > 0 ? RED : SUB } }, fill: zeb, alignment: { horizontal: 'center' }, border })
+        put(R, 4, { font: { bold: true, color: { rgb: (x.new_bad || 0) > 0 ? AMBER : SUB } }, fill: zeb, alignment: { horizontal: 'center' }, border })
+        put(R, 5, { font: { bold: true, color: { rgb: rc } }, fill: zeb, alignment: { horizontal: 'center' }, border })
         R++
       })
     }
@@ -302,11 +303,11 @@ export default function AuditReport() {
           {improve.length > 0 && (
             <div className="ar-card">
               <div className="ar-sec"><span className="mk" style={{ background: 'var(--green-soft)' }}>🔧</span><h2>複評改善追蹤</h2><span className="sub">整體改善 {impRate}%</span></div>
-              <div style={{ fontSize: 11, color: 'var(--muted)', padding: '2px 0 8px' }}>初評(第一次稽核)被扣分的項目,到複評(第二次)時還沒改 vs 已修好。改善率 = 已改善 ÷ 初評缺失(僅列當月稽核 2 次以上門市)</div>
+              <div style={{ fontSize: 11, color: 'var(--muted)', padding: '2px 0 8px' }}>初評被扣的項目複評時修好沒(已改善/仍缺失),外加「複評新增」= 複評才冒出來、初評沒扣的新問題。改善率 = 已改善 ÷ 初評缺失(僅列當月稽核 2 次以上門市)</div>
               <div style={{ overflowX: 'auto' }}>
                 <table>
                   <thead><tr>
-                    <th className="l">門市</th><th style={{ width: 78 }}>初評缺失</th><th style={{ width: 90 }}>複評仍缺失</th><th style={{ width: 72 }}>已改善</th><th className="l" style={{ width: 180 }}>改善率</th>
+                    <th className="l">門市</th><th style={{ width: 74 }}>初評缺失</th><th style={{ width: 70 }}>已改善</th><th style={{ width: 84 }}>複評仍缺失</th><th style={{ width: 84 }}>複評新增</th><th className="l" style={{ width: 160 }}>改善率</th>
                   </tr></thead>
                   <tbody>
                     {improve.map(x => {
@@ -316,8 +317,9 @@ export default function AuditReport() {
                         <tr key={x.store_name}>
                           <td className="ar-l ar-store">{x.store_name}</td>
                           <td className="ar-c ar-revi">{x.first_bad} 項</td>
-                          <td className="ar-c" style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: stillBad > 0 ? 'var(--red)' : 'var(--muted)' }}>{stillBad} 項</td>
                           <td className="ar-c" style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: 'var(--green)' }}>{x.improved} 項</td>
+                          <td className="ar-c" style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: stillBad > 0 ? 'var(--red)' : 'var(--muted)' }}>{stillBad} 項</td>
+                          <td className="ar-c" style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: (x.new_bad || 0) > 0 ? 'var(--amber)' : 'var(--muted)' }}>{x.new_bad || 0} 項</td>
                           <td><div className="ar-avg"><span className="ar-bar"><i className={'ar-b' + bd} style={{ width: x.rate + '%' }} /></span><span className={'ar-avgn ar-' + bd}>{x.rate}%</span></div></td>
                         </tr>
                       )

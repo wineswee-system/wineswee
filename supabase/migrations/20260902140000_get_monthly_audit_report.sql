@@ -99,6 +99,13 @@ BEGIN
     SELECT fb.store_name,
            count(*)::int AS first_bad,
            count(*) FILTER (WHERE sb.item_no IS NULL)::int AS improved,
+           -- 複評新增缺失:複評被扣、但初評沒扣的項目(新冒出來的問題)
+           (SELECT count(*)::int FROM secondbad sb2
+              WHERE sb2.store_name = fb.store_name
+                AND NOT EXISTS (SELECT 1 FROM firstbad fb2
+                   WHERE fb2.store_name = sb2.store_name
+                     AND fb2.category_code IS NOT DISTINCT FROM sb2.category_code
+                     AND fb2.item_no IS NOT DISTINCT FROM sb2.item_no)) AS new_bad,
            round(count(*) FILTER (WHERE sb.item_no IS NULL) * 100.0 / count(*))::int AS rate
       FROM firstbad fb
       LEFT JOIN secondbad sb

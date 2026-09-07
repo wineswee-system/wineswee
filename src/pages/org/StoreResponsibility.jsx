@@ -153,7 +153,7 @@ export default function StoreResponsibility() {
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
                             {(s.extra || []).map(e => (
                               <Chip key={e.id} tone={e.can_schedule ? 'cyan' : 'muted'}>
-                                {e.name}<span style={{ fontWeight: 400, opacity: 0.7 }}>·{e.can_schedule ? '可排' : '僅看'}</span>
+                                {e.name}<span style={{ fontWeight: 400, opacity: 0.7 }}>·{e.can_schedule ? '可排' : '僅看'}{e.home_store ? `·本店${e.home_store}` : ''}</span>
                               </Chip>
                             ))}
                             <button className="btn btn-secondary" style={{ fontSize: 11, padding: '3px 10px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
@@ -212,7 +212,7 @@ export default function StoreResponsibility() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {(managing.extra || []).map(e => (
                     <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 10px', borderRadius: 8, background: 'var(--bg-card)', border: '1px solid var(--border-medium)' }}>
-                      <span style={{ fontSize: 13, fontWeight: 600, flex: 1 }}>{e.name}</span>
+                      <span style={{ fontSize: 13, fontWeight: 600, flex: 1 }}>{e.name}{e.home_store && <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted)', marginLeft: 6 }}>本店：{e.home_store}</span>}</span>
                       {e.can_schedule
                         ? <span style={{ fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 12, background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)' }}>可排班</span>
                         : <>

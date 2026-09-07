@@ -16,6 +16,14 @@ export default function StoreResponsibility() {
   const [managingId, setManagingId] = useState(null)  // 開「管理」視窗的 store_id
   const [addEdit, setAddEdit] = useState(false)       // 加人時是否同時給排班編輯權
   const [busy, setBusy] = useState(false)
+  const [log, setLog] = useState([])                  // 管理視窗的變更紀錄
+
+  const loadLog = async (storeId) => {
+    if (storeId == null) { setLog([]); return }
+    const { data: res } = await supabase.rpc('get_store_access_log', { p_store_id: Number(storeId) })
+    setLog(res?.ok ? (res.items || []) : [])
+  }
+  useEffect(() => { loadLog(managingId) }, [managingId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const load = async () => {
     setLoading(true); setError(null)
@@ -31,16 +39,17 @@ export default function StoreResponsibility() {
   useEffect(() => { load() }, [])
 
   // 開關:加/移除某人對某店的額外存取(寫 user_stores)
-  const setAccess = async (empId, storeId, grant, canEdit = false) => {
+  const setAccess = async (empId, storeId, grant, canEdit = false, reason = null) => {
     setBusy(true)
     const { data: res, error: err } = await supabase.rpc('set_store_extra_access', {
-      p_employee_id: Number(empId), p_store_id: Number(storeId), p_grant: grant, p_can_edit: canEdit,
+      p_employee_id: Number(empId), p_store_id: Number(storeId), p_grant: grant, p_can_edit: canEdit, p_reason: reason,
     })
     setBusy(false)
     if (err || !res?.ok) { toast.error('操作失敗：' + (err?.message || res?.error || '未知')); return }
     toast.success(grant ? (canEdit ? '已加入（可排班）' : '已加入（僅看）') : '已移除')
     setAddEdit(false)
-    load()   // 重載後 managing 由 stores 即時重算,視窗內容自動更新
+    load()          // 重載後 managing 由 stores 即時重算,視窗內容自動更新
+    loadLog(storeId) // 更新變更紀錄
   }
 
   if (loading) return <LoadingSpinner />
@@ -220,7 +229,7 @@ export default function StoreResponsibility() {
                             <button className="btn btn-secondary" style={{ fontSize: 12, padding: '3px 10px', color: 'var(--accent-cyan)' }}
                               onClick={() => setAccess(e.id, managing.store_id, true, true)} disabled={busy}>改為可排</button>
                           </>}
-                      <button onClick={() => setAccess(e.id, managing.store_id, false)} disabled={busy} title="移除此人"
+                      <button onClick={() => { const r = window.prompt(`移除「${e.name}」對 ${managing.store_name} 的存取。\n原因（可留空,會記錄）：`); if (r === null) return; setAccess(e.id, managing.store_id, false, false, r) }} disabled={busy} title="移除此人"
                         style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--accent-red)', display: 'flex' }}>
                         <XIcon size={16} />
                       </button>
@@ -244,6 +253,20 @@ export default function StoreResponsibility() {
                     給排班編輯權（勾了＝可排班；不勾＝只能看）
                   </label>
                 </div>
+              </div>
+              {/* 變更紀錄 */}
+              <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 12 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>變更紀錄</div>
+                {log.length === 0
+                  ? <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>尚無紀錄（之後在此頁的加人/移除都會留痕）。</div>
+                  : <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 160, overflowY: 'auto' }}>
+                      {log.map((l, i) => (
+                        <div key={i} style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                          <span style={{ color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{(l.created_at || '').slice(0, 16).replace('T', ' ')}</span>
+                          <span><b>{l.actor_name}</b> {l.action} <b>{l.employee_name}</b>{l.reason ? `· ${l.reason}` : ''}</span>
+                        </div>
+                      ))}
+                    </div>}
               </div>
             </div>
 

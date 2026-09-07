@@ -159,20 +159,23 @@ export default function AuditReport() {
     })
     if (improve.length) {
       rows.push(['']); R++
-      rows.push([`■ 複評改善追蹤（整體改善 ${impRate}%）`, '', '', '', '', '']); put(R, 0, { font: { bold: true, sz: 13, color: { rgb: GREEN } } }); R++
-      const hi = ['門市', '初評缺失', '已改善', '複評仍缺失', '複評新增', '改善率']
+      rows.push([`■ 複評改善追蹤（整體改善 ${impRate}%）`, '', '', '', '', '', '']); put(R, 0, { font: { bold: true, sz: 13, color: { rgb: GREEN } } }); R++
+      const hi = ['門市', '初評缺失', '複評缺失', '已改善', '複評仍缺失', '複評新增', '改善率']
       rows.push(hi); hi.forEach((_, c) => put(R, c, { font: { bold: true, sz: 11, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: GREEN } }, alignment: { horizontal: c === 0 ? 'left' : 'center', vertical: 'center' }, border })); R++
       improve.forEach((x, i) => {
         const stillBad = (x.first_bad || 0) - (x.improved || 0)
-        rows.push([x.store_name, `${x.first_bad} 項`, `${x.improved} 項`, `${stillBad} 項`, `${x.new_bad || 0} 項`, `${x.rate}%`])
+        const secondBad = stillBad + (x.new_bad || 0)
+        rows.push([x.store_name, `${x.first_bad} 項`, `${secondBad} 項`, `${x.improved} 項`, `${stillBad} 項`, `${x.new_bad || 0} 項`, `${x.rate}%`])
         const zeb = i % 2 ? { fgColor: { rgb: ZEBRA } } : undefined
         const rc = x.rate >= 80 ? GREEN : x.rate >= 60 ? AMBER : RED
+        const sbc = secondBad < (x.first_bad || 0) ? GREEN : secondBad > (x.first_bad || 0) ? RED : SUB
         put(R, 0, { font: { bold: true, color: { rgb: INK } }, fill: zeb, alignment: { horizontal: 'left', vertical: 'center' }, border })
         put(R, 1, { font: { color: { rgb: SUB } }, fill: zeb, alignment: { horizontal: 'center' }, border })
-        put(R, 2, { font: { bold: true, color: { rgb: GREEN } }, fill: zeb, alignment: { horizontal: 'center' }, border })
-        put(R, 3, { font: { bold: true, color: { rgb: stillBad > 0 ? RED : SUB } }, fill: zeb, alignment: { horizontal: 'center' }, border })
-        put(R, 4, { font: { bold: true, color: { rgb: (x.new_bad || 0) > 0 ? AMBER : SUB } }, fill: zeb, alignment: { horizontal: 'center' }, border })
-        put(R, 5, { font: { bold: true, color: { rgb: rc } }, fill: zeb, alignment: { horizontal: 'center' }, border })
+        put(R, 2, { font: { bold: true, color: { rgb: sbc } }, fill: zeb, alignment: { horizontal: 'center' }, border })
+        put(R, 3, { font: { bold: true, color: { rgb: GREEN } }, fill: zeb, alignment: { horizontal: 'center' }, border })
+        put(R, 4, { font: { bold: true, color: { rgb: stillBad > 0 ? RED : SUB } }, fill: zeb, alignment: { horizontal: 'center' }, border })
+        put(R, 5, { font: { bold: true, color: { rgb: (x.new_bad || 0) > 0 ? AMBER : SUB } }, fill: zeb, alignment: { horizontal: 'center' }, border })
+        put(R, 6, { font: { bold: true, color: { rgb: rc } }, fill: zeb, alignment: { horizontal: 'center' }, border })
         R++
       })
     }
@@ -194,14 +197,14 @@ export default function AuditReport() {
     const ws = XLSX.utils.aoa_to_sheet(rows)
     // 依內容自動配欄寬(中文字約算 1.8 寬;跳過標題/區塊/空白列;夾在 6~50)
     const dw = (s) => { s = String(s ?? ''); let n = 0; for (const ch of s) n += ch.charCodeAt(0) > 255 ? 1.8 : 1; return n }
-    const colW = [0, 0, 0, 0, 0, 0]
+    const colW = [0, 0, 0, 0, 0, 0, 0]
     rows.forEach((r) => {
       if (!Array.isArray(r)) return
       if (r.filter(x => x !== '' && x != null).length <= 1) return
-      r.forEach((v, c) => { if (c < 6) colW[c] = Math.max(colW[c], dw(v)) })
+      r.forEach((v, c) => { if (c < 7) colW[c] = Math.max(colW[c], dw(v)) })
     })
     ws['!cols'] = colW.map(w => ({ wch: Math.min(50, Math.max(6, Math.round(w) + 2)) }))
-    ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 5 } }, { s: { r: 1, c: 0 }, e: { r: 1, c: 5 } }]
+    ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 6 } }, { s: { r: 1, c: 0 }, e: { r: 1, c: 6 } }]
     ws['!rows'] = rows.map((_, i) => ({ hpt: (i >= dataStart && i < dataStart + defs.length) ? 30 : (i === 0 ? 26 : 18) }))
     Object.entries(st).forEach(([k, s]) => { const [r, c] = k.split(',').map(Number); const a = XLSX.utils.encode_cell({ r, c }); if (!ws[a]) ws[a] = { t: 's', v: '' }; ws[a].s = s })
     const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, `稽核月報表 ${year}-${String(month).padStart(2, '0')}`)
@@ -303,20 +306,22 @@ export default function AuditReport() {
           {improve.length > 0 && (
             <div className="ar-card">
               <div className="ar-sec"><span className="mk" style={{ background: 'var(--green-soft)' }}>🔧</span><h2>複評改善追蹤</h2><span className="sub">整體改善 {impRate}%</span></div>
-              <div style={{ fontSize: 11, color: 'var(--muted)', padding: '2px 0 8px' }}>初評被扣的項目複評時修好沒(已改善/仍缺失),外加「複評新增」= 複評才冒出來、初評沒扣的新問題。改善率 = 已改善 ÷ 初評缺失(僅列當月稽核 2 次以上門市)</div>
+              <div style={{ fontSize: 11, color: 'var(--muted)', padding: '2px 0 8px' }}>初評缺失 → 複評缺失(複評當次總缺失=仍缺失+複評新增),看整體有沒有變少。中間拆:初評被扣的項目複評修好沒(已改善/仍缺失),外加「複評新增」= 複評才冒出來、初評沒扣的新問題。改善率 = 已改善 ÷ 初評缺失(僅列當月稽核 2 次以上門市)</div>
               <div style={{ overflowX: 'auto' }}>
                 <table>
                   <thead><tr>
-                    <th className="l">門市</th><th style={{ width: 74 }}>初評缺失</th><th style={{ width: 70 }}>已改善</th><th style={{ width: 84 }}>複評仍缺失</th><th style={{ width: 84 }}>複評新增</th><th className="l" style={{ width: 160 }}>改善率</th>
+                    <th className="l">門市</th><th style={{ width: 74 }}>初評缺失</th><th style={{ width: 74 }}>複評缺失</th><th style={{ width: 70 }}>已改善</th><th style={{ width: 84 }}>複評仍缺失</th><th style={{ width: 84 }}>複評新增</th><th className="l" style={{ width: 160 }}>改善率</th>
                   </tr></thead>
                   <tbody>
                     {improve.map(x => {
                       const bd = rateBand(x.rate)
                       const stillBad = (x.first_bad || 0) - (x.improved || 0)
+                      const secondBad = stillBad + (x.new_bad || 0)   // 複評當次缺失總數 = 仍缺失 + 複評新增
                       return (
                         <tr key={x.store_name}>
                           <td className="ar-l ar-store">{x.store_name}</td>
                           <td className="ar-c ar-revi">{x.first_bad} 項</td>
+                          <td className="ar-c" style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: secondBad < (x.first_bad || 0) ? 'var(--green)' : secondBad > (x.first_bad || 0) ? 'var(--red)' : 'var(--muted)' }}>{secondBad} 項</td>
                           <td className="ar-c" style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: 'var(--green)' }}>{x.improved} 項</td>
                           <td className="ar-c" style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: stillBad > 0 ? 'var(--red)' : 'var(--muted)' }}>{stillBad} 項</td>
                           <td className="ar-c" style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: (x.new_bad || 0) > 0 ? 'var(--amber)' : 'var(--muted)' }}>{x.new_bad || 0} 項</td>

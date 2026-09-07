@@ -127,7 +127,7 @@ export default function AuditReport() {
     for (let c = 0; c < 6; c++) put(R, c, { font: { bold: c === 0, sz: 11, color: { rgb: c === 0 ? WINE : INK } }, fill: { fgColor: { rgb: WSOFT } }, alignment: { horizontal: c === 0 ? 'left' : 'center', vertical: 'center' }, border })
     R++; rows.push(['']); R++
     rows.push(['■ 門市稽核分數排名（依當月平均）', '', '', '', '', '']); put(R, 0, { font: { bold: true, sz: 13, color: { rgb: WINE } } }); R++
-    const h1 = ['名次', '門市', '第一複評', '第二複評', '平均', '複評趨勢']
+    const h1 = ['名次', '門市', '初評', '複評', '平均', '複評趨勢']
     rows.push(h1); h1.forEach((_, c) => put(R, c, { font: { bold: true, sz: 11, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: WINE } }, alignment: { horizontal: c === 1 ? 'left' : 'center', vertical: 'center' }, border })); R++
     scores.forEach((s, i) => {
       const rank = i + 1
@@ -270,7 +270,7 @@ export default function AuditReport() {
                 <table>
                   <thead><tr>
                     <th style={{ width: 56 }}>名次</th><th className="l">門市</th>
-                    <th style={{ width: 80 }}>第一複評</th><th style={{ width: 80 }}>第二複評</th>
+                    <th style={{ width: 80 }}>初評</th><th style={{ width: 80 }}>複評</th>
                     <th className="l" style={{ width: 180 }}>平均</th><th style={{ width: 96 }}>複評趨勢</th>
                   </tr></thead>
                   <tbody>

@@ -23,14 +23,18 @@ BEGIN
   SELECT COALESCE(json_agg(row_to_json(t) ORDER BY t.avg DESC NULLS LAST), '[]'::json) INTO v_scores
   FROM (
     SELECT s.store_name,
+           -- 初評=最早一次;複評=最後一次(有第三、四次都算複評,顯示最新那次)
            (array_agg(s.avg_score ORDER BY s.audit_date))[1]::numeric AS first_score,
-           (array_agg(s.avg_score ORDER BY s.audit_date))[2]::numeric AS second_score,
+           CASE WHEN count(*) >= 2
+                THEN (array_agg(s.avg_score ORDER BY s.audit_date DESC))[1]::numeric
+                ELSE NULL END AS second_score,
            round(avg(s.avg_score), 2) AS avg,
            count(*)::int AS audit_count,
+           -- 趨勢=最後一次 vs 初評
            CASE
              WHEN count(*) < 2 THEN NULL
-             WHEN (array_agg(s.avg_score ORDER BY s.audit_date))[2] > (array_agg(s.avg_score ORDER BY s.audit_date))[1] THEN 'up'
-             WHEN (array_agg(s.avg_score ORDER BY s.audit_date))[2] < (array_agg(s.avg_score ORDER BY s.audit_date))[1] THEN 'down'
+             WHEN (array_agg(s.avg_score ORDER BY s.audit_date DESC))[1] > (array_agg(s.avg_score ORDER BY s.audit_date))[1] THEN 'up'
+             WHEN (array_agg(s.avg_score ORDER BY s.audit_date DESC))[1] < (array_agg(s.avg_score ORDER BY s.audit_date))[1] THEN 'down'
              ELSE 'flat'
            END AS trend
     FROM public.store_audits s

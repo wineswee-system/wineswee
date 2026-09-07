@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
-import { ShieldCheck, AlertTriangle, RefreshCw, Users, Store as StoreIcon, Plus, X as XIcon } from 'lucide-react'
+import { ShieldCheck, AlertTriangle, RefreshCw, Users, Store as StoreIcon, X as XIcon, Settings, Building2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import { ModalOverlay } from '../../components/Modal'
 import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
 import { toast } from '../../lib/toast'
 
@@ -12,8 +13,8 @@ export default function StoreResponsibility() {
   const [employees, setEmployees] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [addRow, setAddRow] = useState(null)   // 正在加人的 store_id
-  const [addEdit, setAddEdit] = useState(false) // 加人時是否同時給排班編輯權
+  const [managingId, setManagingId] = useState(null)  // 開「管理」視窗的 store_id
+  const [addEdit, setAddEdit] = useState(false)       // 加人時是否同時給排班編輯權
   const [busy, setBusy] = useState(false)
 
   const load = async () => {
@@ -38,14 +39,15 @@ export default function StoreResponsibility() {
     setBusy(false)
     if (err || !res?.ok) { toast.error('操作失敗：' + (err?.message || res?.error || '未知')); return }
     toast.success(grant ? (canEdit ? '已加入（可排班）' : '已加入（僅看）') : '已移除')
-    setAddRow(null); setAddEdit(false)
-    load()
+    setAddEdit(false)
+    load()   // 重載後 managing 由 stores 即時重算,視窗內容自動更新
   }
 
   if (loading) return <LoadingSpinner />
 
   const stores = data?.stores || []
   const allPeople = data?.all_store_people || []
+  const managing = managingId != null ? stores.find(s => s.store_id === managingId) : null
   const gapCount = stores.filter(s => (s.gaps || []).length > 0).length
 
   const Chip = ({ children, tone = 'muted' }) => {
@@ -150,40 +152,14 @@ export default function StoreResponsibility() {
                         <td style={{ fontSize: 12 }}>
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
                             {(s.extra || []).map(e => (
-                              <span key={e.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 4px 2px 8px', borderRadius: 12, fontSize: 12, fontWeight: 600, background: 'var(--bg-secondary)', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
-                                {e.name}
-                                {e.can_schedule
-                                  ? <span style={{ opacity: 0.6, fontWeight: 400, color: 'var(--accent-cyan)' }}>(可排)</span>
-                                  : <button onClick={() => setAccess(e.id, s.store_id, true, true)} disabled={busy} title="給排班編輯權"
-                                      style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--accent-cyan)', padding: 0, fontSize: 11, fontWeight: 600, textDecoration: 'underline' }}>僅看→改可排</button>}
-                                <button onClick={() => setAccess(e.id, s.store_id, false)} disabled={busy} title="移除存取"
-                                  style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--accent-red)', padding: 0, display: 'flex', lineHeight: 1 }}>
-                                  <XIcon size={12} />
-                                </button>
-                              </span>
+                              <Chip key={e.id} tone={e.can_schedule ? 'cyan' : 'muted'}>
+                                {e.name}<span style={{ fontWeight: 400, opacity: 0.7 }}>·{e.can_schedule ? '可排' : '僅看'}</span>
+                              </Chip>
                             ))}
-                            {addRow === s.store_id ? (
-                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                                <div style={{ minWidth: 190 }}>
-                                  <SearchableSelect value="" onChange={v => v && setAccess(v, s.store_id, true, addEdit)}
-                                    options={empOptions(employees.filter(emp => {
-                                      const ex = new Set([s.manager?.id, s.supervisor?.id, ...(s.extra || []).map(x => x.id)].filter(Boolean))
-                                      return !ex.has(emp.id)
-                                    }), { keyBy: 'id' })}
-                                    placeholder="搜尋員工加入…" />
-                                </div>
-                                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 12, color: 'var(--text-secondary)', cursor: 'pointer' }}>
-                                  <input type="checkbox" checked={addEdit} onChange={e => setAddEdit(e.target.checked)} style={{ accentColor: 'var(--accent-cyan)' }} />
-                                  給排班編輯權
-                                </label>
-                                <button onClick={() => { setAddRow(null); setAddEdit(false) }} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 12 }}>取消</button>
-                              </span>
-                            ) : (
-                              <button className="btn btn-secondary" style={{ fontSize: 11, padding: '2px 8px', display: 'inline-flex', alignItems: 'center', gap: 3 }}
-                                onClick={() => { setAddRow(s.store_id); setAddEdit(false) }} disabled={busy}>
-                                <Plus size={11} /> 加人
-                              </button>
-                            )}
+                            <button className="btn btn-secondary" style={{ fontSize: 11, padding: '3px 10px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                              onClick={() => { setManagingId(s.store_id); setAddEdit(false) }} disabled={busy}>
+                              <Settings size={11} /> 管理
+                            </button>
                           </div>
                         </td>
                         <td>
@@ -204,10 +180,78 @@ export default function StoreResponsibility() {
 
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 12, lineHeight: 1.6 }}>
             說明：能看/排/稽核某店的人 = 全店權限者 ＋ 該店負責人 ＋ 該區督導 ＋ 額外可存取者。<br />
-            「額外可存取」＝個別指派（可用「加人／×」即時開關）；標「僅看」= 該員沒有排班編輯權限（能看班表/稽核,不能排班）。<br />
-            指派給有 schedule.edit 的人（店長/督導/儲幹等）→ 立即可看＋可排該店；稽核「已核准」單依同一店範圍可見。
+            點各店「管理」可加人／移除、切換「可看／可排」。「可排」= 給該員排班編輯權（能排這間店＋他本店）；「僅看」= 只能看班表/稽核。
           </div>
         </>
+      )}
+
+      {/* 管理視窗:單店的加人/移除/可看↔可排 */}
+      {managing && (
+        <ModalOverlay onClose={() => setManagingId(null)}>
+          <div className="modal-shell modal-md" onClick={e => e.stopPropagation()}>
+            <div className="modal-shell-header">
+              <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>
+                <Building2 size={16} style={{ verticalAlign: -3, marginRight: 6, color: 'var(--accent-cyan)' }} />
+                管理「{managing.store_name}」存取
+              </h3>
+              <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }} onClick={() => setManagingId(null)}><XIcon size={20} /></button>
+            </div>
+
+            <div className="modal-shell-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {/* 固定角色(唯讀提示) */}
+              <div style={{ padding: '10px 12px', borderRadius: 8, background: 'var(--bg-secondary)', fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
+                <div>店負責人：<b>{managing.manager?.name || '未指派'}</b>{managing.manager && !managing.manager.can_schedule && <span style={{ color: 'var(--accent-red)' }}> ⚠ 無排班權</span>}</div>
+                <div>區督導：<b>{managing.supervisor?.name || '無'}</b></div>
+                <div style={{ color: 'var(--text-muted)' }}>＋ 全店權限者（admin/督導長等 {allPeople.length} 人）本來就能存取</div>
+              </div>
+
+              {/* 額外指派的人 */}
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>額外指派</div>
+                {(managing.extra || []).length === 0 && <div style={{ fontSize: 12, color: 'var(--text-muted)', paddingBottom: 4 }}>尚無額外指派的人。</div>}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {(managing.extra || []).map(e => (
+                    <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 10px', borderRadius: 8, background: 'var(--bg-card)', border: '1px solid var(--border-medium)' }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, flex: 1 }}>{e.name}</span>
+                      {e.can_schedule
+                        ? <span style={{ fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 12, background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)' }}>可排班</span>
+                        : <>
+                            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>僅看</span>
+                            <button className="btn btn-secondary" style={{ fontSize: 12, padding: '3px 10px', color: 'var(--accent-cyan)' }}
+                              onClick={() => setAccess(e.id, managing.store_id, true, true)} disabled={busy}>改為可排</button>
+                          </>}
+                      <button onClick={() => setAccess(e.id, managing.store_id, false)} disabled={busy} title="移除此人"
+                        style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--accent-red)', display: 'flex' }}>
+                        <XIcon size={16} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* 加人 */}
+              <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 12 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>加入新的人</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <SearchableSelect value="" onChange={v => v && setAccess(v, managing.store_id, true, addEdit)}
+                    options={empOptions(employees.filter(emp => {
+                      const ex = new Set([managing.manager?.id, managing.supervisor?.id, ...(managing.extra || []).map(x => x.id)].filter(Boolean))
+                      return !ex.has(emp.id)
+                    }), { keyBy: 'id' })}
+                    placeholder="搜尋員工姓名/部門/門市…" />
+                  <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={addEdit} onChange={e => setAddEdit(e.target.checked)} style={{ accentColor: 'var(--accent-cyan)' }} />
+                    給排班編輯權（勾了＝可排班；不勾＝只能看）
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div className="modal-shell-footer">
+              <button className="btn btn-secondary" onClick={() => setManagingId(null)}>關閉</button>
+            </div>
+          </div>
+        </ModalOverlay>
       )}
     </div>
   )

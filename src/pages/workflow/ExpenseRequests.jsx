@@ -297,8 +297,11 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
 
   // Submit new request OR re-submit edited request
   const handleSubmit = async () => {
-    const validItems = lineItems.filter(li => li.name && li.qty > 0)
-    const total = validItems.length > 0 ? validItems.reduce((s, li) => s + (li.subtotal || 0), 0) : Number(form.estimated_amount)
+    // 叫貨(order):每列 = 廠商 + 金額(存 subtotal),不看數量;一般費用:品名 + 數量
+    const validItems = docType === 'order'
+      ? lineItems.filter(li => li.name && Number(li.subtotal) > 0)
+      : lineItems.filter(li => li.name && li.qty > 0)
+    const total = validItems.length > 0 ? validItems.reduce((s, li) => s + (Number(li.subtotal) || 0), 0) : Number(form.estimated_amount)
 
     // 非費用：只驗 申請人 + 主旨；費用：驗會計科目 + 品項合計 + 門市必填
     if (isExpense) {
@@ -326,7 +329,10 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
       title: form.title,
       description: form.description || null,
       estimated_amount: isExpense ? total : null,
-      supplier: isExpense ? (form.supplier || null) : null,
+      // 叫貨:單頭 supplier 存「各列廠商去重彙總」供列表/明細顯示;對帳改讀 items 每列廠商,不靠這欄
+      supplier: docType === 'order'
+        ? ([...new Set(validItems.map(li => li.name).filter(Boolean))].join('、') || null)
+        : (isExpense ? (form.supplier || null) : null),
       billing_month: docType === 'order' ? (form.billing_month || null) : null,
       items: isExpense ? validItems : null,
       store: isExpense ? (form.store || null) : null,
@@ -1163,16 +1169,16 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
 
         // 明細表格 — 始終顯示，無品項時顯示空白提示（非費用整段隱藏）
         if (!isNonExpense) fields.push({
-          label: '品項明細',
+          label: docType === 'order' ? '廠商明細' : '品項明細',
           value: (
             <div style={{ border: '1px solid var(--border-medium)', borderRadius: 8, overflow: 'hidden' }}>
               <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ background: 'var(--bg-secondary)' }}>
-                    <th style={{ padding: '6px 8px', textAlign: 'left' }}>品名</th>
-                    <th style={{ padding: '6px 8px', textAlign: 'right' }}>數量</th>
-                    <th style={{ padding: '6px 8px', textAlign: 'right' }}>單價</th>
-                    <th style={{ padding: '6px 8px', textAlign: 'right' }}>小計</th>
+                    <th style={{ padding: '6px 8px', textAlign: 'left' }}>{docType === 'order' ? '廠商' : '品名'}</th>
+                    {docType !== 'order' && <th style={{ padding: '6px 8px', textAlign: 'right' }}>數量</th>}
+                    {docType !== 'order' && <th style={{ padding: '6px 8px', textAlign: 'right' }}>單價</th>}
+                    <th style={{ padding: '6px 8px', textAlign: 'right' }}>{docType === 'order' ? '金額' : '小計'}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1180,14 +1186,14 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
                     ? showDetail.items.map((li, i) => (
                         <tr key={i} style={{ borderTop: '1px solid var(--border-subtle)' }}>
                           <td style={{ padding: '4px 8px' }}>{li.name}</td>
-                          <td style={{ padding: '4px 8px', textAlign: 'right' }}>{li.qty}</td>
-                          <td style={{ padding: '4px 8px', textAlign: 'right', fontFamily: 'monospace' }}>{fmtCur(li.unit_price, showDetail.currency)}</td>
+                          {docType !== 'order' && <td style={{ padding: '4px 8px', textAlign: 'right' }}>{li.qty}</td>}
+                          {docType !== 'order' && <td style={{ padding: '4px 8px', textAlign: 'right', fontFamily: 'monospace' }}>{fmtCur(li.unit_price, showDetail.currency)}</td>}
                           <td style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 600, fontFamily: 'monospace' }}>{fmtCur(li.subtotal, showDetail.currency)}</td>
                         </tr>
                       ))
                     : (
                         <tr>
-                          <td colSpan={4} style={{ padding: '8px 8px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>無品項明細</td>
+                          <td colSpan={docType === 'order' ? 2 : 4} style={{ padding: '8px 8px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>{docType === 'order' ? '無廠商明細' : '無品項明細'}</td>
                         </tr>
                       )
                   }

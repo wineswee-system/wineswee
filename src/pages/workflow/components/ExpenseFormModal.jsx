@@ -62,7 +62,7 @@ function StoreSelect({ value, onChange, stores, error }) {
 
 // 供應商下拉(叫貨用)— 從 suppliers 主檔挑,或「其他(自填)」保留自訂。
 // 沿用 StoreSelect 同套模式:value 不在主檔清單但非空 → 自動切「其他」顯示 input(編輯舊單/自填單也吃)。
-function SupplierSelect({ value, onChange, supplierNames }) {
+function SupplierSelect({ value, onChange, supplierNames, hideLabel = false }) {
   const [isOther, setIsOther] = useState(() => !!value && !supplierNames.includes(value))
   useEffect(() => {
     if (value && !supplierNames.includes(value)) setIsOther(true)
@@ -70,7 +70,7 @@ function SupplierSelect({ value, onChange, supplierNames }) {
   const selectValue = isOther ? '__OTHER__' : (value || '')
   return (
     <div>
-      <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>供應商/廠商</label>
+      {!hideLabel && <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>供應商/廠商</label>}
       <select
         value={selectValue}
         onChange={e => {
@@ -400,9 +400,7 @@ export default function ExpenseFormModal({
               用 auto-fit minmax — 寬夠就兩欄、不夠就自動降一欄，不需要 media query */}
           {isExpense && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-              {isOrder ? (
-                <SupplierSelect value={form.supplier} onChange={v => set('supplier', v)} supplierNames={supplierList} />
-              ) : (
+              {!isOrder && (
                 <div>
                   <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>供應商/廠商</label>
                   <input type="text" value={form.supplier} onChange={e => set('supplier', e.target.value)} placeholder="選填"
@@ -456,7 +454,47 @@ export default function ExpenseFormModal({
           {/* Line items — expense only.
               用 form-table（CSS grid + container query）取代 table，窄容器自動變兩排排版：
               品名 + [X] / 數量 × 單價 = 小計 */}
-          {isExpense && (
+          {isExpense && isOrder && (
+            <div className={errors._total ? 'field-error' : undefined}>
+              <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>廠商明細 <span style={{ color: 'var(--accent-red)' }}>*</span>
+                <span style={{ color: 'var(--text-muted)', fontWeight: 400, fontSize: 12 }}>（一單可多廠商:每列選廠商 + 填金額）</span></label>
+              {errors._total && <div className="field-error-msg" style={{ marginBottom: 4 }}>⚠ 請至少填一個廠商（含金額 &gt; 0）</div>}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ display: 'flex', gap: 8, fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', padding: '0 2px' }}>
+                  <div style={{ flex: 1 }}>廠商</div>
+                  <div style={{ width: 130 }}>金額</div>
+                  <div style={{ width: 28 }} />
+                </div>
+                {lineItems.map((li, i) => (
+                  <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                    <div style={{ flex: 1 }}>
+                      <SupplierSelect hideLabel value={li.name} onChange={v => updateItem(i, 'name', v)} supplierNames={supplierList} />
+                    </div>
+                    <input type="number" value={li.subtotal || ''} onChange={e => updateItem(i, 'subtotal', Number(e.target.value) || 0)}
+                      placeholder="0" inputMode="decimal"
+                      style={{ width: 130, padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-main)', fontVariantNumeric: 'tabular-nums' }} />
+                    <div style={{ width: 28, display: 'flex', justifyContent: 'center', paddingTop: 8 }}>
+                      {lineItems.length > 1 && (
+                        <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-red)', padding: 0 }}
+                          onClick={() => setLineItems(items => items.filter((_, j) => j !== i))} aria-label="刪除此廠商">
+                          <X size={14} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 2 }}>
+                  <button className="btn btn-secondary" style={{ fontSize: 11, padding: '4px 10px' }}
+                    onClick={() => setLineItems(items => [...items, emptyItem()])}>
+                    <Plus size={11} /> 新增廠商
+                  </button>
+                  <div style={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{fmtAmt(lineTotal)}</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {isExpense && !isOrder && (
             <div className={errors._total ? 'field-error' : undefined}>
               <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600 }}>品項明細 <span style={{ color: 'var(--accent-red)' }}>*</span></label>
               {errors._total && <div className="field-error-msg" style={{ marginBottom: 4 }}>⚠ 請至少填一個品項（含數量 &gt; 0）</div>}

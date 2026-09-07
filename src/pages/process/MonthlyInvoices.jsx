@@ -41,25 +41,33 @@ export default function MonthlyInvoices() {
     setLoading(true)
     const [inv, ord, sup] = await Promise.all([
       supabase.from('monthly_invoices').select('*').is('deleted_at', null),
-      supabase.from('expense_requests').select('supplier, billing_month, actual_amount, estimated_amount, status')
+      supabase.from('expense_requests').select('supplier, billing_month, actual_amount, estimated_amount, status, items')
         .eq('doc_type', 'order').is('deleted_at', null).in('status', COUNTED),
       supabase.from('suppliers').select('name').order('name'),
     ])
     if (inv.error) setError(inv.error.message)
     setInvoices(inv.data || [])
-    setOrders((ord.data || []).filter(o => o.supplier && o.billing_month))
+    // 有帳務月份才進對帳(一單多廠商:各列廠商各自加總,見下方 orderAgg)
+    setOrders((ord.data || []).filter(o => o.billing_month))
     setSupplierList([...new Set((sup.data || []).map(s => s.name).filter(Boolean))])
     setLoading(false)
   }
   useEffect(() => { load() }, [orgId])
 
-  // 叫貨單依「月份|廠商」加總(actual 優先,退 estimated)
+  // 叫貨單依「月份|廠商」加總 —— 一單多廠商:逐 items 列(廠商=name、金額=subtotal)攤開加總。
+  // 舊單無 items 才退回單頭 supplier + actual/estimated(相容既有資料)。
   const orderAgg = {}
   orders.forEach(o => {
-    const key = `${o.billing_month}|${o.supplier}`
-    if (!orderAgg[key]) orderAgg[key] = { total: 0, count: 0 }
-    orderAgg[key].total += nn(o.actual_amount) || nn(o.estimated_amount)
-    orderAgg[key].count += 1
+    const lines = Array.isArray(o.items) && o.items.length > 0
+      ? o.items.map(it => ({ vendor: it.name, amt: nn(it.subtotal) }))
+      : (o.supplier ? [{ vendor: o.supplier, amt: nn(o.actual_amount) || nn(o.estimated_amount) }] : [])
+    lines.forEach(l => {
+      if (!l.vendor) return
+      const key = `${o.billing_month}|${l.vendor}`
+      if (!orderAgg[key]) orderAgg[key] = { total: 0, count: 0 }
+      orderAgg[key].total += l.amt
+      orderAgg[key].count += 1
+    })
   })
 
   // 對帳列 = 叫貨單組合 ∪ 已登記發票,依(月份|廠商)合併

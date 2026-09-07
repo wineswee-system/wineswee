@@ -81,6 +81,7 @@ export default function Attendance() {
   const [dayLeaves, setDayLeaves] = useState([])        // 已核准請假對照
   const [salaryCats, setSalaryCats] = useState([])      // [{employee_id, employment_category}] 判斷行政/正職
   const [catWorkRules, setCatWorkRules] = useState([])  // employment_category_work_rules（行政固定辦公時間）
+  const [holidays, setHolidays] = useState([])          // 國定假日/補班（判行政平日該上班沒打卡,排除假日）
   const [clockCorrections, setClockCorrections] = useState([])  // 補打卡申請（顯示「有沒有申請補打卡」欄）
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
@@ -188,7 +189,10 @@ export default function Attendance() {
         .eq('organization_id', orgId).is('deleted_at', null)
         .in('status', ['待審核', '已核准', '已駁回'])
         .gte('date', startDate).lte('date', endDate),
-    ]).then(([r, e, d, s, ot, sch, lv, orgRes, visRes, salRes, ecwrRes, ccRes]) => {
+      // 國定假日/補班日：行政(固定辦公時間)判「平日該上班沒打卡」時,要把國定假日排除(假日不用打卡)
+      supabase.from('holidays').select('date, is_workday, type')
+        .gte('date', startDate).lte('date', endDate),
+    ]).then(([r, e, d, s, ot, sch, lv, orgRes, visRes, salRes, ecwrRes, ccRes, holRes]) => {
       const boundaryHour = parseInt(orgRes?.data?.settings?.day_boundary_hour, 10) || 6
       const boundaryStr = `${String(boundaryHour).padStart(2, '0')}:00:00`
       const visIds = Array.isArray(visRes?.data) ? visRes.data : null
@@ -214,6 +218,7 @@ export default function Attendance() {
       setDayLeaves(lv.data || [])
       setSalaryCats(salRes?.data || [])
       setCatWorkRules(ecwrRes?.data || [])
+      setHolidays(holRes?.data || [])
       // 補打卡:套跟出勤一樣的可見性（店員只看自己、主管看可見門市）
       let ccs = ccRes?.data || []
       if (isStaff && profile?.name) ccs = ccs.filter(c => c.employee === profile.name)
@@ -314,6 +319,23 @@ export default function Attendance() {
     }
   }, [catWorkRules])   // eslint-disable-line react-hooks/exhaustive-deps
 
+  // 國定假日(is_workday=false=放假)集合;行政判「平日該上班」要排除這些日子
+  const holidayOff = useMemo(() => {
+    const s = new Set()
+    for (const h of holidays) if (h.date && h.is_workday === false) s.add(String(h.date).slice(0, 10))
+    return s
+  }, [holidays])
+
+  // 行政(admin 身分)當天「應該上班」= 週一~五 且 非國定假日(對齊計薪引擎「應上班日」定義)。
+  //   行政沒排班,故無法靠班表判漏打;用固定辦公時間身分 + 工作日推定「該上班沒打卡」。
+  const adminShouldWork = (employee, date) => {
+    if (empCatByName[employee] !== 'admin' || !date) return false
+    const dow = new Date(date + 'T00:00:00').getDay()
+    if (dow === 0 || dow === 6) return false          // 週末不推定上班
+    if (holidayOff.has(date)) return false            // 國定假日=放假,不算漏打
+    return true
+  }
+
   // 遲到/早退:有排班就比班表;行政(admin)沒排班 → 固定辦公時間 + 浮動制(跟計薪引擎同一套規則)。
   //   上班晚於「基準−寬限」=遲到;下班早於「應下班」=早退。
   //   行政應下班 = clamp(上班打卡 + 工時span, 下班−寬限, 下班+寬限)（早進早走、晚進晚走）。
@@ -377,7 +399,8 @@ export default function Attendance() {
     if (r._rowType === 'notClocked') {
       if (dayCtx.leave[`${r.employee}|${r.date}`]) return false      // 請假
       const sv = dayCtx.sched[`${r.employee}|${r.date}`]
-      if (!sv || !/\d{1,2}:\d{2}/.test(sv)) return false             // 休/例假/無排班 → 不算異常
+      if (!sv) return adminShouldWork(r.employee, r.date)            // 無排班:行政平日該上班沒打卡 = 異常;其他人不算
+      if (!/\d{1,2}:\d{2}/.test(sv)) return false                    // 休/例假 → 不算異常
       return true                                                    // 有排班卻沒打卡 = 未打卡
     }
     if (r.status === '請假') return false
@@ -523,7 +546,7 @@ export default function Attendance() {
     if (isOvertime) status = '加班'
     else if (isNotClocked) {
       if (lv) status = lv.pending ? '請假(審)' : '請假'
-      else { const isWork = sched && /\d{1,2}:\d{2}/.test(sched); status = sched ? (isWork ? '未打卡' : sched) : '無排班' }
+      else { const isWork = sched && /\d{1,2}:\d{2}/.test(sched); status = sched ? (isWork ? '未打卡' : sched) : (adminShouldWork(r.employee, r.date) ? '未打卡' : '無排班') }
     } else {
       const offSched = clockOffSchedule(r)
       const hasApprovedLeave = lv && !lv.pending   // 已核准請假 → 不標遲到/早退(對齊計薪守門)
@@ -958,7 +981,10 @@ export default function Attendance() {
                             const isWork = sv && /\d{1,2}:\d{2}/.test(sv)   // 班別是時間段=該上班
                             // 休假/例假/請假別(非時間段)→ 本來就不用打卡,不標紅;無排班也不算漏打
                             if (sv && !isWork) return <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{sv}</span>
-                            if (!sv) return <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>無排班</span>
+                            // 無排班:行政(固定辦公時間)平日該上班沒打卡 → 未打卡;其他人才顯示無排班
+                            if (!sv) return adminShouldWork(r.employee, r.date)
+                              ? <span className="badge badge-danger"><span className="badge-dot"></span>未打卡</span>
+                              : <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>無排班</span>
                             return <span className="badge badge-danger"><span className="badge-dot"></span>未打卡</span>
                           })()
                         : (() => {

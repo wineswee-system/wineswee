@@ -27,6 +27,7 @@ export default function MonthlyInvoices() {
   const [form, setForm] = useState({ invoice_month: '', vendor: '', amount: '', note: '', orderTotal: 0, lockKey: false })
   const [existingFiles, setExistingFiles] = useState([])
   const [newFiles, setNewFiles] = useState([])
+  const [invLines, setInvLines] = useState([{ number: '', amount: '' }])  // 多張發票:每筆 發票號碼 + 金額
   const [editingId, setEditingId] = useState(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
@@ -98,15 +99,21 @@ export default function MonthlyInvoices() {
   const openReg = (r) => {
     if (r.inv) {
       setForm({ invoice_month: r.month, vendor: r.vendor, amount: r.inv.amount ?? '', note: r.inv.note || '', orderTotal: r.orderTotal, lockKey: true })
+      // 舊資料無 invoice_lines → 用單一金額當一筆(號碼空白待補)
+      setInvLines(Array.isArray(r.inv.invoice_lines) && r.inv.invoice_lines.length
+        ? r.inv.invoice_lines.map(l => ({ number: l.number || '', amount: l.amount ?? '' }))
+        : [{ number: '', amount: r.inv.amount ?? '' }])
       setExistingFiles(Array.isArray(r.inv.attachments) ? r.inv.attachments : []); setEditingId(r.inv.id)
     } else {
       setForm({ invoice_month: r.month, vendor: r.vendor, amount: '', note: '', orderTotal: r.orderTotal, lockKey: true })
+      setInvLines([{ number: '', amount: '' }])
       setExistingFiles([]); setEditingId(null)
     }
     setNewFiles([]); setError(null); setShowModal(true)
   }
   const openNew = () => {
     setForm({ invoice_month: new Date().toISOString().slice(0, 7), vendor: '', amount: '', note: '', orderTotal: 0, lockKey: false })
+    setInvLines([{ number: '', amount: '' }])
     setExistingFiles([]); setNewFiles([]); setEditingId(null); setError(null); setShowModal(true)
   }
 
@@ -139,7 +146,12 @@ export default function MonthlyInvoices() {
     try {
       const uploaded = newFiles.length ? await uploadFiles(newFiles) : []
       const attachments = [...existingFiles, ...uploaded]
-      const payload = { invoice_month: form.invoice_month, vendor: form.vendor.trim(), amount: nn(form.amount), note: form.note?.trim() || null, attachments }
+      // 多張發票:清掉全空列,金額加總存入 amount(對帳讀 amount),明細存 invoice_lines
+      const cleanLines = invLines
+        .map(l => ({ number: (l.number || '').trim(), amount: nn(l.amount) }))
+        .filter(l => l.number || l.amount)
+      const amountSum = cleanLines.reduce((s, l) => s + l.amount, 0)
+      const payload = { invoice_month: form.invoice_month, vendor: form.vendor.trim(), amount: amountSum, note: form.note?.trim() || null, attachments, invoice_lines: cleanLines }
       if (editingId) {
         const { error } = await supabase.from('monthly_invoices').update(payload).eq('id', editingId)
         if (error) throw error
@@ -169,8 +181,9 @@ export default function MonthlyInvoices() {
 
   if (loading) return <LoadingSpinner />
   const pickedCount = existingFiles.length + newFiles.length
+  const invTotal = invLines.reduce((s, l) => s + nn(l.amount), 0)
   const modalOrderTotal = form.lockKey ? form.orderTotal : previewOrderTotal(form.invoice_month, form.vendor)
-  const modalDiff = nn(form.amount) - modalOrderTotal
+  const modalDiff = invTotal - modalOrderTotal
 
   return (
     <div style={{ padding: 20 }}>
@@ -293,17 +306,33 @@ export default function MonthlyInvoices() {
               {/* 對帳提示 */}
               <div style={{ padding: '10px 14px', borderRadius: 8, background: 'var(--bg-secondary)', display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}><span style={{ color: 'var(--text-secondary)' }}>系統叫貨總額</span><strong style={{ fontVariantNumeric: 'tabular-nums' }}>{fmtMoney(modalOrderTotal)}</strong></div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}><span style={{ color: 'var(--text-secondary)' }}>發票金額</span><strong style={{ fontVariantNumeric: 'tabular-nums' }}>{fmtMoney(nn(form.amount))}</strong></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}><span style={{ color: 'var(--text-secondary)' }}>發票金額（{invLines.filter(l => l.number || l.amount).length} 張加總）</span><strong style={{ fontVariantNumeric: 'tabular-nums' }}>{fmtMoney(invTotal)}</strong></div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, borderTop: '1px dashed var(--border)', paddingTop: 6 }}>
                   <span style={{ color: 'var(--text-secondary)' }}>差異</span>
                   <strong style={{ fontVariantNumeric: 'tabular-nums', color: Math.abs(modalDiff) < 1 ? 'var(--accent-green)' : 'var(--accent-red)' }}>{Math.abs(modalDiff) < 1 ? '✓ 相符' : (modalDiff > 0 ? '+' : '') + Math.round(modalDiff).toLocaleString()}</strong>
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <div><label style={labelStyle}>發票金額</label><input type="number" min={0} value={form.amount} onChange={e => set('amount', e.target.value)} placeholder="0" style={fieldStyle} /></div>
-                <div><label style={labelStyle}>備註</label><input value={form.note} onChange={e => set('note', e.target.value)} style={fieldStyle} /></div>
+              {/* 多張發票:每筆 發票號碼 + 金額(可多筆,自動加總) */}
+              <div>
+                <label style={labelStyle}>發票明細（發票號碼 + 金額,可多張）</label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {invLines.map((l, i) => (
+                    <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <input value={l.number} onChange={e => setInvLines(p => p.map((x, j) => j === i ? { ...x, number: e.target.value } : x))}
+                        placeholder="發票號碼（例 AB12345678）" style={{ ...fieldStyle, flex: 1 }} />
+                      <input type="number" min={0} value={l.amount} onChange={e => setInvLines(p => p.map((x, j) => j === i ? { ...x, amount: e.target.value } : x))}
+                        placeholder="金額" style={{ ...fieldStyle, width: 120, fontVariantNumeric: 'tabular-nums' }} />
+                      <button onClick={() => setInvLines(p => p.length > 1 ? p.filter((_, j) => j !== i) : p)}
+                        disabled={invLines.length <= 1}
+                        style={{ border: 'none', background: 'none', cursor: invLines.length > 1 ? 'pointer' : 'not-allowed', color: 'var(--accent-red)', opacity: invLines.length > 1 ? 1 : 0.3, padding: 4 }} aria-label="刪除此發票"><X size={16} /></button>
+                    </div>
+                  ))}
+                </div>
+                <button onClick={() => setInvLines(p => [...p, { number: '', amount: '' }])}
+                  style={{ marginTop: 6, fontSize: 12, padding: '4px 10px', borderRadius: 6, border: '1px solid var(--accent-cyan)', background: 'none', color: 'var(--accent-cyan)', cursor: 'pointer', fontWeight: 600 }}>＋ 新增發票</button>
               </div>
+              <div><label style={labelStyle}>備註</label><input value={form.note} onChange={e => set('note', e.target.value)} style={fieldStyle} /></div>
 
               <div>
                 <label style={labelStyle}>發票附件（圖片 / PDF,最多 {MAX_FILES} 個） · {pickedCount}/{MAX_FILES}</label>

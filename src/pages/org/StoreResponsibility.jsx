@@ -1,23 +1,45 @@
 import { useState, useEffect } from 'react'
-import { ShieldCheck, AlertTriangle, RefreshCw, Users, Store as StoreIcon } from 'lucide-react'
+import { ShieldCheck, AlertTriangle, RefreshCw, Users, Store as StoreIcon, Plus, X as XIcon } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import SearchableSelect, { empOptions } from '../../components/SearchableSelect'
+import { toast } from '../../lib/toast'
 
 // 門市權責總表(唯讀):每間店誰能看/能排/能稽核 + 缺口。資料由 DEFINER RPC 一次算好。
 // 階段二會在此加「開關」直接指派(寫 user_stores)。
 export default function StoreResponsibility() {
   const [data, setData] = useState(null)
+  const [employees, setEmployees] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [addRow, setAddRow] = useState(null)   // 正在加人的 store_id
+  const [busy, setBusy] = useState(false)
 
   const load = async () => {
     setLoading(true); setError(null)
-    const { data: res, error: err } = await supabase.rpc('get_store_responsibility_overview')
-    if (err) { setError(err.message); setLoading(false); return }
+    const [ovRes, empRes] = await Promise.all([
+      supabase.rpc('get_store_responsibility_overview'),
+      supabase.rpc('list_org_active_employees'),
+    ])
+    const res = ovRes.data
+    if (ovRes.error) { setError(ovRes.error.message); setLoading(false); return }
     if (!res?.ok) { setError(res?.error === 'NOT_ALLOWED' ? '只有管理員可檢視門市權責' : (res?.error || '載入失敗')); setLoading(false); return }
-    setData(res); setLoading(false)
+    setData(res); setEmployees(empRes.data || []); setLoading(false)
   }
   useEffect(() => { load() }, [])
+
+  // 開關:加/移除某人對某店的額外存取(寫 user_stores)
+  const setAccess = async (empId, storeId, grant) => {
+    setBusy(true)
+    const { data: res, error: err } = await supabase.rpc('set_store_extra_access', {
+      p_employee_id: Number(empId), p_store_id: Number(storeId), p_grant: grant,
+    })
+    setBusy(false)
+    if (err || !res?.ok) { toast.error('操作失敗：' + (err?.message || res?.error || '未知')); return }
+    toast.success(grant ? '已加入' : '已移除')
+    setAddRow(null)
+    load()
+  }
 
   if (loading) return <LoadingSpinner />
 
@@ -47,7 +69,7 @@ export default function StoreResponsibility() {
         <div className="page-header-row">
           <div>
             <h2><ShieldCheck size={20} style={{ verticalAlign: -3, marginRight: 6, color: 'var(--accent-cyan)' }} />門市權責總表</h2>
-            <p>每間門市誰能檢視 / 排班 / 稽核 —— 店負責人、區督導、額外指派 + 缺口一覽（唯讀）</p>
+            <p>每間門市誰能檢視 / 排班 / 稽核 —— 店負責人、區督導、額外指派 + 缺口一覽。可直接「加人／移除」指派額外存取</p>
           </div>
           <button className="btn btn-secondary" onClick={load}><RefreshCw size={14} /> 重新整理</button>
         </div>
@@ -114,11 +136,35 @@ export default function StoreResponsibility() {
                         </td>
                         <td style={{ fontSize: 12 }}>{s.supervisor?.name || <span style={{ color: 'var(--text-muted)' }}>—</span>}</td>
                         <td style={{ fontSize: 12 }}>
-                          {(s.extra || []).length === 0
-                            ? <span style={{ color: 'var(--text-muted)' }}>—</span>
-                            : <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                                {s.extra.map(e => <Chip key={e.id} tone="muted">{e.name}{!e.can_schedule && <span style={{ opacity: 0.6 }}> (僅看)</span>}</Chip>)}
-                              </div>}
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
+                            {(s.extra || []).map(e => (
+                              <span key={e.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 4px 2px 8px', borderRadius: 12, fontSize: 12, fontWeight: 600, background: 'var(--bg-secondary)', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                                {e.name}{!e.can_schedule && <span style={{ opacity: 0.6, fontWeight: 400 }}>(僅看)</span>}
+                                <button onClick={() => setAccess(e.id, s.store_id, false)} disabled={busy} title="移除存取"
+                                  style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--accent-red)', padding: 0, display: 'flex', lineHeight: 1 }}>
+                                  <XIcon size={12} />
+                                </button>
+                              </span>
+                            ))}
+                            {addRow === s.store_id ? (
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                <div style={{ minWidth: 190 }}>
+                                  <SearchableSelect value="" onChange={v => v && setAccess(v, s.store_id, true)}
+                                    options={empOptions(employees.filter(emp => {
+                                      const ex = new Set([s.manager?.id, s.supervisor?.id, ...(s.extra || []).map(x => x.id)].filter(Boolean))
+                                      return !ex.has(emp.id)
+                                    }), { keyBy: 'id' })}
+                                    placeholder="搜尋員工加入…" />
+                                </div>
+                                <button onClick={() => setAddRow(null)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 12 }}>取消</button>
+                              </span>
+                            ) : (
+                              <button className="btn btn-secondary" style={{ fontSize: 11, padding: '2px 8px', display: 'inline-flex', alignItems: 'center', gap: 3 }}
+                                onClick={() => setAddRow(s.store_id)} disabled={busy}>
+                                <Plus size={11} /> 加人
+                              </button>
+                            )}
+                          </div>
                         </td>
                         <td>
                           {gaps.length === 0
@@ -138,8 +184,8 @@ export default function StoreResponsibility() {
 
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 12, lineHeight: 1.6 }}>
             說明：能看/排/稽核某店的人 = 全店權限者 ＋ 該店負責人 ＋ 該區督導 ＋ 額外可存取者。<br />
-            「額外可存取」來自個別指派（user_stores）；標「僅看」= 沒有排班編輯權限（可看不可排）。<br />
-            排班還需 schedule.edit 權限才能編輯；稽核「已核准」單依同一店範圍可見。
+            「額外可存取」＝個別指派（可用「加人／×」即時開關）；標「僅看」= 該員沒有排班編輯權限（能看班表/稽核,不能排班）。<br />
+            指派給有 schedule.edit 的人（店長/督導/儲幹等）→ 立即可看＋可排該店；稽核「已核准」單依同一店範圍可見。
           </div>
         </>
       )}

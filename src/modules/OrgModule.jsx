@@ -9,6 +9,7 @@ import Employees from '../pages/org/Employees'
 import EmployeeProfile from '../pages/org/EmployeeProfile'
 import LineIntegration from '../pages/org/LineIntegration'
 import Templates from '../pages/org/Templates'
+import StoreResponsibility from '../pages/org/StoreResponsibility'
 
 export default function OrgModule() {
   return (
@@ -18,6 +19,7 @@ export default function OrgModule() {
       <Route path="chart" element={<OrgChart />} />
       <Route path="companies" element={<Companies />} />
       <Route path="locations" element={<Locations />} />
+      <Route path="store-responsibility" element={<StoreResponsibility />} />
       <Route path="departments" element={<Departments />} />
       <Route path="employees" element={<Employees />} />
       <Route path="employees/:id" element={<EmployeeProfile />} />

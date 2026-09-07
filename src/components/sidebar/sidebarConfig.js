@@ -10,7 +10,7 @@ import {
   ShoppingCart, CreditCard, BookText, FileCheck,
   FileEdit, Tag, Monitor, RotateCcw, PieChart, AlertTriangle,
   Layout, Factory, ShoppingBag, Calculator,
-  UserCheck, Shield, Send, Search, UserPlus, Layers,
+  UserCheck, Shield, ShieldCheck, Send, Search, UserPlus, Layers,
   Brain, ClipboardCheck, Heart, Scale, MessageSquare, FileBarChart, Gift,
   FolderTree, UserMinus, PauseCircle, RefreshCcw, GraduationCap, PlayCircle,
   Globe, Trash2, Upload,
@@ -251,6 +251,7 @@ export const groupNav = {
         { icon: Building, label: '公司', path: '/org/companies' },
         { icon: ClipboardList, label: '部門', path: '/org/departments' },
         { icon: MapPin, label: '門市', path: '/org/locations' },
+        { icon: ShieldCheck, label: '門市權責', path: '/org/store-responsibility' },
         { icon: UserCircle, label: '員工', path: '/org/employees' },
       ]
     },

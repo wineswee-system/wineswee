@@ -305,6 +305,7 @@ export default function WorkOrders() {
       {detail && (
         <WorkOrderDetail
           order={detail} me={me} isAdmin={isAdmin} employees={employees}
+          orgId={orgId} myName={profile?.name}
           storeName={(id) => stores.find(s => s.id === id)?.name || `#${id}`}
           onClose={() => setDetail(null)}
           onChanged={() => { setDetail(null); load() }}
@@ -315,10 +316,13 @@ export default function WorkOrders() {
 }
 
 // ── 明細 + 動作 ──
-function WorkOrderDetail({ order: o, me, isAdmin, employees, storeName, onClose, onChanged }) {
+function WorkOrderDetail({ order: o, me, isAdmin, employees, orgId, myName, storeName, onClose, onChanged }) {
   const navigate = useNavigate()
   const [accepting, setAccepting] = useState(false)
   const [acceptForm, setAcceptForm] = useState({ assignee_id: o.assignee_id ? String(o.assignee_id) : '', scheduled_due_date: o.scheduled_due_date || o.expected_due_date || '' })
+  const [rejecting, setRejecting] = useState(false)   // 已完成關:申請人駁回打回重做
+  const [rejReason, setRejReason] = useState('')
+  const [rejFiles, setRejFiles] = useState([])
   const [atts, setAtts] = useState([])
   useEffect(() => { listFormAttachments('work_order', o.id).then(setAtts).catch(() => setAtts([])) }, [o.id])
   const openAtt = async (a) => {
@@ -355,6 +359,17 @@ function WorkOrderDetail({ order: o, me, isAdmin, employees, storeName, onClose,
     const reason = window.prompt('退回原因：')
     if (reason === null) return
     await call('reject_work_order', { p_id: o.id, p_reason: reason }, '已退回')
+  }
+  // 已完成關:申請人駁回結案 → 打回「處理中」交回承辦人重做(可打字 + 附圖片/檔案)
+  const doReopen = async () => {
+    if (!rejReason.trim() && rejFiles.length === 0) { toast.warning('請填駁回原因,或附上圖片說明'); return }
+    if (rejFiles.length) {
+      try {
+        const res = await uploadFormAttachments({ formType: 'work_order', formId: o.id, files: rejFiles.map(f => ({ file: f })), organizationId: orgId, uploaderEmpId: me?.id, uploaderName: myName })
+        if (res?.errors?.length) toast.warning(`${res.errors.length} 個附件上傳失敗：${res.errors.map(e => e.error).join('；')}`)
+      } catch (err) { toast.warning('附件上傳失敗：' + (err.message || '')) }
+    }
+    await call('reopen_work_order', { p_id: o.id, p_reason: rejReason.trim() }, '已駁回,退回承辦人重做')
   }
   const toProject = () => {
     // 對齊轉流程:導到新增專案畫面,真的建了才綁(建立畫面 onClose 取消 → 工單不變,可反悔)
@@ -457,10 +472,40 @@ function WorkOrderDetail({ order: o, me, isAdmin, employees, storeName, onClose,
           )
         )}
 
-        {/* 已完成：申請人確認結案 */}
+        {/* 已完成：申請人確認結案 / 駁回(打回重做) */}
         {o.status === '已完成' && (isRequester || isAdmin) && (
-          <AsyncButton className="btn btn-primary btn-sm" style={{ alignSelf: 'flex-start', background: 'var(--accent-green)' }}
-            onClick={() => call('confirm_work_order', { p_id: o.id }, '已結案')} busyLabel="處理中…">確認結案</AsyncButton>
+          rejecting ? (
+            <div style={{ padding: 12, borderRadius: 8, background: 'var(--bg-secondary)', border: '1px solid var(--border-medium)', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--accent-red)' }}>駁回工單（退回承辦人重做）</div>
+              <textarea className="form-input" style={{ width: '100%', minHeight: 72, resize: 'vertical' }}
+                placeholder="駁回原因：哪裡沒做好、要怎麼修…（可只放圖片）"
+                value={rejReason} onChange={e => setRejReason(e.target.value)} />
+              <div>
+                <input type="file" multiple accept={WO_ATTACH_ACCEPT} onChange={e => setRejFiles(Array.from(e.target.files || []))} style={{ fontSize: 12 }} />
+                {rejFiles.length > 0 && (
+                  <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                    {rejFiles.map((f, i) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-secondary)' }}>
+                        <Paperclip size={11} /> {f.name}
+                        <button type="button" onClick={() => setRejFiles(rejFiles.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-red)' }}><XIcon size={12} /></button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>可附照片、PDF、Word、Excel 等佐證</div>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <AsyncButton className="btn btn-sm" style={{ background: 'var(--accent-red)', color: '#fff' }} onClick={doReopen} busyLabel="處理中…">送出駁回</AsyncButton>
+                <button className="btn btn-secondary btn-sm" onClick={() => { setRejecting(false); setRejReason(''); setRejFiles([]) }}>取消</button>
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', gap: 8 }}>
+              <AsyncButton className="btn btn-primary btn-sm" style={{ background: 'var(--accent-green)' }}
+                onClick={() => call('confirm_work_order', { p_id: o.id }, '已結案')} busyLabel="處理中…">確認結案</AsyncButton>
+              <button className="btn btn-secondary btn-sm" style={{ color: 'var(--accent-red)' }} onClick={() => setRejecting(true)}>駁回</button>
+            </div>
+          )
         )}
 
         {/* 待受理/已退回：申請人可撤單 */}

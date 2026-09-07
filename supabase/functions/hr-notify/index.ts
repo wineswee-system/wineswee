@@ -1269,6 +1269,7 @@ function buildWorkOrderNotification(
     accepted:  { title: "✅ 工單已受理", color: "#2563EB", lead: `${details.target_department || ""} 已受理，排定 ${details.scheduled_due_date || "—"} 完成` },
     completed: { title: "🎉 工單已完成", color: "#0891B2", lead: `${details.assignee_name || details.target_department || ""} 回報完成，請確認結案` },
     rejected:  { title: "↩️ 工單被退回", color: "#DC2626", lead: `原因：${details.reject_reason || "—"}` },
+    reopened:  { title: "🔁 工單被駁回・請重做", color: "#DC2626", lead: `${details.requester_name || "申請人"} 駁回結案，原因：${details.reject_reason || "—"}` },
     confirmed: { title: "🏁 工單已結案", color: "#16A34A", lead: `申請人已確認結案` },
   };
   const cfg = cfgMap[type] || { title: "工單通知", color: "#2563EB", lead: "" };

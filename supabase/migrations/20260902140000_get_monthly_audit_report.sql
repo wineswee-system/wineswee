@@ -50,7 +50,7 @@ BEGIN
     JOIN public.store_audits a ON a.id = i.audit_id
     WHERE a.organization_id = p_org AND a.status = '已核准'
       AND a.audit_date BETWEEN v_start AND v_end
-      AND (i.passed = false OR i.deduct_score > 0)
+      AND i.passed = false   -- 缺失=未通過;加分項(passed=true 但 deduct_score>0)不算
       AND COALESCE(btrim(i.item_text), '') <> ''
     GROUP BY i.item_text
     ORDER BY count(*) DESC, sum(i.deduct_score) DESC
@@ -68,7 +68,7 @@ BEGIN
     JOIN public.store_audits a ON a.id = i.audit_id
     WHERE a.organization_id = p_org AND a.status = '已核准'
       AND a.audit_date BETWEEN v_start AND v_end
-      AND (i.passed = false OR i.deduct_score > 0)
+      AND i.passed = false   -- 缺失=未通過;加分項不算
     GROUP BY 1
   ) g;
 
@@ -89,12 +89,12 @@ BEGIN
     firstbad AS (
       SELECT a1.store_name, i.category_code, i.item_no
         FROM a1 JOIN public.store_audit_items i ON i.audit_id = a1.id
-       WHERE (i.passed = false OR i.deduct_score > 0)
+       WHERE i.passed = false   -- 缺失=未通過;加分項不算
     ),
     secondbad AS (
       SELECT a2.store_name, i.category_code, i.item_no
         FROM a2 JOIN public.store_audit_items i ON i.audit_id = a2.id
-       WHERE (i.passed = false OR i.deduct_score > 0)
+       WHERE i.passed = false   -- 缺失=未通過;加分項不算
     )
     SELECT fb.store_name,
            count(*)::int AS first_bad,

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { X, CheckCircle2, XCircle, RotateCcw, Send, Star, Paperclip } from 'lucide-react'
+import { X, CheckCircle2, XCircle, RotateCcw, Send, Star, Paperclip, Printer } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../LoadingSpinner'
@@ -10,6 +10,7 @@ import SignaturePad from './SignaturePad'
 import SearchableSelect, { empOptions } from '../SearchableSelect'
 import { postBindingFillDone } from '../../lib/embeddedBinding'
 import ExtraSignerControls from '../ExtraSignerControls'
+import { printStoreAudit } from '../../lib/printStoreAudit'
 
 const STATUS_BADGE = {
   '草稿':   { bg: 'var(--bg-secondary)',      color: 'var(--text-muted)' },
@@ -471,6 +472,10 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
 
         {/* Footer 操作 */}
         <div style={{ padding: 16, borderTop: '1px solid var(--border)', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button className="btn btn-secondary" style={{ marginRight: 'auto' }}
+            onClick={() => printStoreAudit({ audit, items, onDuty, chainSteps })}>
+            <Printer size={14} /> 匯出 PDF
+          </button>
           <button className="btn btn-secondary" onClick={onClose}>關閉</button>
           {isDraft && isAuditor && (
             <button className="btn btn-primary" onClick={handleSubmit} disabled={saving}>

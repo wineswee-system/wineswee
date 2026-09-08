@@ -213,7 +213,7 @@ export default function BatchPayrollModal({ month, batchPreview, batchSaving, on
                     <th>跨店津貼</th>
                     <th>其他津貼</th>
                     <th>加班費</th>
-                    <th title="過期沒休完的補休自動兌現（已含在加班費內）">補休折現</th>
+                    <th title="過期或離職未休補休兌現（已從加班費拆出獨立計）">補休折現</th>
                     <th>額外加班</th>
                     <th>獎金</th>
                     <th title="離職當月未休完特休折現（已計入應領）">特休折現</th>
@@ -280,9 +280,9 @@ export default function BatchPayrollModal({ month, batchPreview, batchSaving, on
                         <td>{p.night_allowance?.toLocaleString() || 0}</td>
                         <td>{p.cross_store_allowance?.toLocaleString() || 0}</td>
                         <td>{p.other_custom_total?.toLocaleString() || 0}</td>
-                        <td>{p.regular_overtime_pay?.toLocaleString() || 0}</td>
+                        <td>{Math.max(0, (p.regular_overtime_pay || 0) - (p.comp_time_settled_pay || 0)).toLocaleString()}</td>
                         <td style={{ color: p.comp_time_settled_pay > 0 ? 'var(--accent-orange)' : 'var(--text-muted)' }}
-                            title={p.comp_time_settled_count > 0 ? `${p.comp_time_settled_count} 筆過期補休兌現` : ''}>
+                            title={p.comp_time_settled_count > 0 ? `${p.comp_time_settled_count} 筆補休兌現(過期/離職結清)` : ''}>
                           {p.comp_time_settled_pay > 0 ? p.comp_time_settled_pay.toLocaleString() : '-'}
                         </td>
                         <td>{p.extra_overtime_pay?.toLocaleString() || 0}</td>

@@ -57,6 +57,10 @@ export default function DisasterManagement() {
   // 沒來結算
   const [noShowChecked, setNoShowChecked] = useState(new Set())
   const [settling, setSettling] = useState(false)
+  // 有來但早退(短少)結算
+  const [earlyList, setEarlyList] = useState([])
+  const [earlyChecked, setEarlyChecked] = useState(new Set())
+  const [settlingEarly, setSettlingEarly] = useState(false)
 
   const load = async () => {
     if (!orgId) return
@@ -122,6 +126,25 @@ export default function DisasterManagement() {
     toast.success(`已為 ${data.created} 人產生「${data.leave_type}」假單`)
   }
 
+  // 早退(短少)結算:短少時數(半小時為基準)改記天災假,不當早退扣;只月薪、PT 跳過
+  const loadEarly = async (dId) => {
+    const { data } = await supabase.rpc('disaster_settle_early_leaves', { p_disaster_id: dId, p_employee_ids: null, p_dry_run: true })
+    const el = (data?.ok && Array.isArray(data.preview)) ? data.preview : []
+    setEarlyList(el)
+    setEarlyChecked(new Set(el.map(x => x.employee_id)))
+  }
+  const settleEarly = async () => {
+    const ids = [...earlyChecked]
+    if (!ids.length) return toast.warning('沒有勾選要結算的人')
+    setSettlingEarly(true)
+    const { data, error } = await supabase.rpc('disaster_settle_early_leaves', { p_disaster_id: selected.id, p_employee_ids: ids, p_dry_run: false })
+    setSettlingEarly(false)
+    if (error) return toast.error('結算失敗：' + error.message)
+    if (!data?.ok) return toast.error('結算失敗：' + (data?.error || ''))
+    toast.success(`已為 ${data.created} 筆早退產生「${data.leave_type}」假單`)
+    loadEarly(selected.id)
+  }
+
   // 選中天災日 → 載津貼 + 出勤
   const selectDisaster = async (d) => {
     setSelected(d)
@@ -141,6 +164,7 @@ export default function DisasterManagement() {
       att = att.filter(a => d.store_ids.includes(a.store_id))
     }
     setAttendance(att)
+    loadEarly(d.id)   // 早退(短少)預覽
   }
 
   // ── 宣告 ──
@@ -408,6 +432,39 @@ export default function DisasterManagement() {
                       })}
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* 有來但早退（短少工時）結算 */}
+              {selected.no_show_handling !== 'paid' && earlyList.length > 0 && (
+                <div className="card" style={{ padding: 16 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <div style={{ fontWeight: 700 }}>有來但早退（短少工時）結算 — 記「{selected.no_show_handling === 'annual_leave' ? '特休' : '天災假'}」</div>
+                    {canManage && (
+                      <button className="btn btn-primary" disabled={settlingEarly} onClick={settleEarly}>
+                        {settlingEarly ? '結算中…' : `結算 ${earlyChecked.size} 人`}
+                      </button>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
+                    有打卡、但實際工時未達排班（遲到 / 早退）的<b>月薪</b>員工。勾選要結算的，短少時數（<b>以半小時為基準</b>）會改記「{selected.no_show_handling === 'annual_leave' ? '特休' : '天災無薪假'}」，<b>不當早退扣</b>。PT 時薪不列入。重複結算不會重建。
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 240, overflow: 'auto' }}>
+                    {earlyList.map(x => {
+                      const on = earlyChecked.has(x.employee_id)
+                      return (
+                        <label key={`${x.employee_id}-${x.date}`} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 13,
+                          background: on ? 'var(--accent-orange-dim)' : 'var(--bg-secondary)', border: `1px solid ${on ? 'var(--accent-orange)' : 'var(--border-subtle)'}` }}>
+                          <input type="checkbox" checked={on} onChange={() => setEarlyChecked(prev => { const n = new Set(prev); if (n.has(x.employee_id)) n.delete(x.employee_id); else n.add(x.employee_id); return n })} />
+                          <span style={{ fontWeight: 600, minWidth: 68 }}>{x.name}</span>
+                          <span style={{ color: 'var(--text-muted)' }}>{x.date}</span>
+                          <span style={{ marginLeft: 'auto', color: 'var(--accent-red)' }}>
+                            {x.late_min > 0 && `遲到 ${x.late_min}分 `}{x.early_min > 0 && `早退 ${x.early_min}分`} → {x.shortfall}h
+                          </span>
+                        </label>
+                      )
+                    })}
+                  </div>
                 </div>
               )}
             </>

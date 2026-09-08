@@ -633,7 +633,7 @@ export default function Salary() {
       const list = Array.isArray(rows) ? rows : []
       if (list.length === 0) { toast.error(`${month} 沒有可計薪的員工`); return }
       const [{ data: emps }, { data: org }] = await Promise.all([
-        supabase.from('employees').select('id, employee_number, join_date, store, employment_type, salary_type').eq('organization_id', orgId),
+        supabase.from('employees').select('id, employee_number, join_date, store, employment_type, salary_type, labor_ins_enrolled, health_ins_enrolled').eq('organization_id', orgId),
         supabase.from('organizations').select('name').eq('id', orgId).maybeSingle(),
       ])
       const empMap = new Map((emps || []).map(e => [e.id, { ...e }]))
@@ -668,14 +668,22 @@ export default function Salary() {
         // 補發(manual_backpay)與加項(manual_bonus)都歸「微調加項」欄(對齊畫面「加項」呈現),不另列補發前月差額
         return { ...p, manual_bonus: bonus + backpay, manual_deduction: deduct, _adjust_note_add: noteAdd, _adjust_note_ded: noteDed }
       })
+      // 過濾:應發 0 且勞健保兩者都未加保(還沒真正開始的人)→ 報表不列;有加保或有薪資的仍保留
+      const finalList = enriched.filter(p => {
+        const e = empMap.get(p.employee_id) || {}
+        const enrolled = e.labor_ins_enrolled || e.health_ins_enrolled
+        return !(nn(p.gross) === 0 && !enrolled)
+      })
+      const skipped = list.length - finalList.length
+      const skipNote = skipped > 0 ? `(略過 ${skipped} 位未計薪/未加保)` : ''
       if (which === 'financial') {
         const { exportFinancialReport } = await import('../../lib/exportFinancialReport')
-        exportFinancialReport(enriched, empMap, month, org?.name || '')
-        toast.success(`已匯出 ${month} 財務報表（${list.length} 人）`)
+        exportFinancialReport(finalList, empMap, month, org?.name || '')
+        toast.success(`已匯出 ${month} 財務報表（${finalList.length} 人）${skipNote}`)
       } else {
         const { exportPayrollRegister } = await import('../../lib/exportPayrollRegister')
-        exportPayrollRegister(enriched, empMap, month, org?.name || '')
-        toast.success(`已匯出 ${month} 薪資報表（${list.length} 人）`)
+        exportPayrollRegister(finalList, empMap, month, org?.name || '')
+        toast.success(`已匯出 ${month} 薪資報表（${finalList.length} 人）${skipNote}`)
       }
     } catch (err) {
       console.error('Export register failed:', err)

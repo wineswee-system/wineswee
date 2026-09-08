@@ -89,8 +89,30 @@ function buildFullItems(d, adjustments = []) {
   // 殘差保險:若總額有三項之外無法歸類的部分才補一行(正常為 0),確保顯示項加得回減項合計。
   const absenceResidual = n(d.absenceDeduction) - n(d.unpaidDeduction) - n(d.halfPayDeduction) - n(d.awolDeduction)
   if (absenceResidual > 0) push({ label: '其他缺勤扣', value: absenceResidual, sign: '-', section: 'deduct', color: 'var(--accent-red)', note: n(d.absenceDays) ? `${n(d.absenceDays)} 天` : null })
-  if (n(d.unpaidDeduction) > 0) push({ label: '無薪假扣', value: n(d.unpaidDeduction), sign: '-', section: 'deduct', color: 'var(--accent-red)' })
-  if (n(d.halfPayDeduction) > 0) push({ label: '半薪假扣', value: n(d.halfPayDeduction), sign: '-', section: 'deduct', color: 'var(--accent-red)' })
+  // 請假扣款「什麼假就什麼假」:用 _leave_rows 逐假別拆(型別對齊引擎),零頭校回引擎總額
+  {
+    const hrLv = n(d._hourly_rate)
+    const UNPAID = new Set(['事假', 'personal', '無薪假', 'unpaid', '天災假', '天災', 'disaster'])
+    const HALF = new Set(['病假', 'sick', '生理假', 'menstrual'])
+    const LABEL = { personal: '事假', unpaid: '無薪假', 天災: '天災假', disaster: '天災假', sick: '病假', menstrual: '生理假' }
+    const lv = {}
+    for (const r of (d._leave_rows || [])) {
+      const f = UNPAID.has(r.type) ? 1 : HALF.has(r.type) ? 0.5 : 0
+      if (!f) continue
+      const label = LABEL[r.type] || r.type
+      lv[label] = (lv[label] || 0) + Math.round(n(r.hours) * hrLv * f)
+    }
+    const engLv = n(d.unpaidDeduction) + n(d.halfPayDeduction)
+    const keys = Object.keys(lv)
+    if (keys.length) {
+      const diff = engLv - keys.reduce((s, k) => s + lv[k], 0)
+      if (diff) { const kmax = keys.reduce((a, b) => lv[a] >= lv[b] ? a : b); lv[kmax] += diff }
+      for (const [label, amt] of Object.entries(lv)) if (amt !== 0) push({ label: `${label}扣`, value: amt, sign: '-', section: 'deduct', color: 'var(--accent-red)' })
+    } else {
+      if (n(d.unpaidDeduction) > 0) push({ label: '無薪假扣', value: n(d.unpaidDeduction), sign: '-', section: 'deduct', color: 'var(--accent-red)' })
+      if (n(d.halfPayDeduction) > 0) push({ label: '半薪假扣', value: n(d.halfPayDeduction), sign: '-', section: 'deduct', color: 'var(--accent-red)' })
+    }
+  }
   if (n(d.awolDeduction) > 0) { const awolDates = Array.isArray(d._awol_rows) && d._awol_rows.length ? `（${d._awol_rows.join('、')}）` : ''; push({ label: '曠職扣', value: n(d.awolDeduction), sign: '-', section: 'deduct', color: 'var(--accent-red)', note: n(d.awolDays) ? `${n(d.awolDays)} 天${awolDates}` : null }) }
   if (n(d.lateDeduction) > 0) push({ label: '遲到扣', value: n(d.lateDeduction), sign: '-', section: 'deduct', color: 'var(--accent-red)', note: n(d.lateMins) ? `${n(d.lateMins)} 分鐘` : null })
   if (n(d.earlyLeaveDeduction) > 0) { const earlyDates = Array.isArray(d._early_rows) && d._early_rows.length ? `（${d._early_rows.map(r => r.date).join('、')}）` : ''; push({ label: '早退扣', value: n(d.earlyLeaveDeduction), sign: '-', section: 'deduct', color: 'var(--accent-red)', note: n(d.earlyLeaveMinutes) ? `${n(d.earlyLeaveMinutes)} 分鐘${earlyDates}` : null }) }

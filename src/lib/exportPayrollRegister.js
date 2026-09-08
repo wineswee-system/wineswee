@@ -44,8 +44,12 @@ const COLS = [
   { h: '勞保自付', group: '薪資科目減項', w: 9, get: (p) => n(p.laborInsurance) },
   { h: '健保自付', group: '薪資科目減項', w: 9, get: (p) => n(p.healthInsurance) },
   { h: '勞退自提', group: '薪資科目減項', w: 12, get: (p) => n(p.pension) },
-  { h: '無薪假', group: '薪資科目減項', w: 11, get: (p) => n(p.unpaidDeduction) },
-  { h: '半薪假', group: '薪資科目減項', w: 11, get: (p) => n(p.halfPayDeduction) },
+  // 請假扣款逐假別(什麼假就什麼假);_lv 由 computeLvRegister 逐人算好、對齊引擎總額。全 0 欄由 activeColumns 自動隱藏
+  { h: '事假',   group: '薪資科目減項', w: 9, get: (p) => n(p._lv?.['事假']) },
+  { h: '天災假', group: '薪資科目減項', w: 9, get: (p) => n(p._lv?.['天災假']) },
+  { h: '無薪假', group: '薪資科目減項', w: 9, get: (p) => n(p._lv?.['無薪假']) },
+  { h: '病假',   group: '薪資科目減項', w: 9, get: (p) => n(p._lv?.['病假']) },
+  { h: '生理假', group: '薪資科目減項', w: 9, get: (p) => n(p._lv?.['生理假']) },
   { h: '法定扣款', group: '薪資科目減項', w: 9, get: (p) => n(p.legal_deduction) },
   { h: '遲到', group: '薪資科目減項', w: 9, get: (p) => n(p.lateDeduction) },
   { h: '早退', group: '薪資科目減項', w: 9, get: (p) => n(p.earlyLeaveDeduction) },
@@ -184,7 +188,26 @@ function buildSummarySheet(rows, empMap, month, company) {
  * @param month  '2026-06'
  * @param company 公司抬頭
  */
+// 逐人算「各假別扣款」_lv:型別對齊引擎扣款集合,零頭校回引擎總額(不支薪+半薪)
+const LV_UNPAID_R = new Set(['事假', 'personal', '無薪假', 'unpaid', '天災假', '天災', 'disaster'])
+const LV_HALF_R = new Set(['病假', 'sick', '生理假', 'menstrual'])
+const LV_LABEL_R = { personal: '事假', unpaid: '無薪假', 天災: '天災假', disaster: '天災假', sick: '病假', menstrual: '生理假' }
+function computeLvRegister(p) {
+  const hr = n(p._hourly_rate), lv = {}
+  for (const r of (p._leave_rows || [])) {
+    const f = LV_UNPAID_R.has(r.type) ? 1 : LV_HALF_R.has(r.type) ? 0.5 : 0
+    if (!f) continue
+    const label = LV_LABEL_R[r.type] || r.type
+    lv[label] = (lv[label] || 0) + Math.round(n(r.hours) * hr * f)
+  }
+  const eng = n(p.unpaidDeduction) + n(p.halfPayDeduction)
+  const keys = Object.keys(lv)
+  if (keys.length) { const diff = eng - keys.reduce((s, k) => s + lv[k], 0); if (diff) { const kmax = keys.reduce((a, b) => lv[a] >= lv[b] ? a : b); lv[kmax] += diff } }
+  p._lv = lv
+}
+
 export function exportPayrollRegister(rows, empMap, month, company = '') {
+  rows.forEach(computeLvRegister)   // 先算各假別扣款
   const cols = activeColumns(rows, empMap)   // 全公司統一欄位(有值才出欄)
   // 依門市分組(威耀總部/空 → 總部)
   const groups = new Map()

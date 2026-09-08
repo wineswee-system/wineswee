@@ -292,6 +292,24 @@ export default function PayrollFormulaModal({ payroll, month, onClose }) {
     + (p.unused_leave_payout||0) + (p.severance_total||0)
 
   const leaveDeduction = (p.unpaidDeduction||0) + (p.halfPayDeduction||0)
+  // 請假扣款「什麼假就什麼假」:用 _leave_rows 逐假別拆(對齊引擎扣款型別集合),總額校回引擎值
+  const LV_UNPAID = new Set(['事假','personal','無薪假','unpaid','天災假','天災','disaster'])
+  const LV_HALF = new Set(['病假','sick','生理假','menstrual'])
+  const leaveDeductByType = (() => {
+    const m = {}
+    for (const r of leaveRows) {
+      const f = LV_UNPAID.has(r.type) ? 1 : LV_HALF.has(r.type) ? 0.5 : 0
+      if (!f) continue
+      m[r.type] = (m[r.type] || 0) + Math.round((Number(r.hours)||0) * hr * f)
+    }
+    // 逐類四捨五入與引擎總額的零頭 → 調到金額最大的那類,確保加得回 leaveDeduction
+    const keys = Object.keys(m)
+    if (keys.length) {
+      const diff = leaveDeduction - keys.reduce((s,k)=>s+m[k],0)
+      if (diff) { const kmax = keys.reduce((a,b)=> m[a]>=m[b]?a:b); m[kmax] += diff }
+    }
+    return m
+  })()
   const awolDeduction = (p.awolDeduction||0)
   const totalDedCheck = (p.laborInsurance||0) + (p.healthInsurance||0) + (p.pension||0)
     + leaveDeduction + awolDeduction + (p.lateDeduction||0) + (p.earlyLeaveDeduction||0) + (p.legal_deduction||0)
@@ -526,21 +544,31 @@ export default function PayrollFormulaModal({ payroll, month, onClose }) {
                 hint={isProrated ? '已套在職比例' : null}
               />
             )}
-            {leaveDeduction > 0 && (
-              <FormulaRow
-                label="請假扣款"
-                value={-leaveDeduction}
-                formula={'無薪假（事假/無薪假）：時數 × 時薪 × 1.0\n半薪假（病假/生理假）：時數 × 時薪 × 0.5'}
-                vars={[
-                  { k: '無薪時數', v: p.unpaidHours },
-                  { k: '半薪時數', v: p.halfPayHours },
-                  { k: '時薪', v: hr },
-                  { k: '無薪扣款', v: p.unpaidDeduction },
-                  { k: '半薪扣款', v: p.halfPayDeduction },
-                ]}
-                hint={isHourly ? '時薪制 PT 請假不扣（沒上班→沒工時→自然不算薪）' : null}
-              />
-            )}
+            {/* 什麼假就什麼假:逐假別各一行(有明細時);無明細但有扣款→退回合併顯示 */}
+            {Object.keys(leaveDeductByType).length > 0
+              ? Object.entries(leaveDeductByType).filter(([, v]) => v !== 0).map(([type, amt]) => (
+                  <FormulaRow key={type}
+                    label={type}
+                    value={-amt}
+                    formula={LV_HALF.has(type) ? '半薪假：時數 × 時薪 × 0.5' : '不支薪假：時數 × 時薪 × 1.0'}
+                    hint={isHourly ? '時薪制 PT 請假不扣(沒上班→沒工時→自然不算薪)' : null}
+                  />
+                ))
+              : (leaveDeduction > 0 && (
+                <FormulaRow
+                  label="請假扣款"
+                  value={-leaveDeduction}
+                  formula={'不支薪假(事假/無薪假/天災假):時數 × 時薪 × 1.0\n半薪假(病假/生理假):時數 × 時薪 × 0.5'}
+                  vars={[
+                    { k: '無薪時數', v: p.unpaidHours },
+                    { k: '半薪時數', v: p.halfPayHours },
+                    { k: '時薪', v: hr },
+                    { k: '無薪扣款', v: p.unpaidDeduction },
+                    { k: '半薪扣款', v: p.halfPayDeduction },
+                  ]}
+                  hint={isHourly ? '時薪制 PT 請假不扣(沒上班→沒工時→自然不算薪)' : null}
+                />
+              ))}
             {awolDeduction > 0 && (
               <FormulaRow
                 label="曠職扣款"

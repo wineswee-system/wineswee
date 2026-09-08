@@ -21,14 +21,16 @@ function enrich(p) {
   const daily = n(p.insuredLabor) / 30
   const idays = p.is_partial_month ? n(p.in_service_days) : 30   // 滿月=30,未滿月=實際天數
   p._li_ord = R(daily * idays * 0.115 * 0.20)
-  p._li_emp = R(daily * idays * 0.01 * 0.20)
-  p._li_sub = p._li_ord + p._li_emp
+  // 勞保小計對齊引擎權威值(laborInsurance);就業=小計−普通,避免拆分各自捨去產生殘差
+  p._li_sub = n(p.laborInsurance) || (p._li_ord + R(daily * idays * 0.01 * 0.20))
+  p._li_emp = p._li_sub - p._li_ord
   p._er_ord = R(daily * idays * 0.115 * 0.70)
   p._er_emp = R(daily * idays * 0.01 * 0.70)
   p._er_occ = R(daily * idays * 0.0019)
   p._er_sub = p._er_ord + p._er_emp + p._er_occ
   p._ot = n(p.regular_overtime_pay) - n(p.comp_time_settled_pay) + n(p.extra_overtime_pay)     // 加班費全免稅(補休另列補休代金,扣除避免重複)
-  const lvSum = Object.values(bt).reduce((a, b) => a + b, 0)
+  // 請假扣款用引擎權威值(unpaid+half),而非逐類 R() 加總(逐類捨去差會漏進殘差)
+  const lvSum = n(p.unpaidDeduction) + n(p.halfPayDeduction)
   const late = n(p.lateDeduction) + n(p.earlyLeaveDeduction) + n(p.awolDeduction)
   p._salSub = n(p.base_salary) + n(p.meal_allowance) + n(p.role_allowance) + n(p.night_allowance) + n(p.cross_store_allowance) + n(p.transport_allowance) + n(p.unused_leave_payout) + n(p.comp_time_settled_pay) - lvSum - late
   p._payable = p._salSub + p._ot

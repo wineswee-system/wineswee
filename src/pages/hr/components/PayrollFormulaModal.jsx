@@ -381,10 +381,10 @@ export default function PayrollFormulaModal({ payroll, month, onClose }) {
                 formula="自訂津貼加總（排除已歸類的夜班/跨店）" />
             )}
 
-            {p.regular_overtime_pay > 0 && (
+            {(p.regular_overtime_pay - (p.comp_time_settled_pay || 0)) > 0 && (
               <FormulaRow
                 label="加班費"
-                value={p.regular_overtime_pay}
+                value={p.regular_overtime_pay - (p.comp_time_settled_pay || 0)}
                 formula={[
                   '三桶階梯倍率：',
                   p.otWeekday > 0 ? '・平日：前 2 小時 × 1.34；超過 2 小時部分 × 1.67' : null,
@@ -425,6 +425,11 @@ export default function PayrollFormulaModal({ payroll, month, onClose }) {
                 formula="離職當月未休完特休 × 平均日薪"
                 vars={[{ k: '未休天數', v: p.unused_leave_days || 0 }]} />
             )}
+            {p.comp_time_settled_pay > 0 && (
+              <FormulaRow label="補休折現" value={p.comp_time_settled_pay} color="var(--accent-green)"
+                formula="離職當月未休補休一次結清（按加班當時凍結工資，非現在月薪）"
+                vars={[{ k: '結清筆數', v: p.comp_time_settled_count || 0 }]} />
+            )}
             {p.severance_total > 0 && (
               <FormulaRow label="資遣費" value={p.severance_total} color="var(--accent-green)"
                 formula={`資遣費${p.severance_notice_wage > 0 ? ' + 預告工資' : ''}（離職當月一次給付）`}
@@ -442,7 +447,8 @@ export default function PayrollFormulaModal({ payroll, month, onClose }) {
               vars={[
                 { k: '本薪', v: p.base_salary },
                 { k: '津貼小計', v: allowancesSum },
-                { k: '加班費', v: otSum },
+                { k: '加班費', v: otSum - (p.comp_time_settled_pay || 0) },
+                ...(p.comp_time_settled_pay > 0 ? [{ k: '補休折現', v: p.comp_time_settled_pay }] : []),
                 { k: '獎金', v: p.policyBonus || 0 },
                 ...(p.unused_leave_payout > 0 ? [{ k: '特休折現', v: p.unused_leave_payout }] : []),
                 ...(p.severance_total > 0 ? [{ k: '資遣費', v: p.severance_total }] : []),

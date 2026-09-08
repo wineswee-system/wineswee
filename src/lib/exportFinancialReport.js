@@ -27,7 +27,7 @@ function enrich(p) {
   p._er_emp = R(daily * idays * 0.01 * 0.70)
   p._er_occ = R(daily * idays * 0.0019)
   p._er_sub = p._er_ord + p._er_emp + p._er_occ
-  p._ot = n(p.regular_overtime_pay) + n(p.extra_overtime_pay)     // 加班費全免稅
+  p._ot = n(p.regular_overtime_pay) - n(p.comp_time_settled_pay) + n(p.extra_overtime_pay)     // 加班費全免稅(補休另列補休代金,扣除避免重複)
   const lvSum = Object.values(bt).reduce((a, b) => a + b, 0)
   const late = n(p.lateDeduction) + n(p.earlyLeaveDeduction) + n(p.awolDeduction)
   p._salSub = n(p.base_salary) + n(p.meal_allowance) + n(p.role_allowance) + n(p.night_allowance) + n(p.cross_store_allowance) + n(p.transport_allowance) + n(p.unused_leave_payout) + n(p.comp_time_settled_pay) - lvSum - late
@@ -35,7 +35,8 @@ function enrich(p) {
   p._net = n(p.netSalary) + n(p.manual_bonus) - n(p.manual_deduction)
   p._erTotal = R(p._net + p._er_sub + n(p.healthEmployer) + n(p.pensionEmployer))
   // 其他加項/其他減項殘差:確保 應付 + Σ其他加項 − Σ其他減項 = 本月實發
-  const addItem = n(p.severance_amount) + n(p.attendance_bonus) + n(p.policyBonus) + n(p.manual_bonus)
+  const addItem = n(p.severance_amount) + n(p.severance_notice_wage) + n(p.attendance_bonus) + n(p.policyBonus) + n(p.manual_bonus)
+    + n(p.expired_leave_cashout) + n(p.ptPaidLeavePay) + n(p.ptHalfLeavePay) + n(p.other_custom_total)
   const dedItem = p._li_sub + n(p.healthInsurance) + n(p.pension) + n(p.nhi_supplementary) + n(p.legal_deduction) + n(p.incomeTax) + n(p.manual_deduction)
   const recon = p._net - p._payable - addItem + dedItem
   p._resAdd = recon > 0 ? recon : 0
@@ -67,6 +68,11 @@ function financeCols(LV) {
   F.push({ r3: '加班費', r4: '應稅', r5: '', w: 10, get: () => 0 })
   F.push({ r3: '應付薪資小計', r4: '', r5: '', w: 12, get: p => p._payable })
   F.push({ r3: '其他加項', r4: '資遣費', r5: '', w: 10, opt: 1, get: p => n(p.severance_amount) })
+  F.push({ r3: '其他加項', r4: '預告工資', r5: '', w: 10, opt: 1, get: p => n(p.severance_notice_wage) })
+  F.push({ r3: '其他加項', r4: '到期折現', r5: '', w: 10, opt: 1, get: p => n(p.expired_leave_cashout) })
+  F.push({ r3: '其他加項', r4: 'PT有薪假', r5: '', w: 10, opt: 1, get: p => n(p.ptPaidLeavePay) })
+  F.push({ r3: '其他加項', r4: 'PT半薪假', r5: '', w: 10, opt: 1, get: p => n(p.ptHalfLeavePay) })
+  F.push({ r3: '其他加項', r4: '其他津貼', r5: '', w: 10, opt: 1, get: p => n(p.other_custom_total) })
   F.push({ r3: '其他加項', r4: '全勤獎金', r5: '', w: 9, opt: 1, get: p => n(p.attendance_bonus) })
   F.push({ r3: '其他加項', r4: '獎金', r5: '', w: 9, opt: 1, get: p => n(p.policyBonus) })
   F.push({ r3: '其他加項', r4: '微調加項', r5: '', w: 10, opt: 1, get: p => n(p.manual_bonus) })

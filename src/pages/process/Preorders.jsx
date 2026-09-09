@@ -15,6 +15,7 @@ const emptyForm = () => ({
   items: [emptyItem()],
   need_bag: false, need_invoice: false, invoice_tax_id: '',
   specific_delivery: false, delivery_time: '',
+  shipping_no: '',
   notes: '', status: '未出貨',
 })
 
@@ -64,6 +65,7 @@ export default function Preorders() {
       items: Array.isArray(r.items) && r.items.length ? r.items.map(it => ({ name: it.name || '', qty: it.qty ?? 1 })) : [emptyItem()],
       need_bag: !!r.need_bag, need_invoice: !!r.need_invoice, invoice_tax_id: r.invoice_tax_id || '',
       specific_delivery: !!r.specific_delivery, delivery_time: r.delivery_time || '',
+      shipping_no: r.shipping_no || '',
       notes: r.notes || '', status: r.status || '未出貨',
     })
     setEditingId(r.id); setError(null); setShowModal(true)
@@ -85,6 +87,7 @@ export default function Preorders() {
       invoice_tax_id: form.need_invoice ? (form.invoice_tax_id || null) : null,
       specific_delivery: form.specific_delivery,
       delivery_time: form.specific_delivery ? (form.delivery_time || null) : null,
+      shipping_no: form.shipping_no?.trim() || null,
       notes: form.notes || null, status: form.status,
     }
     if (editingId) {
@@ -113,7 +116,7 @@ export default function Preorders() {
     if (!search.trim()) return true
     const q = search.trim().toLowerCase()
     const inItems = (r.items || []).some(it => (it.name || '').toLowerCase().includes(q))
-    return [r.customer_name, r.phone, r.address].some(f => (f || '').toLowerCase().includes(q)) || inItems
+    return [r.customer_name, r.phone, r.address, r.shipping_no].some(f => (f || '').toLowerCase().includes(q)) || inItems
   }
   const inDateRange = (r) => {
     if (dateFrom && (r.order_date || '') < dateFrom) return false
@@ -129,12 +132,12 @@ export default function Preorders() {
 
   const exportCsv = () => {
     const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`
-    const headers = ['日期', '姓名', '電話', '地址', '品項', '提袋', '發票統編', '指定送貨時間', '其他交待', '狀態']
+    const headers = ['日期', '姓名', '電話', '地址', '品項', '提袋', '發票統編', '指定送貨時間', '貨運單號', '其他交待', '狀態']
     const lines = [headers.join(',')]
     filtered.forEach(r => lines.push([
       r.order_date || '', r.customer_name || '', r.phone || '', r.address || '',
       itemsSummary(r.items), r.need_bag ? '是' : '', r.need_invoice ? (r.invoice_tax_id || '是') : '',
-      r.specific_delivery ? (r.delivery_time || '是') : '', r.notes || '', r.status,
+      r.specific_delivery ? (r.delivery_time || '是') : '', r.shipping_no || '', r.notes || '', r.status,
     ].map(esc).join(',')))
     const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' })
     const url = URL.createObjectURL(blob)
@@ -192,7 +195,7 @@ export default function Preorders() {
         <DateRangeField start={dateFrom} end={dateTo} onChange={(s, e) => { setDateFrom(s || ''); setDateTo(e || '') }} />
         <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
           <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="搜尋姓名 / 電話 / 地址 / 品項"
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="搜尋姓名 / 電話 / 地址 / 品項 / 貨運單號"
             style={{ ...fieldStyle, paddingLeft: 32 }} />
         </div>
       </div>
@@ -210,13 +213,14 @@ export default function Preorders() {
               <th style={{ padding: '10px 12px' }}>品項</th>
               <th style={{ padding: '10px 12px' }}>需求</th>
               <th style={{ padding: '10px 12px' }}>備註</th>
+              <th style={{ padding: '10px 12px' }}>貨運單號</th>
               <th style={{ padding: '10px 12px' }}>狀態</th>
               <th style={{ padding: '10px 12px', textAlign: 'right' }}>操作</th>
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 ? (
-              <tr><td colSpan={8} style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)' }}>沒有預購單</td></tr>
+              <tr><td colSpan={9} style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)' }}>沒有預購單</td></tr>
             ) : filtered.map(r => (
               <tr key={r.id} style={{ borderTop: '1px solid var(--border)', fontSize: 14 }}>
                 <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>{r.order_date || '—'}</td>
@@ -227,6 +231,7 @@ export default function Preorders() {
                   {[r.need_bag && '提袋', r.need_invoice && `統編${r.invoice_tax_id ? ' ' + r.invoice_tax_id : ''}`, r.specific_delivery && `指定時間${r.delivery_time ? ' ' + r.delivery_time : ''}`].filter(Boolean).join('、') || '—'}
                 </td>
                 <td style={{ padding: '10px 12px', maxWidth: 200, fontSize: 13, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap' }}>{r.notes || '—'}</td>
+                <td style={{ padding: '10px 12px', fontSize: 13, fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{r.shipping_no || '—'}</td>
                 <td style={{ padding: '10px 12px' }}>
                   <button onClick={() => toggleStatus(r)} title="點擊切換出貨狀態" style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 0 }}>{statusPill(r.status)}</button>
                 </td>
@@ -279,6 +284,8 @@ export default function Preorders() {
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}><input type="checkbox" checked={form.specific_delivery} onChange={e => set('specific_delivery', e.target.checked)} /> 是否特定送貨時間</label>
                 {form.specific_delivery && <input value={form.delivery_time} onChange={e => set('delivery_time', e.target.value)} placeholder="指定送貨時間(例:週六下午)" style={{ ...fieldStyle, marginLeft: 24, width: 'calc(100% - 24px)' }} />}
               </div>
+
+              <div><label style={labelStyle}>貨運單號</label><input value={form.shipping_no} onChange={e => set('shipping_no', e.target.value)} placeholder="出貨後填(可搜尋)" style={fieldStyle} /></div>
 
               <div><label style={labelStyle}>其他交待事項</label><textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={3} style={{ ...fieldStyle, resize: 'vertical' }} /></div>
 

@@ -284,8 +284,14 @@ function renderItem(item) {
   const starNote = item.is_star ? ` <span class="star">可開罰</span>` : ''
   const remark = (item.input_type === 'text' && item.remark)
     ? `<div class="item-remark">${safe(item.remark)}</div>` : ''
+  const multi = (item.input_type === 'multi' && Array.isArray(item.remark_list))
+    ? (() => {
+        const filled = item.remark_list.filter(x => (x || '').toString().trim())
+        return filled.length ? `<div class="item-remark">${filled.map((x, i) => `${i + 1}. ${safe(x)}`).join('<br>')}</div>` : ''
+      })()
+    : ''
   return `<tr class="${rowCls}">
-    <td>${star}${safe(item.item_text || '')}${starNote}${remark}</td>
+    <td>${star}${safe(item.item_text || '')}${starNote}${remark}${multi}</td>
     <td class="mark">${mark}</td>
   </tr>`
 }

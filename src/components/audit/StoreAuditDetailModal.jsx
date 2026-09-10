@@ -586,6 +586,51 @@ function ItemRow({ item, editable, maxDeduct, onChange }) {
           item.remark && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 3, padding: '3px 8px', background: 'var(--bg-secondary)', borderRadius: 4 }}>{item.remark}</div>
         )
       )}
+
+      {/* 多格填寫題(input_type='multi',例:抽查N樣庫存對比)— 可 +新增,內容進月報表 */}
+      {item.input_type === 'multi' && (
+        <MultiRemark list={item.remark_list} editable={editable} onChange={arr => onChange({ remark_list: arr })} />
+      )}
+    </div>
+  )
+}
+
+// 多格填寫:一格一項抽查內容,可 +新增 / 刪除;存 remark_list(jsonb 字串陣列)
+function MultiRemark({ list, editable, onChange }) {
+  const arr = Array.isArray(list) ? list : []
+  if (!editable) {
+    const filled = arr.filter(x => (x || '').trim())
+    if (!filled.length) return null
+    return (
+      <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: 3 }}>
+        {filled.map((x, i) => (
+          <div key={i} style={{ fontSize: 12, color: 'var(--text-secondary)', padding: '3px 8px', background: 'var(--bg-secondary)', borderRadius: 4 }}>{i + 1}. {x}</div>
+        ))}
+      </div>
+    )
+  }
+  const display = arr.length ? arr : ['']
+  const commit = (next) => onChange(next.length ? next : [''])
+  return (
+    <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {display.map((v, i) => (
+        <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <span style={{ fontSize: 11, color: 'var(--text-muted)', width: 16, textAlign: 'right' }}>{i + 1}.</span>
+          <input
+            className="form-input"
+            value={v || ''}
+            onChange={e => { const n = [...display]; n[i] = e.target.value; onChange(n) }}
+            placeholder={`抽查品項 ${i + 1}（帳面 vs 現場）`}
+            style={{ flex: 1, fontSize: 12, background: 'var(--bg-secondary)' }}
+          />
+          {display.length > 1 && (
+            <button type="button" onClick={() => commit(display.filter((_, j) => j !== i))}
+              style={{ width: 24, height: 24, borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-secondary)', color: 'var(--accent-red)', cursor: 'pointer', fontSize: 14, lineHeight: 1, flexShrink: 0 }}>×</button>
+          )}
+        </div>
+      ))}
+      <button type="button" onClick={() => onChange([...display, ''])}
+        style={{ alignSelf: 'flex-start', padding: '4px 12px', borderRadius: 6, border: '1px dashed var(--accent-cyan)', background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>＋ 新增一格</button>
     </div>
   )
 }

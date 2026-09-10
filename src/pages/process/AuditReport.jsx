@@ -73,14 +73,21 @@ export default function AuditReport() {
   const [year, setYear] = useState(now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear())
   const [month, setMonth] = useState(now.getMonth() === 0 ? 12 : now.getMonth())
   const [data, setData] = useState(null)
+  const [keyChecks, setKeyChecks] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const orgId = profile?.organization_id ?? getTenantOrgId()
     if (!orgId) return
     setLoading(true)
-    supabase.rpc('get_monthly_audit_report', { p_org: orgId, p_year: year, p_month: month })
-      .then(({ data, error }) => { setData(error ? null : data); setLoading(false) })
+    Promise.all([
+      supabase.rpc('get_monthly_audit_report', { p_org: orgId, p_year: year, p_month: month }),
+      supabase.rpc('get_monthly_audit_key_checks', { p_org: orgId, p_year: year, p_month: month }),
+    ]).then(([rep, kc]) => {
+      setData(rep.error ? null : rep.data)
+      setKeyChecks(kc.error || !Array.isArray(kc.data) ? [] : kc.data)
+      setLoading(false)
+    })
   }, [profile?.organization_id, year, month])
 
   const scores = data?.scores || []
@@ -191,6 +198,22 @@ export default function AuditReport() {
         put(R, 1, { font: { color: { rgb: SUB } }, fill: zeb, alignment: { horizontal: 'center' }, border })
         put(R, 2, { font: { color: { rgb: (c.stores === scores.length && scores.length > 0) ? RED : SUB } }, fill: zeb, alignment: { horizontal: 'center' }, border })
         put(R, 3, { font: { bold: true, color: { rgb: WINK } }, fill: zeb, alignment: { horizontal: 'center' }, border })
+        R++
+      })
+    }
+    if (keyChecks.length) {
+      rows.push(['']); R++
+      rows.push(['■ 重點抽查明細（庫存對比等）', '', '', '', '', '']); put(R, 0, { font: { bold: true, sz: 13, color: { rgb: WINE } } }); R++
+      const hk = ['門市', '日期', '抽查項目', '內容', '扣分', '']
+      rows.push(hk);['門市', '日期', '抽查項目', '內容', '扣分'].forEach((_, c) => put(R, c, { font: { bold: true, sz: 11, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: WINE } }, alignment: { horizontal: c === 0 || c === 2 || c === 3 ? 'left' : 'center', vertical: 'center' }, border })); R++
+      keyChecks.forEach((k, i) => {
+        rows.push([k.store_name, String(k.audit_date || ''), k.item_text, (k.entries || []).map((e, j) => `${j + 1}. ${e}`).join('\n'), (k.deduct || 0) > 0 ? k.deduct : '—', ''])
+        const zeb = i % 2 ? { fgColor: { rgb: ZEBRA } } : undefined
+        put(R, 0, { font: { bold: true, color: { rgb: INK } }, fill: zeb, alignment: { horizontal: 'left', vertical: 'center' }, border })
+        put(R, 1, { font: { color: { rgb: SUB } }, fill: zeb, alignment: { horizontal: 'center', vertical: 'center' }, border })
+        put(R, 2, { font: { color: { rgb: SUB } }, fill: zeb, alignment: { horizontal: 'left', vertical: 'center', wrapText: true }, border })
+        put(R, 3, { font: { color: { rgb: INK } }, fill: zeb, alignment: { horizontal: 'left', vertical: 'top', wrapText: true }, border })
+        put(R, 4, { font: { bold: true, color: { rgb: (k.deduct || 0) > 0 ? RED : SUB } }, fill: zeb, alignment: { horizontal: 'center', vertical: 'center' }, border })
         R++
       })
     }
@@ -351,6 +374,40 @@ export default function AuditReport() {
                           ? <span className="ar-pill ar-pd">{c.stores} 家全中</span>
                           : <span className="ar-revi">{c.stores} 家</span>}</td>
                         <td><div className="ar-freq"><span className="ar-freqbar"><i style={{ width: (c.deduct / maxCatDeduct * 100) + '%' }} /></span><span className="ar-freqn" style={{ minWidth: 40, color: 'var(--wine-ink)' }}>{c.deduct}</span></div></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* 重點抽查明細（多格填寫題:庫存對比等）— 按門市/日期列出內容 */}
+          {keyChecks.length > 0 && (
+            <div className="ar-card">
+              <div className="ar-sec"><span className="mk" style={{ background: 'var(--wine-soft)' }}>🔍</span><h2>重點抽查明細</h2><span className="sub">庫存對比等·哪間門市哪天</span></div>
+              <div style={{ overflowX: 'auto' }}>
+                <table>
+                  <thead><tr>
+                    <th className="l" style={{ width: 130 }}>門市</th><th style={{ width: 100 }}>日期</th>
+                    <th className="l">抽查項目</th><th className="l">內容</th><th style={{ width: 64 }}>扣分</th>
+                  </tr></thead>
+                  <tbody>
+                    {keyChecks.map((k, i) => (
+                      <tr key={i}>
+                        <td className="ar-l ar-store" style={{ fontSize: 14 }}>{k.store_name}</td>
+                        <td className="ar-c ar-revi">{k.audit_date}</td>
+                        <td className="ar-l" style={{ fontSize: 13, color: 'var(--sub)' }}>{k.item_text}</td>
+                        <td className="ar-l">
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                            {(k.entries || []).map((e, j) => (
+                              <div key={j} style={{ fontSize: 13, color: 'var(--ink)' }}>{j + 1}. {e}</div>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="ar-c">{(k.deduct || 0) > 0
+                          ? <span className="ar-ded">{k.deduct}</span>
+                          : <span className="ar-dash">—</span>}</td>
                       </tr>
                     ))}
                   </tbody>

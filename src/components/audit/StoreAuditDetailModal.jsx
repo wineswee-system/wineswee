@@ -595,41 +595,62 @@ function ItemRow({ item, editable, maxDeduct, onChange }) {
   )
 }
 
-// 多格填寫:一格一項抽查內容,可 +新增 / 刪除;存 remark_list(jsonb 字串陣列)
+// 抽盤結果:現場 − 庫存 → 正確 / 多N / 少N（任一非數字回 null）
+export function invResult(book, actual) {
+  const b = (book === '' || book == null) ? null : Number(book)
+  const a = (actual === '' || actual == null) ? null : Number(actual)
+  if (b == null || a == null || Number.isNaN(b) || Number.isNaN(a)) return null
+  const d = a - b
+  if (d === 0) return { t: '正確', c: 'var(--accent-green)' }
+  return d > 0 ? { t: `多${d}`, c: 'var(--accent-orange)' } : { t: `少${-d}`, c: 'var(--accent-red)' }
+}
+const EMPTY_ROW = { name: '', book: '', actual: '' }
+const normRows = (list) => Array.isArray(list) ? list.map(x => (x && typeof x === 'object') ? { name: x.name || '', book: x.book ?? '', actual: x.actual ?? '' } : { ...EMPTY_ROW, name: String(x || '') }) : []
+
+// 庫存抽查多格:每格 品名 / 庫存數量 / 實際數量,可 +新增 / 刪除;存 remark_list(jsonb 物件陣列)
 function MultiRemark({ list, editable, onChange }) {
-  const arr = Array.isArray(list) ? list : []
+  const arr = normRows(list)
   if (!editable) {
-    const filled = arr.filter(x => (x || '').trim())
+    const filled = arr.filter(x => (x.name || '').trim())
     if (!filled.length) return null
     return (
       <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: 3 }}>
-        {filled.map((x, i) => (
-          <div key={i} style={{ fontSize: 12, color: 'var(--text-secondary)', padding: '3px 8px', background: 'var(--bg-secondary)', borderRadius: 4 }}>{i + 1}. {x}</div>
-        ))}
+        {filled.map((x, i) => {
+          const r = invResult(x.book, x.actual)
+          return (
+            <div key={i} style={{ fontSize: 12, color: 'var(--text-secondary)', padding: '3px 8px', background: 'var(--bg-secondary)', borderRadius: 4 }}>
+              {i + 1}. {x.name}　庫存 {x.book || '—'} / 現場 {x.actual || '—'}
+              {r && <span style={{ color: r.c, fontWeight: 700, marginLeft: 6 }}>{r.t}</span>}
+            </div>
+          )
+        })}
       </div>
     )
   }
-  const display = arr.length ? arr : ['']
-  const commit = (next) => onChange(next.length ? next : [''])
+  const display = arr.length ? arr : [{ ...EMPTY_ROW }]
+  const setAt = (i, k, v) => onChange(display.map((r, j) => j === i ? { ...r, [k]: v } : r))
+  const commit = (next) => onChange(next.length ? next : [{ ...EMPTY_ROW }])
   return (
-    <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 6 }}>
-      {display.map((v, i) => (
-        <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <span style={{ fontSize: 11, color: 'var(--text-muted)', width: 16, textAlign: 'right' }}>{i + 1}.</span>
-          <input
-            className="form-input"
-            value={v || ''}
-            onChange={e => { const n = [...display]; n[i] = e.target.value; onChange(n) }}
-            placeholder={`抽查品項 ${i + 1}（帳面 vs 現場）`}
-            style={{ flex: 1, fontSize: 12, background: 'var(--bg-secondary)' }}
-          />
-          {display.length > 1 && (
-            <button type="button" onClick={() => commit(display.filter((_, j) => j !== i))}
-              style={{ width: 24, height: 24, borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-secondary)', color: 'var(--accent-red)', cursor: 'pointer', fontSize: 14, lineHeight: 1, flexShrink: 0 }}>×</button>
-          )}
-        </div>
-      ))}
-      <button type="button" onClick={() => onChange([...display, ''])}
+    <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 5 }}>
+      <div style={{ display: 'flex', gap: 4, alignItems: 'center', fontSize: 10, color: 'var(--text-muted)', fontWeight: 700, paddingLeft: 18 }}>
+        <span style={{ flex: 2 }}>商品名稱</span><span style={{ width: 60, textAlign: 'center' }}>庫存</span><span style={{ width: 60, textAlign: 'center' }}>現場</span><span style={{ width: 44, textAlign: 'center' }}>結果</span><span style={{ width: 22 }} />
+      </div>
+      {display.map((row, i) => {
+        const r = invResult(row.book, row.actual)
+        return (
+          <div key={i} style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)', width: 14 }}>{i + 1}.</span>
+            <input className="form-input" value={row.name} onChange={e => setAt(i, 'name', e.target.value)} placeholder="品名" style={{ flex: 2, fontSize: 12, background: 'var(--bg-secondary)' }} />
+            <input className="form-input" type="number" value={row.book} onChange={e => setAt(i, 'book', e.target.value)} placeholder="庫存" style={{ width: 60, fontSize: 12, textAlign: 'center', background: 'var(--bg-secondary)' }} />
+            <input className="form-input" type="number" value={row.actual} onChange={e => setAt(i, 'actual', e.target.value)} placeholder="現場" style={{ width: 60, fontSize: 12, textAlign: 'center', background: 'var(--bg-secondary)' }} />
+            <span style={{ width: 44, fontSize: 12, fontWeight: 700, textAlign: 'center', color: r ? r.c : 'var(--text-muted)' }}>{r ? r.t : '—'}</span>
+            {display.length > 1
+              ? <button type="button" onClick={() => commit(display.filter((_, j) => j !== i))} style={{ width: 22, height: 22, borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-secondary)', color: 'var(--accent-red)', cursor: 'pointer', fontSize: 13, lineHeight: 1, flexShrink: 0 }}>×</button>
+              : <span style={{ width: 22 }} />}
+          </div>
+        )
+      })}
+      <button type="button" onClick={() => onChange([...display, { ...EMPTY_ROW }])}
         style={{ alignSelf: 'flex-start', padding: '4px 12px', borderRadius: 6, border: '1px dashed var(--accent-cyan)', background: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>＋ 新增一格</button>
     </div>
   )

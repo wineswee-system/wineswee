@@ -66,6 +66,16 @@ const CSS = `
 const MEDAL_CLS = ['ar-m1', 'ar-m2', 'ar-m3']
 const band = (v) => v >= 85 ? 'hi' : v >= 75 ? 'mid' : 'lo'
 
+// 抽盤結果:現場 − 庫存 → 正確 / 多N / 少N（任一非數字回 null）。顏色用報表色盤
+function invResult(book, actual) {
+  const b = (book === '' || book == null) ? null : Number(book)
+  const a = (actual === '' || actual == null) ? null : Number(actual)
+  if (b == null || a == null || Number.isNaN(b) || Number.isNaN(a)) return null
+  const d = a - b
+  if (d === 0) return { t: '正確', c: 'var(--green)', rgb: '12885A' }
+  return d > 0 ? { t: `多${d}`, c: 'var(--amber)', rgb: 'B0730F' } : { t: `少${-d}`, c: 'var(--red)', rgb: 'D23B3B' }
+}
+
 export default function AuditReport() {
   const navigate = useNavigate()
   const { profile } = useAuth()
@@ -203,17 +213,19 @@ export default function AuditReport() {
     }
     if (keyChecks.length) {
       rows.push(['']); R++
-      rows.push(['■ 重點抽查明細（庫存對比等）', '', '', '', '', '']); put(R, 0, { font: { bold: true, sz: 13, color: { rgb: WINE } } }); R++
-      const hk = ['門市', '日期', '抽查項目', '內容', '扣分', '']
-      rows.push(hk);['門市', '日期', '抽查項目', '內容', '扣分'].forEach((_, c) => put(R, c, { font: { bold: true, sz: 11, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: WINE } }, alignment: { horizontal: c === 0 || c === 2 || c === 3 ? 'left' : 'center', vertical: 'center' }, border })); R++
+      rows.push([`■ ${month} 月 庫存抽查狀況`, '', '', '', '', '']); put(R, 0, { font: { bold: true, sz: 13, color: { rgb: WINE } } }); R++
+      const hk = ['門市', '抽盤日期', '商品名稱', '庫存數量', '現場數量', '抽盤結果']
+      rows.push(hk); hk.forEach((_, c) => put(R, c, { font: { bold: true, sz: 11, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: WINE } }, alignment: { horizontal: c === 0 || c === 2 ? 'left' : 'center', vertical: 'center' }, border })); R++
       keyChecks.forEach((k, i) => {
-        rows.push([k.store_name, String(k.audit_date || ''), k.item_text, (k.entries || []).map((e, j) => `${j + 1}. ${e}`).join('\n'), (k.deduct || 0) > 0 ? k.deduct : '—', ''])
+        const r = invResult(k.book, k.actual)
+        rows.push([k.store_name, String(k.audit_date || ''), k.name, k.book ?? '—', k.actual ?? '—', r ? r.t : '—'])
         const zeb = i % 2 ? { fgColor: { rgb: ZEBRA } } : undefined
         put(R, 0, { font: { bold: true, color: { rgb: INK } }, fill: zeb, alignment: { horizontal: 'left', vertical: 'center' }, border })
         put(R, 1, { font: { color: { rgb: SUB } }, fill: zeb, alignment: { horizontal: 'center', vertical: 'center' }, border })
-        put(R, 2, { font: { color: { rgb: SUB } }, fill: zeb, alignment: { horizontal: 'left', vertical: 'center', wrapText: true }, border })
-        put(R, 3, { font: { color: { rgb: INK } }, fill: zeb, alignment: { horizontal: 'left', vertical: 'top', wrapText: true }, border })
-        put(R, 4, { font: { bold: true, color: { rgb: (k.deduct || 0) > 0 ? RED : SUB } }, fill: zeb, alignment: { horizontal: 'center', vertical: 'center' }, border })
+        put(R, 2, { font: { bold: true, color: { rgb: INK } }, fill: zeb, alignment: { horizontal: 'left', vertical: 'center', wrapText: true }, border })
+        put(R, 3, { font: { color: { rgb: INK } }, fill: zeb, alignment: { horizontal: 'center', vertical: 'center' }, border })
+        put(R, 4, { font: { color: { rgb: INK } }, fill: zeb, alignment: { horizontal: 'center', vertical: 'center' }, border })
+        put(R, 5, { font: { bold: true, color: { rgb: r ? r.rgb : '9AA7B5' } }, fill: zeb, alignment: { horizontal: 'center', vertical: 'center' }, border })
         R++
       })
     }
@@ -382,34 +394,30 @@ export default function AuditReport() {
             </div>
           )}
 
-          {/* 重點抽查明細（多格填寫題:庫存對比等）— 按門市/日期列出內容 */}
+          {/* 庫存抽查狀況(多格填寫題展開:一商品一列,抽盤結果=現場−庫存) */}
           {keyChecks.length > 0 && (
             <div className="ar-card">
-              <div className="ar-sec"><span className="mk" style={{ background: 'var(--wine-soft)' }}>🔍</span><h2>重點抽查明細</h2><span className="sub">庫存對比等·哪間門市哪天</span></div>
+              <div className="ar-sec"><span className="mk" style={{ background: 'var(--wine-soft)' }}>🔍</span><h2>庫存抽查狀況</h2><span className="sub">{month} 月·抽盤結果=現場−庫存</span></div>
               <div style={{ overflowX: 'auto' }}>
                 <table>
                   <thead><tr>
-                    <th className="l" style={{ width: 130 }}>門市</th><th style={{ width: 100 }}>日期</th>
-                    <th className="l">抽查項目</th><th className="l">內容</th><th style={{ width: 64 }}>扣分</th>
+                    <th className="l" style={{ width: 120 }}>門市</th><th style={{ width: 100 }}>抽盤日期</th>
+                    <th className="l">商品名稱</th><th style={{ width: 90 }}>庫存數量</th><th style={{ width: 90 }}>現場數量</th><th style={{ width: 90 }}>抽盤結果</th>
                   </tr></thead>
                   <tbody>
-                    {keyChecks.map((k, i) => (
-                      <tr key={i}>
-                        <td className="ar-l ar-store" style={{ fontSize: 14 }}>{k.store_name}</td>
-                        <td className="ar-c ar-revi">{k.audit_date}</td>
-                        <td className="ar-l" style={{ fontSize: 13, color: 'var(--sub)' }}>{k.item_text}</td>
-                        <td className="ar-l">
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                            {(k.entries || []).map((e, j) => (
-                              <div key={j} style={{ fontSize: 13, color: 'var(--ink)' }}>{j + 1}. {e}</div>
-                            ))}
-                          </div>
-                        </td>
-                        <td className="ar-c">{(k.deduct || 0) > 0
-                          ? <span className="ar-ded">{k.deduct}</span>
-                          : <span className="ar-dash">—</span>}</td>
-                      </tr>
-                    ))}
+                    {keyChecks.map((k, i) => {
+                      const r = invResult(k.book, k.actual)
+                      return (
+                        <tr key={i}>
+                          <td className="ar-l ar-store" style={{ fontSize: 14 }}>{k.store_name}</td>
+                          <td className="ar-c ar-revi">{k.audit_date}</td>
+                          <td className="ar-l ar-item">{k.name}</td>
+                          <td className="ar-c ar-num">{k.book ?? '—'}</td>
+                          <td className="ar-c ar-num">{k.actual ?? '—'}</td>
+                          <td className="ar-c" style={{ fontWeight: 800, color: r ? r.c : 'var(--muted)' }}>{r ? r.t : '—'}</td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>

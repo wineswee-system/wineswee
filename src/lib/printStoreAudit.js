@@ -286,8 +286,21 @@ function renderItem(item) {
     ? `<div class="item-remark">${safe(item.remark)}</div>` : ''
   const multi = (item.input_type === 'multi' && Array.isArray(item.remark_list))
     ? (() => {
-        const filled = item.remark_list.filter(x => (x || '').toString().trim())
-        return filled.length ? `<div class="item-remark">${filled.map((x, i) => `${i + 1}. ${safe(x)}`).join('<br>')}</div>` : ''
+        const rows = item.remark_list
+          .map(x => (x && typeof x === 'object') ? x : { name: String(x || ''), book: '', actual: '' })
+          .filter(x => (x.name || '').toString().trim())
+        if (!rows.length) return ''
+        const line = (x, i) => {
+          const b = (x.book === '' || x.book == null) ? null : Number(x.book)
+          const a = (x.actual === '' || x.actual == null) ? null : Number(x.actual)
+          let res = ''
+          if (b != null && a != null && !isNaN(b) && !isNaN(a)) {
+            const d = a - b
+            res = d === 0 ? '正確' : d > 0 ? `多${d}` : `少${-d}`
+          }
+          return `${i + 1}. ${safe(x.name)}（庫存 ${x.book || '—'} / 現場 ${x.actual || '—'}${res ? '：' + res : ''}）`
+        }
+        return `<div class="item-remark">${rows.map(line).join('<br>')}</div>`
       })()
     : ''
   return `<tr class="${rowCls}">

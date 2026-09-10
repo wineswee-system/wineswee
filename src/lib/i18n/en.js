@@ -8059,7 +8059,7 @@ export default {
   "應徵者匯入範本.csv": "applicant_import_template.csv",
   "= 看得到，不能改 ·": "= Can view, cannot edit ·",
   "= 看得到 + 可以改": "= Can view + can edit",
-  "訂購單申請-檢視全部人": "Purchase order requests - view all",
+  "叫貨申請單-檢視全部人": "Purchase order requests - view all",
   "排班規則 / 工時設定": "Scheduling rules / working hours settings",
   "戰情儀表板：流程 分頁": "Command dashboard: Workflow tab",
   "系統功能說明與常見問題": "System feature guide and FAQ",

@@ -911,8 +911,8 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /* 固定懸浮 header(玻璃質感,浮在內容之上) */
-.ws{--hh:138px}
-.ws .header{position:fixed;top:0;left:0;right:0;z-index:60;background:rgba(250,245,236,.82);
+.ws{--hh:calc(138px + var(--sw-banner-offset, 0px))}
+.ws .header{position:fixed;top:var(--sw-banner-offset, 0px);left:0;right:0;z-index:60;background:rgba(250,245,236,.82);
   backdrop-filter:blur(18px) saturate(1.15);border-bottom:1px solid rgba(201,170,130,.32);
   box-shadow:0 14px 44px -26px rgba(58,15,17,.42)}
 .ws .header-ann{background:var(--wine-deep);color:var(--gold-hi);text-align:center;font-family:var(--display);

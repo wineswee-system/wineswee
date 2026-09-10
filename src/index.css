@@ -64,6 +64,7 @@
   --sidebar-collapsed: 72px;
   --topnav-height: 52px;
   --header-height: 0px;
+  --sw-banner-offset: 0px;
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 14px;
@@ -415,7 +416,7 @@ input, select, textarea {
   padding: 0 20px;
   gap: 8px;
   position: fixed;
-  top: 0;
+  top: var(--sw-banner-offset, 0px);
   left: 0;
   right: 0;
   z-index: 110;
@@ -674,7 +675,7 @@ input, select, textarea {
   display: flex;
   flex-direction: column;
   position: fixed;
-  top: var(--topnav-height);
+  top: calc(var(--topnav-height) + var(--sw-banner-offset, 0px));
   left: 0;
   z-index: 100;
   transition: all var(--transition-normal);
@@ -904,10 +905,10 @@ input, select, textarea {
 .main-content {
   flex: 1;
   margin-left: var(--sidebar-width);
-  margin-top: var(--topnav-height);
+  margin-top: calc(var(--topnav-height) + var(--sw-banner-offset, 0px));
   /* vh 在 #root zoom 環境下會被乘上 scale，這裡除回去保持實際視窗大小 */
-  min-height: calc((100vh - var(--topnav-height)) / var(--app-font-scale, 1));
-  max-height: calc((100vh - var(--topnav-height)) / var(--app-font-scale, 1));
+  min-height: calc((100vh - var(--topnav-height) - var(--sw-banner-offset, 0px)) / var(--app-font-scale, 1));
+  max-height: calc((100vh - var(--topnav-height) - var(--sw-banner-offset, 0px)) / var(--app-font-scale, 1));
   overflow-y: auto;
   /* ★ 改 auto（原本 hidden）：當內層 wrapper 該 overflow 卻沒出滾軸時，
      main-content 自己會出橫滾軸救命。落地頁 .demo-root / .lp-root 自己
@@ -3011,7 +3012,7 @@ div.data-table > table {
 
 /* ═══ Navbar — glassmorphism ═══ */
 .demo-nav {
-  position: fixed; top: 0; left: 0; right: 0; z-index: 200;
+  position: fixed; top: var(--sw-banner-offset, 0px); left: 0; right: 0; z-index: 200;
   height: 64px;
   background: rgba(250, 251, 255, 0.85);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
@@ -4207,7 +4208,7 @@ div.data-table > table {
 .lp-section-header h2{font-family:'Space Grotesk',sans-serif;font-size:clamp(28px,4.5vw,46px);font-weight:700;color:#1a1a2e;letter-spacing:-.03em;line-height:1.15;margin:12px 0 16px}
 .lp-section-header p{font-size:17px;color:#64748b;line-height:1.7;max-width:520px;margin:0 auto}
 .lp-badge{display:inline-flex;align-items:center;gap:6px;padding:6px 16px;border-radius:100px;background:linear-gradient(135deg,#eef2ff,#faf5ff);border:1px solid rgba(99,102,241,.12);font-size:13px;font-weight:700;color:#6366f1;letter-spacing:.02em}
-.lp-nav{position:fixed;top:0;left:0;right:0;z-index:200;height:68px;background:rgba(248,250,255,.8);-webkit-backdrop-filter:blur(24px) saturate(180%);backdrop-filter:blur(24px) saturate(180%);border-bottom:1px solid rgba(0,0,0,.04)}
+.lp-nav{position:fixed;top:var(--sw-banner-offset, 0px);left:0;right:0;z-index:200;height:68px;background:rgba(248,250,255,.8);-webkit-backdrop-filter:blur(24px) saturate(180%);backdrop-filter:blur(24px) saturate(180%);border-bottom:1px solid rgba(0,0,0,.04)}
 .lp-nav-inner{max-width:1200px;margin:0 auto;height:100%;display:flex;align-items:center;justify-content:space-between;padding:0 32px}
 .lp-nav-brand{display:flex;align-items:center;gap:10px;cursor:pointer}
 .lp-logo{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;display:flex;align-items:center;justify-content:center;font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:700}

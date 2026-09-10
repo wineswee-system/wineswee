@@ -12,6 +12,7 @@ import LoadingSpinner from './components/LoadingSpinner'
 import ConfirmDialog from './components/ConfirmDialog'
 import StickyHorizontalScrollbar from './components/StickyHorizontalScrollbar'
 import OutageBanner from './components/OutageBanner'
+import ServiceEndBanner from './components/ServiceEndBanner'
 import { Toaster } from 'sonner'
 import { TOAST_POSITION } from './lib/toast'
 import { logError } from './lib/systemLogger.js'
@@ -268,6 +269,7 @@ export default function App() {
     <AuthProvider>
       <TenantProvider>
         <ThemedToaster />
+        <ServiceEndBanner />
         <OutageBanner />
         <ConfirmDialog />
         <Suspense fallback={<LoadingSpinner />}>

@@ -129,6 +129,10 @@ export default function OrgChart() {
   const isStoreLead = (e, store) => (store?.manager_id ? e.id === store.manager_id : (e.position || '').includes('店長') && !(e.position || '').includes('副店長'))
   // 儲備幹部：組織圖上獨立一層,掛在店長底下(位階在店長與一般門市人員之間)
   const isReserve = (e) => (e.position || '').includes('儲備')
+  // 門市/課別人員名字顏色:派遣→綠、兼職→橘、其餘→次要文字
+  const staffColor = (e) => e.employment_type === '派遣' ? 'var(--accent-green)'
+    : e.employment_type === '兼職' ? 'var(--accent-orange)'
+    : 'var(--text-secondary)'
   const storeEmployees = (store) => {
     const list = employees.filter(e => e.store_id === store.id)
     // 跨店負責人:負責人(manager_id)的 store_id 若在別家店(如督導管多店),本店卡撈不到 → 補進來,否則負責人不出現
@@ -414,7 +418,7 @@ export default function OrgChart() {
                                   {staff.map(emp => (
                                     <div key={emp.id} style={{
                                       fontSize: 11,
-                                      color: isStoreLead(emp, s) ? color : (emp.employment_type === '兼職' ? 'var(--accent-orange)' : 'var(--text-secondary)'),
+                                      color: isStoreLead(emp, s) ? color : staffColor(emp),
                                       fontWeight: isStoreLead(emp, s) ? 600 : 400,
                                     }}>
                                       {labelOf(emp)}
@@ -486,7 +490,7 @@ export default function OrgChart() {
                             {staff.map(emp => (
                               <div key={emp.id} style={{
                                 fontSize: 11,
-                                color: isStoreLead(emp, s) ? color : (emp.employment_type === '兼職' ? 'var(--accent-orange)' : 'var(--text-secondary)'),
+                                color: isStoreLead(emp, s) ? color : staffColor(emp),
                                 fontWeight: isStoreLead(emp, s) ? 700 : 500,
                                 lineHeight: 1.3,
                               }}>
@@ -678,7 +682,7 @@ export default function OrgChart() {
                                             borderRadius: 5,
                                             padding: '3px 8px',
                                             textAlign: 'center',
-                                            color: emp.employment_type === '兼職' ? 'var(--accent-orange)' : 'var(--text-secondary)',
+                                            color: staffColor(emp),
                                             fontWeight: 500,
                                           }}>
                                             {labelOf(emp)}
@@ -717,7 +721,7 @@ export default function OrgChart() {
                             </div>
                             {mgr && <div style={{ fontSize: 11, color, fontWeight: 600, border: `1px dashed ${color}`, borderRadius: 6, padding: '3px 8px', background: 'var(--glass-light)' }}>{mgr.position ? `${mgr.position} ` : ''}{labelOf(mgr)}</div>}
                             {staff.map((e) => (
-                              <div key={e.id} style={{ fontSize: 11, background: 'var(--glass-light)', border: '1px solid var(--border-subtle)', borderRadius: 5, padding: '3px 8px', color: e.employment_type === '兼職' ? 'var(--accent-orange)' : 'var(--text-secondary)' }}>{labelOf(e)}</div>
+                              <div key={e.id} style={{ fontSize: 11, background: 'var(--glass-light)', border: '1px solid var(--border-subtle)', borderRadius: 5, padding: '3px 8px', color: staffColor(e) }}>{labelOf(e)}</div>
                             ))}
                           </div>
                         )

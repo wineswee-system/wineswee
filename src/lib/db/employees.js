@@ -2,7 +2,8 @@ import { supabase } from '../supabase'
 import { dedup } from './utils'
 
 export const getEmployees = (orgId) => {
-  let q = supabase.from('employees').select('*, departments!department_id(name), stores!store_id(name)').order('id')
+  // is_archived=true = 系統/測試管理帳號(非真員工)→ 一律不列(單筆 getEmployeeById 不濾,仍可管理)
+  let q = supabase.from('employees').select('*, departments!department_id(name), stores!store_id(name)').not('is_archived', 'is', true).order('id')
   if (orgId) q = q.eq('organization_id', orgId)
   return q
 }
@@ -12,6 +13,7 @@ export const getEmployees = (orgId) => {
 export const getEmployeesList = (orgId) => {
   let q = supabase.from('employees')
     .select('id, name, name_en, dept, department_id, store, store_id, position, position_secondary, position_third, email, phone, employee_number, employment_type, join_date, resign_date, status, is_archived, avatar, avatar_url, departments!department_id(name), stores!store_id(name)')
+    .not('is_archived', 'is', true)   // 系統/測試管理帳號不列
     .order('id')
   if (orgId) q = q.eq('organization_id', orgId)
   return q
@@ -44,7 +46,7 @@ export const inviteEmployee = (email, name) =>
 export const getActiveEmployees = (select = 'id, name, department_id, store_id, departments(name), stores(name)', orgId) => {
   const key = orgId ? `activeEmployees:${select}:${orgId}` : `activeEmployees:${select}`
   return dedup(key, () => {
-    let q = supabase.from('employees').select(select).eq('status', '在職').order('name')
+    let q = supabase.from('employees').select(select).eq('status', '在職').not('is_archived', 'is', true).order('name')
     if (orgId) q = q.eq('organization_id', orgId)
     return q
   })

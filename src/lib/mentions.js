@@ -38,7 +38,7 @@ async function resolveMentionsToEmployees(names) {
     .from('employees')
     .select('id, name, email')
     .in('name', names)
-    .eq('status', '在職')
+    .eq('status', '在職').not('is_archived', 'is', true)
   return data || []
 }
 

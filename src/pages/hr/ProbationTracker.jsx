@@ -39,7 +39,7 @@ export default function ProbationTracker() {
     const orgId = profile?.organization_id ?? getTenantOrgId()   // super_admin 無固定 org → 吃目前切換的 org
     Promise.all([
       getProbationRecords(profile?.organization_id),
-      supabase.from('employees').select('id, name, name_en, dept, department_id, store, store_id, position, join_date, departments!department_id(name), stores!store_id(name)').eq('status', '在職').eq('organization_id', orgId).order('name'),
+      supabase.from('employees').select('id, name, name_en, dept, department_id, store, store_id, position, join_date, departments!department_id(name), stores!store_id(name)').eq('status', '在職').not('is_archived', 'is', true).eq('organization_id', orgId).order('name'),
     ]).then(([r, e]) => {
       setRecords(r.data || [])
       setEmployees(e.data || [])

@@ -36,7 +36,7 @@ export default function TaskFormsTab({ task, formBindings, setFormBindings, supe
   // 載入員工清單（指派他人填寫用）
   useEffect(() => {
     const orgId = task?.organization_id
-    let q = supabase.from('employees').select('id, name, name_en, position, dept, store').eq('status', '在職').order('name')
+    let q = supabase.from('employees').select('id, name, name_en, position, dept, store').eq('status', '在職').not('is_archived', 'is', true).order('name')
     if (orgId) q = q.eq('organization_id', orgId)
     q.then(({ data }) => setEmployees(data || []))
   }, [task?.organization_id])

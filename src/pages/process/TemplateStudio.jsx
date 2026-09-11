@@ -111,7 +111,7 @@ export default function TemplateStudio() {
         supabase.from('sop_templates').select('id, name').order('name'),
         supabase.from('workflow_categories').select('id, name').eq('scope', 'workflow').order('name'),
         supabase.from('departments').select('id, name').order('name'),
-        supabase.from('employees').select('id, name, name_en, position, dept, store').eq('status', '在職').eq('organization_id', orgId).order('name'),
+        supabase.from('employees').select('id, name, name_en, position, dept, store').eq('status', '在職').not('is_archived', 'is', true).eq('organization_id', orgId).order('name'),
       ])
 
       if (clRes.status === 'fulfilled' && clRes.value.data) {

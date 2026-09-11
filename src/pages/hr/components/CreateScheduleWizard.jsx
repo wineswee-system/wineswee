@@ -236,7 +236,7 @@ export default function CreateScheduleWizard({ open, onClose, locations, mode, o
       toFetch.map(async id => {
         const empRes = await supabase.from('employees')
           .select('id, name, dept, employment_type, store, store_id')
-          .eq('store_id', id).eq('status', '在職').order('name')
+          .eq('store_id', id).eq('status', '在職').not('is_archived', 'is', true).order('name')
         const emps = empRes.data || []
         let lastDate = null
         if (emps.length > 0) {

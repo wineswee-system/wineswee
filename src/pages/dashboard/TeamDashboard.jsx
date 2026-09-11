@@ -422,7 +422,7 @@ export default function TeamDashboard() {
     let empQ = supabase.from('employees')
       .select('*')
       .eq('organization_id', orgId)
-      .eq('status', '在職')
+      .eq('status', '在職').not('is_archived', 'is', true)
       .order('name')
     if (isManager && visibleStoreIds) empQ = empQ.in('store_id', visibleStoreIds)  // 督導看轄下多店
     else if (scopeStoreId) empQ = empQ.eq('store_id', scopeStoreId)

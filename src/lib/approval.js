@@ -11,7 +11,7 @@ export async function getSupervisorById(employeeId) {
     .from('employees')
     .select('supervisor_id')
     .eq('id', employeeId)
-    .eq('status', '在職')
+    .eq('status', '在職').not('is_archived', 'is', true)
     .maybeSingle()
 
   if (!emp?.supervisor_id) return null
@@ -20,7 +20,7 @@ export async function getSupervisorById(employeeId) {
     .from('employees')
     .select('id, name, email, role_id')
     .eq('id', emp.supervisor_id)
-    .eq('status', '在職')
+    .eq('status', '在職').not('is_archived', 'is', true)
     .maybeSingle()
 
   return supervisor
@@ -32,7 +32,7 @@ export async function getSupervisor(employeeName) {
     .from('employees')
     .select('id, supervisor_id')
     .eq('name', employeeName)
-    .eq('status', '在職')
+    .eq('status', '在職').not('is_archived', 'is', true)
     .maybeSingle()
 
   if (!emp) return null
@@ -49,7 +49,7 @@ export async function getApprovalChain(employeeNameOrId, permissionCode) {
   let currentId = typeof employeeNameOrId === 'number' ? employeeNameOrId : null
   if (!currentId) {
     const { data: rows } = await supabase
-      .from('employees').select('id').eq('name', employeeNameOrId).eq('status', '在職')
+      .from('employees').select('id').eq('name', employeeNameOrId).eq('status', '在職').not('is_archived', 'is', true)
     // Guard: ambiguous name match across org — cannot safely pick one approver
     if (!rows?.length || rows.length > 1) return chain
     currentId = rows[0].id

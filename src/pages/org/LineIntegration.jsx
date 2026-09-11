@@ -52,7 +52,7 @@ export default function LineIntegration() {
       const emptyRes = Promise.resolve({ data: [], error: null })
       const [acc, emp, grp, msg, cmd] = await Promise.all([
         noCh ? emptyRes : supabase.from('employee_line_accounts').select('*, employees(name, department_id, position, departments!department_id(name)), line_channels(code, name)').in('channel_id', channelIds).order('linked_at', { ascending: false }),
-        supabase.from('employees').select('id, name, name_en, dept, department_id, store, store_id, position, status, departments!department_id(name), stores!store_id(name)').eq('status', '在職').eq('organization_id', orgId).order('name'),
+        supabase.from('employees').select('id, name, name_en, dept, department_id, store, store_id, position, status, departments!department_id(name), stores!store_id(name)').eq('status', '在職').not('is_archived', 'is', true).eq('organization_id', orgId).order('name'),
         noCh ? emptyRes : getLineGroups(channelIds),
         noCh ? emptyRes : getLineMessages({ channelIds }),
         noCh ? emptyRes : supabase.from('line_command_logs').select('*').in('channel_id', channelIds).order('created_at', { ascending: false }).limit(100),

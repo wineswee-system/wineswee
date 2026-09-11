@@ -123,7 +123,7 @@ export default function SOPTemplates() {
     Promise.all([
       supabase.from('sop_templates').select('*').order('id'),
       supabase.from('stores').select('*').order('name'),
-      supabase.from('employees').select('id, name, department_id, position, departments(name)').eq('status', '在職').eq('organization_id', orgId).order('name'),
+      supabase.from('employees').select('id, name, department_id, position, departments(name)').eq('status', '在職').not('is_archived', 'is', true).eq('organization_id', orgId).order('name'),
     ]).then(async ([t, l, e]) => {
       let tpls = t.data || []
       // If no templates in DB, seed defaults

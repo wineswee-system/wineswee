@@ -24,7 +24,7 @@ export default function EarlyLeaveForm() {
     if (!orgId) { setLoading(false); return }
     const [empRes, recRes] = await Promise.all([
       supabase.from('employees').select('id, name, dept, store, store_id')
-        .eq('status', '在職').eq('organization_id', orgId).order('name'),
+        .eq('status', '在職').not('is_archived', 'is', true).eq('organization_id', orgId).order('name'),
       supabase.from('early_leave_records').select('*')
         .eq('organization_id', orgId).order('date', { ascending: false }).limit(200),
     ])

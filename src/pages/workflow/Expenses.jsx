@@ -110,7 +110,7 @@ export default function Expenses() {
     const orgId = profile?.organization_id ?? getTenantOrgId()
     Promise.all([
       getExpenses(orgId),
-      supabase.from('employees').select('id, name, name_en, dept, department_id, store, store_id, position, signature_url, departments!department_id(name), stores!store_id(name)').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, name_en, dept, department_id, store, store_id, position, signature_url, departments!department_id(name), stores!store_id(name)').eq('status', '在職').not('is_archived', 'is', true).order('name'),
       supabase.from('departments').select('*').order('name'),
       orgId ? supabase.from('organizations').select('name, logo_url').eq('id', orgId).maybeSingle() : Promise.resolve({ data: null }),
       getAccounts(orgId),

@@ -68,7 +68,7 @@ export async function getDashboardKPIs() {
     supabase.from('sales_orders').select('total, status')
       .eq('status', '處理中'),
     supabase.from('employees').select('id', { count: 'exact' })
-      .eq('status', '在職'),
+      .eq('status', '在職').not('is_archived', 'is', true),
   ])
 
   const result = {

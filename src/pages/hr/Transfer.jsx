@@ -96,7 +96,7 @@ export default function Transfer() {
       supabase
         .from('employees')
         .select('id, name, dept, store, department_id, store_id, position, job_grade')
-        .eq('status', '在職')
+        .eq('status', '在職').not('is_archived', 'is', true)
         .eq('organization_id', profile?.organization_id)
         .order('name'),
       supabase.from('departments').select('id, name').eq('organization_id', profile?.organization_id).order('name'),

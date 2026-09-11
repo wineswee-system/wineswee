@@ -39,7 +39,7 @@ export default function TaskDiscussionTab({ task, profile, attachments, setAttac
       .from('employees')
       .select('id, name, store_id, store')
       .eq('organization_id', profile.organization_id)
-      .eq('status', '在職')
+      .eq('status', '在職').not('is_archived', 'is', true)
       .order('name')
       .then(async ({ data: emps }) => {
         if (!emps) return

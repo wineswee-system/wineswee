@@ -80,7 +80,7 @@ export default function ForeignWorkers() {
       supabase.from('broker_agencies').select('*').eq('organization_id', orgId).eq('is_active', true).order('name'),
       supabase.from('accommodations').select('*').eq('organization_id', orgId).order('name'),
       supabase.from('accommodation_assignments').select('*, employee:employees!employee_id(id, name), accommodation:accommodations!accommodation_id(id, name)').is('end_date', null),
-      supabase.from('employees').select('id, name, dept, store').eq('organization_id', orgId).eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, dept, store').eq('organization_id', orgId).eq('status', '在職').not('is_archived', 'is', true).order('name'),
     ])
     setWorkers(ws || [])
     setDocs(ds || [])

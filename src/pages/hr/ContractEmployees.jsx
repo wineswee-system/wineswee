@@ -68,7 +68,7 @@ export default function ContractEmployees() {
         .select('id, name, dept, position, store, employment_type')
         .eq('organization_id', orgId)
         .in('employment_type', ['約聘', '兼職', '派遣'])
-        .eq('status', '在職')
+        .eq('status', '在職').not('is_archived', 'is', true)
         .order('name'),
     ])
     setContracts(cs || [])

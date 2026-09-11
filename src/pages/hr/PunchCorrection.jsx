@@ -167,7 +167,7 @@ export default function PunchCorrection() {
     const orgId = profile?.organization_id ?? getTenantOrgId()
     Promise.all([
       supabase.from('clock_corrections').select('*').is('deleted_at', null).order('created_at', { ascending: false }),
-      supabase.from('employees').select('id, name, name_en, position, dept, department_id, store, store_id, signature_url, departments!department_id(name), stores!store_id(name)').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, name_en, position, dept, department_id, store, store_id, signature_url, departments!department_id(name), stores!store_id(name)').eq('status', '在職').not('is_archived', 'is', true).order('name'),
       orgId ? supabase.from('organizations').select('name, logo_url').eq('id', orgId).maybeSingle() : Promise.resolve({ data: null }),
       supabase.from('stores').select('id, name').eq('organization_id', orgId ?? -1).order('name'),
     ]).then(([c, e, orgRes, s]) => {

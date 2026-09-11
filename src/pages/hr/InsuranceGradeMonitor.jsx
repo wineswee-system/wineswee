@@ -35,7 +35,7 @@ export default function InsuranceGradeMonitor() {
       const [empRes, laborRes, pensionRes] = await Promise.all([
         supabase.from('employees')
           .select('id, name, dept, store, base_salary, labor_ins_grade, labor_pension_grade, status, employment_type')
-          .eq('status', '在職').eq('organization_id', profile?.organization_id).order('name'),
+          .eq('status', '在職').not('is_archived', 'is', true).eq('organization_id', profile?.organization_id).order('name'),
         supabase.from('labor_ins_brackets').select('*').eq('year', year).order('insured_salary'),
         supabase.from('labor_pension_brackets').select('*').eq('year', year).order('monthly_wage'),
       ])

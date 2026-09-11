@@ -54,7 +54,7 @@ export default function LegalDeductions() {
     const orgId = profile?.organization_id ?? getTenantOrgId()
     Promise.all([
       supabase.from('legal_deductions').select('*').order('id', { ascending: false }),
-      supabase.from('employees').select('id, name, name_en, dept, store, store_id, position, departments!department_id(name), stores!store_id(name)').eq('status', '在職').eq('organization_id', orgId).order('name'),
+      supabase.from('employees').select('id, name, name_en, dept, store, store_id, position, departments!department_id(name), stores!store_id(name)').eq('status', '在職').not('is_archived', 'is', true).eq('organization_id', orgId).order('name'),
       supabase.from('departments').select('*').order('name'),
     ]).then(([d, e, dp]) => {
       setItems(d.data || [])

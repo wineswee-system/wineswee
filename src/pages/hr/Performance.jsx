@@ -34,7 +34,7 @@ export default function Performance() {
     Promise.all([
       getPerformanceReviews(profile?.organization_id),
       supabase.from('performance_goals').select('*').order('id'),
-      supabase.from('employees').select('id, name, dept, department_id, position, departments!department_id(name)').eq('status', '在職').eq('organization_id', orgId).order('name'),
+      supabase.from('employees').select('id, name, dept, department_id, position, departments!department_id(name)').eq('status', '在職').not('is_archived', 'is', true).eq('organization_id', orgId).order('name'),
       supabase.from('departments').select('*').order('name'),
     ]).then(([r, g, e, d]) => {
       setReviews(r.data || [])

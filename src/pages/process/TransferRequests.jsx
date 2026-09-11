@@ -73,7 +73,7 @@ export default function TransferRequests() {
     if (!orgId) return
     Promise.all([
       supabase.from('goods_transfer_requests').select('*, items:goods_transfer_items(*)').eq('organization_id', orgId).is('deleted_at', null).order('id', { ascending: false }),
-      supabase.from('employees').select('id, name, store_id, position').eq('organization_id', orgId).eq('status', '在職'),
+      supabase.from('employees').select('id, name, store_id, position').eq('organization_id', orgId).eq('status', '在職').not('is_archived', 'is', true),
       supabase.from('stores').select('id, name, manager_id').eq('organization_id', orgId),
     ]).then(([r, e, s]) => {
       setRecords(r.data || [])

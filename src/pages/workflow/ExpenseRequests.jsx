@@ -112,7 +112,7 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
     // 費用頁用員工的 id/name/dept/編號/門市（下拉+payload）+ signature_url（簽呈 PDF 蓋章），不需 getEmployees 的 56 欄
     let empQuery = supabase.from('employees')
       .select('id, name, name_en, employee_number, dept, department_id, store, store_id, position, status, signature_url')
-      .eq('status', '在職').order('name')
+      .eq('status', '在職').not('is_archived', 'is', true).order('name')
     if (orgId) empQuery = empQuery.eq('organization_id', orgId)
     const [reqRes, accRes, empRes, orgRes, extraRes, storeRes, curRes, deptRes] = await Promise.all([
       reqQuery,

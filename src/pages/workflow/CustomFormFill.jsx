@@ -81,7 +81,7 @@ export default function CustomFormFill({ templateId: propTemplateId, embedded: p
         supabase.from('employees')
           .select('id, name, name_en, position, dept, store')
           .eq('organization_id', orgId)
-          .eq('status', '在職')
+          .eq('status', '在職').not('is_archived', 'is', true)
           .order('name')
           .then(({ data }) => setEmployees(data || []))
       )

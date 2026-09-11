@@ -29,7 +29,7 @@ export default function ExpenseSimpleDraft({ initialDraft, onCapture, onClose })
 
   useEffect(() => {
     const orgId = profile?.organization_id ?? getTenantOrgId()
-    let empQ = supabase.from('employees').select('id, name, name_en, dept, position').eq('status', '在職').order('name')
+    let empQ = supabase.from('employees').select('id, name, name_en, dept, position').eq('status', '在職').not('is_archived', 'is', true).order('name')
     if (orgId) empQ = empQ.eq('organization_id', orgId)
     Promise.all([empQ, getAccounts(orgId)]).then(([eRes, aRes]) => {
       const emps = eRes?.data || []

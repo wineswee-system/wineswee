@@ -105,7 +105,7 @@ export default function ChainConfigModal({ open, onClose, formType, formLabel, o
       const [empRes, roleRes, deptRes, storeRes, sectionRes] = await Promise.all([
         supabase.from('employees')
           .select('id, name, name_en, employee_number, status, position, dept, store, departments!department_id(name), stores!store_id(name)')
-          .eq('organization_id', organizationId).eq('status', '在職').order('name'),
+          .eq('organization_id', organizationId).eq('status', '在職').not('is_archived', 'is', true).order('name'),
         supabase.from('roles').select('id, name').order('name'),
         supabase.from('departments').select('id, name').eq('organization_id', organizationId).order('name'),
         supabase.from('stores').select('id, name').eq('organization_id', organizationId).order('name'),

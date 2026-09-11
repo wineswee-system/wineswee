@@ -23,7 +23,7 @@ export default function DelegationRules() {
         .select('*, delegator:delegator_employee_id(name), delegate:delegate_employee_id(name)')
         .eq('org_id', orgId)
         .order('created_at', { ascending: false }),
-      supabase.from('employees').select('id,name').eq('status', '在職').eq('organization_id', orgId).order('name'),
+      supabase.from('employees').select('id,name').eq('status', '在職').not('is_archived', 'is', true).eq('organization_id', orgId).order('name'),
     ]).then(([r, e]) => {
       setRules(r.data || [])
       setEmployees(e.data || [])

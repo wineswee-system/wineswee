@@ -26,7 +26,7 @@ export default function SelfService() {
 
   useEffect(() => {
     const orgId = profile?.organization_id ?? getTenantOrgId()
-    supabase.from('employees').select('*, departments!department_id(name), stores!store_id(name)').eq('status', '在職').eq('organization_id', orgId).order('name')
+    supabase.from('employees').select('*, departments!department_id(name), stores!store_id(name)').eq('status', '在職').not('is_archived', 'is', true).eq('organization_id', orgId).order('name')
       .then(({ data }) => {
         setEmployees(data || [])
         if (data?.length) {

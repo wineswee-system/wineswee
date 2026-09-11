@@ -126,7 +126,7 @@ export default function Workflows() {
       getWorkflows({ orgId }),
       getWorkflowInstances({ excludeTemplates: HR_APPROVAL_TEMPLATE_NAMES, orgId }),
       getTasks({ orgId }),
-      withOrg(supabase.from('employees').select('id, name, name_en, dept, position, department_id, store, store_id, departments!department_id(name), stores!store_id(name)').eq('status', '在職').order('name')),
+      withOrg(supabase.from('employees').select('id, name, name_en, dept, position, department_id, store, store_id, departments!department_id(name), stores!store_id(name)').eq('status', '在職').not('is_archived', 'is', true).order('name')),
       withOrg(supabase.from('checklists').select('*').order('id')),
       supabase.from('sop_templates').select('*').order('id'),
       withOrg(supabase.from('departments').select('*').order('name')),

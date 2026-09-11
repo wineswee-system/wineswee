@@ -60,7 +60,7 @@ export default function ScheduleBuilder() {
       supabase.from('employees')
         .select('id, name, dept, employment_type, store, store_id, additional_stores, can_open, can_close, weekly_target_hours, personal_hour_cap')
         .eq('store_id', storeId)
-        .eq('status', '在職')
+        .eq('status', '在職').not('is_archived', 'is', true)
         .order('name'),
       supabase.from('shift_definitions').select('*').order('sort_order'),
       supabase.from('stores').select('*').eq('id', storeId).single(),

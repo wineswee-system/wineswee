@@ -66,7 +66,7 @@ export default function ApprovalActionBar({
           .limit(1),
         supabase.from('employees')
           .select('id, name, department_id')
-          .eq('status', '在職')
+          .eq('status', '在職').not('is_archived', 'is', true)
           .eq('organization_id', orgId)
           .order('name'),
       ])

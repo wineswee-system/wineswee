@@ -53,7 +53,7 @@ export default function Users() {
       .from('employees')
       .select('id, name, email, role, role_id, dept, status, position')
       .eq('organization_id', orgId)
-      .eq('status', '在職')          // 只列在職 — 離職的自動失權
+      .eq('status', '在職').not('is_archived', 'is', true)          // 只列在職 — 離職的自動失權
       .order('id')
     setUsers(data ?? [])
     setLoading(false)

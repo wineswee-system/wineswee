@@ -564,7 +564,7 @@ export default function Recruitment() {
         supabase.from('departments').select('id,name').eq('organization_id', orgId).order('name'),
         supabase.from('stores').select('id,name').eq('organization_id', orgId).order('name'),
         supabase.from('employees').select('id, name, name_en, position, dept, store')
-          .eq('organization_id', orgId).eq('status', '在職').order('name'),
+          .eq('organization_id', orgId).eq('status', '在職').not('is_archived', 'is', true).order('name'),
         getCandidates(orgId),
         getInterviews(orgId),
         getOfferLetterTemplates(orgId),

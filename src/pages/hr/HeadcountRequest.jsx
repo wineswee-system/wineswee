@@ -196,7 +196,7 @@ export default function HeadcountRequest() {
     const orgId = profile?.organization_id ?? getTenantOrgId()
     const [{ data: r }, { data: e }, { data: d }, { data: s }, chain, orgRes] = await Promise.all([
       q,
-      supabase.from('employees').select('id,name,name_en,position,department_id,store_id,signature_url,departments!department_id(name)').eq('status','在職').order('name'),
+      supabase.from('employees').select('id,name,name_en,position,department_id,store_id,signature_url,departments!department_id(name)').eq('status', '在職').not('is_archived', 'is', true).order('name'),
       supabase.from('departments').select('id,name').eq('organization_id', orgId || 0).order('name'),
       supabase.from('stores').select('id,name').eq('organization_id', orgId || 0).order('name'),
       findHeadcountChain(orgId),

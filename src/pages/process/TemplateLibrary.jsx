@@ -169,7 +169,7 @@ export default function TemplateLibrary() {
         supabase.from('stores').select('id, name').order('name').then(r => r.data || []),
         supabase.from('employees')
           .select('id, name, department_id, position, is_manager')
-          .eq('status', '在職').eq('organization_id', orgId).order('name')
+          .eq('status', '在職').not('is_archived', 'is', true).eq('organization_id', orgId).order('name')
           .then(r => r.data || []),
         supabase.from('departments').select('id, name').order('name').then(r => r.data || []),
         supabase.from('list_templates').select('*').order('name').then(r => r.data || []),

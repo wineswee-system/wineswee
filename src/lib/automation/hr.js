@@ -8,7 +8,7 @@ export async function calculateAnnualLeaveSettlement() {
   const currentMonth = today.toISOString().slice(0, 7) // e.g. 2026-04
 
   const { data: employees } = await supabase
-    .from('employees').select('*').eq('status', '在職')
+    .from('employees').select('*').eq('status', '在職').not('is_archived', 'is', true)
 
   if (!employees) return []
 

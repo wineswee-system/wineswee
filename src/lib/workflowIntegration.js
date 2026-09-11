@@ -267,20 +267,20 @@ export async function advanceWorkflow(stepId, approverName, action, comment = ''
       if (nextStep.role === 'hr') {
         const deptId = await lookupDeptId('人資部')
         if (deptId) {
-          const { data: hr } = await supabase.from('employees').select('name').eq('department_id', deptId).eq('status', '在職').limit(1).maybeSingle()
+          const { data: hr } = await supabase.from('employees').select('name').eq('department_id', deptId).eq('status', '在職').not('is_archived', 'is', true).limit(1).maybeSingle()
           nextAssignee = hr?.name
         }
       } else if (nextStep.role === 'finance') {
         const deptId = await lookupDeptId('管理部')
         if (deptId) {
-          const { data: fin } = await supabase.from('employees').select('name').eq('department_id', deptId).eq('position', '財務').eq('status', '在職').limit(1).maybeSingle()
+          const { data: fin } = await supabase.from('employees').select('name').eq('department_id', deptId).eq('position', '財務').eq('status', '在職').not('is_archived', 'is', true).limit(1).maybeSingle()
           nextAssignee = fin?.name
         }
       }
     }
 
     if (nextAssignee) {
-      const { data: empRow } = await supabase.from('employees').select('id').eq('name', nextAssignee).eq('status', '在職').maybeSingle()
+      const { data: empRow } = await supabase.from('employees').select('id').eq('name', nextAssignee).eq('status', '在職').not('is_archived', 'is', true).maybeSingle()
       await supabase.from('tasks').update({ assignee: nextAssignee, assignee_id: empRow?.id ?? null }).eq('id', nextStep.id)
       await supabase.from('notifications').insert({
         recipient_emp_id: empRow?.id ?? null,

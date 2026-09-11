@@ -70,7 +70,7 @@ export default function EngagementSurveys() {
     if (!orgId) { setLoading(false); return }
     Promise.all([
       getEngagementSurveys(orgId),
-      supabase.from('employees').select('id, name, name_en, dept, department_id, store, store_id, position, departments!department_id(name), stores!store_id(name)').eq('status', '在職').eq('organization_id', orgId).order('name'),
+      supabase.from('employees').select('id, name, name_en, dept, department_id, store, store_id, position, departments!department_id(name), stores!store_id(name)').eq('status', '在職').not('is_archived', 'is', true).eq('organization_id', orgId).order('name'),
     ]).then(([s, e]) => {
       setSurveys(s.data || [])
       setEmployees(e.data || [])

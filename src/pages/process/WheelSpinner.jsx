@@ -74,7 +74,7 @@ export default function WheelSpinner() {
     if (!orgId) return
     supabase.from('employees')
       .select('name, store, store_id, dept, department_id, status')
-      .eq('organization_id', orgId).eq('status', '在職').order('name')
+      .eq('organization_id', orgId).eq('status', '在職').not('is_archived', 'is', true).order('name')
       .then(({ data }) => setEmps(data || []))
   }, [profile?.organization_id])
 

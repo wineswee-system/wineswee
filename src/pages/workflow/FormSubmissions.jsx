@@ -316,7 +316,7 @@ export default function FormSubmissions() {
     const { data: empList } = await supabase
       .from('employees')
       .select('name, signature_url')
-      .eq('status', '在職')
+      .eq('status', '在職').not('is_archived', 'is', true)
       .eq('organization_id', orgId)
       .not('signature_url', 'is', null)
     const signatures = Object.fromEntries(

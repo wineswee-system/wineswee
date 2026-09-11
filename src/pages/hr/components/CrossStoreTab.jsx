@@ -16,7 +16,7 @@ export default function CrossStoreTab({ storeFilter, locations, shiftDefs, weekD
     setLoading(true)
     const orgId = profile?.organization_id ?? getTenantOrgId()
     Promise.all([
-      supabase.from('employees').select('id, name, store, store_id, additional_stores, employment_type, position, stores!store_id(name)').eq('status', '在職').eq('organization_id', orgId),
+      supabase.from('employees').select('id, name, store, store_id, additional_stores, employment_type, position, stores!store_id(name)').eq('status', '在職').not('is_archived', 'is', true).eq('organization_id', orgId),
       supabase.from('store_staffing').select('*'),
       supabase.from('schedules').select('employee, date, shift').gte('date', weekDates[0]).lte('date', weekDates[weekDates.length - 1]),
     ]).then(([e, s, sc]) => {

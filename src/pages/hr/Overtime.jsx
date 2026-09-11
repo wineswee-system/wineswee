@@ -119,7 +119,7 @@ export default function Overtime() {
     const orgId = profile?.organization_id ?? getTenantOrgId()
     return Promise.all([
       getOvertimeRequests({ from: startDate, to: endDate }),
-      supabase.from('employees').select('id, name, dept, store_id, department_id, position, signature_url, departments!department_id(name), salary_structures(salary_type)').eq('status', '在職').order('name'),
+      supabase.from('employees').select('id, name, dept, store_id, department_id, position, signature_url, departments!department_id(name), salary_structures(salary_type)').eq('status', '在職').not('is_archived', 'is', true).order('name'),
       supabase.from('departments').select('*').order('name'),
       supabase.from('stores').select('id, name, overtime_step_hours, organization_id').eq('organization_id', profile?.organization_id ?? -1).order('name'),
       orgId ? supabase.from('organizations').select('name, logo_url').eq('id', orgId).maybeSingle() : Promise.resolve({ data: null }),

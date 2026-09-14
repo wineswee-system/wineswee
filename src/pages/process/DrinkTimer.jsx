@@ -55,6 +55,7 @@ function seedTables(store) {
 }
 
 const LS_KEY = (s) => `drinktimer_v1_${s}`
+const PRESET_VERSION = 2   // 預設桌位版本;有預設的店且尚無計時資料時,舊版本會自動套新預設
 
 export default function DrinkTimer() {
   const navigate = useNavigate()
@@ -86,9 +87,19 @@ export default function DrinkTimer() {
     if (!store) return
     const raw = localStorage.getItem(LS_KEY(store))
     if (raw) {
-      try { const d = JSON.parse(raw); setData({ rate: DEFAULT_RATE, sessions: {}, tables: [], ...d }); return } catch { /* fall through */ }
+      try {
+        const d = { rate: DEFAULT_RATE, sessions: {}, tables: [], presetVersion: 0, ...JSON.parse(raw) }
+        // 有內建預設的店 + 舊預設版本 + 尚無任何計時(都空桌)→ 自動套用新預設(免手動)
+        const noActive = Object.values(d.sessions || {}).every(arr => !arr || arr.length === 0)
+        if (PRESETS[store] && (d.presetVersion || 0) < PRESET_VERSION && noActive) {
+          const fixed = { ...d, tables: seedTables(store), sessions: {}, presetVersion: PRESET_VERSION }
+          setData(fixed); localStorage.setItem(LS_KEY(store), JSON.stringify(fixed)); return
+        }
+        setData(d); return
+      } catch { /* fall through */ }
     }
-    setData({ rate: DEFAULT_RATE, tables: seedTables(store), sessions: {} })
+    const seeded = { rate: DEFAULT_RATE, tables: seedTables(store), sessions: {}, presetVersion: PRESET_VERSION }
+    setData(seeded); localStorage.setItem(LS_KEY(store), JSON.stringify(seeded))
     setEditMode(false)
   }, [store]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -144,7 +155,7 @@ export default function DrinkTimer() {
   }
   const reseedTables = () => {
     if (!confirm(`還原「${store}」的預設桌位？\n會覆蓋目前的桌位設定與所有計時資料。`)) return
-    persist({ ...data, tables: seedTables(store), sessions: {} })
+    persist({ ...data, tables: seedTables(store), sessions: {}, presetVersion: PRESET_VERSION })
   }
 
   const resetAll = () => {

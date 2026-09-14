@@ -183,9 +183,9 @@ export default function StoreBonus() {
     if (error) { toast.error('同步失敗：' + error.message); return }
     if (!data?.ok) { toast.error(`同步失敗：${data?.error || 'unknown'}`); return }
     if (data.updated === 0) {
-      toast.success('已是最新（沒人補卡次數變動）')
+      toast.success('已是最新（沒人忘卡次數變動）')
     } else {
-      toast.success(`已同步 ${data.updated} 人補卡次數，已重算扣項`)
+      toast.success(`已同步 ${data.updated} 人忘卡次數，已重算扣項`)
     }
     loadMonthly()
   }
@@ -437,8 +437,8 @@ export default function StoreBonus() {
             <div style={{ flex: 1 }} />
             {!isFinalized && (
               <>
-                <AsyncButton className="btn btn-secondary" onClick={handleSyncPunchCounts} busyLabel="同步中…" disabled={saving} title="從 clock_corrections 自動填補卡次數">
-                  <RefreshCw size={14} /> 同步補卡次數
+                <AsyncButton className="btn btn-secondary" onClick={handleSyncPunchCounts} busyLabel="同步中…" disabled={saving} title="從 clock_corrections 自動填忘卡次數">
+                  <RefreshCw size={14} /> 同步忘卡次數
                 </AsyncButton>
                 <AsyncButton className="btn btn-secondary" onClick={handleRecalculate} busyLabel="重算中…" disabled={saving}>
                   <RefreshCw size={14} /> 重算
@@ -468,12 +468,12 @@ export default function StoreBonus() {
                   <th>小功次</th>
                   <th>大功次</th>
                   <th>功獎金</th>
-                  <th>缺失</th>
+                  <th>曠職</th>
                   <th>小過</th>
                   <th>大過</th>
-                  <th>補卡次</th>
-                  <th>稽核扣</th>
-                  <th>補卡扣</th>
+                  <th>忘卡次</th>
+                  <th>個人扣</th>
+                  <th>忘卡扣</th>
                   <th>前月補發</th>
                   {customFields.map(f => (
                     <th key={f.id} title={f.effect === 'add' ? '加項（進應發）' : f.effect === 'deduct' ? '扣項（進應發）' : '僅記錄'}>
@@ -664,7 +664,7 @@ function RoleConfigModal({ config, orgId, onClose, onSaved }) {
             <thead>
               <tr>
                 <th>角色</th><th>權重</th><th>小功獎金/筆</th><th>大功獎金/筆</th><th>達標獎金</th>
-                <th>缺失扣/筆</th><th>小過扣/筆</th><th>大過扣/筆</th><th>補卡第幾次起扣</th><th>補卡扣/次</th><th>最低工時</th><th>次月起領</th>
+                <th>曠職扣/筆</th><th>小過扣/筆</th><th>大過扣/筆</th><th>忘卡第幾次起扣</th><th>忘卡扣/次</th><th>最低工時</th><th>次月起領</th>
               </tr>
             </thead>
             <tbody>

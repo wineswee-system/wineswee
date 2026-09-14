@@ -39,3 +39,7 @@ test-results/
 playwright-report/
 _*
 i18n-missing.txt
+
+# Removed from GitHub tracking (kept locally)
+/docs/
+/mobile/

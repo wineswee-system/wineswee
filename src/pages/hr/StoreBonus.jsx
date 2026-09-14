@@ -416,6 +416,20 @@ export default function StoreBonus() {
             <div><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>管理獎金提撥</div><div style={{ fontSize: 16, fontWeight: 700 }}>{(Number(monthly.mgmt_tier_pct || 0) * 100).toFixed(0)}%</div><div style={{ fontSize: 10, color: 'var(--text-muted)' }}>≥6%→10% · 3~5.99%→5%</div></div>
             <div><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>管理獎金池</div><div style={{ fontSize: 18, fontWeight: 800, color: 'var(--accent-cyan)' }}>NT$ {Number(monthly.mgmt_bonus_pool || 0).toLocaleString()}</div></div>
           </div>
+          <div style={{ marginTop: 12, display: 'flex', gap: 16, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+            <Field label="團隊扣（稽核/客訴/盤損·人工填總額）">
+              <input className="form-input" type="number" disabled={isFinalized}
+                value={monthly.team_deduction ?? 0}
+                onChange={e => setMonthly(m => ({ ...m, team_deduction: e.target.value }))}
+                onBlur={e => handleSaveMonthly({ team_deduction: Number(e.target.value) || 0 })} />
+            </Field>
+            <div style={{ paddingBottom: 8 }}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>可分配管理獎金（池 − 團隊扣）</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--accent-green)' }}>
+                NT$ {Math.max(0, Number(monthly.mgmt_bonus_pool || 0) - Number(monthly.team_deduction || 0)).toLocaleString()}
+              </div>
+            </div>
+          </div>
           <div style={{ marginTop: 12, display: 'flex', gap: 12, alignItems: 'center', fontSize: 13, color: 'var(--text-muted)' }}>
             <span>{monthly.is_target_achieved ? '✅ 達成率≥100%（發業績獎金）' : '⚠️ 未達目標（不發業績獎金）'}</span>
             <span>·</span>

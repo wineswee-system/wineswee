@@ -45,6 +45,11 @@ export default function StoreBonus() {
   const [quarterData, setQuarterData] = useState(null)
   const [showQuarterDef, setShowQuarterDef] = useState(false)
 
+  // 新增人員(督導/代理/漏撈的人)
+  const [allEmployees, setAllEmployees] = useState([])
+  const [addEmpId, setAddEmpId] = useState('')
+  const [addEmpRole, setAddEmpRole] = useState('正職')
+
   const reloadCustomFields = () => {
     const orgId = profile?.organization_id ?? getTenantOrgId()
     if (!orgId) return
@@ -86,14 +91,34 @@ export default function StoreBonus() {
       supabase.from('store_bonus_role_config').select('*').eq('organization_id', orgId).order('weight', { ascending: false }),
       supabase.from('store_bonus_custom_fields').select('*').eq('organization_id', orgId).eq('is_active', true).order('sort_order'),
       supabase.from('store_bonus_quarter_def').select('*').eq('organization_id', orgId).order('quarter'),
-    ]).then(([s, c, cf, qd]) => {
+      supabase.from('employees').select('id, name').eq('organization_id', orgId).eq('status', '在職').not('is_archived', 'is', true).order('name'),
+    ]).then(([s, c, cf, qd, ae]) => {
       setStores(s.data || [])
       setRoleConfig(c.data || [])
       setCustomFields(cf.data || [])
       setQuarterDefs(qd.data || [])
+      setAllEmployees(ae.data || [])
       setLoading(false)
     })
   }, [profile?.organization_id])
+
+  // 新增人員到名單(督導/代理/漏撈的人)
+  const handleAddEmployee = async () => {
+    if (!monthly?.id || !addEmpId) return
+    const emp = allEmployees.find(e => String(e.id) === String(addEmpId))
+    if (!emp) return
+    if (employees.some(e => String(e.employee_id) === String(emp.id))) { toast.warning('此人已在名單'); return }
+    const cfg = roleConfig.find(c => c.role === addEmpRole)
+    setSaving(true)
+    const { error } = await supabase.from('store_bonus_employee').insert({
+      monthly_id: monthly.id, employee_id: emp.id, employee_name: emp.name, role: addEmpRole, weight: cfg?.weight || 0,
+    })
+    if (!error) await supabase.rpc('recalculate_store_bonus', { p_monthly_id: monthly.id })
+    setSaving(false)
+    if (error) { toast.error('加入失敗：' + error.message); return }
+    setAddEmpId('')
+    loadMonthly()
+  }
 
   // 載入當前選擇的店 + 月度
   const loadMonthly = async () => {
@@ -453,6 +478,31 @@ export default function StoreBonus() {
               </>
             )}
           </div>
+        </div>
+      )}
+
+      {/* 新增人員(督導/代理/開單漏撈的人) */}
+      {monthly && !isFinalized && (
+        <div className="card" style={{ padding: 12, marginBottom: 8, display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <div>
+            <label className="form-label">新增人員（督導/代理/漏撈的人）</label>
+            <select className="form-input" value={addEmpId} onChange={e => setAddEmpId(e.target.value)} style={{ minWidth: 180 }}>
+              <option value="">— 選擇員工 —</option>
+              {allEmployees.filter(a => !employees.some(e => String(e.employee_id) === String(a.id))).map(a => (
+                <option key={a.id} value={a.id}>{a.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="form-label">角色</label>
+            <select className="form-input" value={addEmpRole} onChange={e => setAddEmpRole(e.target.value)} style={{ width: 100 }}>
+              {ROLE_OPTIONS.map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </div>
+          <button className="btn btn-secondary" onClick={handleAddEmployee} disabled={!addEmpId || saving} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <Plus size={14} /> 加入名單
+          </button>
+          <span style={{ fontSize: 11, color: 'var(--text-muted)', paddingBottom: 8 }}>督導只掛總部、開單撈不到 → 用這裡手動加；有店長時督導/代理重算後自動 0</span>
         </div>
       )}
 

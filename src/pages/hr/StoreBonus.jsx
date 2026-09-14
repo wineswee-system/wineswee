@@ -467,6 +467,9 @@ export default function StoreBonus() {
             <div style={{ flex: 1 }} />
             {!isFinalized && (
               <>
+                <AsyncButton className="btn btn-secondary" onClick={handleInitialize} busyLabel="拉取中…" disabled={saving} title="重新從門市＋組織拉人(補督導/主管、開單後才到職的人；已填資料保留)">
+                  <RefreshCw size={14} /> 重新拉人員
+                </AsyncButton>
                 <AsyncButton className="btn btn-secondary" onClick={handleSyncPunchCounts} busyLabel="同步中…" disabled={saving} title="從 clock_corrections 自動填忘卡次數">
                   <RefreshCw size={14} /> 同步忘卡次數
                 </AsyncButton>

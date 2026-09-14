@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import AsyncButton from '../../components/AsyncButton'
+import SearchableSelect from '../../components/SearchableSelect'
 import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
 
@@ -486,12 +487,14 @@ export default function StoreBonus() {
         <div className="card" style={{ padding: 12, marginBottom: 8, display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
           <div>
             <label className="form-label">新增人員（督導/代理/漏撈的人）</label>
-            <select className="form-input" value={addEmpId} onChange={e => setAddEmpId(e.target.value)} style={{ minWidth: 180 }}>
-              <option value="">— 選擇員工 —</option>
-              {allEmployees.filter(a => !employees.some(e => String(e.employee_id) === String(a.id))).map(a => (
-                <option key={a.id} value={a.id}>{a.name}</option>
-              ))}
-            </select>
+            <div style={{ minWidth: 200 }}>
+              <SearchableSelect
+                value={addEmpId}
+                onChange={(v) => setAddEmpId(v || '')}
+                options={allEmployees.filter(a => !employees.some(e => String(e.employee_id) === String(a.id))).map(a => ({ value: String(a.id), label: a.name }))}
+                placeholder="搜尋員工姓名…"
+              />
+            </div>
           </div>
           <div>
             <label className="form-label">角色</label>
@@ -502,7 +505,7 @@ export default function StoreBonus() {
           <button className="btn btn-secondary" onClick={handleAddEmployee} disabled={!addEmpId || saving} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
             <Plus size={14} /> 加入名單
           </button>
-          <span style={{ fontSize: 11, color: 'var(--text-muted)', paddingBottom: 8 }}>督導只掛總部、開單撈不到 → 用這裡手動加；有店長時督導/代理重算後自動 0</span>
+          <span style={{ fontSize: 11, color: 'var(--text-muted)', paddingBottom: 8 }}>開單已自動帶入該店督導（＝店長的直屬主管）；這裡用來手動加代理或漏撈的人。有店長時督導/代理重算後自動 0</span>
         </div>
       )}
 

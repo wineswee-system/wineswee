@@ -38,12 +38,43 @@ export default function StoreBonus() {
   const [showConfig, setShowConfig] = useState(false)
   const [showCustomFields, setShowCustomFields] = useState(false)
 
+  // 季別累積結算
+  const [quarter, setQuarter] = useState('Q' + (Math.floor(today.getMonth() / 3) + 1))
+  const [quarterYear, setQuarterYear] = useState(today.getFullYear())
+  const [quarterDefs, setQuarterDefs] = useState([])      // [{quarter, months:[]}]
+  const [quarterData, setQuarterData] = useState(null)
+  const [showQuarterDef, setShowQuarterDef] = useState(false)
+
   const reloadCustomFields = () => {
     const orgId = profile?.organization_id ?? getTenantOrgId()
     if (!orgId) return
     supabase.from('store_bonus_custom_fields').select('*')
       .eq('organization_id', orgId).eq('is_active', true).order('sort_order')
       .then(({ data }) => setCustomFields(data || []))
+  }
+
+  // 季別累積結算:把該季各月每人獎金加總
+  const handleQuarterSummary = async () => {
+    if (!storeId) { toast.warning('請先選門市'); return }
+    const { data, error } = await supabase.rpc('store_bonus_quarter_summary', {
+      p_store_id: Number(storeId), p_year: Number(quarterYear), p_quarter: quarter,
+    })
+    if (error || !data?.ok) { toast.error('查詢失敗：' + (error?.message || '')); return }
+    setQuarterData(data)
+  }
+  const toggleQuarterMonth = (q, m) => setQuarterDefs(defs => defs.map(d => {
+    if (d.quarter !== q) return d
+    const has = (d.months || []).includes(m)
+    return { ...d, months: has ? d.months.filter(x => x !== m) : [...(d.months || []), m].sort((a, b) => a - b) }
+  }))
+  const saveQuarterDefs = async () => {
+    const orgId = profile?.organization_id ?? getTenantOrgId()
+    for (const d of quarterDefs) {
+      await supabase.from('store_bonus_quarter_def')
+        .update({ months: d.months || [] }).eq('organization_id', orgId).eq('quarter', d.quarter)
+    }
+    toast.success('季別月份已儲存')
+    setShowQuarterDef(false)
   }
 
   // 載入門市清單 + role config + 自訂欄位
@@ -54,10 +85,12 @@ export default function StoreBonus() {
       supabase.from('stores').select('id, name').eq('organization_id', orgId).order('name'),
       supabase.from('store_bonus_role_config').select('*').eq('organization_id', orgId).order('weight', { ascending: false }),
       supabase.from('store_bonus_custom_fields').select('*').eq('organization_id', orgId).eq('is_active', true).order('sort_order'),
-    ]).then(([s, c, cf]) => {
+      supabase.from('store_bonus_quarter_def').select('*').eq('organization_id', orgId).order('quarter'),
+    ]).then(([s, c, cf, qd]) => {
       setStores(s.data || [])
       setRoleConfig(c.data || [])
       setCustomFields(cf.data || [])
+      setQuarterDefs(qd.data || [])
       setLoading(false)
     })
   }, [profile?.organization_id])
@@ -254,6 +287,85 @@ export default function StoreBonus() {
           }}>
             {isFinalized ? '已結算' : '草稿中'}
           </span>
+        )}
+      </div>
+
+      {/* 季別累積結算（自選季別 + 可定義月份） */}
+      <div className="card" style={{ padding: 16, marginBottom: 16 }}>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <div>
+            <label className="form-label">結算年度</label>
+            <input className="form-input" type="number" value={quarterYear} onChange={e => setQuarterYear(e.target.value)} style={{ width: 100 }} />
+          </div>
+          <div>
+            <label className="form-label">季別</label>
+            <select className="form-input" value={quarter} onChange={e => setQuarter(e.target.value)} style={{ width: 90 }}>
+              {['Q1', 'Q2', 'Q3', 'Q4'].map(q => <option key={q} value={q}>{q}</option>)}
+            </select>
+          </div>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)', paddingBottom: 8 }}>
+            {(() => { const d = quarterDefs.find(x => x.quarter === quarter); return d ? `含月份：${(d.months || []).join('、')} 月` : '' })()}
+          </span>
+          <AsyncButton className="btn btn-primary" onClick={handleQuarterSummary} busyLabel="查詢中…" disabled={!storeId}>季別累積</AsyncButton>
+          <div style={{ flex: 1 }} />
+          <button className="btn btn-secondary" onClick={() => setShowQuarterDef(v => !v)}>定義季別月份</button>
+        </div>
+
+        {showQuarterDef && (
+          <div style={{ marginTop: 12, padding: 12, background: 'var(--bg-secondary)', borderRadius: 8 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>勾選各季包含的月份（可跨標準季自訂）</div>
+            {['Q1', 'Q2', 'Q3', 'Q4'].map(q => {
+              const d = quarterDefs.find(x => x.quarter === q) || { quarter: q, months: [] }
+              return (
+                <div key={q} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, flexWrap: 'wrap' }}>
+                  <b style={{ width: 30 }}>{q}</b>
+                  {Array.from({ length: 12 }, (_, i) => i + 1).map(m => {
+                    const on = (d.months || []).includes(m)
+                    return (
+                      <button key={m} onClick={() => toggleQuarterMonth(q, m)} style={{
+                        width: 34, padding: '4px 0', borderRadius: 6, cursor: 'pointer', fontSize: 12,
+                        border: `1px solid ${on ? 'var(--accent-cyan)' : 'var(--border-medium)'}`,
+                        background: on ? 'var(--accent-cyan-dim)' : 'var(--bg-card)',
+                        color: on ? 'var(--accent-cyan)' : 'var(--text-muted)', fontWeight: on ? 700 : 400,
+                      }}>{m}</button>
+                    )
+                  })}
+                </div>
+              )
+            })}
+            <button className="btn btn-primary" onClick={saveQuarterDefs} style={{ marginTop: 6 }}>儲存季別定義</button>
+          </div>
+        )}
+
+        {quarterData && (
+          <div style={{ marginTop: 12 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>
+              {quarterData.year} {quarterData.quarter}（月份 {(quarterData.months || []).join('、')}）·
+              {(quarterData.month_status || []).length
+                ? (quarterData.month_status || []).map(m => ` ${m.year_month}(${m.status === 'finalized' ? '已結算' : '草稿'})`).join('')
+                : ' 區間內尚無開單'}
+            </div>
+            <div className="data-table-wrapper">
+              <table className="data-table">
+                <thead><tr><th>姓名</th><th>角色</th><th>月數</th><th>管理獎金</th><th>業績獎金</th><th>功獎金</th><th>扣款</th><th>累積應發</th></tr></thead>
+                <tbody>
+                  {(quarterData.rows || []).map(r => (
+                    <tr key={r.employee_id}>
+                      <td><b>{r.employee_name}</b></td>
+                      <td>{r.role}</td>
+                      <td style={{ textAlign: 'center' }}>{r.months}</td>
+                      <td style={{ textAlign: 'right' }}>{Number(r.total_mgmt).toLocaleString()}</td>
+                      <td style={{ textAlign: 'right' }}>{Number(r.total_target).toLocaleString()}</td>
+                      <td style={{ textAlign: 'right' }}>{Number(r.total_merit).toLocaleString()}</td>
+                      <td style={{ textAlign: 'right', color: 'var(--accent-red)' }}>{Number((r.total_audit || 0) + (r.total_punch || 0)).toLocaleString()}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 800, color: 'var(--accent-cyan)' }}>{Number(r.total_net).toLocaleString()}</td>
+                    </tr>
+                  ))}
+                  {(quarterData.rows || []).length === 0 && <tr><td colSpan={8} style={{ textAlign: 'center', padding: 16, color: 'var(--text-muted)' }}>此季無資料</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </div>
         )}
       </div>
 

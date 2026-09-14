@@ -9,7 +9,7 @@ import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
 
 // 固定 3 種角色（DB role_config 還沒建也能正常下拉）
-const ROLE_OPTIONS = ['店長', '正職', '兼職']
+const ROLE_OPTIONS = ['店長', '代理人', '督導', '正職', '兼職']
 
 /**
  * 門市業績獎金 — 月度計算與結算
@@ -188,7 +188,7 @@ export default function StoreBonus() {
   }
 
   const totals = useMemo(() => ({
-    profit: employees.reduce((s, e) => s + Number(e.profit_bonus || 0), 0),
+    profit: employees.reduce((s, e) => s + Number(e.mgmt_bonus || 0), 0),
     target: employees.reduce((s, e) => s + Number(e.target_bonus || 0), 0),
     merit:  employees.reduce((s, e) => s + Number(e.merit_bonus || 0), 0),
     audit:  employees.reduce((s, e) => s + Number(e.audit_deduction || 0), 0),
@@ -260,42 +260,52 @@ export default function StoreBonus() {
       {/* 門市層輸入 */}
       {monthly && (
         <div className="card" style={{ padding: 16, marginBottom: 16 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
-            <Field label="損益兩平">
-              <input className="form-input" type="number" disabled={isFinalized}
-                value={monthly.breakeven}
-                onChange={e => setMonthly(m => ({ ...m, breakeven: e.target.value }))}
-                onBlur={e => handleSaveMonthly({ breakeven: Number(e.target.value) || 0 })} />
-            </Field>
-            <Field label="目標">
-              <input className="form-input" type="number" disabled={isFinalized}
-                value={monthly.target_revenue}
-                onChange={e => setMonthly(m => ({ ...m, target_revenue: e.target.value }))}
-                onBlur={e => handleSaveMonthly({ target_revenue: Number(e.target.value) || 0 })} />
-            </Field>
-            <Field label="本月業績">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+            <Field label="營業額">
               <input className="form-input" type="number" disabled={isFinalized}
                 value={monthly.actual_revenue}
                 onChange={e => setMonthly(m => ({ ...m, actual_revenue: e.target.value }))}
                 onBlur={e => handleSaveMonthly({ actual_revenue: Number(e.target.value) || 0 })} />
             </Field>
-            <Field label="獎勵 %">
-              <input className="form-input" type="number" step="0.001" disabled={isFinalized}
-                value={monthly.reward_pct}
-                onChange={e => setMonthly(m => ({ ...m, reward_pct: e.target.value }))}
-                onBlur={e => handleSaveMonthly({ reward_pct: Number(e.target.value) || 0.02 })} />
+            <Field label="目標（業績獎金達標用）">
+              <input className="form-input" type="number" disabled={isFinalized}
+                value={monthly.target_revenue}
+                onChange={e => setMonthly(m => ({ ...m, target_revenue: e.target.value }))}
+                onBlur={e => handleSaveMonthly({ target_revenue: Number(e.target.value) || 0 })} />
             </Field>
-            <Field label="獎金池">
-              <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--accent-cyan)', padding: '8px 0' }}>
-                NT$ {Number(monthly.bonus_pool).toLocaleString()}
-              </div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                損益超額 {Math.max(0, Number(monthly.actual_revenue) - Number(monthly.breakeven)).toLocaleString()} × {(Number(monthly.reward_pct) * 100).toFixed(1)}%
-              </div>
+            <Field label="營業毛利">
+              <input className="form-input" type="number" disabled={isFinalized}
+                value={monthly.gross_profit ?? 0}
+                onChange={e => setMonthly(m => ({ ...m, gross_profit: e.target.value }))}
+                onBlur={e => handleSaveMonthly({ gross_profit: Number(e.target.value) || 0 })} />
+            </Field>
+            <Field label="營業費用">
+              <input className="form-input" type="number" disabled={isFinalized}
+                value={monthly.operating_expense ?? 0}
+                onChange={e => setMonthly(m => ({ ...m, operating_expense: e.target.value }))}
+                onBlur={e => handleSaveMonthly({ operating_expense: Number(e.target.value) || 0 })} />
+            </Field>
+            <Field label="營業稅損">
+              <input className="form-input" type="number" disabled={isFinalized}
+                value={monthly.tax_loss ?? 0}
+                onChange={e => setMonthly(m => ({ ...m, tax_loss: e.target.value }))}
+                onBlur={e => handleSaveMonthly({ tax_loss: Number(e.target.value) || 0 })} />
+            </Field>
+            <Field label="總部成本 %（×營業額）">
+              <input className="form-input" type="number" step="0.01" disabled={isFinalized}
+                value={monthly.hq_cost_pct ?? 0.07}
+                onChange={e => setMonthly(m => ({ ...m, hq_cost_pct: e.target.value }))}
+                onBlur={e => handleSaveMonthly({ hq_cost_pct: Number(e.target.value) || 0.07 })} />
             </Field>
           </div>
+          <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+            <div><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>淨利</div><div style={{ fontSize: 16, fontWeight: 700 }}>NT$ {Number(monthly.net_profit || 0).toLocaleString()}</div></div>
+            <div><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>淨利率</div><div style={{ fontSize: 16, fontWeight: 700 }}>{(Number(monthly.net_profit_rate || 0) * 100).toFixed(2)}%</div></div>
+            <div><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>管理獎金提撥</div><div style={{ fontSize: 16, fontWeight: 700 }}>{(Number(monthly.mgmt_tier_pct || 0) * 100).toFixed(0)}%</div><div style={{ fontSize: 10, color: 'var(--text-muted)' }}>≥6%→10% · 3~5.99%→5%</div></div>
+            <div><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>管理獎金池</div><div style={{ fontSize: 18, fontWeight: 800, color: 'var(--accent-cyan)' }}>NT$ {Number(monthly.mgmt_bonus_pool || 0).toLocaleString()}</div></div>
+          </div>
           <div style={{ marginTop: 12, display: 'flex', gap: 12, alignItems: 'center', fontSize: 13, color: 'var(--text-muted)' }}>
-            <span>{monthly.is_target_achieved ? '✅ 達標（正職可領達標獎金）' : '⚠️ 未達標'}</span>
+            <span>{monthly.is_target_achieved ? '✅ 達成率≥100%（發業績獎金）' : '⚠️ 未達目標（不發業績獎金）'}</span>
             <span>·</span>
             <span>總權重：{Number(monthly.total_weight).toFixed(2)}</span>
             <div style={{ flex: 1 }} />
@@ -327,8 +337,8 @@ export default function StoreBonus() {
                   <th>角色</th>
                   <th>權重</th>
                   <th>個人比</th>
-                  <th>損益獎金</th>
-                  <th>達標</th>
+                  <th>管理獎金</th>
+                  <th>業績獎金</th>
                   <th>小功次</th>
                   <th>大功次</th>
                   <th>功獎金</th>
@@ -361,7 +371,7 @@ export default function StoreBonus() {
                     </td>
                     <td style={{ textAlign: 'right' }}>{Number(e.weight).toFixed(2)}</td>
                     <td style={{ textAlign: 'right' }}>{Number(e.weight_ratio).toFixed(2)}</td>
-                    <td style={{ textAlign: 'right' }}>{Number(e.profit_bonus).toLocaleString()}</td>
+                    <td style={{ textAlign: 'right' }}>{Number(e.mgmt_bonus || 0).toLocaleString()}</td>
                     <td style={{ textAlign: 'right', color: 'var(--accent-green)' }}>
                       {e.target_bonus > 0 ? Number(e.target_bonus).toLocaleString() : '—'}
                     </td>

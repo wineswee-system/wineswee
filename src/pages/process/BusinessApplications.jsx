@@ -1,7 +1,7 @@
 ﻿import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
-import { Wallet, Receipt, FileText, ClipboardList, Package, ShoppingCart, Building2, Banknote, Hammer, Wrench, Target } from 'lucide-react'
+import { Wallet, Receipt, FileText, ClipboardList, Package, ShoppingCart, Building2, Banknote, Hammer, Wrench, Target, Wine } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -46,6 +46,7 @@ const FIXED_PREORDER = [
 // 小工具（純前端，不走簽核 / 不上傳）
 const FIXED_TOOLS = [
   { icon: Target, name: '幸運轉盤', desc: '輸入名單轉盤抽選：抽員工 / 抽獎 / 決定順序，可洗牌、抽中後移除（純工具，資料留在瀏覽器）', action: '/process/wheel', color: 'var(--accent-purple)', dim: 'var(--accent-purple-dim)', tag: '工具' },
+  { icon: Wine, name: '暢飲計時', desc: '桌位計時看板：一桌可多組、開始/暫停/歸零、依門市桌位、可設時薪（純前端，資料留在瀏覽器）', action: '/process/drink-timer', color: 'var(--accent-cyan)', dim: 'var(--accent-cyan-dim)', tag: '工具' },
 ]
 
 const COLOR_MAP = {

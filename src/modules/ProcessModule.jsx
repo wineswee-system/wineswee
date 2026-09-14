@@ -32,6 +32,7 @@ import ExpenseQuery from '../pages/process/ExpenseQuery'
 import Preorders from '../pages/process/Preorders'
 import OrderRequestsPage from '../pages/process/OrderRequestsPage'
 import WheelSpinner from '../pages/process/WheelSpinner'
+import DrinkTimer from '../pages/process/DrinkTimer'
 import AuditReport from '../pages/process/AuditReport'
 import ExpenseReport from '../pages/process/ExpenseReport'
 import CustomFormFill from '../pages/workflow/CustomFormFill'
@@ -93,6 +94,7 @@ export default function ProcessModule() {
       <Route path="expense-query" element={<ExpenseQuery />} />
       <Route path="preorders" element={<Preorders />} />
       <Route path="wheel" element={<WheelSpinner />} />
+      <Route path="drink-timer" element={<DrinkTimer />} />
       <Route path="audit-report" element={<AuditReport />} />
       <Route path="expense-report" element={<ExpenseReport />} />
       <Route path="forms/custom/:templateId" element={<CustomFormFill />} />

@@ -819,7 +819,6 @@ export default function Leave() {
         const period = detailRow.start_date === detailRow.end_date || !detailRow.end_date
           ? `${detailRow.start_date}${detailRow.start_time ? ` ${detailRow.start_time}~${detailRow.end_time || ''}` : ''}`
           : `${detailRow.start_date} ~ ${detailRow.end_date}`
-        const duration = detailRow.hours && detailRow.hours < 8 ? `${detailRow.hours} 小時` : `${detailRow.days || 0} 天`
         const atts = (detailRow.attachments || []).map((u, i) => typeof u === 'string'
           ? { url: u, name: u.split('?')[0].split('/').pop() || `附件 ${i+1}` }
           : u)
@@ -841,7 +840,8 @@ export default function Leave() {
             fields={[
               { label: '假別', value: detailRow.type },
               { label: '期間', value: period },
-              { label: '天/時數', value: duration },
+              { label: '天數', value: `${detailRow.days || 0} 天` },
+              { label: '時數', value: `${detailRow.hours != null ? Number(detailRow.hours) : (detailRow.days || 0) * 8} 小時` },
               { label: '事由', value: detailRow.reason, multiline: true },
               ...(detailRow.reject_reason ? [{ label: '駁回原因', value: detailRow.reject_reason, multiline: true }] : []),
             ]}

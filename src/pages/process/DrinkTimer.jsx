@@ -22,13 +22,19 @@ const PRESETS = {
   '信義安和': [
     { name: '大圓桌1', type: 'round', floor: '一樓' },
     { name: '大圓桌2', type: 'round', floor: '一樓' },
-    { name: '小方桌3、4', type: 'square', floor: '一樓' },
-    { name: '小方桌5、6', type: 'square', floor: '一樓' },
+    { name: '小方桌3', type: 'square', floor: '一樓' },
+    { name: '小方桌4', type: 'square', floor: '一樓' },
+    { name: '小方桌5', type: 'square', floor: '一樓' },
+    { name: '小方桌6', type: 'square', floor: '一樓' },
     { name: '小方桌7', type: 'square', floor: '一樓' },
-    { name: '小方桌8、9', type: 'square', floor: '二樓' },
-    { name: '小方桌10、11', type: 'square', floor: '二樓' },
-    { name: '小方桌12、13', type: 'square', floor: '二樓' },
-    { name: '小方桌14、15', type: 'square', floor: '二樓' },
+    { name: '小方桌8', type: 'square', floor: '二樓' },
+    { name: '小方桌9', type: 'square', floor: '二樓' },
+    { name: '小方桌10', type: 'square', floor: '二樓' },
+    { name: '小方桌11', type: 'square', floor: '二樓' },
+    { name: '小方桌12', type: 'square', floor: '二樓' },
+    { name: '小方桌13', type: 'square', floor: '二樓' },
+    { name: '小方桌14', type: 'square', floor: '二樓' },
+    { name: '小方桌15', type: 'square', floor: '二樓' },
     { name: '大圓桌16', type: 'round', floor: '二樓' },
     { name: '大圓桌17', type: 'round', floor: '二樓' },
     { name: '大圓桌18', type: 'round', floor: '二樓' },
@@ -136,6 +142,10 @@ export default function DrinkTimer() {
     const s = { ...data.sessions }; delete s[id]
     persist({ ...data, tables: data.tables.filter(t => t.id !== id), sessions: s })
   }
+  const reseedTables = () => {
+    if (!confirm(`還原「${store}」的預設桌位？\n會覆蓋目前的桌位設定與所有計時資料。`)) return
+    persist({ ...data, tables: seedTables(store), sessions: {} })
+  }
 
   const resetAll = () => {
     if (!confirm(`⚠️ 打烊清除「${store}」全部計時資料？（桌位設定保留）`)) return
@@ -187,7 +197,12 @@ export default function DrinkTimer() {
               </div>
             ))}
           </div>
-          <button className="btn btn-primary" onClick={addTable} style={{ marginTop: 10, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Plus size={15} /> 新增桌位</button>
+          <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+            <button className="btn btn-primary" onClick={addTable} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Plus size={15} /> 新增桌位</button>
+            {PRESETS[store] && (
+              <button className="btn btn-secondary" onClick={reseedTables} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><RotateCcw size={15} /> 還原預設桌位</button>
+            )}
+          </div>
         </div>
       )}
 

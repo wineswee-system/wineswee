@@ -26,9 +26,7 @@ import {
 // 且 CLAUDE.md 禁止新增色系；為保留群組視覺辨識度暫留 hex。
 export const majorGroups = [
   { key: 'dashboard', icon: LayoutDashboard, label: '儀表板', color: 'var(--accent-cyan)', path: '/' },
-  { key: 'commerce', icon: Handshake, label: '商務營運', color: 'var(--accent-blue)' },
-  { key: 'supply', icon: Warehouse, label: '供應鏈', color: 'var(--accent-green)' },
-  { key: 'dispatch', icon: Truck, label: '物流調度', color: 'var(--accent-orange)' },
+  { key: 'reservations', icon: ConciergeBell, label: '訂位管理', color: 'var(--accent-blue)' },
   { key: 'people', icon: Users, label: '人員組織', color: 'var(--accent-purple)' },
   { key: 'project', icon: Workflow, label: '專案流程', color: '#6366f1' }, // indigo：無對應 token，見上註
   { key: 'comms', icon: Mail, label: '通訊協作', color: '#2dd4bf' }, // teal：無對應 token，見上註
@@ -37,77 +35,7 @@ export const majorGroups = [
 
 // ── Mega menu + sidebar content for each group ──
 export const groupNav = {
-  commerce: [
-    {
-      label: 'CRM 客戶管理',
-      icon: Handshake,
-      children: [
-        { icon: Eye, label: '總覽', path: '/crm/overview' },
-        { icon: UserPlus, label: '線索管理', path: '/crm/leads' },
-        { icon: Users, label: '客戶管理', path: '/crm/customers' },
-        { icon: UserCheck, label: '聯絡人', path: '/crm/contacts' },
-        { icon: UserCircle, label: '客戶 360', path: '/crm/customer-360' },
-        { icon: Users, label: '客戶分群', path: '/crm/segments' },
-        { icon: TrendingUp, label: '銷售漏斗', path: '/crm/pipeline' },
-        { icon: Calendar, label: '活動排程', path: '/crm/activities' },
-        { icon: Award,       label: '會員管理',    path: '/crm/members' },
-        { icon: Award,       label: '會員等級設定', path: '/crm/levels' },
-        { icon: Users,       label: '會員群組',    path: '/crm/groups' },
-        { icon: Gift,        label: '優惠券管理',  path: '/crm/coupons' },
-        { icon: ShoppingBag, label: '消費紀錄',    path: '/crm/purchases' },
-        { icon: FileText,    label: '問卷管理',    path: '/crm/surveys' },
-        { icon: Sparkles,    label: 'Pilot 試跑',  path: '/crm/pilots' },
-      ]
-    },
-    {
-      label: '行銷自動化',
-      icon: Megaphone,
-      children: [
-        { icon: Megaphone, label: '行銷活動', path: '/crm/marketing' },
-        { icon: Sparkles, label: 'Drip Campaign', path: '/crm/drip-campaigns' },
-        { icon: FileText, label: '表單建立器', path: '/crm/forms' },
-        { icon: Zap, label: '工作流程', path: '/crm/workflows' },
-        { icon: Send, label: '發送紀錄', path: '/crm/messages' },
-        { icon: HeadphonesIcon, label: '客服工單', path: '/crm/service' },
-        { icon: BarChart2, label: 'CRM 報表', path: '/crm/reports' },
-      ]
-    },
-    {
-      label: '銷售管理',
-      icon: FileEdit,
-      children: [
-        { icon: PieChart, label: '銷售總覽', path: '/sales' },
-        { icon: FileText, label: '報價管理', path: '/sales/quotations' },
-        { icon: ClipboardList, label: '銷售訂單', path: '/sales/orders' },
-        { icon: Tag, label: '促銷活動', path: '/sales/promotions' },
-        { icon: Tag, label: '價格規則', path: '/sales/pricing' },
-        { icon: DollarSign, label: '業務佣金', path: '/sales/commission' },
-        { icon: RotateCcw, label: '銷售退貨', path: '/sales/returns' },
-        { icon: FileText, label: '銷貨折讓單', path: '/sales/allowances' },
-        { icon: Truck, label: '物流追蹤', path: '/sales/shipments' },
-      ]
-    },
-    {
-      label: '門市 / POS',
-      icon: Monitor,
-      children: [
-        { icon: PieChart,    label: '營運總覽', path: '/pos' },
-        { icon: Monitor,     label: '收銀台',   path: '/pos/terminal' },
-        { icon: DollarSign,   label: '交班日結', path: '/pos/shifts' },
-        { icon: FileBarChart, label: 'Z 報表',  path: '/pos/z-report' },
-        { icon: BookText,     label: '菜單管理', path: '/pos/menu' },
-        { icon: ShoppingBag, label: '商品目錄', path: '/pos/products' },
-        { icon: ClipboardList, label: '服務員點餐', path: '/pos/waiter' },
-        { icon: ChefHat,      label: '廚房顯示',   path: '/pos/kitchen' },
-        { icon: QrCode,       label: 'QR 點餐設定', path: '/pos/qr-settings' },
-        { icon: QrCode,       label: 'QR 桌台管理', path: '/pos/qr-tables' },
-        { icon: Award,        label: '員工業績',    path: '/pos/staff-performance' },
-        { icon: ClipboardList, label: '訂單記錄',   path: '/pos/orders' },
-        { icon: TrendingUp,   label: 'X 報表',      path: '/pos/x-report' },
-        { icon: BarChart2,    label: '月業績報表',  path: '/pos/monthly-report' },
-        { icon: Receipt,      label: '發票查詢',    path: '/pos/invoices' },
-      ]
-    },
+  reservations: [
     {
       label: '訂位管理',
       icon: ConciergeBell,
@@ -117,55 +45,6 @@ export const groupNav = {
         { icon: Map, label: '座位地圖', path: '/reservations/seating' },
         { icon: TableProperties, label: '桌位設定', path: '/reservations/tables' },
         { icon: ClipboardEdit, label: '訂位規則', path: '/reservations/rules' },
-      ]
-    },
-  ],
-
-  supply: [
-    {
-      label: '採購管理',
-      icon: ShoppingCart,
-      children: [
-        { icon: Users, label: '供應商', path: '/purchase/suppliers' },
-        { icon: Tag, label: '供應商分類', path: '/purchase/categories' },
-        { icon: BarChart2, label: '供應商績效', path: '/purchase/performance' },
-        { icon: UserCheck, label: '廠商入駐', path: '/purchase/onboarding' },
-        { icon: ClipboardList, label: '採購申請', path: '/purchase/requests' },
-        { icon: FileText, label: '採購單', path: '/purchase/orders' },
-        { icon: FileCheck, label: '進貨驗收', path: '/purchase/receipts' },
-        { icon: FileText, label: '進貨折讓單', path: '/purchase/allowances' },
-        { icon: FileText, label: '合約管理', path: '/purchase/contracts' },
-        { icon: FileText, label: '長期採購協議', path: '/purchase/blanket' },
-        { icon: GitBranch, label: '採購管線', path: '/purchase/pipeline' },
-        { icon: Workflow, label: '採購流程', path: '/purchase/workflow' },
-        { icon: Shield, label: '三方比對', path: '/purchase/matching' },
-      ]
-    },
-    {
-      label: '倉儲管理',
-      icon: Warehouse,
-      children: [
-        { icon: BarChart2, label: '倉庫總覽', path: '/wms/overview' },
-        { icon: Package, label: '商品主檔', path: '/wms/skus' },
-        { icon: Package, label: '儲位管理', path: '/wms/bins' },
-        { icon: PackageOpen, label: '進貨管理', path: '/wms/inbound' },
-        { icon: BarChart3, label: '庫存管理', path: '/wms/inventory' },
-        { icon: Truck, label: '出貨管理', path: '/wms/outbound' },
-        { icon: Truck, label: '揀貨/包裝/出貨', path: '/wms/pick-pack-ship' },
-        { icon: ArrowRightLeft, label: '倉庫調撥', path: '/wms/transfers' },
-        { icon: RotateCcw, label: 'RMA / 倉退', path: '/wms/returns' },
-        { icon: Layers, label: '組合商品', path: '/wms/kitting' },
-      ]
-    },
-    {
-      label: '庫存與盤點',
-      icon: CheckSquare,
-      children: [
-        { icon: Package, label: '批號追蹤', path: '/wms/lots' },
-        { icon: CheckSquare, label: '盤點作業', path: '/wms/stock-count' },
-        { icon: Calculator, label: '庫存估價', path: '/wms/valuation' },
-        { icon: BarChart2, label: '異常與報表', path: '/wms/reports' },
-        { icon: Sparkles, label: 'AI 庫存管理', path: '/wms/ai' },
       ]
     },
   ],
@@ -365,38 +244,6 @@ export const groupNav = {
     },
   ],
 
-  dispatch: [
-    {
-      label: '調度中心',
-      icon: Eye,
-      children: [
-        { icon: Eye,           label: '調度總覽',   path: '/dispatch' },
-        { icon: ClipboardList, label: '任務佇列',   path: '/dispatch/queue' },
-        { icon: Map,           label: '路線管理',   path: '/dispatch/routes' },
-        { icon: Calendar,      label: '排程日曆',   path: '/dispatch/schedule' },
-        { icon: MapPin,        label: '追蹤中心',   path: '/dispatch/tracking' },
-        { icon: BarChart2,     label: '物流分析',   path: '/dispatch/analytics' },
-      ]
-    },
-    {
-      label: '車隊管理',
-      icon: Truck,
-      children: [
-        { icon: Truck,  label: '車輛管理', path: '/dispatch/fleet' },
-        { icon: Users,  label: '司機管理', path: '/dispatch/fleet/drivers' },
-      ]
-    },
-    {
-      label: 'WMS 出貨流程',
-      icon: Package,
-      children: [
-        { icon: ClipboardList, label: '揀貨管理', path: '/wms/picklist' },
-        { icon: CheckSquare,   label: '包裝站',   path: '/wms/pack' },
-        { icon: ArrowRightLeft, label: '碼頭交接', path: '/wms/dock' },
-      ]
-    },
-  ],
-
   analytics: [
     {
       label: 'BI 分析',
@@ -413,11 +260,7 @@ export const groupNav = {
       label: '模組報表',
       icon: PieChart,
       children: [
-        { icon: Award, label: '銷售績效', path: '/analytics/sales' },
         { icon: Users, label: '人資分析', path: '/analytics/hr' },
-        { icon: Package, label: '庫存分析', path: '/analytics/inventory' },
-        { icon: ShoppingBag, label: 'POS 分析', path: '/analytics/pos' },
-        { icon: Users, label: 'CRM 分析', path: '/analytics/crm' },
       ]
     },
   ],

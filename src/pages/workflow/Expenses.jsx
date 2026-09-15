@@ -25,9 +25,15 @@ const CATEGORIES = ['交通', '住宿', '餐飲', '設備', '其他']
 const emptyItem = () => ({ name: '', qty: 1, unit_price: '', subtotal: 0 })
 
 export default function Expenses() {
-  const { profile, hasPermission, isAdmin } = useAuth()
+  const { profile, hasPermission, isAdmin, isSuperAdmin } = useAuth()
   // 黑色(限制)科目:只給 財務部(25)/人力資源管理部(26)/admin 看;一般員工只看紅色(all)
   const canSeeRestrictedAccounts = isAdmin || [25, 26].includes(profile?.department_id)
+  // 經常性費用報銷表單鎖 super_admin：一般員工只能查看過去紀錄，不能新增/編輯重送/複製
+  const guardCreateExpense = () => {
+    if (isSuperAdmin) return true
+    toast.info('此功能需加購模組，請聯繫系統管理員')
+    return false
+  }
   const canDeleteAll = hasPermission('hr_form.delete_all')
   const { canApprove } = usePendingApprovals()
   const navigate = useNavigate()
@@ -153,13 +159,14 @@ export default function Expenses() {
   // 開完就把 new=1 拿掉，避免關 modal 後重彈；binding_id 留著給 submit 使用
   useEffect(() => {
     if (searchParams.get('new') === '1' && !showModal) {
+      const next = new URLSearchParams(searchParams)
+      next.delete('new')
+      setSearchParams(next, { replace: true })
+      if (!guardCreateExpense()) return
       setEditingId(null)
       setForm({ employee: '', category: CATEGORIES[0], date: '', description: '', receipt: true })
       setLineItems([emptyItem()])
       setShowModal(true)
-      const next = new URLSearchParams(searchParams)
-      next.delete('new')
-      setSearchParams(next, { replace: true })
     }
   }, [searchParams, showModal, setSearchParams]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -415,6 +422,7 @@ export default function Expenses() {
               </button>
             )}
             <button className="btn btn-primary" onClick={() => {
+              if (!guardCreateExpense()) return
               setEditingId(null)
               setForm({ employee: profile?.name || employees[0]?.name || '', category: CATEGORIES[0], date: '', description: '', receipt: true })
               setLineItems([emptyItem()])
@@ -504,6 +512,7 @@ export default function Expenses() {
                       )}
                       {['待審核','申請中','已駁回','已退回'].includes(e.status) && e.employee === profile?.name && (
                         <button className="btn btn-sm btn-primary" style={{ background: 'var(--accent-orange)' }} onClick={() => {
+                          if (!guardCreateExpense()) return
                           setEditingId(e.id)
                           setCloneSourceAtts(Array.isArray(e.attachments) ? e.attachments : [])
                           setForm({
@@ -519,6 +528,7 @@ export default function Expenses() {
                       )}
                       {e.employee === profile?.name && (
                         <button className="btn btn-sm btn-secondary" style={{ color: 'var(--accent-cyan)' }} title="以這張為範本開一張全新報銷（含附件，不動原單）" onClick={() => {
+                          if (!guardCreateExpense()) return
                           setEditingId(null)
                           setCloneSourceAtts(Array.isArray(e.attachments) ? e.attachments : [])
                           setForm({
@@ -550,7 +560,7 @@ export default function Expenses() {
         </div>
       </div>
 
-      {showModal && (
+      {showModal && isSuperAdmin && (
         <Modal
           title={editingId ? '✏️ 編輯重送（駁回後修改）' : '新增經常性費用報銷'}
           onClose={() => { setShowModal(false); setErrors({}); setEditingId(null); setCloneSourceAtts([]) }}

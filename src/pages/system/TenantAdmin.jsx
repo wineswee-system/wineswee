@@ -9,7 +9,7 @@ import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
 const PLANS = ['免費', '標準', '專業', '企業']
 const STATUSES = ['啟用', '暫停', '試用']
-const FEATURES = ['HR', 'CRM', 'WMS', 'POS']
+const FEATURES = ['HR']
 
 const planColor = { '免費': 'badge-neutral', '標準': 'badge-info', '專業': 'badge-purple', '企業': 'badge-danger' }
 const statusColor = { '啟用': 'badge-success', '暫停': 'badge-warning', '試用': 'badge-info' }

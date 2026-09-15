@@ -199,7 +199,6 @@ export default function Analytics() {
           baseline={t.revenue.yesterday}
           baselineLabel="昨日"
           accent="cyan"
-          onClick={() => navigate('/pos')}
         />
         <KpiCard
           label="今日訂單數"
@@ -305,8 +304,6 @@ export default function Analytics() {
           count={todos.low_stock_count}
           accent="orange"
           label={`低庫存 SKU：${todos.low_stock_count} 個品項已低於安全庫存`}
-          sub="點擊查看補貨建議"
-          onClick={() => navigate('/wms')}
         />
         <TodoRow
           count={todos.stuck_tasks_count}

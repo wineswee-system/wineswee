@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   Package, Shield, RefreshCw, Check, X, Building2, Save,
-  Users, Handshake, ShoppingCart, Warehouse,
-  BarChart3, GitBranch, Monitor, Search,
+  Users, BarChart3, GitBranch, Search,
   ToggleLeft, ToggleRight, AlertTriangle
 } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
@@ -10,21 +9,16 @@ import { getTenants, updateTenantModules } from '../../lib/db'
 
 const ALL_MODULES = [
   { key: 'HR', label: '人力資源', desc: '出勤、請假、薪資、績效、招募、訓練', icon: Users, color: '#a78bfa', group: '人員' },
-  { key: 'CRM', label: '客戶管理', desc: '客戶、銷售漏斗、會員、行銷自動化', icon: Handshake, color: '#3b82f6', group: '商務' },
-  { key: 'Sales', label: '銷售管理', desc: '報價、訂單、促銷、退貨、物流追蹤', icon: ShoppingCart, color: '#22d3ee', group: '商務' },
-  { key: 'POS', label: '收銀系統', desc: '收銀台、交班日結、即時銷售分析', icon: Monitor, color: '#f472b6', group: '商務' },
-  { key: 'WMS', label: '倉儲管理', desc: '庫存、進出貨、盤點、批號追蹤、儲位', icon: Warehouse, color: '#34d399', group: '供應鏈' },
-  { key: 'Purchase', label: '採購管理', desc: '供應商、採購單、驗收、合約、三方比對', icon: ShoppingCart, color: '#fb923c', group: '供應鏈' },
   { key: 'Analytics', label: '數據分析', desc: '預測分析、異常偵測、自訂儀表板、BI', icon: BarChart3, color: '#e879f9', group: '進階' },
   { key: 'Process', label: '流程管理', desc: '工作流程、任務、查核清單、SOP', icon: GitBranch, color: '#06b6d4', group: '進階' },
 ]
 
-const MODULE_GROUPS = ['人員', '商務', '供應鏈', '進階']
+const MODULE_GROUPS = ['人員', '進階']
 
 const planModuleDefaults = {
   '免費': ['HR'],
-  '標準': ['HR', 'CRM', 'Sales'],
-  '專業': ['HR', 'CRM', 'Sales', 'POS', 'WMS', 'Purchase', 'Analytics'],
+  '標準': ['HR'],
+  '專業': ['HR', 'Analytics'],
   '企業': ALL_MODULES.map(m => m.key),
 }
 

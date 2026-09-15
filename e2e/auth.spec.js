@@ -44,17 +44,4 @@ test.describe('Authentication', () => {
     await expect(content).toBeVisible({ timeout: 10000 })
   })
 
-  test('AUTH-E06: POS terminal page loads', async ({ page }) => {
-    await page.goto('/pos/terminal')
-    await page.waitForTimeout(2000)
-    const content = page.locator('main, [class*="main"]').first()
-    await expect(content).toBeVisible({ timeout: 10000 })
-  })
-
-  test('AUTH-E07: CRM pipeline page loads', async ({ page }) => {
-    await page.goto('/crm/pipeline')
-    await page.waitForTimeout(2000)
-    const content = page.locator('main, [class*="main"]').first()
-    await expect(content).toBeVisible({ timeout: 10000 })
-  })
 })

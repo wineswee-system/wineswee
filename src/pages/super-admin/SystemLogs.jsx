@@ -7,7 +7,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { getSystemLogs, getTenants } from '../../lib/db'
 
 const LEVELS = ['info', 'warn', 'debug']
-const MODULES = ['Auth', 'HR', 'CRM', 'Sales', 'POS', 'WMS', 'Purchase', 'Analytics', 'Process', 'System']
+const MODULES = ['Auth', 'HR', 'Analytics', 'Process', 'System']
 const ACTIONS = ['login', 'logout', 'module_access', 'export', 'import', 'config_change', 'create', 'update', 'delete']
 
 const levelStyle = {

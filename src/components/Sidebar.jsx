@@ -98,9 +98,7 @@ const superAdminItems = [
 // ── Route prefix → group key mapping ──
 const routeToGroup = (pathname) => {
   if (pathname === '/') return 'dashboard'
-  if (pathname.startsWith('/crm') || pathname.startsWith('/sales') || pathname.startsWith('/pos') || pathname.startsWith('/reservations')) return 'commerce'
-  if (pathname.startsWith('/purchase') || pathname.startsWith('/wms')) return 'supply'
-  if (pathname.startsWith('/dispatch')) return 'dispatch'
+  if (pathname.startsWith('/reservations')) return 'reservations'
   if (pathname.startsWith('/process')) return 'project'
   if (pathname.startsWith('/org/line')) return 'system' // LINE integration lives in System sidebar
   if (pathname.startsWith('/hr') || pathname.startsWith('/org') || pathname.startsWith('/lms')) return 'people'
@@ -258,17 +256,15 @@ export default function Sidebar() {
 
   // Major group → required perm（null = 全員可見）
   const GROUP_REQUIRES = {
-    dashboard: null,                 // 全員可見
-    commerce:  'nav.group.crm',
-    supply:    'nav.group.supply',
-    dispatch:  'dispatch.view',
-    finance:   'finance.view',       // 既有舊 perm
-    people:    null,                 // 大家都有「個人 HR」section
-    project:   'nav.project.work',   // 有專案工作就能看到 group
-    analytics: 'nav.group.analytics',
+    dashboard:     null,             // 全員可見
+    reservations:  null,             // 訂位模組 perm: null，全員可見
+    finance:       'finance.view',   // 既有舊 perm
+    people:        null,             // 大家都有「個人 HR」section
+    project:       'nav.project.work', // 有專案工作就能看到 group
+    analytics:     'nav.group.analytics',
   }
-  // 物流調度 / 通訊協作：新模組，暫時只開放 super_admin（不吃 GROUP_REQUIRES / dispatch.view）
-  const SUPER_ADMIN_ONLY_GROUPS = new Set(['dispatch', 'comms'])
+  // 通訊協作：新模組，暫時只開放 super_admin（不吃 GROUP_REQUIRES）
+  const SUPER_ADMIN_ONLY_GROUPS = new Set(['comms'])
   const isSuperAdmin = profile?.role === 'super_admin'
   // 逐入口權限新制是否上線（migration 20260806120000 跑了才有哨兵）。
   // 上線後 top tab / leaf 一律吃 nav.top.* / nav.entry.*；未上線走下方舊 fallback，避免部署順序鎖人。

@@ -93,16 +93,6 @@ export function registerHRHandlers(bus) {
     await supabase.from('employees').update({ status: '離職中' }).eq('id', employee_id)
       .then(({ error }) => { if (error) console.warn(`[HR] Failed to update status for ${name}:`, error.message) })
 
-    // Notify related modules via events
-    await bus.publish('pos.access.revoked', { employee_id, name, reason: '離職流程' }, {
-      causation_id: event.id,
-      correlation_id: event.metadata?.correlation_id,
-    }).catch(() => {})
-
-    await bus.publish('wms.access.revoked', { employee_id, name, reason: '離職流程' }, {
-      causation_id: event.id,
-      correlation_id: event.metadata?.correlation_id,
-    }).catch(() => {})
   })
 
   // ── High attrition risk → log for HR review ──

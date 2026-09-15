@@ -32,7 +32,7 @@ import { confirm } from '../../lib/confirm'
 const normBucket = b => ({ General: '一般工作', Personal: '私人工作', Workflow: '工作流程', Project: '專案' }[b] || b || '一般工作')
 
 export default function Tasks() {
-  const { profile, hasPermission } = useAuth()
+  const { profile, hasPermission, isSuperAdmin } = useAuth()
   const { logAction, logFieldChange } = useAuditLog()
   const [tab, setTab] = useState('all')
   const [view, setView] = useState(() => localStorage.getItem('tasks_view') || 'list')
@@ -858,15 +858,22 @@ export default function Tasks() {
             )}
           </div>
 
-          {/* 綁定表單 — 任務完成前需填完這些表單；可指定每張誰來填 */}
-          <BoundFormsField
-            value={form.required_forms || []}
-            onChange={v => set('required_forms', v)}
-            employees={employees}
-            defaultAssigneeId={employees.find(e => e.name === form.assignee)?.id || null}
-          />
+          {/* 綁定表單 — 任務完成前需填完這些表單；可指定每張誰來填（鎖 super_admin） */}
+          {isSuperAdmin ? (
+            <BoundFormsField
+              value={form.required_forms || []}
+              onChange={v => set('required_forms', v)}
+              employees={employees}
+              defaultAssigneeId={employees.find(e => e.name === form.assignee)?.id || null}
+            />
+          ) : (
+            <div style={{ padding: 12, borderRadius: 8, background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)', fontSize: 12, color: 'var(--text-muted)' }}>
+              📋 綁定表單：此功能需加購模組，請聯繫系統管理員
+            </div>
+          )}
 
-          {/* 附件（選填） */}
+          {/* 附件（選填，鎖 super_admin） */}
+          {isSuperAdmin ? (
           <div style={{ padding: 12, borderRadius: 8, background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)' }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 4 }}>📎 附件（選填）</div>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
@@ -919,6 +926,11 @@ export default function Tasks() {
               </div>
             )}
           </div>
+          ) : (
+            <div style={{ padding: 12, borderRadius: 8, background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)', fontSize: 12, color: 'var(--text-muted)' }}>
+              📎 附件：此功能需加購模組，請聯繫系統管理員
+            </div>
+          )}
 
           <Field label="說明（選填）">
             <textarea className="form-input" style={{ width: '100%', minHeight: 60, resize: 'vertical' }} placeholder="任務說明、注意事項..." value={form.description} onChange={e => set('description', e.target.value)} />

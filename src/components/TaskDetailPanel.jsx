@@ -31,13 +31,21 @@ import TaskAttachmentsTab from './tasks/TaskAttachmentsTab'
 const STATUS_LIST = ['未開始', '待簽核', '進行中', '已完成', '已擱置']
 const PRIORITY_LIST = ['低', '中', '高']
 
+function LockedFeatureMessage() {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '48px 24px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+      <div style={{ fontSize: 14, maxWidth: 360 }}>此功能需加購模組，請聯繫系統管理員</div>
+    </div>
+  )
+}
+
 
 export default function TaskDetailPanel({
   step: task, instance, allSteps, employees, stores, checklists,
   onUpdate, onDelete, onDuplicate, onClose,
   mode = 'modal',
 }) {
-  const { profile } = useAuth()
+  const { profile, isSuperAdmin } = useAuth()
   const navigate = useNavigate()
   const { logAction, logFieldChange } = useAuditLog()
   const [form, setForm] = useState({})
@@ -92,6 +100,8 @@ export default function TaskDetailPanel({
   // 表單 tab：能看到這個 task 的人都能看（RLS 已擋過）
   // super_admin_only 的表單在 TaskFormsTab 內層過濾
   const canSeeForms = true
+  // 表單/附件/簽核鎖 super_admin：分頁本身仍顯示，內容換成「需加購模組」訊息
+  const lockedFeature = !isSuperAdmin
 
   // InputModal state
   const [inputModal, setInputModal] = useState({ open: false, title: '', label: '', placeholder: '', required: true, onConfirm: null })
@@ -434,12 +444,14 @@ export default function TaskDetailPanel({
 
           {/* ═══ 表單 Tab ═══ */}
           {activeTab === 'forms' && canSeeForms && (
-            <TaskFormsTab
-              task={task}
-              formBindings={formBindings}
-              setFormBindings={setFormBindings}
-              superAdminOnlyTplIds={superAdminOnlyTplIds}
-            />
+            lockedFeature ? <LockedFeatureMessage /> : (
+              <TaskFormsTab
+                task={task}
+                formBindings={formBindings}
+                setFormBindings={setFormBindings}
+                superAdminOnlyTplIds={superAdminOnlyTplIds}
+              />
+            )
           )}
 
           {/* ═══ Basic Tab ═══ */}
@@ -668,41 +680,45 @@ export default function TaskDetailPanel({
 
           {/* ═══ Approval Tab ═══ */}
           {activeTab === 'approval' && (
-            <TaskApprovalTab
-              task={task}
-              profile={profile}
-              employees={employees}
-              form={form}
-              setAndDirty={setAndDirty}
-              confirmations={confirmations}
-              setConfirmations={setConfirmations}
-              newConfirmApprover={newConfirmApprover}
-              setNewConfirmApprover={setNewConfirmApprover}
-              newConfirmPriority={newConfirmPriority}
-              setNewConfirmPriority={setNewConfirmPriority}
-              approvalChains={approvalChains}
-              approvalForm={approvalForm}
-              setApprovalForm={setApprovalForm}
-              approvalSteps={approvalSteps}
-              setApprovalSteps={setApprovalSteps}
-              approvalPriority={approvalPriority}
-              setApprovalPriority={setApprovalPriority}
-              approvalMode={approvalMode}
-              setApprovalMode={setApprovalMode}
-              openInput={openInput}
-              closeInput={closeInput}
-              onUpdate={onUpdate}
-            />
+            lockedFeature ? <LockedFeatureMessage /> : (
+              <TaskApprovalTab
+                task={task}
+                profile={profile}
+                employees={employees}
+                form={form}
+                setAndDirty={setAndDirty}
+                confirmations={confirmations}
+                setConfirmations={setConfirmations}
+                newConfirmApprover={newConfirmApprover}
+                setNewConfirmApprover={setNewConfirmApprover}
+                newConfirmPriority={newConfirmPriority}
+                setNewConfirmPriority={setNewConfirmPriority}
+                approvalChains={approvalChains}
+                approvalForm={approvalForm}
+                setApprovalForm={setApprovalForm}
+                approvalSteps={approvalSteps}
+                setApprovalSteps={setApprovalSteps}
+                approvalPriority={approvalPriority}
+                setApprovalPriority={setApprovalPriority}
+                approvalMode={approvalMode}
+                setApprovalMode={setApprovalMode}
+                openInput={openInput}
+                closeInput={closeInput}
+                onUpdate={onUpdate}
+              />
+            )
           )}
 
           {/* ═══ 附件 Tab ═══ */}
           {activeTab === 'attachments' && (
-            <TaskAttachmentsTab
-              task={task}
-              profile={profile}
-              attachments={attachments}
-              setAttachments={setAttachments}
-            />
+            lockedFeature ? <LockedFeatureMessage /> : (
+              <TaskAttachmentsTab
+                task={task}
+                profile={profile}
+                attachments={attachments}
+                setAttachments={setAttachments}
+              />
+            )
           )}
 
           {/* ═══ Discussion Tab ═══ */}

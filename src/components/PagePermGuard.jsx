@@ -91,9 +91,51 @@ function NoPermission() {
   )
 }
 
+// 加購模組限定：功能本身視為額外模組，權限碼開通無效，只有 super_admin 能用（含 admin 也擋）。
+export const SUPERADMIN_ONLY_PATHS = [
+  '/hr/payroll',
+  '/hr/salary-structures',
+]
+
+// 同上，但整個模組(含所有子頁)都鎖 super_admin，用前綴比對（LMS 沒有可窮舉的少量子頁）。
+export const SUPERADMIN_ONLY_PREFIXES = [
+  '/lms',
+]
+
+// 同上，但只擋「範本建立/編輯」子頁，/process/sop 本身(範本庫瀏覽 + 部署)不擋
+// —— 前綴/精確比對無法表達「擋子頁但不擋自己」，用 matcher function。
+export const SUPERADMIN_ONLY_MATCHERS = [
+  (pathname) => /^\/process\/sop\/(new|legacy)(\/|$)/.test(pathname),
+  (pathname) => /^\/process\/sop\/list(\/|$)/.test(pathname),
+  (pathname) => /^\/process\/sop\/form(\/|$)/.test(pathname),
+  (pathname) => /^\/process\/sop\/[^/]+\/edit$/.test(pathname),
+]
+
+function isSuperAdminOnlyPath(pathname) {
+  return SUPERADMIN_ONLY_PATHS.includes(pathname)
+    || SUPERADMIN_ONLY_PREFIXES.some(p => pathname === p || pathname.startsWith(p + '/'))
+    || SUPERADMIN_ONLY_MATCHERS.some(fn => fn(pathname))
+}
+
+function AddonRequired() {
+  return (
+    <div style={{
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+      padding: '80px 24px', textAlign: 'center', color: 'var(--text-secondary)',
+    }}>
+      <ShieldAlert size={48} style={{ color: 'var(--accent-orange)', marginBottom: 16 }} />
+      <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8, color: 'var(--text-primary)' }}>需要加購模組</h2>
+      <p style={{ fontSize: 14, maxWidth: 420 }}>
+        此功能需加購模組，請聯繫系統管理員。
+      </p>
+    </div>
+  )
+}
+
 export default function PagePermGuard({ children }) {
   const { pathname } = useLocation()
-  const { hasPermission } = useAuth()
+  const { hasPermission, isSuperAdmin } = useAuth()
+  if (isSuperAdminOnlyPath(pathname) && !isSuperAdmin) return <AddonRequired />
   const code = PAGE_PERM[pathname]
   if (code && !hasPermission(code)) return <NoPermission />
   // 逐入口權限（migration 20260806120000 上線後才生效；哨兵判斷，未上線不影響）

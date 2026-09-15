@@ -46,9 +46,15 @@ import { HR_APPROVAL_TEMPLATE_NAMES } from '../../lib/workflowIntegration'
 const TRIGGER_DEPTH_LIMIT = 5
 
 export default function Workflows() {
-  const { profile, hasPermission } = useAuth()
+  const { profile, hasPermission, isSuperAdmin } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
+  // 流程範本建立/編輯/刪除/部署鎖 super_admin：空白新增流程、任務維持開放
+  const guardTemplateAction = () => {
+    if (isSuperAdmin) return true
+    toast.info('此功能需加購模組，請聯繫系統管理員')
+    return false
+  }
   const currentUser = profile?.name || '管理員'
   const { logAction, logFieldChange } = useAuditLog()
   const [tab, setTab] = useState('active')
@@ -437,6 +443,7 @@ export default function Workflows() {
   }
 
   const handleChainApprove = async (instId, action, reason = null) => {
+    if (!isSuperAdmin) { toast.info('此功能需加購模組，請聯繫系統管理員'); return }
     const empId = profile?.id
     if (!empId) { toast.error('無法識別簽核人員'); return }
     const { data, error } = await supabase.rpc('workflow_instance_chain_approve', {
@@ -809,6 +816,7 @@ export default function Workflows() {
     resetNewTpl()
   }
   const handleEditTemplate = (tpl) => {
+    if (!guardTemplateAction()) return
     setEditingTplId(tpl.id)
     setNewTpl({
       name: tpl.name || '',
@@ -900,6 +908,7 @@ export default function Workflows() {
   }
 
   const handleDeleteTemplate = async (tpl) => {
+    if (!guardTemplateAction()) return
     if (!(await confirm({ message: `確定刪除範本「${tpl.name}」？此操作無法復原。` }))) return
     // ★ 修：範本在 sop_templates，原本誤用 deleteWorkflow 刪到 workflows 表 → 沒真的刪、刷新又出現
     const { data: deleted, error } = await supabase.from('sop_templates').delete().eq('id', tpl.id).select()
@@ -1474,10 +1483,10 @@ export default function Workflows() {
       {tab === 'templates' && (
         <TemplatesList
           templates={templates}
-          onDeploy={tpl => { setDeployTemplate(tpl); setDeployForm({ location: '', assignees: {} }); setDeployResult(null); setShowDeployModal(true) }}
+          onDeploy={tpl => { if (!guardTemplateAction()) return; setDeployTemplate(tpl); setDeployForm({ location: '', assignees: {} }); setDeployResult(null); setShowDeployModal(true) }}
           onEdit={handleEditTemplate}
           onDelete={handleDeleteTemplate}
-          onCreateNew={() => { setEditingTplId(null); resetNewTpl(); setShowCreateTplModal(true) }}
+          onCreateNew={() => { if (!guardTemplateAction()) return; setEditingTplId(null); resetNewTpl(); setShowCreateTplModal(true) }}
           onManageCategories={() => setShowCategoryModal(true)}
         />
       )}

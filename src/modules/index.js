@@ -13,12 +13,7 @@ import { lazy } from 'react'
 
 export const DEFS = [
   { basePath: '/hr',            perm: null,                   load: () => import('./HRModule') },
-  { basePath: '/crm',           perm: 'nav.group.crm',        load: () => import('./CRMModule') },
   { basePath: '/analytics',     perm: 'nav.group.analytics',  alsoBase: true, load: () => import('./AnalyticsModule') },
-  { basePath: '/purchase',      perm: 'nav.group.supply',     load: () => import('./PurchaseModule') },
-  { basePath: '/wms',           perm: 'nav.group.supply',     load: () => import('./WMSModule') },
-  { basePath: '/sales',         perm: 'nav.group.crm',        alsoBase: true, load: () => import('./SalesModule') },
-  { basePath: '/pos',           perm: null,    alsoBase: true, load: () => import('./POSModule') },
   { basePath: '/org',           perm: null,                   load: () => import('./OrgModule') },
   // 不要用 subRoutes 把 /process/settings/* 切出來 —
   // renderModule 的 subRoute outer 會吃 /process/settings/，剩下 'chains'，
@@ -30,7 +25,6 @@ export const DEFS = [
   { basePath: '/reservations',  perm: null,    alsoBase: true, load: () => import('./ReservationModule') },
   { basePath: '/super-admin',   perm: null,    superAdminOnly: true, load: () => import('./SuperAdminModule') },
   { basePath: '/comms',         perm: null,    alsoBase: true, superAdminOnly: true, load: () => import('./CommsModule') },
-  { basePath: '/dispatch',      perm: 'dispatch.view', alsoBase: true, superAdminOnly: true, load: () => import('./DispatchModule') },
 ]
 
 export const ALL_MODULES = DEFS.map(({ load, ...rest }) => ({

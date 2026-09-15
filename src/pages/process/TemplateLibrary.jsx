@@ -124,9 +124,16 @@ function TriToggle({ label, value, onChange }) {
  *   - Import JSON file of templates (skip duplicates by name)
  */
 export default function TemplateLibrary() {
-  const { profile } = useAuth()
+  const { profile, isSuperAdmin } = useAuth()
   const navigate = useNavigate()
   const importInputRef = useRef(null)
+  // 範本建立/編輯/部署鎖 super_admin：瀏覽範本庫維持開放，擋「複製範本」「部署」「模擬部署」這幾個就地動作
+  // （新增/編輯按鈕都是導頁到 /process/sop/new|:id/edit，已由 PagePermGuard 擋）
+  const guardTemplateEdit = () => {
+    if (isSuperAdmin) return true
+    toast.info('此功能需加購模組，請聯繫系統管理員')
+    return false
+  }
 
   const [loading, setLoading] = useState(true)
   const [templates, setTemplates] = useState([])
@@ -305,6 +312,7 @@ export default function TemplateLibrary() {
 
   // ── Duplicate ──
   const handleDuplicate = async (tpl) => {
+    if (!guardTemplateEdit()) return
     try {
       // eslint-disable-next-line no-unused-vars
       const { id, created_at, updated_at, ...rest } = tpl
@@ -893,7 +901,7 @@ export default function TemplateLibrary() {
                           <button
                             className="btn btn-primary"
                             style={{ fontSize: 12, padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 4 }}
-                            onClick={() => setDeployTarget(tpl)}
+                            onClick={() => { if (!guardTemplateEdit()) return; setDeployTarget(tpl) }}
                           >
                             <Rocket size={12} /> 部署
                           </button>
@@ -915,7 +923,7 @@ export default function TemplateLibrary() {
                         {/* Dry-run / shadow deploy (workflow only) */}
                         {!isSpecialType && (
                           <button
-                            onClick={() => setShadowTarget(tpl)}
+                            onClick={() => { if (!guardTemplateEdit()) return; setShadowTarget(tpl) }}
                             title="模擬部署"
                             style={{
                               background: 'none', border: 'none', color: 'var(--text-muted)',
@@ -996,7 +1004,7 @@ export default function TemplateLibrary() {
           onClose={() => setPreviewTarget(null)}
           onEdit={() => { setPreviewTarget(null); navigate(`/process/sop/${previewTarget.id}/edit`) }}
           onDuplicate={async () => { await handleDuplicate(previewTarget); setPreviewTarget(null) }}
-          onDeploy={() => { setDeployTarget(previewTarget); setPreviewTarget(null) }}
+          onDeploy={() => { if (!guardTemplateEdit()) return; setDeployTarget(previewTarget); setPreviewTarget(null) }}
         />
       )}
       {analyticsTarget && (

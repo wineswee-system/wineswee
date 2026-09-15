@@ -79,6 +79,8 @@ export default function ProjectListView({
   onDeleteTemplate,
   onCreateTemplate,
   tplSaving = false,
+  guardBlankProjectCreate = () => true,
+  guardTemplateEdit = () => true,
 }) {
   const [editingTpl, setEditingTpl] = useState(null)
 
@@ -112,6 +114,7 @@ export default function ProjectListView({
               <Download size={14} /> 匯出
             </button>
             <button className="btn btn-primary" onClick={async () => {
+              if (!guardBlankProjectCreate()) return
               const { data } = await supabase.from('workflow_instances').select('id, template_name, status, started_by, started_at').is('project_id', null).order('started_at', { ascending: false })
               setFreeInstances(data || [])
               resetNewProjectState()
@@ -173,7 +176,7 @@ export default function ProjectListView({
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
             <button className="btn btn-primary"
               style={{ display: 'flex', alignItems: 'center', gap: 5 }}
-              onClick={() => setEditingTpl({})}>
+              onClick={() => { if (!guardTemplateEdit()) return; setEditingTpl({}) }}>
               <Plus size={14} /> 新增專案範本
             </button>
           </div>
@@ -200,18 +203,18 @@ export default function ProjectListView({
                     <button className="btn btn-secondary"
                       style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13 }}
                       title="編輯模板"
-                      onClick={() => setEditingTpl(tpl)}>
+                      onClick={() => { if (!guardTemplateEdit()) return; setEditingTpl(tpl) }}>
                       <Edit3 size={13} /> 編輯
                     </button>
                     <button className="btn btn-secondary"
                       style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, color: 'var(--accent-red)' }}
                       title="刪除模板"
-                      onClick={() => onDeleteTemplate(tpl)}>
+                      onClick={() => { if (!guardTemplateEdit()) return; onDeleteTemplate(tpl) }}>
                       <Trash2 size={13} />
                     </button>
                     <button className="btn btn-primary"
                       style={{ display: 'flex', alignItems: 'center', gap: 4 }}
-                      onClick={() => openDeploy(tpl)}>
+                      onClick={() => { if (!guardTemplateEdit()) return; openDeploy(tpl) }}>
                       <Rocket size={14} /> 部署
                     </button>
                   </div>

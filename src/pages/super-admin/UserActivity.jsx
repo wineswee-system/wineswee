@@ -7,7 +7,7 @@ import {
 import { useAuth } from '../../contexts/AuthContext'
 import { getUserActivity, getTenants } from '../../lib/db'
 
-const MODULES = ['Auth', 'HR', 'CRM', 'Sales', 'POS', 'WMS', 'Purchase', 'Analytics', 'Process', 'System']
+const MODULES = ['Auth', 'HR', 'Analytics', 'Process', 'System']
 const ACTIONS = ['page_view', 'click', 'create', 'update', 'delete', 'search', 'export', 'login', 'logout']
 
 const actionMeta = {

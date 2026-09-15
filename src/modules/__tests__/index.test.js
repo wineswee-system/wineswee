@@ -30,11 +30,10 @@ describe('module registry (DEFS / ALL_MODULES)', () => {
     expect(DEFS.map(d => d.basePath)).toEqual(ALL_MODULES.map(m => m.basePath))
   })
 
-  it('alsoBase modules are /analytics, /sales, /pos', () => {
+  it('alsoBase modules are /analytics, /reservations', () => {
     const alsoBase = ALL_MODULES.filter(m => m.alsoBase).map(m => m.basePath)
     expect(alsoBase).toContain('/analytics')
-    expect(alsoBase).toContain('/sales')
-    expect(alsoBase).toContain('/pos')
+    expect(alsoBase).toContain('/reservations')
   })
 
   it('/super-admin is superAdminOnly', () => {

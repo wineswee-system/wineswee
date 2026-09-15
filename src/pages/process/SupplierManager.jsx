@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import { ModalOverlay } from '../../components/Modal'
-import { Plus, Trash2, Edit3, X, Search, Building2 } from 'lucide-react'
-import { getSuppliers, createSupplier, updateSupplier, deleteSupplier } from '../../lib/db/purchasing'
-import { useOrgId } from '../../contexts/AuthContext'
+import { Plus, Trash2, Edit3, X, Search, Building2, ShieldAlert } from 'lucide-react'
+import { getSuppliers, createSupplier, updateSupplier, deleteSupplier } from '../../lib/db/org'
+import { useOrgId, useAuth } from '../../contexts/AuthContext'
 import { confirm } from '../../lib/confirm'
 import LoadingSpinner from '../../components/LoadingSpinner'
 
@@ -11,6 +11,7 @@ const fieldStyle = { width: '100%', padding: '8px 12px', borderRadius: 6, border
 const labelStyle = { display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }
 
 export default function SupplierManager() {
+  const { isSuperAdmin } = useAuth()
   const orgId = useOrgId()
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
@@ -66,6 +67,15 @@ export default function SupplierManager() {
     const q = search.trim().toLowerCase()
     return [r.name, r.contact_person, r.phone].some(f => (f || '').toLowerCase().includes(q))
   })
+
+  if (!isSuperAdmin) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '48px 24px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+        <ShieldAlert size={40} style={{ color: 'var(--accent-orange)', marginBottom: 12 }} />
+        <div style={{ fontSize: 14, maxWidth: 360 }}>此功能需加購模組，請聯繫系統管理員</div>
+      </div>
+    )
+  }
 
   if (loading) return <LoadingSpinner />
 

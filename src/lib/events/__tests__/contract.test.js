@@ -39,9 +39,9 @@ describe('Event Catalog Contract', () => {
 
   // ── Domain Coverage ──
 
-  const EXPECTED_DOMAINS = ['sales', 'purchase', 'wms', 'finance', 'hr', 'crm', 'pos']
+  const EXPECTED_DOMAINS = ['finance', 'hr']
 
-  it('all 7 domains are represented', () => {
+  it('all 2 domains are represented', () => {
     const domains = [...new Set(Object.values(EVENT_CATALOG).map(s => s.domain))]
     for (const expected of EXPECTED_DOMAINS) {
       expect(domains, `Missing domain: ${expected}`).toContain(expected)
@@ -53,26 +53,6 @@ describe('Event Catalog Contract', () => {
       const events = Object.entries(EVENT_CATALOG).filter(([, s]) => s.domain === domain)
       expect(events.length, `${domain} has fewer than 2 events`).toBeGreaterThanOrEqual(2)
     }
-  })
-
-  // ── Sales Events Contract ──
-
-  describe('sales events', () => {
-    it('sales.order.created has required fields', () => {
-      const schema = EVENT_CATALOG['sales.order.created']
-      expect(schema).toBeTruthy()
-      expect(schema.payload.order_id.required).toBe(true)
-      expect(schema.payload.customer.required).toBe(true)
-      expect(schema.payload.items.required).toBe(true)
-      expect(schema.payload.total_amount.required).toBe(true)
-    })
-
-    it('sales.order.confirmed has required fields', () => {
-      const schema = EVENT_CATALOG['sales.order.confirmed']
-      expect(schema).toBeTruthy()
-      expect(schema.payload.order_id.required).toBe(true)
-      expect(schema.payload.order_number.required).toBe(true)
-    })
   })
 
   // ── Finance Events Contract ──
@@ -106,39 +86,6 @@ describe('Event Catalog Contract', () => {
         expect(schema.payload.payment_id.required).toBe(true)
       }
       expect(EVENT_CATALOG['finance.invoice.issued'].payload.invoice_number.required).toBe(true)
-    })
-  })
-
-  // ── WMS Events Contract ──
-
-  describe('wms events', () => {
-    it('wms.shipment.completed has required fields', () => {
-      const schema = EVENT_CATALOG['wms.shipment.completed']
-      expect(schema).toBeTruthy()
-      expect(schema.payload.shipment_id.required).toBe(true)
-      expect(schema.payload.customer.required).toBe(true)
-    })
-
-    it('wms.stock.adjusted exists', () => {
-      expect(EVENT_CATALOG['wms.stock.adjusted']).toBeTruthy()
-    })
-  })
-
-  // ── POS Events Contract ──
-
-  describe('pos events', () => {
-    it('pos.transaction.completed has required fields', () => {
-      const schema = EVENT_CATALOG['pos.transaction.completed']
-      expect(schema).toBeTruthy()
-      expect(schema.payload.transaction_id.required).toBe(true)
-      expect(schema.payload.total.required).toBe(true)
-      expect(schema.payload.store.required).toBe(true)
-      expect(schema.payload.cashier.required).toBe(true)
-    })
-
-    it('pos.shift.opened and closed exist', () => {
-      expect(EVENT_CATALOG['pos.shift.opened']).toBeTruthy()
-      expect(EVENT_CATALOG['pos.shift.closed']).toBeTruthy()
     })
   })
 

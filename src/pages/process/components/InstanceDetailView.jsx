@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { toast } from '../../../lib/toast'
+import { useAuth } from '../../../contexts/AuthContext'
 import {
   Plus, Pencil, ChevronLeft, MoreVertical, Archive, Trash2,
   Users, User, ClipboardList, FolderOpen, ShieldCheck, ShieldX, X, GripVertical, GitBranch, LayoutDashboard, GanttChartSquare
@@ -124,6 +125,12 @@ export default function InstanceDetailView({
   onInstNameUpdate,
   currentEmpId,
 }) {
+  const { isSuperAdmin } = useAuth()
+  const guardApprovalChain = () => {
+    if (isSuperAdmin) return true
+    toast.info('此功能需加購模組，請聯繫系統管理員')
+    return false
+  }
   const [confirmModal, setConfirmModal] = useState({ open: false, step: null, reason: '' })
   const [menuOpen, setMenuOpen] = useState(false)
   const [chainRejectReason, setChainRejectReason] = useState('')
@@ -874,12 +881,15 @@ export default function InstanceDetailView({
                   const active = cur === opt.v
                   return (
                     <button type="button" key={opt.v}
-                      onClick={() => setTaskForm(f => ({
-                        ...f,
-                        approval_mode: opt.v,
-                        confirmation_approvers: opt.v === 'people' ? (f.confirmation_approvers || []) : [],
-                        approval_chain_id: opt.v === 'chain' ? (f.approval_chain_id || '') : '',
-                      }))}
+                      onClick={() => {
+                        if (opt.v === 'chain' && !guardApprovalChain()) return
+                        setTaskForm(f => ({
+                          ...f,
+                          approval_mode: opt.v,
+                          confirmation_approvers: opt.v === 'people' ? (f.confirmation_approvers || []) : [],
+                          approval_chain_id: opt.v === 'chain' ? (f.approval_chain_id || '') : '',
+                        }))
+                      }}
                       style={{
                         flex: 1, padding: '8px 10px', borderRadius: 8, fontSize: 13, fontWeight: 600,
                         cursor: 'pointer',
@@ -972,20 +982,32 @@ export default function InstanceDetailView({
             )}
           </div>
 
-          {/* ★ 綁定表單 — 任務完成前需填完；可指定每張誰來填 */}
-          <BoundFormsField
-            value={taskForm.required_forms || []}
-            onChange={v => setTaskForm(f => ({ ...f, required_forms: v }))}
-            employees={employees}
-            defaultAssigneeId={employees.find(e => e.name === taskForm.assignee)?.id || null}
-          />
-
-          {/* 發起附件 */}
-          <div style={{ marginTop: 12 }}>
-            <InitiatorAttachmentField
-              files={taskForm.attachments || []}
-              setFiles={fs => setTaskForm(f => ({ ...f, attachments: fs }))}
+          {/* ★ 綁定表單 — 任務完成前需填完；可指定每張誰來填（鎖 super_admin） */}
+          {isSuperAdmin ? (
+            <BoundFormsField
+              value={taskForm.required_forms || []}
+              onChange={v => setTaskForm(f => ({ ...f, required_forms: v }))}
+              employees={employees}
+              defaultAssigneeId={employees.find(e => e.name === taskForm.assignee)?.id || null}
             />
+          ) : (
+            <div style={{ padding: 12, borderRadius: 8, background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)', fontSize: 12, color: 'var(--text-muted)' }}>
+              📋 綁定表單：此功能需加購模組，請聯繫系統管理員
+            </div>
+          )}
+
+          {/* 發起附件（鎖 super_admin） */}
+          <div style={{ marginTop: 12 }}>
+            {isSuperAdmin ? (
+              <InitiatorAttachmentField
+                files={taskForm.attachments || []}
+                setFiles={fs => setTaskForm(f => ({ ...f, attachments: fs }))}
+              />
+            ) : (
+              <div style={{ padding: 12, borderRadius: 8, background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)', fontSize: 12, color: 'var(--text-muted)' }}>
+                📎 附件：此功能需加購模組，請聯繫系統管理員
+              </div>
+            )}
           </div>
         </Modal>
       )}
@@ -993,13 +1015,22 @@ export default function InstanceDetailView({
         <Modal title="編輯流程" onClose={() => setShowEditModal(false)} onSubmit={onEditInstance}>
           <Field label="整體完成後簽核鏈">
             <select className="form-input" style={{ width: '100%' }}
+              disabled={!isSuperAdmin}
               value={editForm.completion_chain_id || ''}
-              onChange={e => setEditForm(f => ({ ...f, completion_chain_id: e.target.value || '' }))}>
+              onChange={e => {
+                if (!guardApprovalChain()) return
+                setEditForm(f => ({ ...f, completion_chain_id: e.target.value || '' }))
+              }}>
               <option value="">不需要 — 所有任務完成即結案</option>
               {approvalChains.map(c => (
                 <option key={c.id} value={c.id}>{c.name}（{c.steps?.length || 0} 關）</option>
               ))}
             </select>
+            {!isSuperAdmin && (
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                此功能需加購模組，請聯繫系統管理員
+              </div>
+            )}
           </Field>
           <Field label="負責人">
             <SearchableSelect

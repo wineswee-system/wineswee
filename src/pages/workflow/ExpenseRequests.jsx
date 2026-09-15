@@ -63,9 +63,16 @@ const verb = (s, doc) => doc?.settleVerb === '驗收'
   : s
 export default function ExpenseRequests({ docType = 'expense' } = {}) {
   const DOC = DOC_CFG[docType] || DOC_CFG.expense
-  const { profile, hasPermission, isAdmin } = useAuth()
+  const { profile, hasPermission, isAdmin, isSuperAdmin } = useAuth()
   // 黑色(restricted)科目只給 財務部(25)/人力資源管理部(26)/admin;一般員工(含manager/店長)只看紅色(all)
   const canSeeRestrictedAccounts = isAdmin || [25, 26].includes(profile?.department_id)
+  // 非經常性費用申請鎖 super_admin：一般員工只能查看過去紀錄，不能新增/編輯重送/複製/核銷
+  // 叫貨申請單(docType='order')不受影響，維持原本權限
+  const guardCreateExpense = () => {
+    if (docType === 'order' || isSuperAdmin) return true
+    toast.info('此功能需加購模組，請聯繫系統管理員')
+    return false
+  }
   const canDeleteAll = hasPermission('hr_form.delete_all')
   const { canApprove } = usePendingApprovals()
   const navigate = useNavigate()
@@ -178,14 +185,15 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
   // 開完就把 new=1 拿掉，避免關 modal 後重彈；binding_id 留著給 submit 使用
   useEffect(() => {
     if (searchParams.get('new') === '1' && !showModal) {
+      const next = new URLSearchParams(searchParams)
+      next.delete('new')
+      setSearchParams(next, { replace: true })
+      if (!guardCreateExpense()) return
       setEditingId(null)
       setForm(emptyForm)
       setLineItems([emptyItem()])
       setFiles([])
       setShowModal(true)
-      const next = new URLSearchParams(searchParams)
-      next.delete('new')
-      setSearchParams(next, { replace: true })
     }
   }, [searchParams, showModal, setSearchParams]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -251,6 +259,7 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
 
   // 進入「編輯重送」模式（駁回後申請人想改內容再送出）；asClone=true → 以舊單為範本開全新單(不動原單)
   const openEditResubmit = (req, asClone = false) => {
+    if (!guardCreateExpense()) return
     setEditingId(asClone ? null : req.id)
     // 複製模式：把來源單的舊附件帶進彈窗（可刪/可改），送出時複製留下的；編輯模式不帶
     // 複製模式 + 編輯模式都帶入舊附件，讓用戶可以看到原始附件並決定保留或刪除
@@ -490,6 +499,7 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
   // Open settle modal
   const openSettle = (req) => {
     openDetail(req)  // ★ 同時建明細+簽核鏈:關掉送驗收框後露出的明細才不會空鏈,下載簽呈也才有簽核流程
+    if (!guardCreateExpense()) return
     setSettleEditMode(false)
     // 重新核銷：保留原本填的金額；首次核銷：以申請金額為預設值
     setSettleForm({
@@ -503,6 +513,7 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
   // 編輯「已送出、還沒人簽」的待核銷單（不重送、不動鏈；走 update_pending_settle）
   const openSettleEdit = (req) => {
     openDetail(req)  // ★ 建簽核鏈:關掉編輯驗收框後露出的明細才有簽核流程、簽呈才正常
+    if (!guardCreateExpense()) return
     setSettleEditMode(true)
     setSettleForm({
       actual_amount: req.actual_amount ?? req.estimated_amount,
@@ -916,6 +927,7 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
               </>
             )}
             <button className="btn btn-primary" onClick={() => {
+              if (!guardCreateExpense()) return
               setEditingId(null)
               setForm({ ...emptyForm, employee: profile?.name || '' })
               setLineItems([emptyItem()])
@@ -1082,7 +1094,7 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
 
       {/* New Request Modal */}
       <ExpenseFormModal
-        open={showModal}
+        open={showModal && (docType === 'order' || isSuperAdmin)}
         onClose={() => { setShowModal(false); setErrors({}); setCarriedAtts([]) }}
         form={form}
         setForm={setForm}
@@ -1112,7 +1124,7 @@ export default function ExpenseRequests({ docType = 'expense' } = {}) {
 
       {/* Settlement Modal */}
       <SettleModal
-        open={showSettleModal && !!showDetail}
+        open={showSettleModal && !!showDetail && (docType === 'order' || isSuperAdmin)}
         onClose={() => { setShowSettleModal(false); setSettleEditMode(false); setErrors({}); setSettleFiles([]) }}
         request={showDetail}
         settleForm={settleForm}

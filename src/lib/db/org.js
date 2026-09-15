@@ -152,3 +152,20 @@ export const getOrgSubscription = (orgId) =>
 
 export const getOrgPayments = (orgId) =>
   supabase.from('org_payments').select('*').eq('organization_id', orgId).order('created_at', { ascending: false })
+
+// 供應商管理（原本在 Purchase 模組的 db/purchasing.js，Purchase 移除時保留給
+// Process 的 SupplierManager.jsx 用 — 該頁面已鎖 super_admin）
+export const getSuppliers = (orgId) => {
+  let q = supabase.from('suppliers').select('*').order('id')
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
+
+export const createSupplier = (data) =>
+  supabase.from('suppliers').insert(data).select().single()
+
+export const updateSupplier = (id, data) =>
+  supabase.from('suppliers').update(data).eq('id', id).select().single()
+
+export const deleteSupplier = (id) =>
+  supabase.from('suppliers').delete().eq('id', id)

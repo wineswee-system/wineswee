@@ -153,6 +153,7 @@ export default function Attendance() {
       supabase.from('employees')
         .select('id, name, dept, store, department_id, position, store_id, status, join_date, resign_date, departments!department_id(name), stores!store_id(name)')
         .eq('organization_id', orgId)
+        .not('is_archived', 'is', true)  // 排除隱藏測試帳號(測試管理員 204),保留 null/false
         .or(`status.eq.在職,resign_date.gte.${startDate}`)
         .order('name'),
       getDepartments(orgId),

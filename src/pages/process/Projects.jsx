@@ -26,8 +26,8 @@ const PROJECT_FIELD_LABELS = {
 export default function Projects() {
   const { profile, isSuperAdmin } = useAuth()
   const { logAction, logFieldChange } = useAuditLog()
-  // 空白新增專案鎖 super_admin：檢視/編輯既有專案維持開放，只擋「從零新增」路徑
-  const guardBlankProjectCreate = () => {
+  // 新增/編輯專案全鎖 super_admin：只維持「檢視」開放
+  const guardProjectWrite = () => {
     if (isSuperAdmin) return true
     toast.info('此功能需加購模組，請聯繫系統管理員')
     return false
@@ -199,7 +199,7 @@ export default function Projects() {
   useEffect(() => {
     if (searchParams.get('link_work_order') && !woLinkOpenedRef.current) {
       woLinkOpenedRef.current = true
-      if (!guardBlankProjectCreate()) return
+      if (!guardProjectWrite()) return
       setEditingId(null); setForm(emptyForm); setShowModal(true)
     }
   }, [searchParams]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -506,6 +506,7 @@ export default function Projects() {
 
   const openEdit = (p, e) => {
     e?.stopPropagation()
+    if (!guardProjectWrite()) return
     setForm({
       name: p.name, description: p.description || '', status: p.status, priority: p.priority || '中',
       owner: p.owner || '', department: p.department || '', store: p.store || '',
@@ -1010,7 +1011,7 @@ export default function Projects() {
   return (
     <>
     <ProjectListView
-      guardBlankProjectCreate={guardBlankProjectCreate}
+      guardBlankProjectCreate={guardProjectWrite}
       guardTemplateEdit={guardTemplateEdit}
       projects={projects}
       templates={templates}

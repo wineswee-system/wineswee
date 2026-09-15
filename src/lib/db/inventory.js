@@ -114,3 +114,12 @@ export const createPackList = (data) =>
 
 export const updatePackList = (id, data) =>
   supabase.from('pack_lists').update(data).eq('id', id).select().single()
+
+export const getInventoryLots = () =>
+  supabase.from('inventory_lots').select('*').order('id', { ascending: false })
+
+export const getStockCounts = () =>
+  supabase.from('stock_counts').select('*').order('id', { ascending: false })
+
+export const createStockCount = (data) =>
+  supabase.from('stock_counts').insert(data).select().single()

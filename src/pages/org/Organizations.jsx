@@ -34,7 +34,8 @@ export default function Organizations() {
   const [error, setError] = useState(null)
   const [showModal, setShowModal] = useState(false)
   const [editingOrg, setEditingOrg] = useState(null)
-  const [form, setForm] = useState({ name: '', slug: '', tax_id: '', contact_person: '', phone: '', address: '', status: 'active', plan: 'free' })
+  const [form, setForm] = useState({ name: '', slug: '', tax_id: '', contact_person: '', phone: '', address: '', status: 'active', plan: 'free', gemini_api_key: '' })
+  const [hasGeminiKey, setHasGeminiKey] = useState(false)
 
   useEffect(() => {
     if (!isSuperAdmin) return
@@ -57,7 +58,8 @@ export default function Organizations() {
 
   const openCreate = () => {
     setEditingOrg(null)
-    setForm({ name: '', slug: '', tax_id: '', contact_person: '', phone: '', address: '', status: 'active', plan: 'free' })
+    setForm({ name: '', slug: '', tax_id: '', contact_person: '', phone: '', address: '', status: 'active', plan: 'free', gemini_api_key: '' })
+    setHasGeminiKey(false)
     setShowModal(true)
   }
 
@@ -67,7 +69,9 @@ export default function Organizations() {
       name: o.name || '', slug: o.slug || '', tax_id: o.tax_id || '',
       contact_person: o.contact_person || '', phone: o.phone || '',
       address: o.address || '', status: o.status || 'active', plan: o.plan || 'free',
+      gemini_api_key: '', // never echo the stored secret back into the form
     })
+    setHasGeminiKey(!!o.gemini_api_key)
     setShowModal(true)
   }
 
@@ -86,12 +90,15 @@ export default function Organizations() {
   const handleSubmit = async () => {
     if (!form.name || !form.slug) return
     try {
+      // Blank gemini_api_key means "leave unchanged" on edit - never overwrite a stored key with empty.
+      const { gemini_api_key, ...rest } = form
+      const payload = gemini_api_key ? form : rest
       if (editingOrg) {
-        const { data, error } = await updateOrganization(editingOrg.id, form)
+        const { data, error } = await updateOrganization(editingOrg.id, payload)
         if (error) throw error
         if (data) setOrgs(prev => prev.map(o => o.id === data.id ? data : o))
       } else {
-        const { data, error } = await createOrganization(form)
+        const { data, error } = await createOrganization(payload)
         if (error) throw error
         if (data) setOrgs(prev => [...prev, data])
       }
@@ -217,6 +224,20 @@ export default function Organizations() {
             <select className="form-input" style={{ width: '100%' }} value={form.status} onChange={e => set('status', e.target.value)}>
               {STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
             </select>
+          </Field>
+          <Field label="Gemini API 金鑰（選填）">
+            <input
+              className="form-input"
+              type="password"
+              autoComplete="new-password"
+              style={{ width: '100%' }}
+              placeholder={hasGeminiKey ? '●●●● 已設定，留空則不變更' : '留空則使用系統預設金鑰'}
+              value={form.gemini_api_key}
+              onChange={e => set('gemini_api_key', e.target.value)}
+            />
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '4px 0 0' }}>
+              此組織的 AI 功能（AI 排班等）將優先使用此金鑰，未設定時退回系統預設金鑰。
+            </p>
           </Field>
         </Modal>
       )}

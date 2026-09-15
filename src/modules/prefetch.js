@@ -8,11 +8,10 @@ const loaderMap = Object.fromEntries(DEFS.map(d => [d.basePath, d.load]))
 // Sidebar group keys → module basePaths
 const groupModules = {
   commerce:      ['/crm', '/sales', '/pos'],
-  supply:        ['/purchase', '/wms', '/manufacturing'],
-  finance:       ['/finance'],
+  supply:        ['/purchase', '/wms'],
   people:        ['/hr', '/org', '/process'],
   analytics:     ['/analytics'],
-  system:        ['/system', '/ai', '/integration'],
+  system:        ['/system'],
   'super-admin': ['/super-admin'],
   lms:           ['/lms'],
 }

@@ -12,17 +12,13 @@ const PLANS = ['免費', '標準', '專業', '企業']
 const STATUSES = ['啟用', '暫停', '試用']
 const ALL_MODULES = [
   { key: 'HR', label: '人力資源', color: '#a78bfa' },
-  { key: 'Finance', label: '財務會計', color: '#fbbf24' },
   { key: 'CRM', label: '客戶管理', color: '#3b82f6' },
   { key: 'Sales', label: '銷售管理', color: '#22d3ee' },
   { key: 'POS', label: '收銀系統', color: '#f472b6' },
   { key: 'WMS', label: '倉儲管理', color: '#34d399' },
   { key: 'Purchase', label: '採購管理', color: '#fb923c' },
-  { key: 'Manufacturing', label: '製造管理', color: '#64748b' },
   { key: 'Analytics', label: '數據分析', color: '#e879f9' },
   { key: 'Process', label: '流程管理', color: '#06b6d4' },
-  { key: 'Integration', label: '外部整合', color: '#84cc16' },
-  { key: 'AI', label: 'AI 助手', color: '#f43f5e' },
 ]
 
 const planLimits = { '免費': 5, '標準': 25, '專業': 100, '企業': 999 }

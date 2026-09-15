@@ -1,10 +1,10 @@
 # SME Ops System — Project Plan
 
-> Last updated: 2026-04-10
+> Last updated: 2026-09-15 — Manufacturing, Integration, the standalone `/ai` module, and the Finance module's pages were removed as add-ons (internal-only tool now, not sold to other tenants); see [ADDON_MODULE_REMOVAL_PLAN.md](ADDON_MODULE_REMOVAL_PLAN.md). Shared library code that other modules depend on (`lib/db/finance.js`, `lib/einvoice/`, `lib/accounting/`) was kept, not deleted — real accounting/e-invoicing now runs through the external 文中 CERP system.
 
 ## Current State
 
-SME-OPS is a cloud-native React ERP with **120+ pages** across 15 modules. The system covers Finance, HR, CRM, POS, WMS, Manufacturing, Purchasing, Sales, Analytics, and more.
+SME-OPS is a cloud-native React ERP covering HR, CRM, POS, WMS, Purchasing, Sales, Analytics, and Process/workflow management for wineswee's internal operations.
 
 ### Module Maturity
 
@@ -13,10 +13,8 @@ SME-OPS is a cloud-native React ERP with **120+ pages** across 15 modules. The s
 | HR / Payroll | 95% | 勞保/健保/勞退/所得稅 fully implemented, Taiwan labor law compliant |
 | Purchase | 90% | Three-way matching with tolerance, auto-PR from low stock |
 | WMS | 90% | FIFO/LIFO/weighted avg costing, barcode scanning |
-| Finance | 85% | Accounting engine, GL posting, BS/P&L/TB, e-invoice MIG/Turnkey |
 | POS | 80% | Payment gateway, receipt printing, shift reports |
 | Sales | 75% | Line items, SKU-linked pricing, quote-to-order conversion |
-| Manufacturing | 75% | MRP engine, multi-level BOM explosion, cost rollup |
 | CRM | 70% | Pipeline, drip campaigns, messaging (Email/LINE/SMS) |
 | Analytics | 65% | Cross-system dashboards, PDF export |
 

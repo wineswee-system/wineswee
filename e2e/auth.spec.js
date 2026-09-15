@@ -44,13 +44,6 @@ test.describe('Authentication', () => {
     await expect(content).toBeVisible({ timeout: 10000 })
   })
 
-  test('AUTH-E05: finance journal entries page loads', async ({ page }) => {
-    await page.goto('/finance/journal')
-    await page.waitForTimeout(2000)
-    const content = page.locator('main, [class*="main"]').first()
-    await expect(content).toBeVisible({ timeout: 10000 })
-  })
-
   test('AUTH-E06: POS terminal page loads', async ({ page }) => {
     await page.goto('/pos/terminal')
     await page.waitForTimeout(2000)

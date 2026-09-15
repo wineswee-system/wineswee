@@ -29,7 +29,6 @@ export const majorGroups = [
   { key: 'commerce', icon: Handshake, label: '商務營運', color: 'var(--accent-blue)' },
   { key: 'supply', icon: Warehouse, label: '供應鏈', color: 'var(--accent-green)' },
   { key: 'dispatch', icon: Truck, label: '物流調度', color: 'var(--accent-orange)' },
-  { key: 'finance', icon: CreditCard, label: '財務會計', color: 'var(--accent-yellow)' },
   { key: 'people', icon: Users, label: '人員組織', color: 'var(--accent-purple)' },
   { key: 'project', icon: Workflow, label: '專案流程', color: '#6366f1' }, // indigo：無對應 token，見上註
   { key: 'comms', icon: Mail, label: '通訊協作', color: '#2dd4bf' }, // teal：無對應 token，見上註
@@ -167,75 +166,6 @@ export const groupNav = {
         { icon: Calculator, label: '庫存估價', path: '/wms/valuation' },
         { icon: BarChart2, label: '異常與報表', path: '/wms/reports' },
         { icon: Sparkles, label: 'AI 庫存管理', path: '/wms/ai' },
-      ]
-    },
-    {
-      label: '製造管理',
-      icon: Factory,
-      children: [
-        { icon: ClipboardList, label: 'BOM 物料清單', path: '/manufacturing/bom' },
-        { icon: BarChart3, label: 'MRP 需求計畫', path: '/manufacturing/mrp' },
-        { icon: ClipboardList, label: '製令管理', path: '/manufacturing/orders' },
-        { icon: BarChart3, label: '生產排程', path: '/manufacturing/scheduling' },
-        { icon: Monitor, label: '生產現場', path: '/manufacturing/shop-floor' },
-        { icon: ClipboardList, label: '工作中心', path: '/manufacturing/work-centers' },
-        { icon: CheckSquare, label: '品質管理', path: '/manufacturing/qm' },
-        { icon: ClipboardList, label: '託外加工', path: '/manufacturing/subcontracting' },
-      ]
-    },
-  ],
-
-  finance: [
-    {
-      label: '日常作業',
-      icon: CreditCard,
-      children: [
-        { icon: Eye, label: '財務總覽', path: '/finance/overview' },
-        { icon: BookText, label: '傳票管理', path: '/finance/journal' },
-        { icon: TrendingUp, label: '應收帳款', path: '/finance/ar' },
-        { icon: Receipt, label: '應付帳款', path: '/finance/ap' },
-        { icon: FileText, label: '電子發票', path: '/finance/invoices' },
-        { icon: CreditCard, label: '銀行對帳', path: '/finance/bank' },
-        { icon: BookText, label: '立沖帳管理', path: '/finance/open-items' },
-        { icon: Receipt, label: '票據管理', path: '/finance/notes' },
-        { icon: CreditCard, label: '卡款結算批次', path: '/finance/settlement-batches' },
-      ]
-    },
-    {
-      label: '財務報表',
-      icon: BarChart3,
-      children: [
-        { icon: BarChart3, label: '試算表', path: '/finance/trial-balance' },
-        { icon: FileText, label: '資產負債表', path: '/finance/balance-sheet' },
-        { icon: TrendingUp, label: '損益表', path: '/finance/profit-loss' },
-        { icon: TrendingUp, label: '現金流量表', path: '/finance/cash-flow' },
-        { icon: BookText, label: '總分類帳', path: '/finance/general-ledger' },
-        { icon: BookText, label: '日記簿', path: '/finance/journal-book' },
-        { icon: BarChart3, label: '營業成本表', path: '/finance/cost-of-goods' },
-      ]
-    },
-    {
-      label: '稅務',
-      icon: Receipt,
-      children: [
-        { icon: Receipt, label: '稅務申報', path: '/finance/tax-reports' },
-        { icon: FileText, label: '營業稅申報', path: '/finance/tax-filing' },
-        { icon: Receipt, label: '401 營業稅報表', path: '/finance/tax-report' },
-        { icon: FileText, label: '發票字軌配號', path: '/finance/invoice-tracks' },
-      ]
-    },
-    {
-      label: '管理會計',
-      icon: DollarSign,
-      children: [
-        { icon: BookText, label: '會計科目', path: '/finance/chart-of-accounts' },
-        { icon: DollarSign, label: '幣別管理', path: '/finance/currencies' },
-        { icon: BarChart3, label: '預算管理', path: '/finance/budgets' },
-        { icon: BarChart3, label: '成本中心', path: '/finance/cost-centers' },
-        { icon: BarChart3, label: '部門損益表', path: '/finance/profit-loss-by-dept' },
-        { icon: Package, label: '固定資產', path: '/finance/fixed-assets' },
-        { icon: FileText, label: '期間關帳', path: '/finance/period-close' },
-        { icon: BookText, label: '過帳規則', path: '/finance/posting-rules' },
       ]
     },
   ],
@@ -390,16 +320,6 @@ export const groupNav = {
         { icon: Tag, label: '標籤管理', path: '/process/settings/tags', title: '自訂標籤庫，給專案、任務貼標用' },
       ]
     },
-    {
-      label: 'AI 助理中心',
-      icon: Sparkles,
-      children: [
-        { icon: Sparkles, label: '導覽助理', path: '/ai/nav-assistant', title: 'AI 導覽：問它「如何申請假單」之類問題，跳到對應功能' },
-        { icon: Bot, label: 'Agent 控制台', path: '/ai/agent', title: 'AI Agent：執行多步驟自動化任務' },
-        { icon: BookOpen, label: '說明中心', path: '/ai/help', title: '系統使用說明文件' },
-        { icon: BookOpen, label: '教學中心', path: '/ai/tutorial', title: '操作教學影片與步驟指引' },
-      ]
-    },
   ],
 
   comms: [
@@ -493,12 +413,10 @@ export const groupNav = {
       label: '模組報表',
       icon: PieChart,
       children: [
-        { icon: DollarSign, label: '財務分析', path: '/analytics/finance' },
         { icon: Award, label: '銷售績效', path: '/analytics/sales' },
         { icon: Users, label: '人資分析', path: '/analytics/hr' },
         { icon: Package, label: '庫存分析', path: '/analytics/inventory' },
         { icon: ShoppingBag, label: 'POS 分析', path: '/analytics/pos' },
-        { icon: Factory, label: '製造分析', path: '/analytics/manufacturing' },
         { icon: Users, label: 'CRM 分析', path: '/analytics/crm' },
       ]
     },

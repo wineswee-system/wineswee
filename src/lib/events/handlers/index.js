@@ -1,15 +1,11 @@
-import { registerFinanceHandlers } from './financeHandlers.js'
 import { registerPurchaseHandlers } from './purchaseHandlers.js'
 import { registerWMSHandlers } from './wmsHandlers.js'
 import { registerCRMHandlers } from './crmHandlers.js'
 import { registerPOSHandlers } from './posHandlers.js'
 import { registerHRHandlers } from './hrHandlers.js'
-import { registerManufacturingHandlers } from './manufacturingHandlers.js'
 import { registerSalesHandlers } from './salesHandlers.js'
 import { registerLMSHandlers } from './lmsHandlers.js'
 import { registerDispatchHandlers } from './dispatchHandlers.js'
-import { registerPostingHandlers } from './postingHandlers.js'
-import { registerVatHandlers } from './vatHandlers.js'
 // registerWorkflowExecutors 需要 crm_workflows 表；目前環境沒有，先停用避免啟動 404。
 // 日後要啟用 CRM 自動化，把下面的 import/call 取消註解，並建好 crm_workflows。
 // import { registerWorkflowExecutors } from '../../workflowExecutor.js'
@@ -25,18 +21,14 @@ import { registerVatHandlers } from './vatHandlers.js'
  * The handler code itself does not change — only the transport layer.
  */
 export function registerAllHandlers(bus) {
-  registerFinanceHandlers(bus)
   registerPurchaseHandlers(bus)
   registerWMSHandlers(bus)
   registerCRMHandlers(bus)
   registerPOSHandlers(bus)
   registerHRHandlers(bus)
-  registerManufacturingHandlers(bus)
   registerSalesHandlers(bus)
   registerLMSHandlers(bus)
   registerDispatchHandlers(bus)
-  registerPostingHandlers(bus) // F-A2 傳票自動拋轉（規則表驅動）
-  registerVatHandlers(bus) // F-B3 進銷項憑證檔自動彙入
 
   // CRM Workflow Automation — 暫停（依賴不存在的 crm_workflows 表）
   // registerWorkflowExecutors(bus)

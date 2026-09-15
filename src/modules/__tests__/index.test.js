@@ -49,11 +49,6 @@ describe('module registry (DEFS / ALL_MODULES)', () => {
     expect(proc.subRoutes).toBeUndefined()
   })
 
-  it('/finance has perm finance.view', () => {
-    const fin = ALL_MODULES.find(m => m.basePath === '/finance')
-    expect(fin.perm).toBe('finance.view')
-  })
-
   it('/system has perm system.admin', () => {
     const sys = ALL_MODULES.find(m => m.basePath === '/system')
     expect(sys.perm).toBe('system.admin')

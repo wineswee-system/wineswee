@@ -182,7 +182,6 @@ export const loggers = {
   purchase: createLogger({ module: 'purchase' }),
   wms: createLogger({ module: 'wms' }),
   finance: createLogger({ module: 'finance' }),
-  manufacturing: createLogger({ module: 'manufacturing' }),
   hr: createLogger({ module: 'hr' }),
   crm: createLogger({ module: 'crm' }),
   pos: createLogger({ module: 'pos' }),

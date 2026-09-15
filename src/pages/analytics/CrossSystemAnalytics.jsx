@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react'
-import { Link2, TrendingUp, Users, Factory, ShoppingBag, AlertTriangle, Clock, DollarSign, UserX, RefreshCw } from 'lucide-react'
+import { Link2, TrendingUp, Users, ShoppingBag, AlertTriangle, Clock, DollarSign, UserX, RefreshCw } from 'lucide-react'
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, PointElement, LineElement, ArcElement, Tooltip, Legend, Filler, RadialLinearScale } from 'chart.js'
 import { Bar, Doughnut, Line, Radar } from 'react-chartjs-2'
 import {
   analyzeProductProfitability,
   analyzeSupplyChainRisk,
-  analyzeLaborCostPerUnit,
   analyzePromotionROI,
   analyzeWorkflowBusinessOutcomes,
   runForecastDrivenMRP,
@@ -26,7 +25,6 @@ const TABS = [
   { key: 'customer360', label: '客戶 360', icon: Users, color: colors.blue },
   { key: 'forecast', label: '需求預測', icon: TrendingUp, color: colors.cyan },
   { key: 'supply-risk', label: '供應鏈風險', icon: AlertTriangle, color: colors.red },
-  { key: 'labor-cost', label: '人工成本', icon: Factory, color: colors.orange },
   { key: 'promo-roi', label: '促銷 ROI', icon: ShoppingBag, color: colors.pink },
   { key: 'cycle-time', label: '流程效率', icon: Clock, color: colors.purple },
   { key: 'attrition-impact', label: '離職資產追蹤', icon: UserX, color: colors.red },
@@ -46,16 +44,15 @@ export default function CrossSystemAnalytics() {
   const loadAllData = async () => {
     setLoading(true)
     try {
-      const [profitability, supplyRisk, laborCost, promoROI, cycleTime, forecast, custList] = await Promise.all([
+      const [profitability, supplyRisk, promoROI, cycleTime, forecast, custList] = await Promise.all([
         analyzeProductProfitability().catch(() => null),
         analyzeSupplyChainRisk().catch(() => null),
-        analyzeLaborCostPerUnit().catch(() => null),
         analyzePromotionROI().catch(() => null),
         analyzeWorkflowBusinessOutcomes().catch(() => null),
         runForecastDrivenMRP(3).catch(() => null),
         supabase.from('customers').select('name').order('name').then(r => r.data || []),
       ])
-      setData({ profitability, supplyRisk, laborCost, promoROI, cycleTime, forecast })
+      setData({ profitability, supplyRisk, promoROI, cycleTime, forecast })
       setCustomers(custList)
     } catch (err) {
       console.error('Cross-system analytics load failed:', err)
@@ -101,7 +98,6 @@ export default function CrossSystemAnalytics() {
       {activeTab === 'customer360' && <Customer360Tab customers={customers} StatCard={StatCard} EmptyState={EmptyState} />}
       {activeTab === 'forecast' && <ForecastTab data={data.forecast} />}
       {activeTab === 'supply-risk' && <SupplyRiskTab data={data.supplyRisk} StatCard={StatCard} EmptyState={EmptyState} />}
-      {activeTab === 'labor-cost' && <LaborCostTab data={data.laborCost} />}
       {activeTab === 'promo-roi' && <PromoROITab data={data.promoROI} />}
       {activeTab === 'cycle-time' && <CycleTimeTab data={data.cycleTime} StatCard={StatCard} EmptyState={EmptyState} />}
       {activeTab === 'attrition-impact' && <AttritionImpactTab />}
@@ -168,70 +164,6 @@ function ForecastTab({ data }) {
   )
 }
 
-// ═══════════════════════════════════════════════════════════
-//  Tab 5: Labor Cost per Unit (HR + Manufacturing)
-// ═══════════════════════════════════════════════════════════
-function LaborCostTab({ data }) {
-  if (!data) return <EmptyState msg="無人工成本資料" />
-
-  const moChart = {
-    labels: data.moBreakdown.slice(0, 10).map(mo => mo.product?.slice(0, 10) || mo.orderNumber),
-    datasets: [{
-      label: '人工成本 / 單位',
-      data: data.moBreakdown.slice(0, 10).map(mo => mo.laborCostPerUnit),
-      backgroundColor: colors.orange + '99',
-      borderColor: colors.orange,
-      borderWidth: 1,
-    }]
-  }
-
-  return (
-    <>
-      <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
-        <StatCard label="總人工成本" value={`NT$ ${data.totalLaborCost.toLocaleString()}`} color="orange" />
-        <StatCard label="總工時" value={`${data.totalHours} 小時`} color="blue" />
-        <StatCard label="每小時成本" value={`NT$ ${data.costPerHour.toLocaleString()}`} color="cyan" />
-        <StatCard label="每單位成本" value={`NT$ ${data.costPerUnit.toLocaleString()}`} color="green" />
-      </div>
-      <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', marginTop: 12 }}>
-        <StatCard label="員工人數" value={data.employeeCount} color="purple" />
-        <StatCard label="總產出" value={`${data.totalUnitsProduced} 單位`} color="pink" />
-        <StatCard label="月份" value={data.month} color="yellow" />
-      </div>
-
-      {data.moBreakdown.length > 0 && (
-        <div className="card" style={{ padding: 20, marginTop: 16 }}>
-          <h4 style={{ color: 'var(--text-primary)', marginBottom: 12 }}>製令人工成本分攤</h4>
-          <div style={{ height: 300 }}>
-            <Bar data={moChart} options={{ ...chartOpts, scales: { x: { grid: gridStyle, ticks: tickStyle }, y: { grid: gridStyle, ticks: tickStyle } } }} />
-          </div>
-        </div>
-      )}
-
-      <div className="card" style={{ padding: 20, marginTop: 16 }}>
-        <h4 style={{ color: 'var(--text-primary)', marginBottom: 12 }}>製令明細</h4>
-        <div className="data-table-wrapper">
-          <table className="data-table">
-            <thead><tr><th>製令</th><th>產品</th><th>數量</th><th>狀態</th><th>分攤人工</th><th>單位人工</th></tr></thead>
-            <tbody>
-              {data.moBreakdown.map((mo, i) => (
-                <tr key={i}>
-                  <td style={{ fontWeight: 600 }}>{mo.orderNumber}</td>
-                  <td>{mo.product}</td>
-                  <td>{mo.quantity}</td>
-                  <td><span className={`badge ${mo.status === '已完成' ? 'badge-success' : 'badge-info'}`}>{mo.status}</span></td>
-                  <td>NT$ {mo.allocatedLaborCost.toLocaleString()}</td>
-                  <td style={{ fontWeight: 600 }}>NT$ {mo.laborCostPerUnit.toLocaleString()}</td>
-                </tr>
-              ))}
-              {data.moBreakdown.length === 0 && <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>本月無製令</td></tr>}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </>
-  )
-}
 
 // ═══════════════════════════════════════════════════════════
 //  Tab 6: Promotion ROI (Promotions → POS → Margin)

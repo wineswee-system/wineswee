@@ -9,12 +9,12 @@ import { toast } from '../../lib/toast'
 import { confirm } from '../../lib/confirm'
 const PLANS = ['免費', '標準', '專業', '企業']
 const STATUSES = ['啟用', '暫停', '試用']
-const FEATURES = ['HR', 'Finance', 'CRM', 'WMS', 'POS', 'Manufacturing']
+const FEATURES = ['HR', 'CRM', 'WMS', 'POS']
 
 const planColor = { '免費': 'badge-neutral', '標準': 'badge-info', '專業': 'badge-purple', '企業': 'badge-danger' }
 const statusColor = { '啟用': 'badge-success', '暫停': 'badge-warning', '試用': 'badge-info' }
 
-const emptyForm = { name: '', tax_id: '', plan: '標準', max_users: 25, admin_email: '', status: '啟用', features: ['HR', 'Finance'] }
+const emptyForm = { name: '', tax_id: '', plan: '標準', max_users: 25, admin_email: '', status: '啟用', features: ['HR'] }
 
 export default function TenantAdmin() {
   const { tenant: activeTenant, switchTenant } = useTenant()
@@ -64,7 +64,7 @@ export default function TenantAdmin() {
       max_users: t.max_users || 25,
       admin_email: t.admin_email || '',
       status: t.status || '啟用',
-      features: Array.isArray(t.features) ? [...t.features] : ['HR', 'Finance'],
+      features: Array.isArray(t.features) ? [...t.features] : ['HR'],
     })
     setShowModal(true)
   }

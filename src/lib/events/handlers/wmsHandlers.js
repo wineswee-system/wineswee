@@ -127,32 +127,6 @@ export function registerWMSHandlers(bus) {
     })
   })
 
-  // ── Manufacturing order completed → receive finished goods ──
-  bus.subscribe('manufacturing.mo.state_changed', async function onMOCompletedReceiveFG(event) {
-    const { mo_id, mo_number, to_state, product_name, quantity } = event.payload
-    if (to_state !== '已完成') return
-
-    if (product_name && quantity) {
-      const stock = await resolveStockByName(product_name)
-      if (stock) {
-        await supabase
-          .from('stock_levels')
-          .update({ quantity: (stock.quantity || 0) + quantity })
-          .eq('id', stock.id)
-      }
-
-      await bus.publish('wms.stock.adjusted', {
-        reason: '製造完工入庫',
-        source_type: 'manufacturing_order',
-        source_id: mo_id,
-        items: [{ name: product_name, qty: quantity }],
-      }, {
-        causation_id: event.id,
-        correlation_id: event.metadata.correlation_id,
-      })
-    }
-  })
-
   // ── Return restocked → increase stock for passed items ──
   bus.subscribe('wms.return.restocked', async function onReturnRestocked(event) {
     const { return_id, return_number, items } = event.payload

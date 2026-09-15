@@ -66,24 +66,3 @@ export function validateJournalEntry(lines) {
     errors,
   }
 }
-
-// ─── 簡易借貸平衡驗證 ────────────────────────────────────────────
-
-/**
- * 快速驗證分錄借貸是否平衡（不做科目等完整驗證）
- * @param {Array<{debit: number|string, credit: number|string}>} lines
- * @returns {{balanced: boolean, totalDebit: number, totalCredit: number}}
- */
-export function validateJournalBalance(lines) {
-  const totalDebit = Math.round(
-    lines.reduce((sum, l) => sum + (parseFloat(l.debit) || 0), 0) * 100
-  ) / 100
-  const totalCredit = Math.round(
-    lines.reduce((sum, l) => sum + (parseFloat(l.credit) || 0), 0) * 100
-  ) / 100
-  return {
-    balanced: Math.abs(totalDebit - totalCredit) < 0.01,
-    totalDebit,
-    totalCredit,
-  }
-}

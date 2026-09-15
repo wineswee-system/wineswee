@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { verifyEmployeeCaller, getOrgGeminiKey } from '../_shared/auth.ts'
 
 // Restrict CORS to the app's own origin in production.
 // Set SITE_URL via: supabase secrets set SITE_URL=https://your-domain.com
@@ -867,7 +868,11 @@ serve(async (httpReq) => {
   }
 
   try {
-    const apiKey = Deno.env.get('GEMINI_API_KEY')
+    // Per-org key override: falls back to the project-level secret when the
+    // caller's org has none set (or the caller isn't a recognized employee, e.g. super_admin).
+    const caller = await verifyEmployeeCaller(httpReq)
+    const orgKey = await getOrgGeminiKey(caller?.orgId ?? null)
+    const apiKey = orgKey || Deno.env.get('GEMINI_API_KEY')
     if (!apiKey) {
       return new Response(
         JSON.stringify({ error: 'GEMINI_API_KEY not configured on server' }),

@@ -348,7 +348,6 @@ export default function Analytics() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
         {[
           { label: '預警中心', path: '/analytics/alerts', accent: 'red', desc: '完整預警清單' },
-          { label: '財務分析', path: '/analytics/finance', accent: 'green', desc: 'AR/AP/毛利/預算' },
           { label: '人資分析', path: '/analytics/hr', accent: 'purple', desc: '出勤/薪資/離職' },
           { label: '跨系統分析', path: '/analytics/cross-system', accent: 'cyan', desc: '7 種跨域洞見' },
         ].map(item => (

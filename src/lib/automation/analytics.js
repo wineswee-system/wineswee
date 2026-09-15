@@ -429,87 +429,6 @@ export async function analyzeSupplyChainRisk() {
   }
 }
 
-// ── 11. HR + 製造 → 單位人工成本 ──
-export async function analyzeLaborCostPerUnit(month) {
-  const targetMonth = month || new Date().toISOString().slice(0, 7)
-
-  // Get salary records for the month
-  const { data: salaries } = await supabase
-    .from('salary_records')
-    .select('*')
-    .eq('month', targetMonth)
-
-  // Get attendance for the month
-  const monthStart = targetMonth + '-01'
-  const [y, m] = targetMonth.split('-').map(Number)
-  const nextMonth = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`
-
-  const { data: attendance } = await supabase
-    .from('attendance_records')
-    .select('*')
-    .gte('date', monthStart)
-    .lt('date', nextMonth)
-
-  // Get manufacturing orders completed in this period
-  const { data: mfgOrders } = await supabase
-    .from('manufacturing_orders')
-    .select('*')
-    .gte('created_at', monthStart)
-    .lt('created_at', nextMonth)
-
-  // Calculate total labor hours from attendance
-  const totalHours = (attendance || []).reduce((sum, a) => {
-    if (a.clock_in && a.clock_out) {
-      const inTime = new Date(`${a.date}T${a.clock_in}`)
-      const outTime = new Date(`${a.date}T${a.clock_out}`)
-      return sum + Math.max(0, (outTime - inTime) / 3600000)
-    }
-    return sum + 8 // default 8 hours if no clock data
-  }, 0)
-
-  // Total labor cost
-  const totalLaborCost = (salaries || []).reduce((s, sal) => s + (sal.net_salary || sal.base_salary || 0), 0)
-
-  // Total units produced
-  const totalUnitsProduced = (mfgOrders || []).reduce((s, mo) => {
-    if (mo.status === '已完成' || mo.status === '完成') {
-      return s + (mo.quantity || mo.qty || 0)
-    }
-    return s
-  }, 0)
-
-  // Cost per hour
-  const costPerHour = totalHours > 0 ? Math.round(totalLaborCost / totalHours) : 0
-
-  // Cost per unit
-  const costPerUnit = totalUnitsProduced > 0 ? Math.round(totalLaborCost / totalUnitsProduced) : 0
-
-  // Breakdown by MO
-  const moBreakdown = (mfgOrders || []).map(mo => {
-    const qty = mo.quantity || mo.qty || 0
-    const laborAlloc = totalUnitsProduced > 0 ? Math.round((qty / totalUnitsProduced) * totalLaborCost) : 0
-    return {
-      orderNumber: mo.order_number || mo.mo_number || `MO-${mo.id}`,
-      product: mo.product_name || mo.product || '—',
-      quantity: qty,
-      status: mo.status,
-      allocatedLaborCost: laborAlloc,
-      laborCostPerUnit: qty > 0 ? Math.round(laborAlloc / qty) : 0,
-    }
-  })
-
-  return {
-    month: targetMonth,
-    totalLaborCost,
-    totalHours: Math.round(totalHours),
-    totalUnitsProduced,
-    costPerHour,
-    costPerUnit,
-    employeeCount: (salaries || []).length,
-    moBreakdown,
-  }
-}
-
 // ── 12. 促銷 ROI 分析 (Promotions → POS → Margin) ──
 export async function analyzePromotionROI() {
   const { data: promotions } = await supabase.from('promotions').select('*')
@@ -595,7 +514,6 @@ export async function analyzeWorkflowBusinessOutcomes() {
   const { data: tasks } = await supabase.from('tasks').select('*')
   const { data: salesOrders } = await supabase.from('sales_orders').select('*')
   const { data: pos } = await supabase.from('purchase_orders').select('*')
-  const { data: mfgOrders } = await supabase.from('manufacturing_orders').select('*')
   const { data: shipments } = await supabase.from('shipments').select('*')
 
   // Calculate process cycle times
@@ -627,19 +545,6 @@ export async function analyzeWorkflowBusinessOutcomes() {
     ? Math.round(poToGR.reduce((s, o) => s + o.days, 0) / poToGR.length * 10) / 10
     : 0
 
-  // MO cycle time
-  const moCycleTime = (mfgOrders || []).map(mo => {
-    if (mo.start_date && mo.end_date) {
-      const days = (new Date(mo.end_date) - new Date(mo.start_date)) / 86400000
-      return { moId: mo.id, product: mo.product_name, days: Math.round(days * 10) / 10 }
-    }
-    return null
-  }).filter(Boolean)
-
-  const avgMoCycle = moCycleTime.length > 0
-    ? Math.round(moCycleTime.reduce((s, o) => s + o.days, 0) / moCycleTime.length * 10) / 10
-    : 0
-
   // Task completion rates
   const totalTasks = (tasks || []).length
   const completedTasks = (tasks || []).filter(t => t.status === '已完成' || t.status === 'completed').length
@@ -662,7 +567,6 @@ export async function analyzeWorkflowBusinessOutcomes() {
     cycleTime: {
       orderToShip: { avg: avgOrderToShip, data: orderToShip.slice(0, 20), total: orderToShip.length },
       poToGR: { avg: avgPoToGR, data: poToGR.slice(0, 20), total: poToGR.length },
-      moCycle: { avg: avgMoCycle, data: moCycleTime.slice(0, 20), total: moCycleTime.length },
     },
     tasks: { total: totalTasks, completed: completedTasks, overdue: overdueTasks, completionRate: totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0 },
     workflowStatus,

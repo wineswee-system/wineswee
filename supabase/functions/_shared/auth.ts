@@ -33,3 +33,19 @@ export async function verifyEmployeeCaller(req: Request): Promise<CallerInfo | n
 
   return { userId: user.id, email: user.email ?? null, orgId: caller.organization_id ?? null }
 }
+
+/** 讀取指定 org 的 Gemini API key 覆寫值；未設定或無 org 回 null（呼叫端應 fallback 全域 GEMINI_API_KEY）。 */
+export async function getOrgGeminiKey(orgId: number | null): Promise<string | null> {
+  if (orgId == null) return null
+
+  // @ts-ignore — Deno global available at runtime in Supabase Edge Functions
+  const db = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
+
+  const { data } = await db
+    .from('organizations')
+    .select('gemini_api_key')
+    .eq('id', orgId)
+    .maybeSingle()
+
+  return data?.gemini_api_key || null
+}

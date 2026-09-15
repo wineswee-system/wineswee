@@ -79,10 +79,6 @@ const systemItems = [
   { icon: Award, label: '系統效能', path: '/system/performance' },
   { icon: BarChart3, label: '資料庫管理', path: '/system/database' },
   { icon: FileText, label: '匯入匯出', path: '/system/import-export' },
-  { icon: FileText, label: '電商串接', path: '/integration/ecommerce' },
-  { icon: Upload, label: '文件匯入', path: '/integration/wenzhong' },
-  { icon: Settings, label: 'API 文件', path: '/integration/api' },
-  { icon: Truck, label: '物流整合', path: '/integration/carriers' },
   { icon: MessageCircle, label: 'LINE 整合', path: '/org/line' },
 ]
 
@@ -103,16 +99,15 @@ const superAdminItems = [
 const routeToGroup = (pathname) => {
   if (pathname === '/') return 'dashboard'
   if (pathname.startsWith('/crm') || pathname.startsWith('/sales') || pathname.startsWith('/pos') || pathname.startsWith('/reservations')) return 'commerce'
-  if (pathname.startsWith('/purchase') || pathname.startsWith('/wms') || pathname.startsWith('/manufacturing')) return 'supply'
+  if (pathname.startsWith('/purchase') || pathname.startsWith('/wms')) return 'supply'
   if (pathname.startsWith('/dispatch')) return 'dispatch'
-  if (pathname.startsWith('/finance')) return 'finance'
   if (pathname.startsWith('/process')) return 'project'
   if (pathname.startsWith('/org/line')) return 'system' // LINE integration lives in System sidebar
   if (pathname.startsWith('/hr') || pathname.startsWith('/org') || pathname.startsWith('/lms')) return 'people'
   if (pathname.startsWith('/comms')) return 'comms'
   if (pathname.startsWith('/analytics')) return 'analytics'
   if (pathname.startsWith('/super-admin')) return 'super-admin'
-  if (pathname.startsWith('/system') || pathname.startsWith('/ai') || pathname.startsWith('/integration')) return 'system'
+  if (pathname.startsWith('/system')) return 'system'
   return 'dashboard'
 }
 
@@ -362,10 +357,6 @@ export default function Sidebar() {
     '/process/settings/expense-chains': 'nav.project.admin',
     '/process/settings/categories':     'nav.project.admin',
     '/process/settings/tags':           'nav.project.admin',
-    '/ai/nav-assistant': 'nav.project.admin',
-    '/ai/agent':         'nav.project.admin',
-    '/ai/help':          'nav.project.admin',
-    '/ai/tutorial':      'nav.project.admin',
   }
 
   const filterSections = (sections) => {

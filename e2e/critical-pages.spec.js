@@ -16,21 +16,6 @@ const criticalRoutes = [
   { path: '/hr/schedule', name: 'Schedule' },
   { path: '/hr/performance', name: 'Performance' },
   { path: '/hr/recruitment', name: 'Recruitment' },
-  { path: '/finance/journal', name: 'Journal Entries' },
-  { path: '/finance/ar', name: 'Accounts Receivable' },
-  { path: '/finance/ap', name: 'Accounts Payable' },
-  { path: '/finance/invoices', name: 'Invoices' },
-  { path: '/finance/trial-balance', name: 'Trial Balance' },
-  { path: '/finance/balance-sheet', name: 'Balance Sheet' },
-  { path: '/finance/profit-loss', name: 'Profit & Loss' },
-  { path: '/finance/tax-reports', name: 'Tax Reports' },
-  { path: '/finance/budgets', name: 'Budgets' },
-  { path: '/finance/bank', name: 'Bank Reconciliation' },
-  { path: '/finance/fixed-assets', name: 'Fixed Assets' },
-  { path: '/manufacturing/bom', name: 'BOM' },
-  { path: '/manufacturing/mrp', name: 'MRP' },
-  { path: '/manufacturing/orders', name: 'Manufacturing Orders' },
-  { path: '/manufacturing/qm', name: 'Quality Inspection' },
   { path: '/wms/overview', name: 'WMS Overview' },
   { path: '/wms/inventory', name: 'Inventory' },
   { path: '/wms/skus', name: 'SKUs' },
@@ -63,7 +48,7 @@ const criticalRoutes = [
 
 test.describe('Critical Page Smoke Tests', () => {
   // Finance pages that depend heavily on Supabase data — may show blank when DB is unreachable
-  const knownFlaky = ['/finance/journal', '/finance/trial-balance', '/finance/balance-sheet', '/finance/profit-loss', '/finance/fixed-assets', '/analytics']
+  const knownFlaky = ['/analytics']
 
   for (const route of criticalRoutes) {
     const isFlaky = knownFlaky.includes(route.path)

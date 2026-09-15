@@ -39,9 +39,9 @@ describe('Event Catalog Contract', () => {
 
   // ── Domain Coverage ──
 
-  const EXPECTED_DOMAINS = ['sales', 'purchase', 'wms', 'finance', 'manufacturing', 'hr', 'crm', 'pos']
+  const EXPECTED_DOMAINS = ['sales', 'purchase', 'wms', 'finance', 'hr', 'crm', 'pos']
 
-  it('all 8 domains are represented', () => {
+  it('all 7 domains are represented', () => {
     const domains = [...new Set(Object.values(EVENT_CATALOG).map(s => s.domain))]
     for (const expected of EXPECTED_DOMAINS) {
       expect(domains, `Missing domain: ${expected}`).toContain(expected)

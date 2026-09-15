@@ -73,11 +73,13 @@ export default function StoreBonus() {
     const has = (d.months || []).includes(m)
     return { ...d, months: has ? d.months.filter(x => x !== m) : [...(d.months || []), m].sort((a, b) => a - b) }
   }))
+  const setQuarterPayout = (q, field, val) => setQuarterDefs(defs => defs.map(d => d.quarter === q ? { ...d, [field]: val } : d))
   const saveQuarterDefs = async () => {
     const orgId = profile?.organization_id ?? getTenantOrgId()
     for (const d of quarterDefs) {
       await supabase.from('store_bonus_quarter_def')
-        .update({ months: d.months || [] }).eq('organization_id', orgId).eq('quarter', d.quarter)
+        .update({ months: d.months || [], payout_month: d.payout_month ?? null, payout_next_year: !!d.payout_next_year })
+        .eq('organization_id', orgId).eq('quarter', d.quarter)
     }
     toast.success('季別月份已儲存')
     setShowQuarterDef(false)
@@ -364,7 +366,12 @@ export default function StoreBonus() {
             </select>
           </div>
           <span style={{ fontSize: 12, color: 'var(--text-muted)', paddingBottom: 8 }}>
-            {(() => { const d = quarterDefs.find(x => x.quarter === quarter); return d ? `含月份：${(d.months || []).join('、')} 月` : '' })()}
+            {(() => {
+              const d = quarterDefs.find(x => x.quarter === quarter)
+              if (!d) return ''
+              const pay = d.payout_month ? `　→ ${d.payout_next_year ? '隔年' : ''}${d.payout_month} 月薪資袋發放` : ''
+              return `含月份：${(d.months || []).join('、')} 月${pay}`
+            })()}
           </span>
           <AsyncButton className="btn btn-primary" onClick={handleQuarterSummary} busyLabel="查詢中…" disabled={!storeId}>季別累積</AsyncButton>
           <button className="btn btn-secondary" onClick={handleExportQuarter} disabled={!quarterData} title="匯出這一季每人應領清單(Excel)">匯出清單</button>
@@ -392,6 +399,17 @@ export default function StoreBonus() {
                       }}>{m}</button>
                     )
                   })}
+                  <span style={{ marginLeft: 12, fontSize: 12, color: 'var(--text-muted)' }}>發放月</span>
+                  <select className="form-input" style={{ width: 70, padding: '4px 6px' }}
+                    value={d.payout_month ?? ''}
+                    onChange={e => setQuarterPayout(q, 'payout_month', e.target.value ? Number(e.target.value) : null)}>
+                    {Array.from({ length: 12 }, (_, i) => i + 1).map(m => <option key={m} value={m}>{m} 月</option>)}
+                  </select>
+                  <label style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={!!d.payout_next_year}
+                      onChange={e => setQuarterPayout(q, 'payout_next_year', e.target.checked)} />
+                    隔年
+                  </label>
                 </div>
               )
             })}

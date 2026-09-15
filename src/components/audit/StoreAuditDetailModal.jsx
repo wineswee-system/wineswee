@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { X, CheckCircle2, XCircle, RotateCcw, Send, Star, Paperclip, Printer } from 'lucide-react'
+import { X, CheckCircle2, XCircle, RotateCcw, Send, Star, Paperclip, Printer, Trash2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import LoadingSpinner from '../LoadingSpinner'
@@ -51,7 +51,8 @@ function computeScores(items) {
 }
 
 export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
-  const { profile } = useAuth()
+  const { profile, hasPermission, isAdmin } = useAuth()
+  const canManage = isAdmin || hasPermission('store_audit.manage')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [audit, setAudit] = useState(null)
@@ -214,6 +215,28 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
     if (error || !data?.ok) { toast.error('失敗：' + (error?.message || data?.error)); return }
     toast.success('已回到草稿狀態')
     onChanged?.(); load()
+  }
+
+  // ─── 管理權限：已核准等狀態退回草稿重編 / 直接刪除 ───
+  const handleReopen = async () => {
+    const ok = await confirm({ message: `將稽核單 #${auditId}（${audit?.status}）退回草稿以重新編輯？` })
+    if (!ok) return
+    setSaving(true)
+    const { data, error } = await supabase.rpc('reopen_store_audit', { p_audit_id: auditId })
+    setSaving(false)
+    if (error || !data?.ok) { toast.error('退回失敗：' + (error?.message || data?.error || '未知')); return }
+    toast.success('已退回草稿，可重新編輯')
+    onChanged?.(); load()
+  }
+  const handleManageDelete = async () => {
+    const ok = await confirm({ message: `確定刪除稽核單 #${auditId}（${audit?.store_name}・${audit?.status}）？連同評核項目一併刪除，無法復原。` })
+    if (!ok) return
+    setSaving(true)
+    const { data, error } = await supabase.rpc('admin_delete_store_audit', { p_audit_id: auditId })
+    setSaving(false)
+    if (error || !data?.ok) { toast.error('刪除失敗：' + (error?.message || data?.error || '未知')); return }
+    toast.success(`已刪除稽核單 #${auditId}`)
+    onChanged?.(); onClose?.()
   }
 
   // ─── 當班人員管理（草稿時可改）───
@@ -502,6 +525,17 @@ export default function StoreAuditDetailModal({ auditId, onClose, onChanged }) {
           {audit.status === '已退回' && isAuditor && (
             <button className="btn btn-secondary" onClick={handleCancel} disabled={saving}>
               <RotateCcw size={14} /> 重新編輯
+            </button>
+          )}
+          {canManage && !isDraft && (
+            <button className="btn btn-secondary" onClick={handleReopen} disabled={saving} title="退回草稿以重新編輯（管理權限）">
+              <RotateCcw size={14} /> 退回草稿重編
+            </button>
+          )}
+          {canManage && (
+            <button className="btn btn-secondary" onClick={handleManageDelete} disabled={saving}
+              title="刪除此稽核單（管理權限）" style={{ color: 'var(--accent-red)' }}>
+              <Trash2 size={14} /> 刪除
             </button>
           )}
         </div>

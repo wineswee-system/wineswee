@@ -21,7 +21,8 @@ const STATUS_BADGE = {
 const SHIFTS = ['開店', '早班', '中班', '晚班', '打烊班']
 
 export default function StoreAudits() {
-  const { profile } = useAuth()
+  const { profile, hasPermission, isAdmin } = useAuth()
+  const canManage = isAdmin || hasPermission('store_audit.manage')
   const [loading, setLoading] = useState(true)
   const [list, setList] = useState([])
   const [stores, setStores] = useState([])
@@ -71,17 +72,21 @@ export default function StoreAudits() {
   }
   useEffect(() => { load() }, [orgId])
 
-  // 刪除草稿（只有草稿可刪；走 SECURITY DEFINER RPC 連子表一起刪）
+  // 刪除稽核單：草稿任何人(自己)可刪；有管理權限者可刪任何狀態(含已核准)。走 SECURITY DEFINER RPC 連子表一起刪。
   const handleDeleteDraft = async (e, r) => {
     e.stopPropagation()  // 別觸發開明細
-    const ok = await confirm({ message: `確定刪除草稿稽核單 #${r.id}（${r.store_name}）？此動作無法復原。` })
+    const isDraft = r.status === '草稿'
+    if (!canManage && !isDraft) return
+    const ok = await confirm({ message: `確定刪除稽核單 #${r.id}（${r.store_name}・${r.status}）？此動作無法復原。` })
     if (!ok) return
-    const { data, error } = await supabase.rpc('delete_store_audit_draft', { p_id: r.id })
+    const { data, error } = canManage
+      ? await supabase.rpc('admin_delete_store_audit', { p_audit_id: r.id })
+      : await supabase.rpc('delete_store_audit_draft', { p_id: r.id })
     if (error || !data?.ok) {
       toast.error('刪除失敗：' + (error?.message || data?.error || '未知'))
       return
     }
-    toast.success(`已刪除草稿 #${r.id}`)
+    toast.success(`已刪除 #${r.id}`)
     load()
   }
 
@@ -206,8 +211,8 @@ export default function StoreAudits() {
                     </td>
                     <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{r.created_at?.slice(0, 16).replace('T', ' ')}</td>
                     <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
-                      {r.status === '草稿' && (
-                        <button onClick={e => handleDeleteDraft(e, r)} title="刪除草稿"
+                      {(canManage || r.status === '草稿') && (
+                        <button onClick={e => handleDeleteDraft(e, r)} title={r.status === '草稿' ? '刪除草稿' : '刪除稽核單（管理權限）'}
                           style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-red)', padding: 4, display: 'inline-flex' }}>
                           <Trash2 size={15} />
                         </button>

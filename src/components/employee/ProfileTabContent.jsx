@@ -76,6 +76,19 @@ export default function ProfileTabContent({
               </label>
             ))}
           </div>
+
+          {isAdmin && (
+            <>
+              <SectionTitle icon="📝" text="備註" />
+              <textarea
+                className="form-input"
+                style={{ width: '100%', minHeight: 84, resize: 'vertical', fontFamily: 'inherit' }}
+                value={form.notes || ''}
+                onChange={e => set('notes', e.target.value)}
+                placeholder="內部備註（僅管理者可見）"
+              />
+            </>
+          )}
         </>
       )}
 

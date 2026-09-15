@@ -83,6 +83,36 @@ export default function StoreBonus() {
     setShowQuarterDef(false)
   }
 
+  // 匯出季發放清單(Excel)
+  const handleExportQuarter = async () => {
+    if (!quarterData?.rows?.length) { toast.warning('沒有資料可匯出，請先「季別累積」'); return }
+    const _m = await import('xlsx-js-style'); const XLSX = _m.utils ? _m : (_m.default || _m)
+    const storeName = stores.find(s => String(s.id) === String(storeId))?.name || ''
+    const header = ['姓名', '角色', '月數', '管理獎金', '業績獎金', '功獎金', '扣款', '累積應發']
+    const rows = [[`${storeName}　${quarterData.year} ${quarterData.quarter} 季發放清單（含月份：${(quarterData.months || []).join('、')}）`], [], header]
+    quarterData.rows.forEach(r => rows.push([
+      r.employee_name, r.role, r.months, Number(r.total_mgmt), Number(r.total_target),
+      Number(r.total_merit), Number(r.total_audit || 0) + Number(r.total_punch || 0), Number(r.total_net),
+    ]))
+    rows.push([])
+    rows.push(['合計', '', '', '', '', '', '', quarterData.rows.reduce((s, r) => s + Number(r.total_net || 0), 0)])
+    const ws = XLSX.utils.aoa_to_sheet(rows)
+    ws['!cols'] = [{ wch: 12 }, { wch: 8 }, { wch: 6 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 12 }]
+    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, quarterData.quarter)
+    XLSX.writeFile(wb, `季發放_${storeName}_${quarterData.year}${quarterData.quarter}.xlsx`)
+  }
+  // 確認季發放(記錄快照)
+  const handleSettleQuarter = async () => {
+    if (!storeId) return
+    if (!confirm(`確認 ${quarterYear} ${quarter} 季發放？會記錄目前各人累積金額的快照。`)) return
+    const { data, error } = await supabase.rpc('settle_store_bonus_quarter', {
+      p_store_id: Number(storeId), p_year: Number(quarterYear), p_quarter: quarter, p_settler: profile?.id || null,
+    })
+    if (error || !data?.ok) { toast.error('季結算失敗：' + (error?.message || data?.error || '')); return }
+    if (data.draft_months > 0) toast.warning(`已記錄季發放 NT$ ${Number(data.total).toLocaleString()}，但有 ${data.draft_months} 個月尚未結算，數字可能還會變`)
+    else toast.success(`已確認季發放：NT$ ${Number(data.total).toLocaleString()}`)
+  }
+
   // 載入門市清單 + role config + 自訂欄位
   useEffect(() => {
     const orgId = profile?.organization_id ?? getTenantOrgId()
@@ -337,6 +367,8 @@ export default function StoreBonus() {
             {(() => { const d = quarterDefs.find(x => x.quarter === quarter); return d ? `含月份：${(d.months || []).join('、')} 月` : '' })()}
           </span>
           <AsyncButton className="btn btn-primary" onClick={handleQuarterSummary} busyLabel="查詢中…" disabled={!storeId}>季別累積</AsyncButton>
+          <button className="btn btn-secondary" onClick={handleExportQuarter} disabled={!quarterData} title="匯出這一季每人應領清單(Excel)">匯出清單</button>
+          <AsyncButton className="btn btn-primary" onClick={handleSettleQuarter} busyLabel="結算中…" disabled={!quarterData} title="記錄本季各人應領金額快照">確認季發放</AsyncButton>
           <div style={{ flex: 1 }} />
           <button className="btn btn-secondary" onClick={() => setShowQuarterDef(v => !v)}>定義季別月份</button>
         </div>

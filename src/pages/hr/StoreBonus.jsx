@@ -485,10 +485,16 @@ export default function StoreBonus() {
                 onChange={e => setMonthly(m => ({ ...m, team_deduction: e.target.value }))}
                 onBlur={e => handleSaveMonthly({ team_deduction: Number(e.target.value) || 0 })} />
             </Field>
+            <Field label="團隊加（盤點無失誤 +4500/季）">
+              <input className="form-input" type="number" disabled={isFinalized}
+                value={monthly.team_addition ?? 0}
+                onChange={e => setMonthly(m => ({ ...m, team_addition: e.target.value }))}
+                onBlur={e => handleSaveMonthly({ team_addition: Number(e.target.value) || 0 })} />
+            </Field>
             <div style={{ paddingBottom: 8 }}>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>可分配管理獎金（池 − 團隊扣）</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>可分配管理獎金（池 − 團隊扣 + 團隊加）</div>
               <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--accent-green)' }}>
-                NT$ {Math.max(0, Number(monthly.mgmt_bonus_pool || 0) - Number(monthly.team_deduction || 0)).toLocaleString()}
+                NT$ {Math.max(0, Number(monthly.mgmt_bonus_pool || 0) - Number(monthly.team_deduction || 0) + Number(monthly.team_addition || 0)).toLocaleString()}
               </div>
             </div>
           </div>

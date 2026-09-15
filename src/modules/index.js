@@ -22,7 +22,6 @@ export const DEFS = [
   { basePath: '/process',       perm: 'nav.project.work',     load: () => import('./ProcessModule') },
   { basePath: '/system',        perm: 'system.admin',         load: () => import('./SystemModule') },
   { basePath: '/lms',           perm: null,                   load: () => import('./LMSModule') },
-  { basePath: '/reservations',  perm: null,    alsoBase: true, load: () => import('./ReservationModule') },
   { basePath: '/super-admin',   perm: null,    superAdminOnly: true, load: () => import('./SuperAdminModule') },
   { basePath: '/comms',         perm: null,    alsoBase: true, superAdminOnly: true, load: () => import('./CommsModule') },
 ]

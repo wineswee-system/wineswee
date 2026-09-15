@@ -98,7 +98,6 @@ const superAdminItems = [
 // ── Route prefix → group key mapping ──
 const routeToGroup = (pathname) => {
   if (pathname === '/') return 'dashboard'
-  if (pathname.startsWith('/reservations')) return 'reservations'
   if (pathname.startsWith('/process')) return 'project'
   if (pathname.startsWith('/org/line')) return 'system' // LINE integration lives in System sidebar
   if (pathname.startsWith('/hr') || pathname.startsWith('/org') || pathname.startsWith('/lms')) return 'people'
@@ -257,7 +256,6 @@ export default function Sidebar() {
   // Major group → required perm（null = 全員可見）
   const GROUP_REQUIRES = {
     dashboard:     null,             // 全員可見
-    reservations:  null,             // 訂位模組 perm: null，全員可見
     finance:       'finance.view',   // 既有舊 perm
     people:        null,             // 大家都有「個人 HR」section
     project:       'nav.project.work', // 有專案工作就能看到 group

@@ -14,7 +14,7 @@ import {
   Brain, ClipboardCheck, Heart, Scale, MessageSquare, FileBarChart, Gift,
   FolderTree, UserMinus, PauseCircle, RefreshCcw, GraduationCap, PlayCircle,
   Globe, Trash2, Upload,
-  ConciergeBell, TableProperties, Timer, Map, ClipboardEdit,
+  Timer,
   QrCode, ChefHat,
   Mail, Inbox, CalendarClock, Link2, Contact,
 } from 'lucide-react'
@@ -26,7 +26,6 @@ import {
 // 且 CLAUDE.md 禁止新增色系；為保留群組視覺辨識度暫留 hex。
 export const majorGroups = [
   { key: 'dashboard', icon: LayoutDashboard, label: '儀表板', color: 'var(--accent-cyan)', path: '/' },
-  { key: 'reservations', icon: ConciergeBell, label: '訂位管理', color: 'var(--accent-blue)' },
   { key: 'people', icon: Users, label: '人員組織', color: 'var(--accent-purple)' },
   { key: 'project', icon: Workflow, label: '專案流程', color: '#6366f1' }, // indigo：無對應 token，見上註
   { key: 'comms', icon: Mail, label: '通訊協作', color: '#2dd4bf' }, // teal：無對應 token，見上註
@@ -35,20 +34,6 @@ export const majorGroups = [
 
 // ── Mega menu + sidebar content for each group ──
 export const groupNav = {
-  reservations: [
-    {
-      label: '訂位管理',
-      icon: ConciergeBell,
-      children: [
-        { icon: Eye, label: '今日總覽', path: '/reservations/overview' },
-        { icon: ClipboardList, label: '訂位清單', path: '/reservations/list' },
-        { icon: Map, label: '座位地圖', path: '/reservations/seating' },
-        { icon: TableProperties, label: '桌位設定', path: '/reservations/tables' },
-        { icon: ClipboardEdit, label: '訂位規則', path: '/reservations/rules' },
-      ]
-    },
-  ],
-
   people: [
     {
       label: '組織架構',

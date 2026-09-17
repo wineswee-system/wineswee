@@ -51,6 +51,13 @@ export default function StoreBonus() {
   const [compPeriod, setCompPeriod] = useState('P' + Math.min(3, Math.floor(today.getMonth() / 4) + 1))
   const [compData, setCompData] = useState(null)
 
+  // 個人銷售酒款激勵
+  const [psiList, setPsiList] = useState([])
+  const [psiEmp, setPsiEmp] = useState('')
+  const [psiAmount, setPsiAmount] = useState('')
+  const [psiDate, setPsiDate] = useState(new Date().toISOString().slice(0, 10))
+  const [psiNotes, setPsiNotes] = useState('')
+
   // 新增人員(督導/代理/漏撈的人)
   const [allEmployees, setAllEmployees] = useState([])
   const [addEmpId, setAddEmpId] = useState('')
@@ -142,6 +149,35 @@ export default function StoreBonus() {
     handleComputeCompetition()
   }
 
+  // 個人銷售酒款激勵:載入 / 登錄 / 刪除
+  const loadPsi = async () => {
+    const orgId = profile?.organization_id ?? getTenantOrgId()
+    if (!orgId) return
+    const { data } = await supabase.from('personal_sale_incentive').select('*')
+      .eq('organization_id', orgId).order('sale_date', { ascending: false }).limit(200)
+    setPsiList(data || [])
+  }
+  const handleAddPsi = async () => {
+    const orgId = profile?.organization_id ?? getTenantOrgId()
+    if (!psiEmp || !psiAmount || !psiDate) { toast.warning('請填同仁 / 金額 / 成交日'); return }
+    const emp = allEmployees.find(e => String(e.id) === String(psiEmp))
+    const { error } = await supabase.from('personal_sale_incentive').insert({
+      organization_id: Number(orgId), employee_id: Number(psiEmp), employee_name: emp?.name || null,
+      sale_date: psiDate, sale_amount: Number(psiAmount) || 0,
+      reviewer_id: profile?.id || null, created_by: profile?.id || null, notes: psiNotes || null,
+    })
+    if (error) { toast.error('登錄失敗：' + error.message); return }
+    toast.success('已登錄')
+    setPsiAmount(''); setPsiNotes('')
+    loadPsi()
+  }
+  const handleDelPsi = async (id) => {
+    if (!confirm('刪除這筆個人銷售登錄？')) return
+    const { error } = await supabase.from('personal_sale_incentive').delete().eq('id', id)
+    if (error) { toast.error('刪除失敗：' + error.message); return }
+    loadPsi()
+  }
+
   // 載入門市清單 + role config + 自訂欄位
   useEffect(() => {
     const orgId = profile?.organization_id ?? getTenantOrgId()
@@ -160,6 +196,7 @@ export default function StoreBonus() {
       setAllEmployees(ae.data || [])
       setLoading(false)
     })
+    loadPsi()
   }, [profile?.organization_id])
 
   // 新增人員到名單(督導/代理/漏撈的人)
@@ -525,6 +562,57 @@ export default function StoreBonus() {
                 </tbody>
               </table>
             </div>
+          </div>
+        )}
+      </div>
+
+      {/* 💰 個人銷售酒款激勵 */}
+      <div className="card" style={{ padding: 16, marginBottom: 16 }}>
+        <h3 style={{ marginTop: 0, fontSize: 16 }}>💰 個人銷售酒款激勵（單筆滿4萬→1,500、滿10萬→3,000・次月20日獨立發放）</h3>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <div style={{ minWidth: 200 }}>
+            <label className="form-label">同仁</label>
+            <SearchableSelect value={psiEmp} onChange={(v) => setPsiEmp(v || '')}
+              options={allEmployees.map(a => ({ value: String(a.id), label: a.name }))}
+              placeholder="搜尋同仁姓名…" />
+          </div>
+          <div>
+            <label className="form-label">成交金額（折扣後）</label>
+            <input className="form-input" type="number" value={psiAmount} onChange={e => setPsiAmount(e.target.value)} style={{ width: 130 }} />
+          </div>
+          <div>
+            <label className="form-label">成交日</label>
+            <input className="form-input" type="date" value={psiDate} onChange={e => setPsiDate(e.target.value)} />
+          </div>
+          <div style={{ flex: 1, minWidth: 140 }}>
+            <label className="form-label">備註（客源/佐證）</label>
+            <input className="form-input" value={psiNotes} onChange={e => setPsiNotes(e.target.value)} placeholder="個人開發/引薦…" />
+          </div>
+          <AsyncButton className="btn btn-primary" onClick={handleAddPsi} busyLabel="登錄中…">登錄</AsyncButton>
+        </div>
+        {psiAmount && Number(psiAmount) > 0 && (
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>
+            預計獎金：<b>{Number(psiAmount) >= 100000 ? '3,000' : Number(psiAmount) >= 40000 ? '1,500' : '0（未達 4 萬不予發放）'}</b>
+          </div>
+        )}
+        {psiList.length > 0 && (
+          <div className="data-table-wrapper" style={{ marginTop: 12 }}>
+            <table className="data-table">
+              <thead><tr><th>成交日</th><th>同仁</th><th>金額</th><th>獎金</th><th>發放月</th><th>備註</th><th></th></tr></thead>
+              <tbody>
+                {psiList.map(p => (
+                  <tr key={p.id}>
+                    <td>{p.sale_date}</td>
+                    <td><b>{p.employee_name}</b></td>
+                    <td style={{ textAlign: 'right' }}>{Number(p.sale_amount).toLocaleString()}</td>
+                    <td style={{ textAlign: 'right', fontWeight: 700, color: p.bonus > 0 ? 'var(--accent-orange)' : 'var(--text-muted)' }}>{p.bonus > 0 ? Number(p.bonus).toLocaleString() : '—'}</td>
+                    <td>{p.payout_year_month}</td>
+                    <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{p.notes}</td>
+                    <td><button className="btn btn-secondary" style={{ padding: '2px 8px', fontSize: 12 }} onClick={() => handleDelPsi(p.id)}>刪</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>

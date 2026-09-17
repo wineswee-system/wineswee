@@ -58,6 +58,13 @@ export default function StoreBonus() {
   const [psiDate, setPsiDate] = useState(new Date().toISOString().slice(0, 10))
   const [psiNotes, setPsiNotes] = useState('')
 
+  // 計時同仁全勤激勵
+  const [ptaiMonth, setPtaiMonth] = useState(new Date().toISOString().slice(0, 7))
+  const [ptaiList, setPtaiList] = useState([])
+  const [ptaiEmp, setPtaiEmp] = useState('')
+  const [ptaiHours, setPtaiHours] = useState('')
+  const [ptaiFull, setPtaiFull] = useState(true)
+
   // 新增人員(督導/代理/漏撈的人)
   const [allEmployees, setAllEmployees] = useState([])
   const [addEmpId, setAddEmpId] = useState('')
@@ -178,6 +185,41 @@ export default function StoreBonus() {
     loadPsi()
   }
 
+  // 計時全勤激勵:載入(依月) / 登錄 / 切換全勤 / 刪除
+  const loadPtai = async (ym) => {
+    const orgId = profile?.organization_id ?? getTenantOrgId()
+    if (!orgId) return
+    const { data } = await supabase.from('part_time_attendance_incentive').select('*')
+      .eq('organization_id', orgId).eq('year_month', ym || ptaiMonth).order('employee_name')
+    setPtaiList(data || [])
+  }
+  const handleAddPtai = async () => {
+    const orgId = profile?.organization_id ?? getTenantOrgId()
+    if (!ptaiEmp || !ptaiHours) { toast.warning('請填同仁 / 當月核薪工時'); return }
+    const emp = allEmployees.find(e => String(e.id) === String(ptaiEmp))
+    const { error } = await supabase.from('part_time_attendance_incentive').upsert({
+      organization_id: Number(orgId), employee_id: Number(ptaiEmp), employee_name: emp?.name || null,
+      year_month: ptaiMonth, paid_hours: Number(ptaiHours) || 0, is_full_attendance: ptaiFull,
+      created_by: profile?.id || null,
+    }, { onConflict: 'organization_id,employee_id,year_month' })
+    if (error) { toast.error('登錄失敗：' + error.message); return }
+    toast.success('已登錄')
+    setPtaiEmp(''); setPtaiHours('')
+    loadPtai()
+  }
+  const handleTogglePtaiFull = async (row) => {
+    const { error } = await supabase.from('part_time_attendance_incentive')
+      .update({ is_full_attendance: !row.is_full_attendance }).eq('id', row.id)
+    if (error) { toast.error('更新失敗：' + error.message); return }
+    loadPtai()
+  }
+  const handleDelPtai = async (id) => {
+    if (!confirm('刪除這筆計時激勵登錄？')) return
+    const { error } = await supabase.from('part_time_attendance_incentive').delete().eq('id', id)
+    if (error) { toast.error('刪除失敗：' + error.message); return }
+    loadPtai()
+  }
+
   // 載入門市清單 + role config + 自訂欄位
   useEffect(() => {
     const orgId = profile?.organization_id ?? getTenantOrgId()
@@ -197,6 +239,7 @@ export default function StoreBonus() {
       setLoading(false)
     })
     loadPsi()
+    loadPtai()
   }, [profile?.organization_id])
 
   // 新增人員到名單(督導/代理/漏撈的人)
@@ -609,6 +652,51 @@ export default function StoreBonus() {
                     <td>{p.payout_year_month}</td>
                     <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{p.notes}</td>
                     <td><button className="btn btn-secondary" style={{ padding: '2px 8px', fontSize: 12 }} onClick={() => handleDelPsi(p.id)}>刪</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* ⏱️ 計時同仁全勤激勵 */}
+      <div className="card" style={{ padding: 16, marginBottom: 16 }}>
+        <h3 style={{ marginTop: 0, fontSize: 16 }}>⏱️ 計時同仁全勤激勵（全勤達標→時薪+10・次月發放）</h3>
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>全勤達標＝工時≥100h ＋ 無遲到/早退/事病假/曠職 ＋ 忘卡補卡≤4（由店長/HR認定勾選）；獎金＝當月核薪工時 × 10</div>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <div>
+            <label className="form-label">月份</label>
+            <input className="form-input" type="month" value={ptaiMonth} onChange={e => { setPtaiMonth(e.target.value); loadPtai(e.target.value) }} />
+          </div>
+          <div style={{ minWidth: 180 }}>
+            <label className="form-label">兼職同仁</label>
+            <SearchableSelect value={ptaiEmp} onChange={(v) => setPtaiEmp(v || '')}
+              options={allEmployees.map(a => ({ value: String(a.id), label: a.name }))} placeholder="搜尋同仁…" />
+          </div>
+          <div>
+            <label className="form-label">當月核薪工時</label>
+            <input className="form-input" type="number" value={ptaiHours} onChange={e => setPtaiHours(e.target.value)} style={{ width: 110 }} />
+          </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, paddingBottom: 8, cursor: 'pointer' }}>
+            <input type="checkbox" checked={ptaiFull} onChange={e => setPtaiFull(e.target.checked)} /> 全勤達標
+          </label>
+          <AsyncButton className="btn btn-primary" onClick={handleAddPtai} busyLabel="登錄中…">登錄</AsyncButton>
+        </div>
+        {ptaiList.length > 0 && (
+          <div className="data-table-wrapper" style={{ marginTop: 12 }}>
+            <table className="data-table">
+              <thead><tr><th>同仁</th><th>核薪工時</th><th>全勤（點切換）</th><th>時薪加給</th><th>激勵獎金</th><th>發放月</th><th></th></tr></thead>
+              <tbody>
+                {ptaiList.map(p => (
+                  <tr key={p.id}>
+                    <td><b>{p.employee_name}</b></td>
+                    <td style={{ textAlign: 'right' }}>{Number(p.paid_hours).toLocaleString()}</td>
+                    <td style={{ textAlign: 'center', cursor: 'pointer' }} onClick={() => handleTogglePtaiFull(p)}>{p.is_full_attendance ? '✅' : '✗'}</td>
+                    <td style={{ textAlign: 'right' }}>+{Number(p.rate_add)}</td>
+                    <td style={{ textAlign: 'right', fontWeight: 700, color: p.bonus > 0 ? 'var(--accent-orange)' : 'var(--text-muted)' }}>{p.bonus > 0 ? Number(p.bonus).toLocaleString() : '—'}</td>
+                    <td>{p.payout_year_month}</td>
+                    <td><button className="btn btn-secondary" style={{ padding: '2px 8px', fontSize: 12 }} onClick={() => handleDelPtai(p.id)}>刪</button></td>
                   </tr>
                 ))}
               </tbody>

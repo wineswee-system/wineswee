@@ -46,6 +46,11 @@ export default function StoreBonus() {
   const [quarterData, setQuarterData] = useState(null)
   const [showQuarterDef, setShowQuarterDef] = useState(false)
 
+  // 店長競賽(org 層級,跨店排名)
+  const [compYear, setCompYear] = useState(today.getFullYear())
+  const [compPeriod, setCompPeriod] = useState('P' + Math.min(3, Math.floor(today.getMonth() / 4) + 1))
+  const [compData, setCompData] = useState(null)
+
   // 新增人員(督導/代理/漏撈的人)
   const [allEmployees, setAllEmployees] = useState([])
   const [addEmpId, setAddEmpId] = useState('')
@@ -113,6 +118,28 @@ export default function StoreBonus() {
     if (error || !data?.ok) { toast.error('季結算失敗：' + (error?.message || data?.error || '')); return }
     if (data.draft_months > 0) toast.warning(`已記錄季發放 NT$ ${Number(data.total).toLocaleString()}，但有 ${data.draft_months} 個月尚未結算，數字可能還會變`)
     else toast.success(`已確認季發放：NT$ ${Number(data.total).toLocaleString()}`)
+  }
+
+  // 店長競賽:計算排名 / 確認發放
+  const handleComputeCompetition = async () => {
+    const orgId = profile?.organization_id ?? getTenantOrgId()
+    if (!orgId) return
+    const { data, error } = await supabase.rpc('compute_store_competition', {
+      p_org: Number(orgId), p_year: Number(compYear), p_period: compPeriod,
+    })
+    if (error || !data?.ok) { toast.error('計算失敗：' + (error?.message || data?.error || '')); return }
+    setCompData(data)
+  }
+  const handleSettleCompetition = async () => {
+    const orgId = profile?.organization_id ?? getTenantOrgId()
+    if (!orgId) return
+    if (!confirm(`確認 ${compYear} ${compPeriod} 店長競賽發放？會記錄前三名快照並掛到發放月薪資袋。`)) return
+    const { data, error } = await supabase.rpc('settle_store_competition', {
+      p_org: Number(orgId), p_year: Number(compYear), p_period: compPeriod, p_settler: profile?.id || null,
+    })
+    if (error || !data?.ok) { toast.error('結算失敗：' + (error?.message || data?.error || '')); return }
+    toast.success(`已確認發放，前三名獎金掛 ${data.payout_year_month} 薪資袋`)
+    handleComputeCompetition()
   }
 
   // 載入門市清單 + role config + 自訂欄位
@@ -444,6 +471,57 @@ export default function StoreBonus() {
                     </tr>
                   ))}
                   {(quarterData.rows || []).length === 0 && <tr><td colSpan={8} style={{ textAlign: 'center', padding: 16, color: 'var(--text-muted)' }}>此季無資料</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 🏆 店長競賽 */}
+      <div className="card" style={{ padding: 16, marginBottom: 16 }}>
+        <h3 style={{ marginTop: 0, fontSize: 16 }}>🏆 店長競賽（4個月一期・業績成長率排名）</h3>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <div>
+            <label className="form-label">年度</label>
+            <input className="form-input" type="number" value={compYear} onChange={e => setCompYear(e.target.value)} style={{ width: 100 }} />
+          </div>
+          <div>
+            <label className="form-label">期別</label>
+            <select className="form-input" value={compPeriod} onChange={e => setCompPeriod(e.target.value)} style={{ width: 190 }}>
+              <option value="P1">P1（1-4月→6月發）</option>
+              <option value="P2">P2（5-8月→10月發）</option>
+              <option value="P3">P3（9-12月→隔年2月發）</option>
+            </select>
+          </div>
+          <AsyncButton className="btn btn-primary" onClick={handleComputeCompetition} busyLabel="計算中…">計算排名</AsyncButton>
+          <AsyncButton className="btn btn-primary" onClick={handleSettleCompetition} busyLabel="結算中…" disabled={!compData} title="記錄前三名快照＋掛發放月薪資袋">確認發放</AsyncButton>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)', paddingBottom: 8 }}>門檻：達業績目標 ＋ 成長率&gt;0% ＋ 淨利率≥3%；成長率＝本期 vs 上一期</span>
+        </div>
+        {compData && (
+          <div style={{ marginTop: 12 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>
+              {compData.year} {compData.period}（{(compData.months || []).join('、')} 月）· 發放月 {compData.payout_year_month} · 獎金 {(compData.prizes || []).map(n => Number(n).toLocaleString()).join(' / ')}
+            </div>
+            <div className="data-table-wrapper">
+              <table className="data-table">
+                <thead><tr><th>名次</th><th>門市</th><th>店長</th><th>本期營業額</th><th>上期營業額</th><th>成長率</th><th>淨利率</th><th>達標</th><th>資格</th><th>獎金</th></tr></thead>
+                <tbody>
+                  {(compData.rows || []).map(r => (
+                    <tr key={r.store_id} style={{ background: r.rank && r.rank <= 3 ? 'var(--accent-orange-dim)' : undefined }}>
+                      <td style={{ textAlign: 'center', fontWeight: 800 }}>{r.rank ? `#${r.rank}` : '—'}</td>
+                      <td><b>{r.store_name}</b></td>
+                      <td>{r.manager_name || '—'}</td>
+                      <td style={{ textAlign: 'right' }}>{Number(r.cur_rev || 0).toLocaleString()}</td>
+                      <td style={{ textAlign: 'right', color: 'var(--text-muted)' }}>{Number(r.prev_rev || 0).toLocaleString()}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 700, color: r.growth > 0 ? 'var(--accent-green)' : r.growth < 0 ? 'var(--accent-red)' : 'var(--text-muted)' }}>{r.growth == null ? '—' : (r.growth * 100).toFixed(1) + '%'}</td>
+                      <td style={{ textAlign: 'right' }}>{r.net_rate == null ? '—' : (r.net_rate * 100).toFixed(1) + '%'}</td>
+                      <td style={{ textAlign: 'center' }}>{r.achieved ? '✅' : '—'}</td>
+                      <td style={{ textAlign: 'center' }}>{r.eligible ? '✅' : '✗'}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 800, color: 'var(--accent-orange)' }}>{r.prize > 0 ? Number(r.prize).toLocaleString() : '—'}</td>
+                    </tr>
+                  ))}
+                  {(compData.rows || []).length === 0 && <tr><td colSpan={10} style={{ textAlign: 'center', padding: 16, color: 'var(--text-muted)' }}>無資料</td></tr>}
                 </tbody>
               </table>
             </div>

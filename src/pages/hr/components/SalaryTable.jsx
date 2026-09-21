@@ -1,0 +1,424 @@
+import { Fragment, useState, useEffect } from 'react'
+import { ChevronDown, ChevronRight } from 'lucide-react'
+import { calculateLaborInsurance, calculateHealthInsurance, calculateLaborPension } from '../../../lib/payroll'
+import { supabase } from '../../../lib/supabase'
+
+import { fmtNT as fmt } from '../../../lib/currency'
+
+const n = (x) => Number(x) || 0
+
+// ── Fallback（RPC 失敗時用 salary_records 彙總值，至少有東西看）──
+function buildFallbackItems(r, brackets) {
+  const base = r.base_salary || 0
+  const laborDetail = calculateLaborInsurance(base, { brackets: brackets?.labor })
+  const healthDetail = calculateHealthInsurance(base, { dependents: r.health_ins_dependents || 0, brackets: brackets?.health })
+  return [
+    { label: '底薪', value: base, color: 'var(--text-primary)', sign: '', section: 'add' },
+    { label: '加班費', value: r.overtime || r.overtime_pay || 0, color: 'var(--accent-cyan)', sign: '+', section: 'add' },
+    { label: '津貼', value: r.allowance || 0, color: 'var(--accent-green)', sign: '+', section: 'add' },
+    { label: '獎金', value: r.bonus || 0, color: 'var(--accent-purple)', sign: '+', section: 'add' },
+    { section: 'divider' },
+    { label: '總薪資', value: base + n(r.overtime || r.overtime_pay) + n(r.allowance) + n(r.bonus), color: 'var(--accent-cyan)', sign: '=', section: 'total' },
+    { section: 'divider' },
+    { label: '勞健保', value: r.insurance || 0, color: 'var(--accent-orange)', sign: '-', section: 'deduct',
+      note: `勞保自付約 ${laborDetail.employee_share.toLocaleString()}、健保自付約 ${healthDetail.employee_share.toLocaleString()}` },
+    { label: '其他扣款', value: r.deductions || 0, color: 'var(--accent-red)', sign: '-', section: 'deduct' },
+  ]
+}
+
+const OT_CAT_LABEL = { weekday: '平日', restday: '休息日', weekly_off: '例假', holiday: '國定假' }
+
+// ── 完整計算過程（從 _compute_payroll_for_employee 的回傳組 + 手動加項/扣項）──
+function buildFullItems(d, adjustments = []) {
+  const items = []
+  const push = (o) => items.push(o)
+  const addAdj = (adjustments || []).filter(a => a.type === 'add')
+  const dedAdj = (adjustments || []).filter(a => a.type === 'deduct')
+  const addAdjSum = addAdj.reduce((s, a) => s + n(a.amount), 0)
+  const dedAdjSum = dedAdj.reduce((s, a) => s + n(a.amount), 0)
+  push({ label: '底薪', value: n(d.base_salary), sign: '', section: 'add', color: 'var(--text-primary)' })
+
+  // ── 加項順序:底薪 → 津貼 → 加班費 → 其他加項(獎金/離職/微調/殘差) ──
+  // 1) 津貼（往上，逐項）
+  ;[['主管加給', d.role_allowance], ['伙食津貼', d.meal_allowance], ['交通津貼', d.transport_allowance],
+    ['夜班津貼', d.night_allowance], ['跨區津貼', d.cross_store_allowance],
+  ].forEach(([lbl, v]) => { if (n(v) > 0) push({ label: lbl, value: n(v), sign: '+', section: 'add', color: 'var(--accent-green)' }) })
+  if (Array.isArray(d.custom_allowances)) {
+    // 夜間/跨店名目的自訂津貼已被引擎抽進「夜班津貼/跨區津貼」固定欄顯示,這裡排除避免重複列
+    //（對齊引擎 v_other_custom 的 WHERE name !~ '夜班|夜間|跨店|跨區'）
+    d.custom_allowances.forEach(c => { if (n(c.amount) > 0 && !/夜班|夜間|跨店|跨區/.test(c.name || '')) push({ label: c.name || '自訂津貼', value: n(c.amount), sign: '+', section: 'add', color: 'var(--accent-green)' }) })
+  } else if (n(d.other_custom_total) > 0) {
+    push({ label: '其他自訂津貼', value: n(d.other_custom_total), sign: '+', section: 'add', color: 'var(--accent-green)' })
+  }
+
+  // 2) 加班費（第二段，分類 + 時數）— 每類別 = legal(otPay*) + exception(_ot_exc_*_pay) 相加。
+  //   兩者相加 = regular+extra = gross 的加班,對得回應發。★別用逐筆 row 的 _pay(休息日混合費率該欄有 bug=0)。
+  ;[['平日加班',   n(d.otWeekday)   + n(d._ot_exc_weekday),    n(d.otPayWeekday)   + n(d._ot_exc_weekday_pay)],
+    ['休息日加班', n(d.otRestday)   + n(d._ot_exc_restday),    n(d.otPayRestday)   + n(d._ot_exc_restday_pay)],
+    ['例假加班',   n(d.otWeeklyOff) + n(d._ot_exc_weekly_off), n(d.otPayWeeklyOff) + n(d._ot_exc_weekly_off_pay)],
+    ['國定加班',   n(d.otHoliday)   + n(d._ot_exc_holiday),    n(d.otPayHoliday)   + n(d._ot_exc_holiday_pay)],
+  ].forEach(([lbl, hrs, pay]) => {
+    if (n(pay) > 0 || n(hrs) > 0) push({ label: lbl, value: Math.round(n(pay)), sign: '+', section: 'add', color: 'var(--accent-cyan)', note: `${n(hrs)} 小時` })
+  })
+  if (n(d.comp_time_settled_pay) > 0) push({ label: '補休兌現', value: n(d.comp_time_settled_pay), sign: '+', section: 'add', color: 'var(--accent-cyan)', note: `${n(d.comp_time_settled_count)} 筆` })
+  if (n(d.holidayBonus) > 0) push({ label: '國定假日出勤加給', value: n(d.holidayBonus), sign: '+', section: 'add', color: 'var(--accent-cyan)' })
+
+  // 3) 其他加項（最下面）:獎金 / 離職相關 / 微調 / 殘差
+  if (n(d.attendance_bonus) > 0) push({ label: '全勤獎金', value: n(d.attendance_bonus), sign: '+', section: 'add', color: 'var(--accent-green)' })
+  if (n(d.policyBonus) > 0) push({ label: '獎金', value: n(d.policyBonus), sign: '+', section: 'add', color: 'var(--accent-purple)' })
+  if (n(d.unused_leave_payout) > 0) push({ label: '特休折現', value: n(d.unused_leave_payout), sign: '+', section: 'add', color: 'var(--accent-green)', note: n(d.unused_leave_days) ? `${n(d.unused_leave_days)} 天` : null })
+  if (n(d.severance_amount) > 0) push({ label: '資遣費', value: n(d.severance_amount), sign: '+', section: 'add', color: 'var(--accent-green)' })
+  if (n(d.severance_notice_wage) > 0) push({ label: '預告工資', value: n(d.severance_notice_wage), sign: '+', section: 'add', color: 'var(--accent-green)' })
+  // 手動加項(逐筆調整:紅包/補發)→ 灌進應發
+  addAdj.forEach(a => push({ label: `加項·${a.label}`, value: n(a.amount), sign: '+', section: 'add', color: 'var(--accent-green)' }))
+  // 保險:顯示加項若加不回應發(引擎有算但畫面漏列的欄位),補一行殘差,確保逐項永遠對得回應發
+  const _shownAdd = items.filter(it => it.section === 'add').reduce((s, it) => s + n(it.value), 0)
+  const _addResidual = (n(d.gross) + addAdjSum) - _shownAdd
+  if (_addResidual > 0.5) push({ label: '其他加項', value: _addResidual, sign: '+', section: 'add', color: 'var(--accent-green)' })
+
+  push({ section: 'divider' })
+  push({ label: '總薪資（應發）', value: n(d.gross) + addAdjSum, sign: '=', section: 'total', color: 'var(--accent-cyan)' })
+  push({ section: 'divider' })
+
+  // 減項
+  const ded = (label, value, note) => { if (n(value) > 0) push({ label, value: n(value), sign: '-', section: 'deduct', color: 'var(--accent-orange)', note }) }
+  ded('勞保自付', d.laborInsurance, n(d.insuredLabor) ? `投保級距 ${n(d.insuredLabor).toLocaleString()}` : null)
+  ded('健保自付', d.healthInsurance, n(d.insuredHealth) ? `投保級距 ${n(d.insuredHealth).toLocaleString()}${n(d.health_ins_dependents) ? ` ×${1 + Math.min(n(d.health_ins_dependents), 3)}口` : ''}` : null)
+  ded('勞退自提', d.pension, n(d.pension_self_pct) ? `自提 ${d.pension_self_pct}%` : null)
+  // 事假/缺勤扣(absenceDeduction) = 無薪+半薪+曠職 的加總,直接拆成獨立項顯示(不再列加總,避免看似重複)。
+  // 殘差保險:若總額有三項之外無法歸類的部分才補一行(正常為 0),確保顯示項加得回減項合計。
+  const absenceResidual = n(d.absenceDeduction) - n(d.unpaidDeduction) - n(d.halfPayDeduction) - n(d.awolDeduction)
+  if (absenceResidual > 0) push({ label: '其他缺勤扣', value: absenceResidual, sign: '-', section: 'deduct', color: 'var(--accent-red)', note: n(d.absenceDays) ? `${n(d.absenceDays)} 天` : null })
+  // 請假扣款「什麼假就什麼假」:用 _leave_rows 逐假別拆(型別對齊引擎),零頭校回引擎總額
+  {
+    const hrLv = n(d._hourly_rate)
+    const UNPAID = new Set(['事假', 'personal', '無薪假', 'unpaid', '天災假', '天災', 'disaster'])
+    const HALF = new Set(['病假', 'sick', '生理假', 'menstrual'])
+    const LABEL = { personal: '事假', unpaid: '無薪假', 天災: '天災假', disaster: '天災假', sick: '病假', menstrual: '生理假' }
+    const lv = {}
+    for (const r of (d._leave_rows || [])) {
+      const f = UNPAID.has(r.type) ? 1 : HALF.has(r.type) ? 0.5 : 0
+      if (!f) continue
+      const label = LABEL[r.type] || r.type
+      lv[label] = (lv[label] || 0) + Math.round(n(r.hours) * hrLv * f)
+    }
+    const engLv = n(d.unpaidDeduction) + n(d.halfPayDeduction)
+    const keys = Object.keys(lv)
+    if (keys.length) {
+      const diff = engLv - keys.reduce((s, k) => s + lv[k], 0)
+      if (diff) { const kmax = keys.reduce((a, b) => lv[a] >= lv[b] ? a : b); lv[kmax] += diff }
+      for (const [label, amt] of Object.entries(lv)) if (amt !== 0) push({ label: `${label}扣`, value: amt, sign: '-', section: 'deduct', color: 'var(--accent-red)' })
+    } else {
+      if (n(d.unpaidDeduction) > 0) push({ label: '無薪假扣', value: n(d.unpaidDeduction), sign: '-', section: 'deduct', color: 'var(--accent-red)' })
+      if (n(d.halfPayDeduction) > 0) push({ label: '半薪假扣', value: n(d.halfPayDeduction), sign: '-', section: 'deduct', color: 'var(--accent-red)' })
+    }
+  }
+  if (n(d.awolDeduction) > 0) { const awolDates = Array.isArray(d._awol_rows) && d._awol_rows.length ? `（${d._awol_rows.join('、')}）` : ''; push({ label: '曠職扣', value: n(d.awolDeduction), sign: '-', section: 'deduct', color: 'var(--accent-red)', note: n(d.awolDays) ? `${n(d.awolDays)} 天${awolDates}` : null }) }
+  if (n(d.lateDeduction) > 0) push({ label: '遲到扣', value: n(d.lateDeduction), sign: '-', section: 'deduct', color: 'var(--accent-red)', note: n(d.lateMins) ? `${n(d.lateMins)} 分鐘` : null })
+  if (n(d.earlyLeaveDeduction) > 0) { const earlyDates = Array.isArray(d._early_rows) && d._early_rows.length ? `（${d._early_rows.map(r => r.date).join('、')}）` : ''; push({ label: '早退扣', value: n(d.earlyLeaveDeduction), sign: '-', section: 'deduct', color: 'var(--accent-red)', note: n(d.earlyLeaveMinutes) ? `${n(d.earlyLeaveMinutes)} 分鐘${earlyDates}` : null }) }
+  if (n(d.legal_deduction) > 0) push({ label: '法定扣款', value: n(d.legal_deduction), sign: '-', section: 'deduct', color: 'var(--accent-red)' })
+  // 手動扣項(逐筆調整)→ 灌進減項
+  dedAdj.forEach(a => push({ label: `扣項·${a.label}`, value: n(a.amount), sign: '-', section: 'deduct', color: 'var(--accent-red)' }))
+  // 保險:顯示扣項若加不回減項合計(引擎有算但畫面漏列的欄位,如所得稅/補充保費/未來新扣項),補一行殘差,確保逐項永遠對得回合計
+  const _shownDed = items.filter(it => it.section === 'deduct').reduce((s, it) => s + n(it.value), 0)
+  const _dedResidual = (n(d.totalDeductions) + dedAdjSum) - _shownDed
+  if (_dedResidual > 0.5) push({ label: '其他扣款', value: _dedResidual, sign: '-', section: 'deduct', color: 'var(--accent-red)' })
+
+  push({ section: 'divider' })
+  push({ label: '減項合計', value: n(d.totalDeductions) + dedAdjSum, sign: '-', section: 'subtotal', color: 'var(--accent-orange)' })
+  return items
+}
+
+export default function SalaryTable({ filtered, adjByRecord = {}, computing = false, expanded, setExpanded, getEmpDept, getBonusDetail, openEdit, brackets }) {
+  // 展開時呼叫批次同款引擎 RPC，取完整計算過程（依 row id 快取）
+  const [detailMap, setDetailMap] = useState({})
+  const [loadingId, setLoadingId] = useState(null)
+  useEffect(() => {
+    if (!expanded || detailMap[expanded] !== undefined) return
+    const row = filtered.find(r => r.id === expanded)
+    if (!row || !row.employee_id || !row.month) { setDetailMap(m => ({ ...m, [expanded]: null })); return }
+    setLoadingId(expanded)
+    supabase.rpc('_compute_payroll_for_employee', { p_emp_id: row.employee_id, p_period: row.month })
+      .then(({ data, error }) => setDetailMap(m => ({ ...m, [expanded]: error ? null : data })))
+      .finally(() => setLoadingId(null))
+  }, [expanded]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <div className="card">
+      <div className="card-header">
+        <div className="card-title"><span className="card-title-icon">📋</span> 薪資明細</div>
+        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+          {computing ? '⏳ 即時試算同步中…' : '外面數字為引擎現算；點擊列展開完整計算過程'}
+        </span>
+      </div>
+      <div className="data-table-wrapper">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th style={{ width: 32 }}></th>
+              <th>員工</th>
+              <th>部門</th>
+              <th>底薪</th>
+              <th>加班費</th>
+              <th>津貼</th>
+              <th>獎金</th>
+              <th style={{ color: 'var(--accent-green)' }}>特休折現</th>
+              <th style={{ color: 'var(--accent-orange)' }}>勞保</th>
+              <th style={{ color: 'var(--accent-orange)' }}>健保</th>
+              <th style={{ color: 'var(--accent-orange)' }}>勞退自提</th>
+              <th style={{ color: 'var(--accent-red)' }}>所得稅</th>
+              <th style={{ fontWeight: 800 }}>實領薪資</th>
+              <th style={{ width: 40 }}></th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.length === 0 && (
+              <tr><td colSpan={14} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 32 }}>本月尚無薪資紀錄</td></tr>
+            )}
+            {filtered.map(r => {
+              const isExpanded = expanded === r.id
+              const bonusDetail = isExpanded ? getBonusDetail(r.employee) : []
+              const detail = detailMap[r.id]   // object | null | undefined
+              const rowAdjs = adjByRecord[r.id] || []
+              const addAdjSum = rowAdjs.filter(a => a.type === 'add').reduce((s, a) => s + n(a.amount), 0)
+              const dedAdjSum = rowAdjs.filter(a => a.type === 'deduct').reduce((s, a) => s + n(a.amount), 0)
+              const items = isExpanded ? (detail ? buildFullItems(detail, rowAdjs) : buildFallbackItems(r, brackets)) : []
+              const shownNet = detail ? (n(detail.netSalary) + addAdjSum - dedAdjSum) : n(r.net_salary)
+              const savedNet = n(r._saved_net ?? r.net_salary)   // 真正的存檔值(外面已改成現算,存檔退成備註)
+              return (
+                <Fragment key={r.id}>
+                  <tr style={{ cursor: 'pointer' }} onClick={() => setExpanded(isExpanded ? null : r.id)}>
+                    <td>{isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</td>
+                    <td style={{ fontWeight: 600 }}>
+                      {r.employee}
+                      {(adjByRecord[r.id] || []).length > 0 && (
+                        <div style={{ marginTop: 3, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                          {adjByRecord[r.id].map((a, i) => (
+                            <span key={i} style={{
+                              fontSize: 11, fontWeight: 500, padding: '1px 6px', borderRadius: 4, whiteSpace: 'nowrap',
+                              color: a.type === 'deduct' ? 'var(--accent-red)' : 'var(--accent-green)',
+                              background: a.type === 'deduct' ? 'var(--accent-red-dim)' : 'var(--accent-green-dim)',
+                            }}>
+                              {a.type === 'deduct' ? '扣項' : '加項'}·{a.label} {a.type === 'deduct' ? '−' : '+'}{a.amount.toLocaleString()}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </td>
+                    <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{getEmpDept(r.employee) || '-'}</td>
+                    <td>{fmt(r.base_salary)}</td>
+                    <td style={{ color: 'var(--accent-cyan)' }}>{r.overtime ? `+${(r.overtime).toLocaleString()}` : '-'}</td>
+                    <td style={{ color: 'var(--accent-green)' }}>{r.allowance ? `+${(r.allowance).toLocaleString()}` : '-'}</td>
+                    <td style={{ color: 'var(--accent-purple)' }}>{r.bonus ? `+${(r.bonus).toLocaleString()}` : '-'}</td>
+                    <td style={{ color: 'var(--accent-green)', fontSize: 12 }}>{r.unused_leave_payout ? `+${(r.unused_leave_payout).toLocaleString()}` : '-'}</td>
+                    <td style={{ color: 'var(--accent-orange)', fontSize: 12 }}>-{(r.labor_insurance || 0).toLocaleString()}</td>
+                    <td style={{ color: 'var(--accent-orange)', fontSize: 12 }}>-{(r.health_insurance || 0).toLocaleString()}</td>
+                    <td style={{ color: 'var(--accent-orange)', fontSize: 12 }}>{r.pension_self ? `-${r.pension_self.toLocaleString()}` : '-'}</td>
+                    <td style={{ color: 'var(--accent-red)', fontSize: 12 }}>{r.income_tax ? `-${r.income_tax.toLocaleString()}` : '-'}</td>
+                    <td style={{ fontWeight: 800, color: 'var(--accent-green)', fontSize: 15 }}>
+                      {fmt(r.net_salary)}
+                      {r._is_computed && Math.abs(n(r.net_salary) - savedNet) > 1 && (
+                        <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-muted)' }}>
+                          存檔 {fmt(savedNet)}
+                        </div>
+                      )}
+                    </td>
+                    <td>
+                      <button className="btn btn-secondary" style={{ padding: '2px 8px', fontSize: 11 }} onClick={e => { e.stopPropagation(); openEdit(r) }}>編輯</button>
+                    </td>
+                  </tr>
+
+                  {isExpanded && (
+                    <tr>
+                      <td colSpan={14} style={{ padding: 0 }}>
+                        <div style={{ background: 'var(--glass-light)', padding: '16px 24px', borderTop: '1px solid var(--border-subtle)' }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+
+                            {/* Payroll breakdown */}
+                            <div>
+                              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 10 }}>
+                                📐 薪資計算明細{detail ? '（系統計算過程）' : ''}
+                              </div>
+                              {loadingId === r.id && detail === undefined ? (
+                                <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: 16 }}>計算中…</div>
+                              ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                                  {!detail && (
+                                    <div style={{ fontSize: 11, color: 'var(--accent-orange)', marginBottom: 2 }}>
+                                      ⚠ 無法取得系統計算過程，以下為存檔彙總值
+                                    </div>
+                                  )}
+                                  {items.map((item, i) => {
+                                    if (item.section === 'divider') {
+                                      return <div key={i} style={{ borderTop: '1px dashed var(--border-medium)', margin: '4px 0' }} />
+                                    }
+                                    if (item.section === 'total' || item.section === 'subtotal') {
+                                      const isTotal = item.section === 'total'
+                                      return (
+                                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', borderRadius: 8,
+                                          background: isTotal ? 'var(--accent-cyan-dim)' : 'var(--accent-orange-dim)',
+                                          border: `1px solid ${isTotal ? 'var(--accent-cyan)' : 'var(--accent-orange)'}`, fontSize: 13 }}>
+                                          <span style={{ fontWeight: 700 }}>{item.sign} {item.label}</span>
+                                          <span style={{ color: item.color, fontWeight: 800 }}>{fmt(item.value)}</span>
+                                        </div>
+                                      )
+                                    }
+                                    return (
+                                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', borderRadius: 7, background: 'var(--bg-card)', fontSize: 13 }}>
+                                        <div>
+                                          <span style={{ color: 'var(--text-secondary)' }}>{item.label}</span>
+                                          {item.note && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{item.note}</div>}
+                                        </div>
+                                        <span style={{ color: item.value === 0 ? 'var(--text-muted)' : item.color, fontWeight: 600 }}>
+                                          {item.value === 0 ? '—' : `${item.sign} ${fmt(item.value)}`}
+                                        </span>
+                                      </div>
+                                    )
+                                  })}
+                                  {/* Net salary */}
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 12px', borderRadius: 8, background: 'var(--accent-green-dim)', border: '1px solid var(--accent-green)', fontSize: 14, marginTop: 6 }}>
+                                    <span style={{ fontWeight: 700 }}>= 實領薪資</span>
+                                    <span style={{ color: 'var(--accent-green)', fontWeight: 800 }}>{fmt(shownNet)}</span>
+                                  </div>
+                                  {detail && Math.abs(shownNet - savedNet) > 1 && (
+                                    <div style={{ fontSize: 11, color: 'var(--accent-orange)', textAlign: 'right' }}>
+                                      ⚠ 此為引擎現算值，存檔為 {fmt(savedNet)}（尚未寫回；重跑批次計薪→儲存才會落地並同步薪資條/LINE）
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Right column: bonus / legal / employer cost */}
+                            <div>
+                              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 10 }}>🏆 獎金明細</div>
+                              {bonusDetail.length === 0 ? (
+                                <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: 16, background: 'var(--bg-card)', borderRadius: 8, textAlign: 'center' }}>
+                                  本月尚無獎金紀錄<br />
+                                  <span style={{ fontSize: 11 }}>可至「績效獎金」頁面新增</span>
+                                </div>
+                              ) : bonusDetail.map(b => (
+                                <div key={b.id} style={{ padding: '10px 12px', borderRadius: 8, background: 'var(--bg-card)', marginBottom: 8, border: '1px solid var(--border-subtle)' }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                                    <span style={{ fontSize: 13, fontWeight: 700 }}>{b.role_type} 獎金</span>
+                                    <span style={{ color: 'var(--accent-purple)', fontWeight: 800 }}>{fmt(b.total_bonus)}</span>
+                                  </div>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text-muted)' }}>
+                                      <span>基本績效獎</span><span>{fmt(b.base_bonus)}</span>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text-muted)' }}>
+                                      <span>數據達標獎</span><span>{fmt(b.data_bonus)}</span>
+                                    </div>
+                                  </div>
+                                  {b.notes && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6, padding: '4px 8px', background: 'var(--glass-light)', borderRadius: 6 }}>說明：{b.notes}</div>}
+                                </div>
+                              ))}
+
+                              {/* 加班逐筆明細（合併 legal+exception，逐日逐筆） */}
+                              {detail && [...(detail._ot_rows || []), ...(detail._ot_exception_rows || [])].length > 0 && (
+                                <div style={{ marginTop: 16 }}>
+                                  <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8 }}>🕐 加班逐筆明細</div>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                    {[...(detail._ot_rows || []), ...(detail._ot_exception_rows || [])]
+                                      .sort((a, b) => (a.date || '').localeCompare(b.date || ''))
+                                      .map((ot, i) => (
+                                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 10px', borderRadius: 7, background: 'var(--bg-card)', fontSize: 12 }}>
+                                          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                                            <span style={{ color: 'var(--text-secondary)' }}>{ot.date}</span>
+                                            <span style={{ fontSize: 11, padding: '1px 6px', borderRadius: 4, background: 'var(--glass-light)', color: 'var(--text-muted)' }}>{OT_CAT_LABEL[ot.category] || ot.category}</span>
+                                            <span style={{ color: 'var(--text-muted)' }}>{n(ot.hours)} 小時</span>
+                                            {ot._rate_label && <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{ot._rate_label}</span>}
+                                          </div>
+                                          <span style={{ color: 'var(--accent-cyan)', fontWeight: 600, whiteSpace: 'nowrap' }}>{fmt(n(ot._pay))}</span>
+                                        </div>
+                                      ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* 請假逐筆明細（逐日逐筆，含不扣款的特休/補休）*/}
+                              {detail && (detail._leave_rows || []).length > 0 && (
+                                <div style={{ marginTop: 16 }}>
+                                  <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8 }}>🏖️ 請假逐筆明細</div>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                    {[...detail._leave_rows]
+                                      .sort((a, b) => (a.date || '').localeCompare(b.date || ''))
+                                      .map((lv, i) => (
+                                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 10px', borderRadius: 7, background: 'var(--bg-card)', fontSize: 12 }}>
+                                          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                                            <span style={{ color: 'var(--text-secondary)' }}>{lv.date}</span>
+                                            <span style={{ fontSize: 11, padding: '1px 6px', borderRadius: 4, background: 'var(--glass-light)', color: 'var(--text-muted)' }}>{lv.type}</span>
+                                          </div>
+                                          <span style={{ color: 'var(--text-muted)', fontWeight: 600, whiteSpace: 'nowrap' }}>{(() => { const dh = n(lv.hours) || (n(lv.days) || 0) * 8; return dh > 0 ? `${dh} 小時${lv.days ? ` · ${lv.days} 天` : ''}` : '-' })()}</span>
+                                        </div>
+                                      ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Legal reference */}
+                              <div style={{ marginTop: 16 }}>
+                                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8 }}>📖 法規依據</div>
+                                <div style={{ padding: '10px 12px', borderRadius: 8, background: 'var(--bg-card)', fontSize: 11, color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                  {[
+                                    { law: '勞基法 §24', desc: '加班費計算：前2h加給1/3，後2h加給2/3' },
+                                    { law: '勞基法 §38-4', desc: '特休未休應折算工資（日薪 × 未休天數）' },
+                                    { law: '勞保條例 §15', desc: '勞保費分攤：勞工20%、雇主70%、政府10%' },
+                                    { law: '健保法 §27', desc: '健保費分攤：被保險人30%、雇主60%、政府10%' },
+                                    { law: '勞退條例 §14', desc: '雇主提繳6%，勞工可自提0~6%（免稅）' },
+                                    { law: '所得稅法 §88', desc: '薪資所得扣繳，依扣繳率標準表計算' },
+                                    { law: '2026 基本工資', desc: '月薪 NT$29,500 / 時薪 NT$196' },
+                                  ].map((item, i) => (
+                                    <div key={i} style={{ display: 'flex', gap: 8 }}>
+                                      <span style={{ color: 'var(--accent-cyan)', fontWeight: 600, whiteSpace: 'nowrap' }}>{item.law}</span>
+                                      <span>{item.desc}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+
+                              {/* Employer cost summary（優先用系統計算） */}
+                              <div style={{ marginTop: 16 }}>
+                                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8 }}>🏢 雇主成本（參考）</div>
+                                <div style={{ padding: '10px 12px', borderRadius: 8, background: 'var(--bg-card)', fontSize: 12, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                  {(() => {
+                                    const laborEr = detail ? n(detail.laborEmployer) : calculateLaborInsurance(r.base_salary || 0, { brackets: brackets?.labor }).employer_share
+                                    const healthEr = detail ? n(detail.healthEmployer) : calculateHealthInsurance(r.base_salary || 0, { dependents: r.health_ins_dependents || 0, brackets: brackets?.health }).employer_share
+                                    const pensionEr = detail ? n(detail.pensionEmployer) : calculateLaborPension(r.base_salary || 0).employer_contribution
+                                    return (
+                                      <>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                          <span style={{ color: 'var(--text-muted)' }}>勞保雇主負擔</span><span>{fmt(laborEr)}</span>
+                                        </div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                          <span style={{ color: 'var(--text-muted)' }}>健保雇主負擔</span><span>{fmt(healthEr)}</span>
+                                        </div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                          <span style={{ color: 'var(--text-muted)' }}>勞退 6% 提繳</span><span>{fmt(pensionEr)}</span>
+                                        </div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--border-subtle)', paddingTop: 4, marginTop: 2 }}>
+                                          <span style={{ fontWeight: 600 }}>雇主額外成本</span>
+                                          <span style={{ fontWeight: 700, color: 'var(--accent-red)' }}>{fmt(laborEr + healthEr + pensionEr)}</span>
+                                        </div>
+                                      </>
+                                    )
+                                  })()}
+                                </div>
+                              </div>
+                            </div>
+
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}

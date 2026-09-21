@@ -1,0 +1,553 @@
+import { useState, useEffect, useMemo } from 'react'
+import { createPortal } from 'react-dom'
+import { ChevronLeft, ChevronRight, AlertCircle, RefreshCw, FileText, Send, CheckCircle, X, Save, Download } from 'lucide-react'
+import * as XLSX from 'xlsx-js-style'
+import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../contexts/AuthContext'
+import { toast } from '../../lib/toast'
+
+const TYPE_LABEL = {
+  MISSING:     '未打卡',
+  LATE:        '遲到',
+  EARLY_LEAVE: '早退',
+  UNSCHEDULED: '未排班打卡',
+  OVERWORK:    '多上時數',
+  UNDERTIME:   '時數不足',
+}
+
+const TYPE_COLOR = {
+  MISSING:     { bg: 'var(--accent-red-dim)',    fg: 'var(--accent-red)' },
+  LATE:        { bg: 'var(--accent-orange-dim)', fg: 'var(--accent-orange)' },
+  EARLY_LEAVE: { bg: 'var(--accent-orange-dim)', fg: 'var(--accent-orange)' },
+  UNSCHEDULED: { bg: 'var(--accent-blue-dim)',   fg: 'var(--accent-blue)' },   // 算差異(藍=待確認),與正向的多上時數區隔
+  OVERWORK:    { bg: 'var(--accent-green-dim)',  fg: 'var(--accent-green)' },   // 綠=正向,不計入差異筆數
+  UNDERTIME:   { bg: 'var(--accent-yellow-dim)', fg: 'var(--accent-yellow)' },
+}
+
+function formatYM(y, m) {
+  return `${y}-${String(m).padStart(2, '0')}`
+}
+
+export default function AttendanceDiffReport() {
+  const { profile, hasPermission } = useAuth()
+
+  // 預設「上個月」
+  const now = new Date()
+  const last = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+  const [year, setYear] = useState(last.getFullYear())
+  const [month, setMonth] = useState(last.getMonth() + 1)
+  const [storeId, setStoreId] = useState('')
+  const [stores, setStores] = useState([])
+  // 篩選器
+  const [filterType, setFilterType] = useState('')      // 差異類型
+  const [filterNotify, setFilterNotify] = useState('')  // '' / 'pending' / 'notified'
+  const [searchName, setSearchName] = useState('')
+  const [minDiff, setMinDiff] = useState(0)
+  const [report, setReport] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [detailEmp, setDetailEmp] = useState(null)
+  const [detailDiffs, setDetailDiffs] = useState([])
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [triggering, setTriggering] = useState(false)
+  const [committing, setCommitting] = useState(false)
+  const [exporting, setExporting] = useState(false)
+
+  const ym = formatYM(year, month)
+
+  useEffect(() => {
+    supabase.from('stores').select('id, name').order('name').then(({ data }) => setStores(data || []))
+  }, [])
+
+  const load = () => {
+    setLoading(true)
+    supabase
+      .rpc('admin_attendance_diff_report', {
+        p_year_month: ym,
+        p_store_id: storeId === '' ? null : Number(storeId),
+      })
+      .then(({ data }) => {
+        setReport(Array.isArray(data) ? data : [])
+        setLoading(false)
+      })
+  }
+  useEffect(load, [ym, storeId])
+
+  const stats = useMemo(() => {
+    const withDiff = report.filter(r => r.diff_count > 0)
+    const notified = withDiff.filter(r => r.notified)
+    return {
+      totalEmp: report.length,
+      withDiff: withDiff.length,
+      notified: notified.length,
+      pending: withDiff.length - notified.length,
+      totalDiff: withDiff.reduce((s, r) => s + Number(r.diff_count || 0), 0),
+    }
+  }, [report])
+
+  // 套用篩選（純前端）
+  const filteredReport = useMemo(() => {
+    return report.filter(r => {
+      if (searchName && !(r.employee_name || '').includes(searchName)) return false
+      if (filterNotify === 'pending' && (Number(r.diff_count) === 0 || r.notified)) return false
+      if (filterNotify === 'notified' && !r.notified) return false
+      if (minDiff > 0 && Number(r.diff_count || 0) < minDiff) return false
+      if (filterType && !(r.type_counts && Number(r.type_counts[filterType] || 0) > 0)) return false
+      return true
+    })
+  }, [report, searchName, filterNotify, minDiff, filterType])
+
+  const openDetail = async (emp) => {
+    setDetailEmp(emp)
+    setDetailLoading(true)
+    const { data } = await supabase.rpc('monthly_attendance_diff', {
+      p_employee_id: emp.employee_id,
+      p_year_month: ym,
+    })
+    setDetailDiffs((Array.isArray(data) ? data : []).filter(d => d.diff_type))
+    setDetailLoading(false)
+  }
+
+  const goPrev = () => {
+    if (month === 1) { setMonth(12); setYear(year - 1) }
+    else setMonth(month - 1)
+  }
+  const goNext = () => {
+    if (month === 12) { setMonth(1); setYear(year + 1) }
+    else setMonth(month + 1)
+  }
+
+  const handleCommitWriteback = async () => {
+    if (!hasPermission('system.admin')) return
+    if (!confirm(
+      `要把 ${ym} 的「排班 vs 打卡」差異結算寫回 attendance_records 嗎？\n\n` +
+      `會把該月所有 attendance_records 的 late_minutes/is_late 先重置 0/false，` +
+      `再依排班比對寫回 LATE。寫回後批次計薪會讀到正確的遲到分鐘數。\n\n` +
+      `請確保員工該補的請假/補卡/加班申請都已簽完才做這步。`
+    )) return
+    setCommitting(true)
+    try {
+      const { data, error } = await supabase.rpc('commit_attendance_diff_writeback', {
+        p_year_month: ym,
+        p_store_id: storeId === '' ? null : Number(storeId),
+      })
+      if (error) throw error
+      const r = Array.isArray(data) ? data[0] : data
+      toast.success(
+        `結算寫回完成：${r?.employees_processed || 0} 人處理、` +
+        `${r?.records_reset || 0} 筆重置、${r?.late_records_written || 0} 筆遲到寫回`
+      )
+      load()
+    } catch (e) {
+      toast.error('結算寫回失敗：' + (e.message || '未知'))
+    }
+    setCommitting(false)
+  }
+
+  // 一鍵匯出「每月出缺勤時數表」(全部小時;左邊每人一列,右邊各項 Top 5)
+  const handleExportHours = async () => {
+    setExporting(true)
+    try {
+      const { data, error } = await supabase.rpc('monthly_attendance_hours_report', {
+        p_year_month: ym,
+        p_store_id: storeId === '' ? null : Number(storeId),
+        p_org: profile?.organization_id ?? null,
+      })
+      if (error) throw error
+      const rows = Array.isArray(data) ? data : []
+      if (rows.length === 0) { toast.info('本月無資料'); setExporting(false); return }
+      const num = v => Math.round((Number(v) || 0) * 100) / 100
+      const otTotal = r => num(r.ot_hours) + num(r.extra_ot_hours)  // 加班+額外加班 合併一欄
+      const storeLabel = storeId === '' ? '全部門市' : (stores.find(s => String(s.id) === String(storeId))?.name || '')
+
+      // ── 樣式 ──
+      const B = { style: 'thin', color: { rgb: 'D9D9D9' } }
+      const borderAll = { top: B, bottom: B, left: B, right: B }
+      const titleStyle = { font: { bold: true, sz: 15, color: { rgb: '1F3864' } }, alignment: { vertical: 'center' } }
+      const hdrStyle = fill => ({ font: { bold: true, sz: 11, color: { rgb: 'FFFFFF' } },
+        fill: { patternType: 'solid', fgColor: { rgb: fill } },
+        alignment: { horizontal: 'center', vertical: 'center', wrapText: true }, border: borderAll })
+      const textStyle = z => ({ alignment: { vertical: 'center' }, border: borderAll,
+        ...(z ? { fill: { patternType: 'solid', fgColor: { rgb: 'F2F6FC' } } } : {}) })
+      const numStyle = z => ({ alignment: { horizontal: 'center', vertical: 'center' }, border: borderAll,
+        ...(z ? { fill: { patternType: 'solid', fgColor: { rgb: 'F2F6FC' } } } : {}) })
+      const MAIN_FILL = '2F5597', RANK_FILL = '548235'
+
+      // ── 主表(加班已含額外加班)──
+      const MAIN_HEADER = ['員工編號', '姓名', '部門', '應出勤時數(小時)', '實際出勤時數(小時)',
+        '加班時數(小時)', '遲到(小時)', '早退(小時)', '忘刷(次)', '假勤時數(小時)']
+      const mainRows = rows.map(r => [
+        r.employee_number || '', r.name || '', r.dept || '',
+        num(r.scheduled_hours), num(r.actual_hours), otTotal(r),
+        num(r.late_hours), num(r.early_leave_hours), r.missing_punch_count ?? 0, num(r.leave_hours),
+      ])
+      const NCOL = MAIN_HEADER.length  // 10
+      const left = [MAIN_HEADER, ...mainRows]
+
+      // ── 右:各項 Top 5 排行 ──
+      const RANKS = [
+        { label: '遲到(小時)', get: r => num(r.late_hours) },
+        { label: '早退(小時)', get: r => num(r.early_leave_hours) },
+        { label: '忘刷(次)', get: r => r.missing_punch_count ?? 0 },
+        { label: '加班時數(小時)', get: otTotal },
+        { label: '假勤時數(小時)', get: r => num(r.leave_hours) },
+      ]
+      const right = []
+      const rightHdr = new Set()
+      for (const rk of RANKS) {
+        rightHdr.add(right.length)
+        right.push(['序號', '姓名', '部門', rk.label])
+        const top = [...rows].filter(r => rk.get(r) > 0).sort((a, b) => rk.get(b) - rk.get(a)).slice(0, 5)
+        top.forEach((r, i) => right.push([i + 1, r.name || '', r.dept || '', rk.get(r)]))
+        right.push(['', '', '', ''])
+      }
+
+      // ── AOA:第0列=標題,第1列=表頭,第2列起=資料;右側從第1列對齊 ──
+      const aoa = [[`每月出缺勤時數表　${ym}　${storeLabel}`, ...Array(NCOL + 4).fill('')]]
+      const bodyLen = Math.max(left.length, right.length)
+      for (let i = 0; i < bodyLen; i++) {
+        const l = left[i] || Array(NCOL).fill('')
+        const r = right[i] || ['', '', '', '']
+        aoa.push([...l, '', ...r])
+      }
+      const ws = XLSX.utils.aoa_to_sheet(aoa)
+      ws['!cols'] = [{ wch: 11 }, { wch: 10 }, { wch: 18 }, { wch: 17 }, { wch: 17 }, { wch: 15 },
+        { wch: 11 }, { wch: 11 }, { wch: 10 }, { wch: 15 }, { wch: 2 },
+        { wch: 6 }, { wch: 10 }, { wch: 18 }, { wch: 15 }]
+      ws['!rows'] = [{ hpt: 26 }, { hpt: 32 }]
+      ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: NCOL - 1 } }]
+      ws['!freeze'] = { xSplit: 0, ySplit: 2 }
+
+      // ── 逐格上樣式 ──
+      const range = XLSX.utils.decode_range(ws['!ref'])
+      for (let R = range.s.r; R <= range.e.r; R++) {
+        for (let C = range.s.c; C <= range.e.c; C++) {
+          const cell = ws[XLSX.utils.encode_cell({ r: R, c: C })]
+          if (!cell) continue
+          if (R === 0) { if (C === 0) cell.s = titleStyle; continue }
+          if (C < NCOL) {                              // 主表
+            if (R === 1) cell.s = hdrStyle(MAIN_FILL)
+            else cell.s = (C <= 2 ? textStyle : numStyle)(R % 2 === 1)
+          } else if (C > NCOL) {                       // 右側排行
+            const ri = R - 1, rc = C - (NCOL + 1)
+            if (rightHdr.has(ri)) cell.s = hdrStyle(RANK_FILL)
+            else if (right[ri] && String(right[ri][rc] ?? '') !== '') cell.s = (rc === 1 || rc === 2 ? textStyle : numStyle)(false)
+          }
+        }
+      }
+
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, ws, ym)
+      XLSX.writeFile(wb, `每月出缺勤時數表_${ym}${storeLabel ? '_' + storeLabel : ''}.xlsx`)
+      toast.success(`已匯出 ${rows.length} 人`)
+    } catch (e) {
+      toast.error('匯出失敗：' + (e.message || '未知'))
+    }
+    setExporting(false)
+  }
+
+  const handleSendNotifications = async () => {
+    if (!hasPermission('system.admin')) return
+    if (!confirm(`要對 ${ym} 所有「未通知」員工發送 LINE 提醒嗎？`)) return
+    setTriggering(true)
+    try {
+      const pendingIds = report.filter(r => r.diff_count > 0 && !r.notified).map(r => r.employee_id)
+      if (pendingIds.length === 0) {
+        toast.info('沒有未通知的員工')
+        setTriggering(false)
+        return
+      }
+      const { data, error } = await supabase.functions.invoke('monthly-attendance-diff-notify', {
+        body: { year_month: ym, employee_ids: pendingIds },
+      })
+      if (error) throw error
+      toast.success(`已送出：${data?.notified || 0} 人成功，${data?.failed || 0} 人失敗`)
+      load()
+    } catch (e) {
+      toast.error('觸發失敗：' + (e.message || '未知'))
+    }
+    setTriggering(false)
+  }
+
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-header-row">
+          <div>
+            <h2><span className="header-icon">📋</span> 打卡核對報表</h2>
+            <p>對比排班 vs 打卡，找出待員工申請補卡 / 請假 / 加班的差異</p>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-secondary" onClick={load}>
+              <RefreshCw size={14} /> 重新整理
+            </button>
+            <button className="btn btn-secondary" onClick={handleExportHours} disabled={exporting}
+              title="匯出當月每人出缺勤時數(全部小時)+ 各項 Top 5">
+              <Download size={14} /> {exporting ? '匯出中...' : '匯出時數表'}
+            </button>
+            {hasPermission('system.admin') && (
+              <button className="btn btn-primary" onClick={handleSendNotifications} disabled={triggering || stats.pending === 0}>
+                <Send size={14} /> {triggering ? '送出中...' : `發 LINE 給 ${stats.pending} 人`}
+              </button>
+            )}
+            {hasPermission('system.admin') && (
+              <button
+                className="btn btn-secondary"
+                onClick={handleCommitWriteback}
+                disabled={committing}
+                title="把排班 vs 打卡差異結算寫回 attendance_records，供批次計薪讀"
+                style={{ background: 'var(--accent-purple-dim)', color: 'var(--accent-purple)', border: '1px solid var(--accent-purple)' }}
+              >
+                <Save size={14} /> {committing ? '寫回中...' : '結算寫回'}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* 控制列 */}
+      <div className="card" style={{ marginBottom: 16, padding: '12px 16px', display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <button onClick={goPrev} className="btn btn-secondary" style={{ padding: '4px 8px' }}>
+            <ChevronLeft size={14} />
+          </button>
+          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', minWidth: 100, textAlign: 'center' }}>
+            {year} 年 {month} 月
+          </div>
+          <button onClick={goNext} className="btn btn-secondary" style={{ padding: '4px 8px' }}>
+            <ChevronRight size={14} />
+          </button>
+        </div>
+        <select
+          value={storeId} onChange={e => setStoreId(e.target.value)}
+          style={{
+            padding: '6px 12px', borderRadius: 6, fontSize: 13,
+            background: 'var(--bg-card)', border: '1px solid var(--border-subtle)',
+            color: 'var(--text-primary)',
+          }}
+        >
+          <option value="">全部門市</option>
+          {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+        </select>
+
+        {/* 差異類型 */}
+        <select value={filterType} onChange={e => setFilterType(e.target.value)}
+          style={{ padding: '6px 12px', borderRadius: 6, fontSize: 13, background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}>
+          <option value="">全部差異類型</option>
+          {Object.entries(TYPE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+        </select>
+
+        {/* 通知狀態 */}
+        <select value={filterNotify} onChange={e => setFilterNotify(e.target.value)}
+          style={{ padding: '6px 12px', borderRadius: 6, fontSize: 13, background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}>
+          <option value="">全部通知狀態</option>
+          <option value="pending">未通知</option>
+          <option value="notified">已通知</option>
+        </select>
+
+        {/* 差異筆數門檻 */}
+        <select value={minDiff} onChange={e => setMinDiff(Number(e.target.value))}
+          style={{ padding: '6px 12px', borderRadius: 6, fontSize: 13, background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}>
+          <option value={0}>不限筆數</option>
+          <option value={1}>≥ 1 筆</option>
+          <option value={5}>≥ 5 筆</option>
+          <option value={10}>≥ 10 筆</option>
+          <option value={20}>≥ 20 筆</option>
+        </select>
+
+        {/* 員工搜尋 */}
+        <input type="text" value={searchName} onChange={e => setSearchName(e.target.value)} placeholder="🔍 搜尋員工姓名"
+          style={{ padding: '6px 12px', borderRadius: 6, fontSize: 13, background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)', minWidth: 150 }} />
+
+        {(filterType || filterNotify || minDiff > 0 || searchName) && (
+          <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: 12 }}
+            onClick={() => { setFilterType(''); setFilterNotify(''); setMinDiff(0); setSearchName('') }}>
+            <X size={12} /> 清除篩選（{filteredReport.length}/{report.length}）
+          </button>
+        )}
+      </div>
+
+      {/* 統計卡 */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, marginBottom: 20 }}>
+        <div className="card" style={{ padding: '12px 16px' }}>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>檢視員工</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)' }}>{stats.totalEmp}</div>
+        </div>
+        <div className="card" style={{ padding: '12px 16px' }}>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>有差異</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--accent-orange)' }}>{stats.withDiff}</div>
+        </div>
+        <div className="card" style={{ padding: '12px 16px' }}>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>已通知</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--accent-green)' }}>{stats.notified}</div>
+        </div>
+        <div className="card" style={{ padding: '12px 16px' }}>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>未通知</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--accent-red)' }}>{stats.pending}</div>
+        </div>
+        <div className="card" style={{ padding: '12px 16px' }}>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>差異總筆數</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--accent-red)' }}>{stats.totalDiff}</div>
+        </div>
+      </div>
+
+      {/* 報表 */}
+      <div className="card" style={{ padding: 0 }}>
+        <div className="data-table-wrapper">
+          <table className="data-table" style={{ width: '100%' }}>
+            <thead>
+              <tr>
+                <th>員工</th>
+                <th>門市</th>
+                <th style={{ textAlign: 'center' }}>差異筆數</th>
+                <th style={{ textAlign: 'center' }}>通知狀態</th>
+                <th style={{ textAlign: 'center' }}>詳情</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr><td colSpan="5" style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)' }}>載入中…</td></tr>
+              ) : filteredReport.length === 0 ? (
+                <tr><td colSpan="5" style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)' }}>無資料</td></tr>
+              ) : filteredReport.map(r => (
+                <tr key={r.employee_id} style={{ opacity: r.diff_count > 0 ? 1 : 0.5 }}>
+                  <td>
+                    {r.employee_name}
+                    {r.is_resigned && (
+                      <span style={{ marginLeft: 6, padding: '1px 6px', borderRadius: 4, fontSize: 11, fontWeight: 600, background: 'var(--accent-orange-dim)', color: 'var(--accent-orange)' }}>離職</span>
+                    )}
+                  </td>
+                  <td style={{ color: 'var(--text-secondary)' }}>{r.store_name || '—'}</td>
+                  <td style={{ textAlign: 'center' }}>
+                    {r.diff_count > 0 ? (
+                      <span style={{
+                        padding: '2px 10px', borderRadius: 6, fontSize: 12, fontWeight: 700,
+                        background: 'var(--accent-red-dim)', color: 'var(--accent-red)',
+                      }}>{r.diff_count}</span>
+                    ) : (
+                      <span style={{ color: 'var(--text-muted)' }}>0</span>
+                    )}
+                  </td>
+                  <td style={{ textAlign: 'center' }}>
+                    {r.diff_count === 0 ? (
+                      <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>—</span>
+                    ) : r.notified ? (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--accent-green)', fontSize: 12, fontWeight: 600 }}>
+                        <CheckCircle size={12} /> 已通知
+                      </span>
+                    ) : (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--accent-orange)', fontSize: 12, fontWeight: 600 }}>
+                        <AlertCircle size={12} /> 未通知
+                      </span>
+                    )}
+                  </td>
+                  <td style={{ textAlign: 'center' }}>
+                    {r.diff_count > 0 && (
+                      <button onClick={() => openDetail(r)} className="btn btn-secondary" style={{ padding: '3px 10px', fontSize: 12 }}>
+                        <FileText size={12} /> 看
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* 詳情 modal — 用 createPortal 渲染到 body，避免 layout wrapper transform 影響 fixed */}
+      {detailEmp && createPortal(
+        <div
+          onClick={() => setDetailEmp(null)}
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9999,
+            display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '5vh 20px 20px',
+            overflow: 'hidden',
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              width: '100%', maxWidth: 700, maxHeight: '90vh',
+              background: 'var(--bg-card)', borderRadius: 16,
+              border: '1px solid var(--border-subtle)',
+              display: 'flex', flexDirection: 'column', overflow: 'hidden',
+            }}
+          >
+            {/* Header — 固定不 scroll */}
+            <div style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              padding: '16px 24px', borderBottom: '1px solid var(--border-subtle)',
+              flexShrink: 0, background: 'var(--bg-card)',
+            }}>
+              <div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)' }}>{detailEmp.employee_name}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{ym} · {detailEmp.store_name || '—'}</div>
+              </div>
+              <button onClick={() => setDetailEmp(null)} style={{
+                background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)',
+                cursor: 'pointer', color: 'var(--text-muted)',
+                width: 32, height: 32, borderRadius: 8,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Body — 可 scroll */}
+            <div style={{ overflowY: 'auto', padding: '16px 24px', flex: 1 }}>
+            {detailLoading ? (
+              <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)' }}>載入中…</div>
+            ) : detailDiffs.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)' }}>無差異</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {detailDiffs.map((d, i) => {
+                  const color = TYPE_COLOR[d.diff_type] || { bg: '#eee', fg: '#666' }
+                  return (
+                    <div key={i} style={{
+                      padding: '10px 14px', borderRadius: 8,
+                      background: 'var(--bg-secondary)',
+                      border: '1px solid var(--border-subtle)',
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
+                          {d.diff_date}
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 6, fontWeight: 400 }}>
+                            ({new Date(d.diff_date).toLocaleDateString('zh-TW', { weekday: 'short' })})
+                          </span>
+                        </div>
+                        <span style={{
+                          padding: '2px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700,
+                          background: color.bg, color: color.fg,
+                        }}>{TYPE_LABEL[d.diff_type] || d.diff_type}</span>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6 }}>
+                        <div>
+                          <span style={{ color: 'var(--text-muted)', marginRight: 6 }}>排班</span>
+                          {d.expected_shift || '無班'}
+                          {d.expected_hours > 0 && ` (${d.expected_hours}h)`}
+                        </div>
+                        <div>
+                          <span style={{ color: 'var(--text-muted)', marginRight: 6 }}>實際</span>
+                          {d.actual_clock_in
+                            ? `${d.actual_clock_in.slice(0,5)} - ${d.actual_clock_out?.slice(0,5) || '?'}`
+                            : '未打卡'}
+                          {d.actual_hours > 0 && ` (${d.actual_hours}h)`}
+                        </div>
+                      </div>
+                      <div style={{ fontSize: 12, color: 'var(--text-primary)' }}>
+                        {d.message}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+    </div>
+  )
+}

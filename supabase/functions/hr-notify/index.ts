@@ -1,0 +1,1792 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+// Restrict CORS to the app's own origin in production.
+// Set SITE_URL via: supabase secrets set SITE_URL=https://your-domain.com
+// @ts-ignore — Deno global available at runtime in Supabase Edge Functions
+const SITE_URL = Deno.env.get('SITE_URL') || '*'
+const corsHeaders = {
+  "Access-Control-Allow-Origin": SITE_URL,
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+// ── LINE Push ──────────────────────────────────────────────────
+async function pushLine(to: string, messages: object[], accessToken: string) {
+  const res = await fetch("https://api.line.me/v2/bot/message/push", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ to, messages }),
+    signal: AbortSignal.timeout(8000),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    console.error(`LINE push failed ${res.status}: ${body}`);
+  }
+  return res.ok;
+}
+
+// ── Resolve LINE ID via multi-OA mapping ────────────────────────
+async function resolveLineId(db: any, employeeId: number): Promise<string | null> {
+  const { data } = await db.from("v_employee_line_resolved")
+    .select("line_user_id")
+    .eq("employee_id", employeeId)
+    .order("is_primary", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data?.line_user_id || null;
+}
+
+async function resolveLineAccount(db: any, employeeId: number): Promise<{ lineUserId: string | null; liffId: string | null }> {
+  const { data } = await db.from("v_employee_line_resolved")
+    .select("line_user_id, liff_id")
+    .eq("employee_id", employeeId)
+    .order("channel_code", { ascending: false })  // 'workflow' channel first
+    .order("is_primary", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return { lineUserId: data?.line_user_id || null, liffId: data?.liff_id || null };
+}
+
+// ── LIFF URL builders（跟 src/lib/lineNotify.js getLiffTaskUrl / buildLiffTaskUrl 對齊）──
+function buildLiffTaskUrl(taskId: number, liffId: string | null, action?: string): string {
+  const toPath = `/tasks?task=${taskId}${action ? `&action=${action}` : ''}`;
+  if (!liffId) return `https://line.me/`;
+  return `https://liff.line.me/${liffId}?to=${encodeURIComponent(toPath)}`;
+}
+
+// ── Label helpers ──────────────────────────────────────────────
+const leaveLabels: Record<string, string> = {
+  annual: "特休", sick: "病假", personal: "事假",
+  bereavement: "喪假", marriage: "婚假", maternity: "產假",
+  paternity: "陪產假", unpaid: "無薪假",
+  特休: "特休", 病假: "病假", 事假: "事假",
+  喪假: "喪假", 婚假: "婚假", 產假: "產假",
+  陪產假: "陪產假", 無薪假: "無薪假",
+};
+const getLeaveLabel = (t: string) => leaveLabels[t] || t;
+
+function row(label: string, value: string, valueColor = "#111111") {
+  return {
+    type: "box", layout: "horizontal",
+    contents: [
+      { type: "text", text: label, size: "sm", color: "#888888", flex: 2 },
+      { type: "text", text: value, size: "sm", color: valueColor, flex: 5, wrap: true },
+    ],
+  };
+}
+
+// ══════════════════════════════════════════════════════════════
+// Flex Message Builders (完整移植自 wine_line)
+// ══════════════════════════════════════════════════════════════
+
+// ── 1. 請假提交 → 通知主管審核 ──────────────────────────────
+function buildLeaveSubmissionNotification(details: {
+  leave_id?: number; requester_name: string; leave_type: string;
+  start_date: string; end_date: string; total_days: number; total_hours?: number; reason?: string;
+}) {
+  const leaveLabel = getLeaveLabel(details.leave_type);
+  return {
+    type: "flex",
+    altText: `📥 新的請假申請：${details.requester_name}`,
+    contents: {
+      type: "bubble", size: "kilo",
+      header: {
+        type: "box", layout: "vertical", backgroundColor: "#E67E22", paddingAll: "14px",
+        contents: [
+          { type: "text", text: `📥 待審核請假：${details.requester_name}`, weight: "bold", color: "#FFFFFF", size: "md" },
+        ],
+      },
+      body: {
+        type: "box", layout: "vertical", paddingAll: "14px", spacing: "sm",
+        contents: [
+          row("申請人", details.requester_name),
+          row("假別", leaveLabel),
+          row("日期", `${details.start_date} ~ ${details.end_date}`),
+          row("時數", `${details.total_hours != null ? details.total_hours : (details.total_days * 8)} 小時`),
+          ...(details.reason ? [row("原因", details.reason)] : []),
+        ],
+      },
+      footer: {
+        type: "box", layout: "horizontal", paddingAll: "10px", spacing: "sm", backgroundColor: "#F7FAFC",
+        contents: [
+          {
+            type: "button", style: "primary", color: "#276749", height: "sm",
+            action: { type: "message", label: "✅ 核准", text: `/管理 核准請假 ${details.leave_id || ''}` },
+          },
+          {
+            type: "button", style: "primary", color: "#C53030", height: "sm",
+            action: { type: "message", label: "❌ 退回", text: `/管理 退回請假 ${details.leave_id || ''}` },
+          },
+        ],
+      },
+    },
+  };
+}
+
+// ── 2. 請假結果 → 通知申請人 ────────────────────────────────
+function buildLeaveNotification(type: "approved" | "rejected", details: {
+  leave_type: string; start_date: string; end_date: string;
+  total_days: number; total_hours?: number; rejection_reason?: string; approver_name?: string;
+}) {
+  const leaveLabel = getLeaveLabel(details.leave_type);
+  const isApproved = type === "approved";
+  const headerColor = isApproved ? "#276749" : "#C53030";
+  const icon = isApproved ? "✅" : "❌";
+  const statusText = isApproved ? "已核准" : "已拒絕";
+
+  return {
+    type: "flex",
+    altText: `${icon} 請假申請${statusText}`,
+    contents: {
+      type: "bubble", size: "kilo",
+      header: {
+        type: "box", layout: "vertical", backgroundColor: headerColor, paddingAll: "14px",
+        contents: [{ type: "text", text: `${icon} 請假申請${statusText}`, weight: "bold", color: "#FFFFFF", size: "md" }],
+      },
+      body: {
+        type: "box", layout: "vertical", paddingAll: "14px", spacing: "sm",
+        contents: [
+          row("假別", leaveLabel),
+          row("日期", `${details.start_date} ~ ${details.end_date}`),
+          row("時數", `${details.total_hours != null ? details.total_hours : (details.total_days * 8)} 小時`),
+          ...(details.approver_name ? [row("審核人", details.approver_name)] : []),
+          ...(!isApproved && details.rejection_reason ? [row("原因", details.rejection_reason, "#C53030")] : []),
+        ],
+      },
+      footer: {
+        type: "box", layout: "vertical", paddingAll: "10px", backgroundColor: "#F7FAFC",
+        contents: [{
+          type: "button", style: "link", height: "sm",
+          action: { type: "message", label: "查看假期餘額", text: "/請假 餘額" },
+        }],
+      },
+    },
+  };
+}
+
+// ── 3. 加班結果 → 通知申請人 ────────────────────────────────
+function buildOtNotification(type: "approved" | "rejected", details: {
+  request_date: string; ot_hours: number; ot_type?: string;
+  filing_type?: string; rejection_reason?: string;
+}) {
+  const isApproved = type === "approved";
+  const headerColor = isApproved ? "#1A365D" : "#C53030";
+  const icon = isApproved ? "✅" : "❌";
+  const statusText = isApproved ? "已核准" : "已拒絕";
+  const otTypeLabel = details.ot_type === "comp" ? "補休" : "加班費";
+  const filingLabel = details.filing_type === "pre" ? "事前申請" : "事後補報";
+
+  return {
+    type: "flex",
+    altText: `${icon} 加班申請${statusText}`,
+    contents: {
+      type: "bubble", size: "kilo",
+      header: {
+        type: "box", layout: "vertical", backgroundColor: headerColor, paddingAll: "14px",
+        contents: [{ type: "text", text: `${icon} 加班申請${statusText}`, weight: "bold", color: "#FFFFFF", size: "md" }],
+      },
+      body: {
+        type: "box", layout: "vertical", paddingAll: "14px", spacing: "sm",
+        contents: [
+          row("日期", details.request_date),
+          row("加班時數", `${details.ot_hours} 小時`),
+          row("補償方式", otTypeLabel),
+          row("申請類型", filingLabel),
+          ...(!isApproved && details.rejection_reason ? [row("原因", details.rejection_reason, "#C53030")] : []),
+        ],
+      },
+    },
+  };
+}
+
+// ── 4. 補打結果 → 通知申請人 ────────────────────────────────
+function buildCorrectionNotification(type: "approved" | "rejected" | "step_assigned", details: {
+  correction_type?: string; requested_clock_in?: string;
+  requested_clock_out?: string; rejection_reason?: string;
+  applicant_name?: string; step_label?: string; reason?: string;
+  request_id?: number; liff_id?: string | null; photo_url?: string | null;
+}) {
+  if (type === "step_assigned") {
+    const typeLabel: Record<string, string> = {
+      clock_in: "更正上班", clock_out: "更正下班", both: "上下班均更正", missing: "補登打卡",
+    };
+    const label = typeLabel[details.correction_type || ""] || "補打卡";
+    const bodyContents: object[] = [
+      ...(details.applicant_name ? [row("申請人", details.applicant_name)] : []),
+      row("類型", label),
+      ...(details.requested_clock_in ? [row("補登時間", new Date(details.requested_clock_in).toLocaleString("zh-TW", { timeZone: "Asia/Taipei", hour12: false }))] : []),
+      ...(details.reason ? [row("原因", details.reason)] : []),
+      ...(details.step_label ? [row("關卡", details.step_label)] : []),
+    ];
+    const liffUrl = details.liff_id && details.request_id
+      ? `https://liff.line.me/${details.liff_id}?to=${encodeURIComponent(`/approve?type=correction&id=${details.request_id}`)}`
+      : null;
+    const footer: object[] = liffUrl ? [{
+      type: "button", style: "primary", color: "#4A90D9", height: "sm",
+      action: { type: "uri", label: "前往簽核", uri: liffUrl },
+    }] : [];
+    return {
+      type: "flex", altText: `📋 補打卡申請待簽核`,
+      contents: {
+        type: "bubble", size: "kilo",
+        ...(details.photo_url ? { hero: { type: "image", url: details.photo_url, size: "full", aspectRatio: "20:13", aspectMode: "cover", action: { type: "uri", uri: details.photo_url } } } : {}),
+        header: {
+          type: "box", layout: "vertical", backgroundColor: "#2B6CB0", paddingAll: "14px",
+          contents: [{ type: "text", text: "📋 補打卡申請待簽核", weight: "bold", color: "#FFFFFF", size: "md" }],
+        },
+        body: { type: "box", layout: "vertical", paddingAll: "14px", spacing: "sm", contents: bodyContents },
+        ...(footer.length ? { footer: { type: "box", layout: "vertical", paddingAll: "12px", contents: footer } } : {}),
+      },
+    };
+  }
+  const isApproved = type === "approved";
+  const icon = isApproved ? "✅" : "❌";
+  const statusText = isApproved ? "已核准" : "已拒絕";
+  const typeLabel: Record<string, string> = {
+    clock_in: "更正上班", clock_out: "更正下班", both: "上下班均更正", missing: "補登打卡",
+  };
+  const label = typeLabel[details.correction_type || ""] || details.correction_type || "補打卡";
+
+  const bodyContents: object[] = [row("申請類型", label)];
+  if (details.requested_clock_in) {
+    bodyContents.push(row("申請上班", new Date(details.requested_clock_in).toLocaleString("zh-TW", { timeZone: "Asia/Taipei", hour12: false })));
+  }
+  if (details.requested_clock_out) {
+    bodyContents.push(row("申請下班", new Date(details.requested_clock_out).toLocaleString("zh-TW", { timeZone: "Asia/Taipei", hour12: false })));
+  }
+  if (!isApproved && details.rejection_reason) {
+    bodyContents.push(row("拒絕原因", details.rejection_reason, "#C53030"));
+  }
+
+  return {
+    type: "flex",
+    altText: `${icon} 補打申請${statusText}`,
+    contents: {
+      type: "bubble", size: "kilo",
+      header: {
+        type: "box", layout: "vertical", backgroundColor: isApproved ? "#276749" : "#C53030", paddingAll: "14px",
+        contents: [{ type: "text", text: `${icon} 補打申請${statusText}`, weight: "bold", color: "#FFFFFF", size: "md" }],
+      },
+      body: {
+        type: "box", layout: "vertical", paddingAll: "14px", spacing: "sm",
+        contents: bodyContents,
+      },
+    },
+  };
+}
+
+// ── 4.5 商品調撥通知 ─────────────────────────────────────────
+function buildGoodsTransferNotification(
+  type:
+    | "step_assigned" | "approved" | "rejected" | "receipt_pending"
+    // 加簽 4 種
+    | "extra_assigned" | "extra_approved_back" | "extra_rejected_back" | "extra_cancelled_info",
+  details: {
+    document_no: string; applicant_name?: string;
+    transfer_type_label?: string; from_label?: string; to_label?: string;
+    items_count?: number; step_label?: string; stage?: string;
+    rejection_reason?: string;
+    // 加簽用
+    extra_step_id?: number; reason?: string; requested_by_name?: string; assignee_name?: string;
+    // 用來組 LIFF URL（per-user 從 employee_line_accounts 解出來，由 dispatch 注入）
+    id?: number; liff_id?: string | null;
+  }
+) {
+  const palette = {
+    step_assigned:        { color: "#E67E22", icon: "📦", title: "新調撥單待簽核" },
+    approved:             { color: "#27AE60", icon: "✅", title: "調撥單已完成" },
+    rejected:             { color: "#C53030", icon: "❌", title: "調撥單已駁回" },
+    receipt_pending:      { color: "#3182CE", icon: "📦", title: "請填驗收實收數量" },
+    extra_assigned:       { color: "#8b5cf6", icon: "✍️", title: "請你加簽商品調撥單" },
+    extra_approved_back:  { color: "#27AE60", icon: "✅", title: "加簽人已簽核，請繼續" },
+    extra_rejected_back:  { color: "#C53030", icon: "❌", title: "加簽人退回此單" },
+    extra_cancelled_info: { color: "#9CA3AF", icon: "🚫", title: "加簽請求已取消" },
+  }[type];
+
+  // LIFF URL（給 receipt_pending / step_assigned 開單據詳情用）
+  // liff_id 從 dispatch 端注入（per-user 從 employee_line_accounts 解）
+  const liffUrl = (details.id && details.liff_id)
+    ? `https://liff.line.me/${details.liff_id}?to=${encodeURIComponent(`/transfer-request?id=${details.id}`)}`
+    : null;
+
+  const bodyContents: object[] = [
+    row("單號", details.document_no),
+  ];
+  if (details.applicant_name) bodyContents.push(row("申請人", details.applicant_name));
+  if (details.transfer_type_label) bodyContents.push(row("類型", details.transfer_type_label));
+  if (details.from_label && details.to_label) bodyContents.push(row("路線", `${details.from_label} → ${details.to_label}`));
+  if (details.items_count) bodyContents.push(row("項數", `${details.items_count} 項商品`));
+  if (details.step_label && type === "step_assigned") bodyContents.push(row("關卡", details.step_label));
+  if (type === "rejected" && details.rejection_reason) bodyContents.push(row("原因", details.rejection_reason, "#C53030"));
+
+  // 加簽資訊
+  if (type === "extra_assigned") {
+    if (details.requested_by_name) bodyContents.push(row("發起人", details.requested_by_name));
+    if (details.reason) bodyContents.push(row("加簽原因", details.reason));
+  }
+  if (type === "extra_approved_back" && details.assignee_name) {
+    bodyContents.push(row("加簽人", details.assignee_name));
+  }
+  if (type === "extra_rejected_back" && details.rejection_reason) {
+    bodyContents.push(row("退回原因", details.rejection_reason, "#C53030"));
+  }
+
+  // ── 底部按鈕 ──
+  const footerButtons: object[] = [];
+  const sid = details.id;
+  if (type === "step_assigned" && sid) {
+    footerButtons.push(
+      { type: "button", style: "primary", color: "#16a34a", height: "sm",
+        action: { type: "postback", label: "✅ 核准",
+          data: `action=approve&type=request&rt=goods_transfer&id=${sid}`,
+          displayText: "核准" } },
+      { type: "button", style: "primary", color: "#dc2626", height: "sm",
+        action: { type: "postback", label: "❌ 駁回",
+          data: `action=reject&type=request&rt=goods_transfer&id=${sid}`,
+          displayText: "駁回" } },
+    );
+  }
+  if (type === "extra_assigned" && details.extra_step_id) {
+    footerButtons.push(
+      { type: "button", style: "primary", color: "#16a34a", height: "sm",
+        action: { type: "postback", label: "✅ 同意加簽",
+          data: `action=approve&type=extra&extra_id=${details.extra_step_id}`,
+          displayText: "同意" } },
+      { type: "button", style: "primary", color: "#dc2626", height: "sm",
+        action: { type: "postback", label: "❌ 退回",
+          data: `action=reject&type=extra&extra_id=${details.extra_step_id}`,
+          displayText: "退回" } },
+    );
+  }
+  if ((type === "receipt_pending" || type === "extra_approved_back") && liffUrl) {
+    footerButtons.push({
+      type: "button", style: "primary", color: palette.color, height: "sm",
+      action: { type: "uri", label: type === "receipt_pending" ? "📝 填驗收" : "✍️ 繼續簽核", uri: liffUrl }
+    });
+  }
+  if (liffUrl && (type === "step_assigned" || type === "rejected" || type === "approved")) {
+    footerButtons.push({ type: "button", style: "link", height: "sm",
+      action: { type: "uri", label: "📋 看詳情", uri: liffUrl } });
+  }
+
+  return {
+    type: "flex",
+    altText: `${palette.icon} ${palette.title} — ${details.document_no}`,
+    contents: {
+      type: "bubble", size: "kilo",
+      header: {
+        type: "box", layout: "vertical", backgroundColor: palette.color, paddingAll: "14px",
+        contents: [{ type: "text", text: `${palette.icon} ${palette.title}`, weight: "bold", color: "#FFFFFF", size: "md" }],
+      },
+      body: {
+        type: "box", layout: "vertical", paddingAll: "14px", spacing: "sm",
+        contents: bodyContents,
+      },
+      ...(footerButtons.length
+        ? { footer: { type: "box", layout: "vertical", spacing: "sm", paddingAll: "12px", contents: footerButtons } }
+        : {}),
+    },
+  };
+}
+
+// ── 5. 班表發佈 → 通知員工（含班次明細）─────────────────────
+function buildScheduleNotification(details: {
+  store_name: string; week_start: string; week_end: string;
+  shifts: { date: string; start_time: string; end_time: string }[];
+}) {
+  const shiftRows: object[] = details.shifts.length > 0
+    ? details.shifts.map(s => ({
+        type: "box", layout: "horizontal",
+        contents: [
+          { type: "text", text: s.date.slice(5), size: "sm", color: "#888888", flex: 2 },
+          { type: "text", text: `${(s.start_time || "").slice(0, 5)} – ${(s.end_time || "").slice(0, 5)}`, size: "sm", weight: "bold", flex: 5 },
+        ],
+      }))
+    : [{ type: "text", text: "本週無排班", size: "sm", color: "#888888" }];
+
+  return {
+    type: "flex",
+    altText: `📅 新班表已發佈: ${details.store_name} ${details.week_start}`,
+    contents: {
+      type: "bubble", size: "kilo",
+      header: {
+        type: "box", layout: "vertical", backgroundColor: "#2B6CB0", paddingAll: "14px",
+        contents: [
+          { type: "text", text: "📅 新班表已發佈", weight: "bold", color: "#FFFFFF", size: "md" },
+          { type: "text", text: `${details.store_name} | ${details.week_start} ~ ${details.week_end}`, size: "xs", color: "#BEE3F8", marginTop: "4px" },
+        ],
+      },
+      body: {
+        type: "box", layout: "vertical", paddingAll: "14px", spacing: "sm",
+        contents: [
+          { type: "text", text: "您的班次", size: "sm", weight: "bold", color: "#2D3748" },
+          { type: "separator", margin: "sm" },
+          ...shiftRows,
+        ],
+      },
+      footer: {
+        type: "box", layout: "vertical", paddingAll: "10px", backgroundColor: "#F7FAFC",
+        contents: [{
+          type: "button", style: "link", height: "sm",
+          action: { type: "message", label: "查看完整班表", text: "/任務 列表" },
+        }],
+      },
+    },
+  };
+}
+
+// ── 6. 任務自動開始通知（對齊 src/lib/lineNotify.js notifyTaskAssignee 格式）────
+// rich version：📋 任務通知 header + 完整 body + 「回報完成」+「查看任務」雙按鈕
+function buildTaskAutoStarted(details: {
+  task_id?: number;
+  task_title?: string;
+  assignee_name?: string;
+  initiated_by?: string;  // 流程發起人（可能與負責人不同）
+  department?: string;
+  store?: string;
+  workflow_name?: string;
+  due_date?: string;      // YYYY-MM-DD
+  due_time?: string;      // HH:MM
+  description?: string;
+  notes?: string;
+  completed_tasks?: string[];
+  bindings?: Array<{ label?: string; required_status?: string }>;
+  step_order?: number;
+  total_steps?: number;
+  liff_id?: string | null;
+}) {
+  const LC = {
+    brand: '#06b6d4', success: '#10b981', warning: '#f59e0b',
+    danger: '#ef4444', muted: '#666666', dark: '#444444', soft: '#8c8c8c',
+  };
+
+  // 到期 label（Asia/Taipei，MM/DD HH:MM）
+  // due_date / due_time 都是「台灣本地時間」字串，不過 Date 直接格式化，
+  // 避免 Deno UTC runtime 用 getHours() 拿到偏移後的時間。
+  let dueLabel = '未設定';
+  let isOverdue = false;
+  if (details.due_date) {
+    const rawDate = String(details.due_date).slice(0, 10);          // YYYY-MM-DD
+    const dm = rawDate.match(/^\d{4}-(\d{2})-(\d{2})/);
+    const rawTime = String(details.due_time || '17:00');
+    const tm = rawTime.match(/^(\d{1,2}):(\d{1,2})/);
+    const hh = tm ? tm[1].padStart(2, '0') : '17';
+    const mi = tm ? tm[2].padStart(2, '0') : '00';
+    if (dm) {
+      dueLabel = `${dm[1]}/${dm[2]} ${hh}:${mi}`;
+      // overdue 用 +08:00 ISO 字串建 Date（new Date 內部是 UTC ms，比較是正確的）
+      const dt = new Date(`${rawDate}T${hh}:${mi}:00+08:00`);
+      if (!isNaN(dt.getTime())) isOverdue = dt < new Date();
+    }
+  }
+
+  // 姓名 | 部門 | 門市
+  const infoParts = [details.assignee_name, details.department, details.store].filter((x) => x && String(x).trim());
+  const infoLine = infoParts.join('  |  ');
+
+  // body contents
+  const body: any[] = [
+    { type: 'text', text: details.task_title || '未命名任務', weight: 'bold', size: 'sm', wrap: true },
+    {
+      type: 'text', text: `到期：${dueLabel}`, size: 'sm', wrap: true,
+      color: isOverdue ? LC.danger : LC.muted,
+      weight: isOverdue ? 'bold' : 'regular',
+    },
+  ];
+  if (infoLine) body.push({ type: 'text', text: infoLine, size: 'sm', color: LC.muted, wrap: true });
+  if (details.initiated_by) body.push({ type: 'text', text: `發起人：${details.initiated_by}`, size: 'sm', color: LC.muted });
+  if (details.workflow_name) body.push({ type: 'text', text: `流程：${details.workflow_name}`, size: 'sm', color: LC.muted });
+  if (details.total_steps != null) {
+    const stepNum = (details.step_order ?? 0) + 1;
+    body.push({ type: 'text', text: `步驟：第 ${stepNum} 步 / 共 ${details.total_steps} 步`, size: 'sm', color: LC.brand });
+  }
+  if (Array.isArray(details.completed_tasks) && details.completed_tasks.length > 0) {
+    body.push({ type: 'text', text: `前置已完成：${details.completed_tasks.join('、')}`, size: 'xs', color: LC.soft, wrap: true });
+  }
+  const desc = details.description && String(details.description).trim();
+  if (desc) {
+    body.push({ type: 'separator', margin: 'sm' });
+    body.push({ type: 'text', text: desc, size: 'sm', color: LC.dark, wrap: true, margin: 'sm' });
+  }
+  const note = details.notes && String(details.notes).trim();
+  if (note) {
+    body.push({ type: 'separator', margin: 'sm' });
+    body.push({ type: 'text', text: '📌 備註', size: 'sm', color: LC.soft, margin: 'sm' });
+    body.push({ type: 'text', text: note, size: 'sm', color: LC.dark, wrap: true });
+  }
+
+  // 需完成表單清單（步驟綁定，執行人填的）
+  const bindings = Array.isArray(details.bindings) ? details.bindings : [];
+  if (bindings.length > 0) {
+    body.push({ type: 'separator', margin: 'sm' });
+    body.push({ type: 'text', text: `📋 需完成表單（${bindings.length}）`, size: 'sm', color: LC.dark, weight: 'bold', margin: 'sm' });
+    for (const b of bindings) {
+      body.push({
+        type: 'box', layout: 'horizontal', spacing: 'sm',
+        contents: [
+          { type: 'text', text: '•', size: 'sm', color: LC.brand, flex: 0 },
+          { type: 'text', text: b.label || '未命名表單', size: 'sm', color: LC.dark, wrap: true, flex: 1 },
+        ],
+      });
+    }
+  }
+
+  // footer 雙按鈕（只在有 task_id 時建 LIFF URL）
+  const taskId = details.task_id;
+  const liffUrl = taskId ? buildLiffTaskUrl(taskId, details.liff_id || null) : null;
+  const hasForms = bindings.length > 0;
+  const footer = liffUrl ? {
+    type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '14px',
+    contents: [
+      { type: 'button', style: 'primary', height: 'sm', color: LC.success,
+        action: { type: 'postback', label: '回報完成', data: `action=complete&type=task&id=${taskId}`, displayText: '回報完成' } },
+      { type: 'button', style: hasForms ? 'primary' : 'secondary', height: 'sm', color: hasForms ? LC.brand : undefined,
+        action: { type: 'uri', label: hasForms ? '查看任務 / 填表單' : '查看任務', uri: liffUrl } },
+    ],
+  } : undefined;
+
+  // header（含 optional 逾期 badge）
+  const headerContents: any[] = [
+    { type: 'text', text: '📋 任務通知', color: '#FFFFFF', weight: 'bold', size: 'md', flex: 1 },
+  ];
+  if (isOverdue) {
+    headerContents.push({
+      type: 'box', layout: 'vertical', backgroundColor: LC.danger, cornerRadius: '4px',
+      paddingTop: '3px', paddingBottom: '3px', paddingStart: '8px', paddingEnd: '8px',
+      contents: [{ type: 'text', text: '⚠️ 逾期', color: '#ffffff', size: 'xxs', weight: 'bold' }],
+    });
+  }
+
+  return {
+    type: 'flex',
+    altText: `${isOverdue ? '⚠️ [逾期] ' : ''}📋 任務通知：${details.task_title || ''}`,
+    contents: {
+      type: 'bubble', size: 'kilo',
+      header: {
+        type: 'box', layout: 'vertical', backgroundColor: LC.brand, paddingAll: '14px',
+        contents: [{ type: 'box', layout: 'horizontal', alignItems: 'center', contents: headerContents }],
+      },
+      body: { type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '14px', contents: body },
+      ...(footer ? { footer } : {}),
+    },
+  };
+}
+
+// ── task_mentioned：在任務備註 @tag 某人，通知被 tag 的員工 ─────
+function buildTaskMentioned(details: {
+  task_id?: number;
+  task_title?: string;
+  author?: string;
+  content?: string;
+  liff_id?: string | null;
+}) {
+  const url = details.task_id && details.liff_id
+    ? buildLiffTaskUrl(details.task_id, details.liff_id)
+    : null;
+  const snippet = details.content ? (details.content.length > 80 ? details.content.slice(0, 80) + '…' : details.content) : '';
+  return {
+    type: "flex",
+    altText: `💬 ${details.author || '有人'} 在任務中提到您`,
+    contents: {
+      type: "bubble", size: "kilo",
+      header: {
+        type: "box", layout: "vertical", backgroundColor: "#2563EB", paddingAll: "14px",
+        contents: [
+          { type: "text", text: `💬 ${details.author || '有人'} 提到您`, weight: "bold", color: "#FFFFFF", size: "md" },
+        ],
+      },
+      body: {
+        type: "box", layout: "vertical", paddingAll: "14px", spacing: "sm",
+        contents: [
+          row("任務", details.task_title || '（未命名）'),
+          ...(snippet ? [row("內容", snippet)] : []),
+        ],
+      },
+      ...(url ? {
+        footer: {
+          type: "box", layout: "vertical", paddingAll: "10px", backgroundColor: "#F7FAFC",
+          contents: [{
+            type: "button", style: "primary", color: "#2563EB", height: "sm",
+            action: { type: "uri", label: "前往任務", uri: url },
+          }],
+        },
+      } : {}),
+    },
+  };
+}
+
+// ── interview_completed：面試官打完成績，通知負責 HR ─────
+function buildInterviewCompleted(details: {
+  candidate_id?: number;
+  candidate_name?: string;
+  interview_id?: number;
+  round?: string;
+  result?: string;
+  score?: number | null;
+  note?: string;
+  interviewer_name?: string;
+  job_id?: number;
+  liff_id?: string | null;
+}) {
+  const LC = {
+    brand: '#06b6d4', success: '#10b981', danger: '#ef4444',
+    muted: '#666666', dark: '#444444', soft: '#8c8c8c',
+  };
+  const passed = details.result === '通過';
+  const headerColor = passed ? LC.success : LC.danger;
+  const emoji = passed ? '✅' : '❌';
+
+  const body: any[] = [
+    { type: 'text', text: details.candidate_name || '未命名候選人',
+      weight: 'bold', size: 'lg', wrap: true, color: LC.dark },
+    { type: 'box', layout: 'horizontal', spacing: 'sm', margin: 'sm',
+      contents: [
+        { type: 'text', text: '輪次', size: 'xs', color: LC.muted, flex: 2 },
+        { type: 'text', text: details.round || '—', size: 'sm', color: LC.dark, flex: 5 },
+      ] },
+    { type: 'box', layout: 'horizontal', spacing: 'sm', margin: 'sm',
+      contents: [
+        { type: 'text', text: '結果', size: 'xs', color: LC.muted, flex: 2 },
+        { type: 'text', text: `${emoji} ${details.result || '—'}`,
+          size: 'sm', weight: 'bold', color: headerColor, flex: 5 },
+      ] },
+  ];
+  if (details.score != null) {
+    body.push({ type: 'box', layout: 'horizontal', spacing: 'sm', margin: 'sm',
+      contents: [
+        { type: 'text', text: '評分', size: 'xs', color: LC.muted, flex: 2 },
+        { type: 'text', text: `${details.score} / 5`, size: 'sm', weight: 'bold', color: LC.brand, flex: 5 },
+      ] });
+  }
+  if (details.interviewer_name) {
+    body.push({ type: 'box', layout: 'horizontal', spacing: 'sm', margin: 'sm',
+      contents: [
+        { type: 'text', text: '面試官', size: 'xs', color: LC.muted, flex: 2 },
+        { type: 'text', text: details.interviewer_name, size: 'sm', color: LC.dark, flex: 5 },
+      ] });
+  }
+  if (details.note) {
+    body.push({ type: 'separator', margin: 'md' });
+    body.push({
+      type: 'box', layout: 'vertical', paddingAll: '8px', cornerRadius: '6px',
+      backgroundColor: '#F9FAFB',
+      contents: [
+        { type: 'text', text: '📝 面試官備註', size: 'xxs', color: LC.muted, weight: 'bold' },
+        { type: 'text', text: details.note, size: 'sm', color: LC.dark, wrap: true, margin: 'xs' },
+      ],
+    });
+  }
+
+  // 進招募管理頁開該候選人
+  const candidateUrl = details.candidate_id && details.liff_id
+    ? `https://liff.line.me/${details.liff_id}?to=${encodeURIComponent('/recruitment?candidate=' + details.candidate_id)}`
+    : null;
+
+  const footer = candidateUrl ? {
+    type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '12px',
+    contents: [{
+      type: 'button',
+      action: { type: 'uri', label: '查看候選人 / 安排下一輪', uri: candidateUrl },
+      style: 'primary', color: LC.brand, height: 'sm',
+    }],
+  } : undefined;
+
+  return {
+    type: 'flex',
+    altText: `${emoji} 面試結果：${details.candidate_name || ''}（${details.round || ''}）${details.result || ''}`,
+    contents: {
+      type: 'bubble', size: 'kilo',
+      header: {
+        type: 'box', layout: 'vertical', backgroundColor: headerColor, paddingAll: '14px',
+        contents: [
+          { type: 'text', text: '📋 面試結果通知', color: '#FFFFFF', weight: 'bold', size: 'md' },
+        ],
+      },
+      body: {
+        type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '16px', contents: body,
+      },
+      ...(footer ? { footer } : {}),
+    },
+  };
+}
+
+// ── task_with_bindings_assigned：任務剛被綁表單時，列出需完成的表單清單 ─────
+function buildTaskWithBindingsAssigned(details: {
+  task_id?: number;
+  task_title?: string;
+  workflow_name?: string;
+  due_date?: string;
+  due_time?: string;
+  store?: string;
+  bindings?: Array<{ label?: string; required_status?: string }>;
+  liff_id?: string | null;
+}) {
+  const LC = {
+    brand: '#06b6d4', success: '#10b981', warning: '#f59e0b',
+    danger: '#ef4444', muted: '#666666', dark: '#444444', soft: '#8c8c8c',
+  };
+
+  // 到期 label（同 buildTaskAutoStarted：不過 Date 直接格式化避免 Deno UTC 偏移）
+  let dueLabel = '未設定';
+  let isOverdue = false;
+  if (details.due_date) {
+    const rawDate = String(details.due_date).slice(0, 10);
+    const dm = rawDate.match(/^\d{4}-(\d{2})-(\d{2})/);
+    const rawTime = String(details.due_time || '17:00');
+    const tm = rawTime.match(/^(\d{1,2}):(\d{1,2})/);
+    const hh = tm ? tm[1].padStart(2, '0') : '17';
+    const mi = tm ? tm[2].padStart(2, '0') : '00';
+    if (dm) {
+      dueLabel = `${dm[1]}/${dm[2]} ${hh}:${mi}`;
+      const dt = new Date(`${rawDate}T${hh}:${mi}:00+08:00`);
+      if (!isNaN(dt.getTime())) isOverdue = dt < new Date();
+    }
+  }
+
+  const body: any[] = [
+    { type: 'text', text: details.task_title || '未命名任務', weight: 'bold', size: 'sm', wrap: true },
+    {
+      type: 'text', text: `到期：${dueLabel}`, size: 'sm', wrap: true,
+      color: isOverdue ? LC.danger : LC.muted,
+      weight: isOverdue ? 'bold' : 'regular',
+    },
+  ];
+  if (details.store) body.push({ type: 'text', text: `門市：${details.store}`, size: 'sm', color: LC.muted });
+  if (details.workflow_name) body.push({ type: 'text', text: `流程：${details.workflow_name}`, size: 'sm', color: LC.muted });
+
+  // bindings 清單
+  const bindings = Array.isArray(details.bindings) ? details.bindings : [];
+  if (bindings.length > 0) {
+    body.push({ type: 'separator', margin: 'sm' });
+    body.push({ type: 'text', text: `📋 需完成表單（${bindings.length}）`, size: 'sm', color: LC.dark, weight: 'bold', margin: 'sm' });
+    for (const b of bindings) {
+      body.push({
+        type: 'box', layout: 'horizontal', spacing: 'sm',
+        contents: [
+          { type: 'text', text: '•', size: 'sm', color: LC.brand, flex: 0 },
+          { type: 'text', text: b.label || '未命名表單', size: 'sm', color: LC.dark, wrap: true, flex: 1 },
+        ],
+      });
+    }
+  }
+
+  const taskId = details.task_id;
+  const liffUrl = taskId ? buildLiffTaskUrl(taskId, details.liff_id || null) : null;
+  const footer = liffUrl ? {
+    type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '14px',
+    contents: [
+      { type: 'button', style: 'primary', height: 'sm', color: LC.brand,
+        action: { type: 'uri', label: '查看任務 / 填表單', uri: liffUrl } },
+    ],
+  } : undefined;
+
+  return {
+    type: 'flex',
+    altText: `📋 新任務（含需填表單）：${details.task_title || ''}`,
+    contents: {
+      type: 'bubble', size: 'kilo',
+      header: {
+        type: 'box', layout: 'vertical', backgroundColor: LC.brand, paddingAll: '14px',
+        contents: [{ type: 'text', text: '📋 任務通知（含需填表單）', color: '#FFFFFF', weight: 'bold', size: 'md' }],
+      },
+      body: { type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '14px', contents: body },
+      ...(footer ? { footer } : {}),
+    },
+  };
+}
+
+// ── form_binding_fill_assigned：被指派去填某張任務綁定表單 ──────────────
+function buildFormBindingFillNotification(details: {
+  binding_id?: number;
+  form_label?: string;
+  form_type?: string;
+  task_id?: number;
+  task_title?: string;
+  due_date?: string;
+  due_time?: string;
+  store?: string;
+  liff_id?: string | null;
+}) {
+  const LC = {
+    brand: '#06b6d4', danger: '#ef4444', muted: '#666666', dark: '#444444',
+  };
+
+  let dueLabel = '未設定';
+  let isOverdue = false;
+  if (details.due_date) {
+    const rawDate = String(details.due_date).slice(0, 10);
+    const dm = rawDate.match(/^\d{4}-(\d{2})-(\d{2})/);
+    const rawTime = String(details.due_time || '17:00');
+    const tm = rawTime.match(/^(\d{1,2}):(\d{1,2})/);
+    const hh = tm ? tm[1].padStart(2, '0') : '17';
+    const mi = tm ? tm[2].padStart(2, '0') : '00';
+    if (dm) {
+      dueLabel = `${dm[1]}/${dm[2]} ${hh}:${mi}`;
+      const dt = new Date(`${rawDate}T${hh}:${mi}:00+08:00`);
+      if (!isNaN(dt.getTime())) isOverdue = dt < new Date();
+    }
+  }
+
+  const body: any[] = [
+    { type: 'text', text: details.form_label || '指派表單', weight: 'bold', size: 'md', wrap: true, color: LC.brand },
+    { type: 'text', text: `任務：${details.task_title || '未命名任務'}`, size: 'sm', wrap: true, color: LC.dark },
+    {
+      type: 'text', text: `到期：${dueLabel}`, size: 'sm', wrap: true,
+      color: isOverdue ? LC.danger : LC.muted,
+      weight: isOverdue ? 'bold' : 'regular',
+    },
+  ];
+  if (details.store) body.push({ type: 'text', text: `門市：${details.store}`, size: 'sm', color: LC.muted });
+
+  const taskId = details.task_id;
+  const liffUrl = taskId ? buildLiffTaskUrl(taskId, details.liff_id || null) : null;
+  const footer = liffUrl ? {
+    type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '14px',
+    contents: [
+      { type: 'button', style: 'primary', height: 'sm', color: LC.brand,
+        action: { type: 'uri', label: '前往填寫', uri: liffUrl } },
+    ],
+  } : undefined;
+
+  return {
+    type: 'flex',
+    altText: `📝 請你填寫表單：${details.form_label || ''}`,
+    contents: {
+      type: 'bubble', size: 'kilo',
+      header: {
+        type: 'box', layout: 'vertical', backgroundColor: LC.brand, paddingAll: '14px',
+        contents: [{ type: 'text', text: '📝 請你填寫表單', color: '#FFFFFF', weight: 'bold', size: 'md' }],
+      },
+      body: { type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '14px', contents: body },
+      ...(footer ? { footer } : {}),
+    },
+  };
+}
+
+// ── approval_delegated：代簽通知 — 你正在代理某人的簽核 ───────────────────
+const CUR_SYM: Record<string, string> = { TWD: 'NT$', USD: 'US$', JPY: '¥', CNY: '¥', EUR: '€', NZD: 'NZ$', AUD: 'A$' };
+function buildApprovalDelegatedNotification(details: {
+  delegator_name?: string;
+  reason?: string;
+  effective_from?: string;
+  effective_to?: string;
+  rt?: string;
+  request_id?: number;
+  doc_label?: string;
+  title?: string;
+  applicant_name?: string;
+  applicant_dept?: string;
+  amount?: number;
+  currency?: string;
+  summary?: string;
+  store?: string;
+  step_name?: string;
+  due_date?: string;
+  due_time?: string;
+  liff_to?: string;
+  liff_id?: string | null;
+}) {
+  const BRAND = '#8b5cf6';
+  // LINE postback approve 支援的 rt(postback-approval.ts);不支援的不放核准鈕
+  const APPROVE_RT = ['leave', 'overtime', 'trip', 'expense', 'expense_request', 'expense_settle', 'correction', 'off_request', 'goods_transfer', 'form_submission'];
+
+  const period = `${(details.effective_from || '').slice(5).replace('-', '/')}–${details.effective_to ? details.effective_to.slice(5).replace('-', '/') : '長期'}`;
+  const sym = CUR_SYM[details.currency || 'TWD'] || (details.currency ?? 'NT$');
+
+  let dueLabel = ''; let isOverdue = false;
+  if (details.due_date) {
+    const rawDate = String(details.due_date).slice(0, 10);
+    const dm = rawDate.match(/^\d{4}-(\d{2})-(\d{2})/);
+    const tm = String(details.due_time || '17:00').match(/^(\d{1,2}):(\d{1,2})/);
+    const hh = tm ? tm[1].padStart(2, '0') : '17'; const mi = tm ? tm[2].padStart(2, '0') : '00';
+    if (dm) { dueLabel = `${dm[1]}/${dm[2]} ${hh}:${mi}`; const dt = new Date(`${rawDate}T${hh}:${mi}:00+08:00`); if (!isNaN(dt.getTime())) isOverdue = dt < new Date(); }
+  }
+
+  const applicantLine = [details.applicant_name, details.applicant_dept].filter(Boolean).join(' · ');
+  const id = details.request_id;
+  const rt = details.rt || 'expense_request';
+  const docLabel = details.doc_label || '簽核';
+
+  const bodyContents: object[] = [
+    // 代理人資訊區
+    row('代替', details.delegator_name || '—', BRAND),
+    row('期間', `${period}${details.reason ? ` · ${details.reason}` : ''}`),
+    { type: 'separator', margin: 'sm' },
+    // 單據資訊區
+    row('類型', `${docLabel}　#${id ?? '—'}`),
+    ...(applicantLine ? [row('申請人', applicantLine)] : []),
+    ...(details.summary ? [row('內容', details.summary)] : []),
+    ...(details.amount != null ? [row('金額', `${sym} ${Number(details.amount).toLocaleString()}`)] : []),
+    ...(details.store ? [row('門市', details.store)] : []),
+    ...(details.step_name ? [row('關卡', details.step_name)] : []),
+    ...(dueLabel ? [row('到期', dueLabel, isOverdue ? '#ef4444' : '#111111')] : []),
+  ];
+
+  const toPath = details.liff_to
+    || (rt === 'expense_settle' ? `/expense-request?settle_id=${id}` : rt === 'expense_request' ? `/expense-request` : `/`);
+  const liffUrl = details.liff_id ? `https://liff.line.me/${details.liff_id}?to=${encodeURIComponent(toPath)}` : null;
+  const canApprove = APPROVE_RT.includes(rt);
+
+  return {
+    type: 'flex',
+    altText: `🔄 代簽 ${docLabel}：代 ${details.delegator_name || ''} 簽 #${id ?? ''}`,
+    contents: {
+      type: 'bubble', size: 'kilo',
+      header: {
+        type: 'box', layout: 'vertical', backgroundColor: BRAND, paddingAll: '14px',
+        contents: [
+          { type: 'text', text: '🔄 代簽通知', color: '#FFFFFF', weight: 'bold', size: 'md' },
+          { type: 'text', text: docLabel, color: '#E9D5FF', size: 'sm', margin: 'xs' },
+        ],
+      },
+      body: { type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '14px', contents: bodyContents },
+      footer: {
+        type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '12px',
+        contents: [
+          ...(canApprove ? [{
+            type: 'button', style: 'primary', height: 'sm', color: BRAND,
+            action: { type: 'postback', label: '✅ 核准（代簽）', data: `action=approve&type=request&rt=${rt}&id=${id}`, displayText: '核准（代簽）' },
+          }] : []),
+          ...(liffUrl ? [{
+            type: 'button', style: canApprove ? 'secondary' : 'primary', height: 'sm',
+            ...(canApprove ? {} : { color: BRAND }),
+            action: { type: 'uri', label: '前往簽核 / 看明細', uri: liffUrl },
+          }] : []),
+        ],
+      },
+    },
+  };
+}
+
+// ── expense_settle_todo：非經常性費用申請「已核准」→ 提醒驗收單位的人去送驗收單 ──
+function buildExpenseSettleTodoNotification(details: {
+  request_id?: number;
+  applicant_name?: string;
+  title?: string;
+  amount?: number;
+  currency?: string;
+  store?: string;
+  settle_unit_label?: string;
+  liff_id?: string | null;
+}) {
+  const C = { brand: '#06b6d4', muted: '#666666', dark: '#444444' };
+  const sym = CUR_SYM[details.currency || 'TWD'] || (details.currency ?? 'NT$');
+  const row = (label: string, value: string) => ({
+    type: 'box', layout: 'baseline', spacing: 'sm', contents: [
+      { type: 'text', text: label, size: 'sm', color: C.muted, flex: 2 },
+      { type: 'text', text: value, size: 'sm', color: C.dark, flex: 5, wrap: true },
+    ],
+  });
+  const body: any[] = [
+    { type: 'text', text: '申請已核准 · 等你送驗收單', weight: 'bold', size: 'sm', wrap: true, color: C.brand },
+    { type: 'separator', margin: 'sm' },
+    row('單號', `#${details.request_id ?? ''}`),
+    ...(details.applicant_name ? [row('申請人', details.applicant_name)] : []),
+    ...(details.title ? [row('項目', details.title)] : []),
+    ...(details.amount != null ? [row('預估金額', `${sym} ${Number(details.amount).toLocaleString()}`)] : []),
+    ...(details.store ? [row('門市', details.store)] : []),
+    ...(details.settle_unit_label ? [row('驗收單位', details.settle_unit_label)] : []),
+    { type: 'separator', margin: 'sm' },
+    { type: 'text', text: '此申請已通過簽核，請前往填寫實際金額、上傳收據並送出驗收單。', size: 'xs', color: C.muted, wrap: true, margin: 'sm' },
+  ];
+  const id = details.request_id;
+  const liffUrl = details.liff_id
+    ? `https://liff.line.me/${details.liff_id}?to=${encodeURIComponent(`/expense-request?settle_id=${id}`)}`
+    : null;
+  const footer = liffUrl ? {
+    type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '14px',
+    contents: [{ type: 'button', style: 'primary', height: 'sm', color: C.brand,
+      action: { type: 'uri', label: '去送驗收單', uri: liffUrl } }],
+  } : undefined;
+  return {
+    type: 'flex',
+    altText: `🧾 待你送驗收單：${details.title || ''} #${details.request_id ?? ''}`,
+    contents: {
+      type: 'bubble', size: 'kilo',
+      header: { type: 'box', layout: 'vertical', backgroundColor: C.brand, paddingAll: '14px',
+        contents: [{ type: 'text', text: '🧾 待你送驗收單', color: '#FFFFFF', weight: 'bold', size: 'md' }] },
+      body: { type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '14px', contents: body },
+      ...(footer ? { footer } : {}),
+    },
+  };
+}
+
+// ── contract_expiry_batch：合約 + 證件到期預警彙整（推給所有 admin/manager）─
+function buildExpiryBatchNotification(alerts: any[]) {
+  const DOC_LABELS: Record<string, string> = {
+    work_permit: '工作許可', arc: '居留證', health_check: '健康檢查',
+    passport: '護照', other: '其他',
+    contract: '勞動契約', 定期勞動契約: '定期合約', 勞務承攬: '勞務承攬', 兼職: '兼職合約', 派遣: '派遣合約',
+  }
+  const label = (a: any) => DOC_LABELS[a.label] || a.label || a.alert_type
+
+  const urgent   = alerts.filter(a => a.days_remaining !== null && a.days_remaining >= 0  && a.days_remaining <= 30)
+  const warning  = alerts.filter(a => a.days_remaining !== null && a.days_remaining > 30   && a.days_remaining <= 90)
+  const expired  = alerts.filter(a => a.days_remaining !== null && a.days_remaining < 0)
+
+  const rows: object[] = []
+  if (expired.length > 0) {
+    rows.push({ type: "text", text: `❌ 已過期 ${expired.length} 件`, size: "sm", color: "#dc2626", weight: "bold" })
+    expired.slice(0, 3).forEach(a => rows.push(row(a.employee_name, `${label(a)} 已過期 ${Math.abs(a.days_remaining)} 天`, "#dc2626")))
+    if (expired.length > 3) rows.push({ type: "text", text: `…另有 ${expired.length - 3} 件，請至系統查看`, size: "xs", color: "#9CA3AF", wrap: true })
+    if (urgent.length > 0 || warning.length > 0) rows.push({ type: "separator", margin: "sm" })
+  }
+  if (urgent.length > 0) {
+    rows.push({ type: "text", text: `⚠️ 30 天內到期 ${urgent.length} 件`, size: "sm", color: "#d97706", weight: "bold" })
+    urgent.slice(0, 5).forEach(a => rows.push(row(a.employee_name, `${label(a)} 剩 ${a.days_remaining} 天`, a.days_remaining <= 7 ? "#dc2626" : "#d97706")))
+    if (urgent.length > 5) rows.push({ type: "text", text: `…另有 ${urgent.length - 5} 件`, size: "xs", color: "#9CA3AF", wrap: true })
+    if (warning.length > 0) rows.push({ type: "separator", margin: "sm" })
+  }
+  if (warning.length > 0) {
+    rows.push({ type: "text", text: `🔔 90 天內到期 ${warning.length} 件`, size: "sm", color: "#6B7280", weight: "bold" })
+    warning.slice(0, 3).forEach(a => rows.push(row(a.employee_name, `${label(a)} 剩 ${a.days_remaining} 天`)))
+  }
+  if (rows.length === 0) rows.push({ type: "text", text: "目前無到期預警項目", size: "sm", color: "#888888" })
+
+  const totalCount = expired.length + urgent.length + warning.length
+  return {
+    type: "flex",
+    altText: `🔔 HR 到期預警 — ${totalCount} 件（緊急 ${urgent.length + expired.length}）`,
+    contents: {
+      type: "bubble", size: "kilo",
+      header: {
+        type: "box", layout: "vertical", backgroundColor: urgent.length + expired.length > 0 ? "#d97706" : "#2563eb", paddingAll: "14px",
+        contents: [
+          { type: "text", text: "🔔 HR 到期預警", weight: "bold", color: "#FFFFFF", size: "md" },
+          { type: "text", text: `合約 + 外籍移工證件 | 共 ${totalCount} 件`, size: "xs", color: "#FEF3C7", margin: "xs" },
+        ],
+      },
+      body: { type: "box", layout: "vertical", paddingAll: "14px", spacing: "sm", contents: rows },
+    },
+  }
+}
+
+// ── form_submission：自訂表單通用通知（step_assigned / approved / rejected）─
+function buildFormSubmissionNotification(
+  variant: "step_assigned" | "approved" | "rejected",
+  details: {
+    submission_id: number;
+    template_name: string;
+    applicant_name: string;
+    current_step_label?: string;
+    current_step_index?: number;
+    total_steps?: number;
+    summary_fields?: Array<{ label: string; value: string }>;
+    reject_reason?: string;
+    liff_url?: string;
+  },
+) {
+  const sid = details.submission_id;
+  const isStep = variant === "step_assigned";
+  const isApproved = variant === "approved";
+  const headerColor = isStep ? "#0EA5E9" : isApproved ? "#16a34a" : "#dc2626";
+  const emoji = isStep ? "📄" : isApproved ? "✅" : "❌";
+  const headerLabel = isStep
+    ? `待你審核：${details.template_name}`
+    : isApproved
+      ? `已核准：${details.template_name}`
+      : `已退回：${details.template_name}`;
+  const altText = `${emoji} ${headerLabel} — ${details.applicant_name}`;
+
+  const summary = (details.summary_fields || []).slice(0, 5).map(f => row(f.label, f.value || "—"));
+  const stepRow = isStep && details.current_step_label
+    ? [row("關卡",
+        `第 ${(details.current_step_index ?? 0) + 1}/${details.total_steps ?? "?"} 關 · ${details.current_step_label}`,
+        "#0EA5E9")]
+    : [];
+  const reasonRow = variant === "rejected" && details.reject_reason
+    ? [
+        { type: "separator", margin: "md" },
+        { type: "text", text: "退回原因", size: "xs", color: "#9CA3AF", margin: "md" },
+        { type: "text", text: details.reject_reason, size: "sm", color: "#dc2626", wrap: true, margin: "xs" },
+      ]
+    : [];
+
+  const footerButtons: object[] = [];
+  if (isStep) {
+    footerButtons.push(
+      { type: "button", style: "primary", color: "#16a34a", height: "sm",
+        action: { type: "postback", label: "✅ 核准",
+          data: `action=approve&type=request&rt=form_submission&id=${sid}`,
+          displayText: "核准" } },
+      { type: "button", style: "primary", color: "#dc2626", height: "sm",
+        action: { type: "postback", label: "❌ 退回",
+          data: `action=reject&type=request&rt=form_submission&id=${sid}`,
+          displayText: "退回" } },
+    );
+  }
+  if (details.liff_url) {
+    footerButtons.push({ type: "button", style: "link", height: "sm",
+      action: { type: "uri", label: isStep ? "📋 看完整詳情" : "📋 看詳情", uri: details.liff_url } });
+  }
+
+  return {
+    type: "flex",
+    altText,
+    contents: {
+      type: "bubble", size: "kilo",
+      header: {
+        type: "box", layout: "vertical", backgroundColor: headerColor, paddingAll: "14px",
+        contents: [
+          { type: "text", text: `${emoji} ${headerLabel}`, weight: "bold", color: "#FFFFFF", size: "md", wrap: true },
+          { type: "text", text: `#${sid}`, size: "xs", color: "#FFFFFFAA", margin: "xs" },
+        ],
+      },
+      body: {
+        type: "box", layout: "vertical", paddingAll: "14px", spacing: "sm",
+        contents: [
+          row("申請人", details.applicant_name),
+          ...stepRow,
+          ...summary,
+          ...reasonRow,
+        ],
+      },
+      ...(footerButtons.length
+        ? { footer: { type: "box", layout: "vertical", spacing: "sm", paddingAll: "12px", contents: footerButtons } }
+        : {}),
+    },
+  };
+}
+
+// ── store_audit：門市稽核通知 ────────────────────────────────
+function buildStoreAuditNotification(
+  variant: "on_duty_assigned" | "step_assigned" | "approved" | "rejected",
+  details: {
+    audit_id: number; store_name: string; audit_date: string;
+    shift?: string | null; auditor_name?: string;
+    failed_count?: number; total_deducted?: number;
+    avg_score?: number; categories?: { name: string; score: number }[];
+    current_step_label?: string; current_step_index?: number; total_steps?: number;
+    reject_reason?: string | null; approver?: string | null;
+    liff_url?: string | null;
+  },
+) {
+  const aid = details.audit_id;
+  const isAction = variant === "on_duty_assigned" || variant === "step_assigned";
+  const isOnDuty = variant === "on_duty_assigned";
+  const isApproved = variant === "approved";
+  const headerColor = isOnDuty ? "#6366f1"
+                    : variant === "step_assigned" ? "#0EA5E9"
+                    : isApproved ? "#16a34a" : "#dc2626";
+  const emoji = isOnDuty ? "📋" : variant === "step_assigned" ? "🔍"
+              : isApproved ? "✅" : "❌";
+  const headerLabel = isOnDuty
+    ? `稽核確認：${details.store_name}`
+    : variant === "step_assigned" ? `待你簽核：${details.store_name}`
+    : isApproved ? `稽核已通過：${details.store_name}`
+    : `稽核已退回：${details.store_name}`;
+  const altText = `${emoji} ${headerLabel}`;
+
+  const bodyRows: object[] = [
+    row("門市", details.store_name),
+    row("日期", `${details.audit_date}${details.shift ? ` · ${details.shift}` : ""}`),
+    row("稽核員", details.auditor_name || "—"),
+  ];
+  if (typeof details.failed_count === "number") {
+    bodyRows.push(row("不合格項目", `${details.failed_count} 項`, details.failed_count > 0 ? "#dc2626" : "#111111"));
+  }
+  if (typeof details.total_deducted === "number" && details.total_deducted > 0) {
+    bodyRows.push(row("扣分", `${details.total_deducted} 分`, "#dc2626"));
+  }
+  // 各大項分數 + 總平均
+  if (Array.isArray(details.categories) && details.categories.length) {
+    const sc = (n: number) => n >= 80 ? "#16a34a" : n >= 60 ? "#f59e0b" : "#dc2626";
+    bodyRows.push({ type: "separator", margin: "md" });
+    if (typeof details.avg_score === "number") {
+      bodyRows.push(row("總平均", `${details.avg_score}`, sc(details.avg_score)));
+    }
+    for (const c of details.categories) {
+      bodyRows.push(row(c.name, `${c.score}`, sc(c.score)));
+    }
+  }
+  if (variant === "step_assigned" && details.current_step_label) {
+    bodyRows.push(row("關卡", `第 ${(details.current_step_index ?? 0) + 1}/${details.total_steps ?? "?"} 關 · ${details.current_step_label}`, "#0EA5E9"));
+  }
+  if (variant === "rejected" && details.reject_reason) {
+    bodyRows.push({ type: "separator", margin: "md" });
+    bodyRows.push({ type: "text", text: "退回原因", size: "xs", color: "#9CA3AF", margin: "md" });
+    bodyRows.push({ type: "text", text: details.reject_reason, size: "sm", color: "#dc2626", wrap: true, margin: "xs" });
+  }
+  if (isApproved && details.approver) {
+    bodyRows.push(row("核簽人", details.approver, "#16a34a"));
+  }
+
+  const footerButtons: object[] = [];
+  if (isAction) {
+    footerButtons.push(
+      { type: "button", style: "primary", color: "#16a34a", height: "sm",
+        action: { type: "postback", label: isOnDuty ? "✅ 確認屬實" : "✅ 核准",
+          data: `action=approve&type=request&rt=store_audit&id=${aid}`,
+          displayText: isOnDuty ? "確認" : "核准" } },
+      { type: "button", style: "primary", color: "#dc2626", height: "sm",
+        action: { type: "postback", label: "❌ 退回",
+          data: `action=reject&type=request&rt=store_audit&id=${aid}`,
+          displayText: "退回" } },
+    );
+  }
+  if (details.liff_url) {
+    footerButtons.push({ type: "button", style: "link", height: "sm",
+      action: { type: "uri", label: isAction ? "📋 看完整詳情" : "📋 看詳情", uri: details.liff_url } });
+  }
+
+  return {
+    type: "flex",
+    altText,
+    contents: {
+      type: "bubble", size: "kilo",
+      header: {
+        type: "box", layout: "vertical", backgroundColor: headerColor, paddingAll: "14px",
+        contents: [
+          { type: "text", text: `${emoji} ${headerLabel}`, weight: "bold", color: "#FFFFFF", size: "md", wrap: true },
+          { type: "text", text: `#${aid}`, size: "xs", color: "#FFFFFFAA", margin: "xs" },
+        ],
+      },
+      body: { type: "box", layout: "vertical", paddingAll: "14px", spacing: "sm", contents: bodyRows },
+      ...(footerButtons.length
+        ? { footer: { type: "box", layout: "vertical", spacing: "sm", paddingAll: "12px", contents: footerButtons } }
+        : {}),
+    },
+  };
+}
+
+// ══════════════════════════════════════════════════════════════
+// Main Handler
+// ══════════════════════════════════════════════════════════════
+
+// ── 跨部門工單通知卡 ──
+function buildWorkOrderNotification(
+  type: string,
+  details: {
+    id: number; title: string; requester_name?: string; requester_department?: string;
+    target_department?: string; assignee_name?: string; priority?: string;
+    expected_due_date?: string; scheduled_due_date?: string; reject_reason?: string;
+    liff_id?: string | null;
+  },
+) {
+  const prLabel = details.priority === "high" ? "🔴 高" : details.priority === "low" ? "🔵 低" : "🟠 中";
+  const cfgMap: Record<string, { title: string; color: string; lead: string }> = {
+    created:   { title: "📋 新工單指派", color: "#2563EB", lead: `${details.requester_department || ""}·${details.requester_name || ""} 請你部門處理` },
+    accepted:  { title: "✅ 工單已受理", color: "#2563EB", lead: `${details.target_department || ""} 已受理，排定 ${details.scheduled_due_date || "—"} 完成` },
+    completed: { title: "🎉 工單已完成", color: "#0891B2", lead: `${details.assignee_name || details.target_department || ""} 回報完成，請確認結案` },
+    rejected:  { title: "↩️ 工單被退回", color: "#DC2626", lead: `原因：${details.reject_reason || "—"}` },
+    reopened:  { title: "🔁 工單被駁回・請重做", color: "#DC2626", lead: `${details.requester_name || "申請人"} 駁回結案，原因：${details.reject_reason || "—"}` },
+    confirmed: { title: "🏁 工單已結案", color: "#16A34A", lead: `申請人已確認結案` },
+  };
+  const cfg = cfgMap[type] || { title: "工單通知", color: "#2563EB", lead: "" };
+
+  const row = (label: string, value: unknown) => ({
+    type: "box", layout: "horizontal", spacing: "sm",
+    contents: [
+      { type: "text", text: label, size: "sm", color: "#999999", flex: 2 },
+      { type: "text", text: String(value ?? "—"), size: "sm", color: "#333333", flex: 4, wrap: true, align: "end" },
+    ],
+  });
+
+  const body: any[] = [
+    { type: "text", text: details.title || "（未命名）", weight: "bold", size: "md", wrap: true },
+    ...(cfg.lead ? [{ type: "text", text: cfg.lead, size: "sm", color: "#666666", wrap: true, margin: "sm" }] : []),
+    { type: "separator", margin: "md" },
+    row("目標部門", details.target_department),
+    row("承辦人", details.assignee_name || "未指派"),
+    row("優先", prLabel),
+    row("期望完成", details.expected_due_date),
+  ];
+  if (details.scheduled_due_date && details.scheduled_due_date !== "—") body.push(row("排定完成", details.scheduled_due_date));
+
+  const footer: any[] = [];
+  if (details.liff_id) {
+    footer.push({
+      type: "button", style: "primary", color: cfg.color, height: "sm",
+      action: { type: "uri", label: "前往工單", uri: `https://liff.line.me/${details.liff_id}?to=${encodeURIComponent(`/work-orders?focus=${details.id}`)}` },
+    });
+  }
+
+  return {
+    type: "flex", altText: `${cfg.title}：${details.title || ""}`,
+    contents: {
+      type: "bubble", size: "kilo",
+      header: { type: "box", layout: "vertical", backgroundColor: cfg.color, paddingAll: "14px",
+        contents: [{ type: "text", text: cfg.title, color: "#ffffff", weight: "bold", size: "md" }] },
+      body: { type: "box", layout: "vertical", spacing: "xs", paddingAll: "14px", contents: body },
+      ...(footer.length ? { footer: { type: "box", layout: "vertical", paddingAll: "12px", contents: footer } } : {}),
+    },
+  };
+}
+
+// ── 錄取簽呈簽核卡(升級版) — pending(送簽/推進) / approved(全通過) / rejected(駁回) ──
+function buildOfferApprovalNotification(subtype: string, details: {
+  offer_id?: number; candidate_name?: string; position?: string; dept?: string;
+  salary?: number | string; current_step?: number; total_steps?: number;
+  reject_reason?: string; liff_id?: string | null;
+}) {
+  const cfg: Record<string, { color: string; icon: string; title: string }> = {
+    pending:  { color: "#E67E22", icon: "📝", title: "新錄取簽呈待簽核" },
+    approved: { color: "#22C55E", icon: "🎉", title: "錄取簽呈已全部通過" },
+    rejected: { color: "#EF4444", icon: "⛔", title: "錄取簽呈被駁回" },
+  };
+  const c = cfg[subtype] || cfg.pending;
+  const row = (label: string, value: string, valColor?: string) => ({
+    type: "box", layout: "baseline", spacing: "sm", contents: [
+      { type: "text", text: label, size: "sm", color: "#8A94A6", flex: 2 },
+      { type: "text", text: value || "—", size: "sm", color: valColor || "#2D3748", flex: 5, wrap: true, weight: "bold" },
+    ],
+  });
+  const body: any[] = [
+    row("應徵者", details.candidate_name || "—"),
+    row("職位", [details.dept, details.position].filter(Boolean).join(" · ") || "—"),
+  ];
+  if (details.salary) body.push(row("待遇", "NT$ " + Number(details.salary).toLocaleString()));
+  if (subtype === "pending" && details.total_steps) {
+    body.push(row("關卡", `第 ${details.current_step || 1} / ${details.total_steps} 關`, c.color));
+  }
+  if (subtype === "rejected" && details.reject_reason) {
+    body.push(row("駁回原因", details.reject_reason, "#EF4444"));
+  }
+
+  const liffUrl = (subtype === "pending" && details.liff_id && details.offer_id)
+    ? `https://liff.line.me/${details.liff_id}?to=${encodeURIComponent("/recruitment/offer/" + details.offer_id)}`
+    : null;
+  // 待簽核卡:卡上直接核准/退回(退回走 pending→聊天輸入原因);另附「查看完整」開 LIFF
+  const footer: any[] = [];
+  if (subtype === "pending" && details.offer_id) {
+    footer.push({
+      type: "box", layout: "horizontal", spacing: "sm", contents: [
+        { type: "button", style: "primary", color: "#22C55E", height: "sm",
+          action: { type: "postback", label: "✓ 核准", data: `action=approve&type=request&rt=offer&id=${details.offer_id}`, displayText: "核准錄取簽呈" } },
+        { type: "button", style: "primary", color: "#EF4444", height: "sm",
+          action: { type: "postback", label: "✕ 退回", data: `action=reject&type=request&rt=offer&id=${details.offer_id}`, displayText: "退回錄取簽呈" } },
+      ],
+    });
+    if (liffUrl) footer.push({
+      type: "button", style: "link", height: "sm",
+      action: { type: "uri", label: "查看完整內容", uri: liffUrl },
+    });
+  }
+
+  return {
+    type: "flex",
+    altText: `${c.icon} ${c.title}｜${details.candidate_name || ""}`,
+    contents: {
+      type: "bubble",
+      header: {
+        type: "box", layout: "vertical", paddingAll: "14px", backgroundColor: c.color,
+        contents: [{ type: "text", text: `${c.icon} ${c.title}`, weight: "bold", color: "#FFFFFF", size: "md" }],
+      },
+      body: { type: "box", layout: "vertical", spacing: "sm", paddingAll: "14px", contents: body },
+      ...(footer.length ? { footer: { type: "box", layout: "vertical", paddingAll: "12px", contents: footer } } : {}),
+    },
+  };
+}
+
+serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+
+  try {
+    const accessToken = Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN_WORKFLOW");
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+    if (!accessToken) {
+      return new Response(JSON.stringify({ error: "Missing LINE_CHANNEL_ACCESS_TOKEN_WORKFLOW" }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const db = createClient(supabaseUrl, supabaseKey);
+
+    // ── Auth check: require service_role token (any) or admin JWT ──
+    // Note: decode JWT 看 role claim，不對 env var 做 strict 字串比對 —
+    // 專案 key 輪換 / vault 跟 env 不同步時，strict 比對會誤殺 PG trigger 呼叫。
+    const authHeader = req.headers.get("Authorization");
+    if (authHeader) {
+      const token = authHeader.replace("Bearer ", "");
+      let isServiceRole = false;
+      try {
+        const parts = token.split(".");
+        if (parts.length === 3) {
+          const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+          const padded = b64 + "=".repeat((4 - b64.length % 4) % 4);
+          const payload = JSON.parse(atob(padded));
+          // anon role = PG trigger 內部呼叫（所有 trigger 均用 anon key）
+          isServiceRole = payload?.role === "service_role" || payload?.role === "anon";
+        }
+      } catch (_e) { /* fall through to user check */ }
+
+      if (!isServiceRole) {
+        const { data: { user } } = await db.auth.getUser(token);
+        if (!user) {
+          return new Response(JSON.stringify({ error: "未授權" }), {
+            status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        const { data: emp } = await db.from("employees").select("role").eq("email", user.email).single();
+        if (!emp || !["admin", "super_admin", "manager"].includes(emp.role)) {
+          return new Response(JSON.stringify({ error: "權限不足" }), {
+            status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      }
+    }
+
+    const body = await req.json();
+    const { employee_id, type, details } = body;
+
+    if (!type) {
+      return new Response(JSON.stringify({ error: "Missing type" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ── contract_expiry_batch: 合約 + 外籍移工證件到期預警 → 推給所有 admin/manager ──
+    if (type === "contract_expiry_batch") {
+      const orgId = details?.organization_id || null
+
+      // 查 v_expiry_alerts：合約 90 天內 + 已過期 7 天內、證件 90 天內 + 已過期 7 天內
+      let query = db.from("v_expiry_alerts")
+        .select("*")
+        .lte("days_remaining", 90)
+        .gte("days_remaining", -7)
+        .order("days_remaining", { ascending: true })
+      if (orgId) query = query.eq("organization_id", orgId)
+      const { data: alerts } = await query
+
+      // 無到期項目仍推一次（讓 HR 知道系統在運作）
+      const msg = buildExpiryBatchNotification(alerts || [])
+
+      // 找所有 admin / manager（有 LINE 帳號的）
+      let adminQuery = db.from("employees")
+        .select("id")
+        .in("role", ["admin", "super_admin", "manager"])
+        .eq("status", "在職")
+      if (orgId) adminQuery = adminQuery.eq("organization_id", orgId)
+      const { data: admins } = await adminQuery
+
+      let sent = 0
+      for (const admin of (admins || [])) {
+        const lineId = await resolveLineId(db, admin.id)
+        if (lineId && await pushLine(lineId, [msg], accessToken)) sent++
+      }
+
+      console.log(`[hr-notify] contract_expiry_batch: ${(alerts || []).length} alerts, sent to ${sent} admins`)
+      return new Response(JSON.stringify({ ok: true, sent, alert_count: (alerts || []).length }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      })
+    }
+
+    // ── schedule_published: broadcast to all employees with shifts ──
+    if (type === "schedule_published") {
+      const { store_name, week_start, week_end, assignments, employee_ids } = details || body;
+      if (!week_start) {
+        return new Response(JSON.stringify({ error: "Missing week_start" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const wEnd = week_end || (() => { const d = new Date(week_start); d.setDate(d.getDate() + 6); return d.toISOString().split("T")[0]; })();
+
+      // Get employee IDs to notify
+      const empIds: number[] = employee_ids || [];
+      if (empIds.length === 0 && assignments) {
+        const unique = new Set((assignments as any[]).map((a: any) => a.employee_id).filter(Boolean));
+        empIds.push(...unique);
+      }
+      if (empIds.length === 0) {
+        return new Response(JSON.stringify({ ok: true, sent: 0 }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      let sentCount = 0;
+      for (const empId of empIds) {
+        const lineId = await resolveLineId(db, empId);
+        if (!lineId) continue;
+
+        // Get this employee's shifts
+        const { data: empSchedules } = await db.from("schedules")
+          .select("date, start_time, end_time")
+          .eq("employee_id", empId)
+          .gte("date", week_start)
+          .lte("date", wEnd)
+          .order("date");
+
+        const shifts = (empSchedules || []).map((s: any) => ({
+          date: s.date, start_time: s.start_time || "", end_time: s.end_time || "",
+        }));
+
+        const msg = buildScheduleNotification({
+          store_name: store_name || "門市",
+          week_start, week_end: wEnd, shifts,
+        });
+        await pushLine(lineId, [msg], accessToken);
+        sentCount++;
+      }
+
+      return new Response(JSON.stringify({ ok: true, sent: sentCount }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // All other types require employee_id
+    if (!employee_id) {
+      return new Response(JSON.stringify({ error: "Missing employee_id" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ── leave_submitted → notify supervisor/admin ──
+    if (type === "leave_submitted") {
+      const { data: requester } = await db.from("employees")
+        .select("name, reporting_to").eq("id", employee_id).single();
+      const requesterName = requester?.name || "員工";
+
+      // 顯示時數:整天假讀班表淨時數(與計薪/LIFF 一致);沒 leave_id 就退回 days×8
+      let leaveHours: number | null = null;
+      if (details?.leave_id != null) {
+        const { data: dh } = await db.rpc("leave_display_hours", { p_leave_id: details.leave_id });
+        if (dh != null) leaveHours = Number(dh);
+      }
+
+      const message = buildLeaveSubmissionNotification({
+        leave_id: details?.leave_id, requester_name: requesterName, ...details,
+        ...(leaveHours != null ? { total_hours: leaveHours } : {}),
+      });
+
+      // Dynamic routing: ≥3 days → admins, else → supervisor
+      let approverIds: number[] = [];
+      const totalDays = Number(details?.total_days) || 1;
+
+      if (totalDays >= 3) {
+        const { data: admins } = await db.from("employees")
+          .select("id").in("role", ["admin", "super_admin"]).eq("status", "在職");
+        approverIds = admins?.map((a: any) => a.id) || [];
+      } else if (requester?.reporting_to) {
+        approverIds = [requester.reporting_to];
+      }
+
+      // Fallback
+      if (approverIds.length === 0) {
+        const { data: managers } = await db.from("employees")
+          .select("id").eq("is_manager", true).eq("status", "在職");
+        approverIds = managers?.map((a: any) => a.id) || [];
+      }
+
+      if (approverIds.length === 0) {
+        console.error(`[hr-notify] leave_submitted: 找不到審核人 (employee_id=${employee_id})`);
+        return new Response(JSON.stringify({ ok: false, error: "找不到審核人，請確認員工有設定主管或系統有管理員" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      let sent = 0;
+      const noLineIds: number[] = [];
+      for (const appId of approverIds) {
+        const lineId = await resolveLineId(db, appId);
+        if (lineId) {
+          if (await pushLine(lineId, [message], accessToken)) sent++;
+        } else {
+          noLineIds.push(appId);
+        }
+      }
+
+      if (noLineIds.length > 0) {
+        console.warn(`[hr-notify] 審核人 ${noLineIds.join(',')} 沒有綁定 LINE，通知未送達`);
+      }
+
+      return new Response(JSON.stringify({ ok: true, sent, no_line_ids: noLineIds }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ── All remaining: send to the employee_id ──
+    // 需要 liff_id 建 LIFF URL 的 type 走 resolveLineAccount
+    const needsLiff = type === "correction_step_assigned"
+      || type === "task_auto_started"
+      || type === "task_with_bindings_assigned"
+      || type === "form_binding_fill_assigned"
+      || type === "approval_delegated"
+      || type === "expense_settle_todo"
+      || type === "interview_completed"
+      || type === "task_mentioned"
+      || type === "goods_transfer_step_assigned"
+      || type === "goods_transfer_receipt_pending"
+      || type === "goods_transfer_extra_assigned"
+      || type === "goods_transfer_extra_approved_back"
+      || type === "goods_transfer_rejected"
+      || type === "goods_transfer_approved"
+      || type.startsWith("work_order_")
+      || type.startsWith("offer_approval_");
+    const acct = needsLiff ? await resolveLineAccount(db, employee_id) : null;
+    const lineUserId = acct ? acct.lineUserId : await resolveLineId(db, employee_id);
+    if (!lineUserId) {
+      console.log(`No LINE mapping for employee ${employee_id}, skipping`);
+      return new Response(JSON.stringify({ ok: true, sent: false }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    let message: object;
+
+    if (type === "leave_approved" || type === "leave_rejected") {
+      // 顯示時數:整天假讀班表淨時數;有 leave_id 才算,否則卡片自退回 days×8
+      let leaveDtl = details;
+      if (details?.leave_id != null && details.total_hours == null) {
+        const { data: dh } = await db.rpc("leave_display_hours", { p_leave_id: details.leave_id });
+        if (dh != null) leaveDtl = { ...details, total_hours: Number(dh) };
+      }
+      message = buildLeaveNotification(type === "leave_approved" ? "approved" : "rejected", leaveDtl);
+    } else if (type === "ot_approved") {
+      message = buildOtNotification("approved", details);
+    } else if (type === "ot_rejected") {
+      message = buildOtNotification("rejected", details);
+    } else if (type === "correction_step_assigned") {
+      // 撈第一張照片(form_attachments, form_type='correction')塞進卡片 hero;service_role bypassrls
+      let photoUrl: string | null = null;
+      if (details?.request_id) {
+        const { data: fa } = await db.from("form_attachments")
+          .select("storage_bucket, storage_path, mime_type")
+          .eq("form_type", "correction").eq("form_id", details.request_id)
+          .order("id", { ascending: true });
+        const img = (fa || []).find((a: any) =>
+          (a.mime_type ?? "").startsWith("image") || /\.(jpe?g|png|gif|webp|heic|heif)(\?|$)/i.test(a.storage_path || ""));
+        if (img) {
+          const { data } = db.storage.from(img.storage_bucket || "attachments").getPublicUrl(img.storage_path);
+          photoUrl = data?.publicUrl || null;
+        }
+      }
+      message = buildCorrectionNotification("step_assigned", { ...details, liff_id: acct?.liffId || null, photo_url: photoUrl });
+    } else if (type === "correction_approved") {
+      message = buildCorrectionNotification("approved", details);
+    } else if (type === "correction_rejected") {
+      message = buildCorrectionNotification("rejected", details);
+    } else if (type === "form_submission_step_assigned") {
+      message = buildFormSubmissionNotification("step_assigned", details);
+    } else if (type === "form_submission_approved") {
+      message = buildFormSubmissionNotification("approved", details);
+    } else if (type === "form_submission_rejected") {
+      message = buildFormSubmissionNotification("rejected", details);
+    } else if (type === "goods_transfer_step_assigned") {
+      message = buildGoodsTransferNotification("step_assigned", { ...details, liff_id: acct?.liffId || null });
+    } else if (type === "goods_transfer_approved") {
+      message = buildGoodsTransferNotification("approved", { ...details, liff_id: acct?.liffId || null });
+    } else if (type === "goods_transfer_rejected") {
+      message = buildGoodsTransferNotification("rejected", { ...details, liff_id: acct?.liffId || null });
+    } else if (type === "goods_transfer_receipt_pending") {
+      message = buildGoodsTransferNotification("receipt_pending", { ...details, liff_id: acct?.liffId || null });
+    } else if (type === "goods_transfer_extra_assigned") {
+      message = buildGoodsTransferNotification("extra_assigned", { ...details, liff_id: acct?.liffId || null });
+    } else if (type === "goods_transfer_extra_approved_back") {
+      message = buildGoodsTransferNotification("extra_approved_back", { ...details, liff_id: acct?.liffId || null });
+    } else if (type === "goods_transfer_extra_rejected_back") {
+      message = buildGoodsTransferNotification("extra_rejected_back", details);
+    } else if (type === "goods_transfer_extra_cancelled_info") {
+      message = buildGoodsTransferNotification("extra_cancelled_info", details);
+    } else if (type === "store_audit_on_duty_assigned") {
+      const _saUrl = acct?.liffId ? `https://liff.line.me/${acct.liffId}?to=${encodeURIComponent(`/store-audit/${details.audit_id}`)}` : null;
+      message = buildStoreAuditNotification("on_duty_assigned", { ...details, liff_url: _saUrl });
+    } else if (type === "store_audit_step_assigned") {
+      const _saUrl = acct?.liffId ? `https://liff.line.me/${acct.liffId}?to=${encodeURIComponent(`/store-audit/${details.audit_id}`)}` : null;
+      message = buildStoreAuditNotification("step_assigned", { ...details, liff_url: _saUrl });
+    } else if (type === "store_audit_approved") {
+      const _saUrl = acct?.liffId ? `https://liff.line.me/${acct.liffId}?to=${encodeURIComponent(`/store-audit/${details.audit_id}`)}` : null;
+      message = buildStoreAuditNotification("approved", { ...details, liff_url: _saUrl });
+    } else if (type === "store_audit_rejected") {
+      const _saUrl = acct?.liffId ? `https://liff.line.me/${acct.liffId}?to=${encodeURIComponent(`/store-audit/${details.audit_id}`)}` : null;
+      message = buildStoreAuditNotification("rejected", { ...details, liff_url: _saUrl });
+    } else if (type === "task_auto_started") {
+      // 補抓 task 完整欄位（trigger 只丟 task_id + 簡單 details，這裡 hydrate）
+      let enriched = { ...details, liff_id: acct?.liffId || null };
+      if (details?.task_id && !details?.due_date) {
+        const { data: task } = await db.from("tasks")
+          .select("id, title, due_date, due_time, description, notes, store, assignee, workflow_instance_id, project_id, created_by, step_order")
+          .eq("id", details.task_id).maybeSingle();
+        if (task) {
+          // 抓 workflow_instance template_name + started_by（發起人）
+          // ⚠ workflow_instances 沒有 created_by 欄,發起人存在 started_by
+          let workflowName: string | undefined = details.workflow_name;
+          let initiatedBy: string | undefined = details.initiated_by || task.created_by || undefined;
+          let totalSteps: number | undefined = undefined;
+          if (task.workflow_instance_id) {
+            const { data: inst } = await db.from("workflow_instances")
+              .select("template_name, started_by").eq("id", task.workflow_instance_id).maybeSingle();
+            if (!workflowName) workflowName = inst?.template_name || undefined;
+            if (!initiatedBy) initiatedBy = inst?.started_by || undefined;
+            // 算此流程的總任務步數
+            const { count } = await db.from("tasks")
+              .select("id", { count: "exact", head: true })
+              .eq("workflow_instance_id", task.workflow_instance_id);
+            totalSteps = count ?? undefined;
+          }
+          // 專案任務(非流程):發起人 fallback 用專案負責人
+          if (!initiatedBy && task.project_id) {
+            const { data: proj } = await db.from("projects")
+              .select("owner").eq("id", task.project_id).maybeSingle();
+            if (proj?.owner) initiatedBy = proj.owner;
+          }
+          // 抓 employee dept
+          const { data: emp } = await db.from("employees")
+            .select("name, dept").eq("id", employee_id).maybeSingle();
+          enriched = {
+            ...enriched,
+            task_id: task.id,
+            task_title: enriched.task_title || task.title,
+            due_date: task.due_date,
+            due_time: task.due_time,
+            description: task.description,
+            notes: task.notes,
+            store: task.store,
+            assignee_name: emp?.name || task.assignee,
+            department: emp?.dept,
+            workflow_name: workflowName,
+            initiated_by: initiatedBy,
+            step_order: task.step_order ?? undefined,
+            total_steps: totalSteps,
+          };
+        }
+      }
+      // 補抓 task_form_bindings（不論 enrichment 有沒有跑，都需要）
+      if (enriched.task_id && !Array.isArray(enriched.bindings)) {
+        const { data: bRows } = await db.from("task_form_bindings")
+          .select("form_label, required_status").eq("task_id", enriched.task_id).order("id");
+        if (bRows?.length) {
+          enriched.bindings = bRows.map((b: any) => ({ label: b.form_label, required_status: b.required_status }));
+        }
+      }
+      message = buildTaskAutoStarted(enriched);
+    } else if (type === "task_with_bindings_assigned") {
+      message = buildTaskWithBindingsAssigned({ ...details, liff_id: acct?.liffId || null });
+    } else if (type === "form_binding_fill_assigned") {
+      message = buildFormBindingFillNotification({ ...details, liff_id: acct?.liffId || null });
+    } else if (type === "approval_delegated") {
+      message = buildApprovalDelegatedNotification({ ...details, liff_id: acct?.liffId || null });
+    } else if (type === "expense_settle_todo") {
+      message = buildExpenseSettleTodoNotification({ ...details, liff_id: acct?.liffId || null });
+    } else if (type === "interview_completed") {
+      message = buildInterviewCompleted({ ...details, liff_id: acct?.liffId || null });
+    } else if (type === "task_mentioned") {
+      message = buildTaskMentioned({ ...details, liff_id: acct?.liffId || null });
+    } else if (type.startsWith("work_order_")) {
+      message = buildWorkOrderNotification(type.replace("work_order_", ""), { ...details, liff_id: acct?.liffId || null });
+    } else if (type.startsWith("offer_approval_")) {
+      message = buildOfferApprovalNotification(type.replace("offer_approval_", ""), { ...details, liff_id: acct?.liffId || null });
+    } else {
+      return new Response(JSON.stringify({ error: `Unknown type: ${type}` }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    await pushLine(lineUserId, [message], accessToken);
+
+    console.log(`[hr-notify] type=${type}, employee_id=${employee_id}, sent=true`);
+
+    return new Response(JSON.stringify({ ok: true, sent: true }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (err) {
+    console.error("hr-notify error:", err);
+    return new Response(JSON.stringify({ error: String(err) }), {
+      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+});

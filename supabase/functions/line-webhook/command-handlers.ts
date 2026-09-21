@@ -1,0 +1,1004 @@
+import type { SupabaseClient } from './types.ts';
+import { priorityLabel, statusLabel, PRIORITY_COLOR, STATUS_COLOR } from './constants.ts';
+import { text, pushAndLog } from './line-api.ts';
+import { resolveLineUserToEmployeeId } from './db-helpers.ts';
+import {
+  mkBtn, infoRow, withQuickReplies,
+  flexTaskList, flexGroupTaskList, flexSuccess, flexWorkflowStatus,
+} from './flex-builders.ts';
+
+// ── Workflow Completion Check ────────────────────────────────────────────────
+
+/** Check if all tasks in a workflow are done; if so, mark workflow complete and notify owner/group. */
+export async function checkWorkflowCompletion(
+  workflowInstanceId: string, db: SupabaseClient, accessToken: string,
+) {
+  // Count remaining non-completed tasks
+  const { data: remaining } = await db.from("tasks")
+    .select("id")
+    .eq("workflow_instance_id", workflowInstanceId)
+    .not("status", "in", '("completed","cancelled")')
+    .limit(1);
+
+  if (remaining && remaining.length > 0) return; // still tasks left
+
+  // All tasks done → mark workflow instance as completed
+  const { data: instance } = await db.from("workflow_instances")
+    .select("id, name, assigned_user_id, status")
+    .eq("id", workflowInstanceId)
+    .maybeSingle();
+
+  if (!instance || instance.status === "已完成") return;
+
+  await db.from("workflow_instances").update({
+    status: "已完成",
+    completed_at: new Date().toISOString(),
+  }).eq("id", workflowInstanceId);
+
+  const wfName = instance.name || "工作流程";
+  const completedAt = new Date().toLocaleString("zh-TW", { timeZone: "Asia/Taipei" });
+
+  const flexMsg = {
+    type: "flex",
+    altText: `🎊 工作流程「${wfName}」已全部完成`,
+    contents: {
+      type: "bubble",
+      size: "kilo",
+      header: {
+        type: "box", layout: "vertical", backgroundColor: "#7c3aed", paddingAll: "14px",
+        contents: [
+          { type: "text", text: wfName, color: "#e9d5ff", size: "xs" },
+          { type: "text", text: "🎊 工作流程完成", weight: "bold", color: "#FFFFFF", size: "md" },
+        ],
+      },
+      body: {
+        type: "box", layout: "vertical", spacing: "sm", paddingAll: "14px",
+        contents: [
+          { type: "text", text: wfName, weight: "bold", size: "lg", wrap: true },
+          { type: "text", text: `所有任務已完成`, size: "sm", color: "#666666" },
+          { type: "text", text: `完成時間：${completedAt}`, size: "xs", color: "#999999", margin: "sm" },
+        ],
+      },
+      footer: {
+        type: "box", layout: "vertical", paddingAll: "14px",
+        contents: [
+          {
+            type: "button", style: "primary", height: "sm", color: "#7c3aed",
+            action: { type: "message", label: "⚙️ 查看流程狀態", text: "/流程 狀態" },
+          },
+        ],
+      },
+    },
+  };
+
+  // Notify workflow owner via LINE
+  if (instance.assigned_user_id) {
+    let ownerLineId: string | null = null;
+    const { data: lu } = await db.from("line_users")
+      .select("line_user_id")
+      .eq("employee_id", instance.assigned_user_id)
+      .eq("is_verified", true)
+      .maybeSingle();
+    ownerLineId = lu?.line_user_id ?? null;
+    if (!ownerLineId) {
+      const { data: mapping } = await db.from("line_users")
+        .select("line_user_id")
+        .eq("employee_id", instance.assigned_user_id)
+        .eq("is_verified", true)
+        .maybeSingle();
+      ownerLineId = mapping?.line_user_id ?? null;
+    }
+    if (ownerLineId) {
+      await pushAndLog(ownerLineId, [flexMsg], accessToken, db, { sourceType: "system" });
+    }
+  }
+
+  // Notify assigned LINE groups
+  const { data: groupAssignments } = await db.from("workflow_instance_line_group_assignments")
+    .select("line_group_id, line_groups!inner(line_group_id)")
+    .eq("workflow_instance_id", workflowInstanceId);
+
+  if (groupAssignments) {
+    for (const ga of groupAssignments) {
+      const lineGroupId = (ga as any).line_groups?.line_group_id;
+      if (lineGroupId) {
+        await pushAndLog(lineGroupId, [flexMsg], accessToken, db, { sourceType: "group", groupId: lineGroupId });
+      }
+    }
+  }
+}
+
+// ── Task List Command ────────────────────────────────────────────────────────
+
+export async function cmdTaskList(userId: string, db: SupabaseClient, displayName?: string, isGroup = false, lineGroupId?: string | null, liffNewTaskId = "", showAll = false) {
+  let tasks: any[] | null = null;
+  const employeeId = await resolveLineUserToEmployeeId(db, userId);
+  console.log("[cmdTaskList] userId=", userId, "employeeId=", employeeId, "isGroup=", isGroup, "lineGroupId=", lineGroupId);
+
+  if (isGroup && lineGroupId) {
+    // Group chat: show all tasks from workflows assigned to this group, with assignee name
+    const { data: groupRow } = await db
+      .from("line_groups")
+      .select("id")
+      .eq("line_group_id", lineGroupId)
+      .maybeSingle();
+
+    console.log("[cmdTaskList] groupRow=", JSON.stringify(groupRow));
+    if (groupRow?.id) {
+      // Find running workflow instances directly assigned to this LINE group
+      const { data: instanceAssignments } = await db
+        .from("workflow_instance_line_group_assignments")
+        .select("workflow_instance_id")
+        .eq("line_group_id", groupRow.id);
+
+      if (instanceAssignments && instanceAssignments.length > 0) {
+        const instanceIds = instanceAssignments.map((a: any) => a.workflow_instance_id);
+        const { data: allTasks } = await db
+          .from("tasks")
+          .select("id, title, status, priority, due_date, notes, confirmation_required, assignee:employees!tasks_assignee_id_fkey(name), workflow_instance:workflow_instances(name)")
+          .in("workflow_instance_id", instanceIds)
+          .in("status", showAll ? ["pending", "in_progress", "completed", "cancelled"] : ["in_progress"])
+          .order("priority", { ascending: false })
+          .limit(10);
+        tasks = allTasks;
+      }
+    }
+    // Fall back to tasks directly assigned to this user if no workflow tasks found
+    console.log("[cmdTaskList] group workflow tasks count=", tasks?.length ?? 0);
+    if (!tasks || tasks.length === 0) {
+      console.log("[cmdTaskList] falling back to user tasks for employeeId=", employeeId);
+      if (employeeId) {
+        const { data: fallback, error: fallbackErr } = await db
+          .from("tasks")
+          .select("id, title, status, priority, due_date, notes, confirmation_required, workflow_instance:workflow_instances(name)")
+          .eq("assignee_id", employeeId)
+          .in("status", showAll ? ["pending", "in_progress", "completed", "cancelled"] : ["in_progress"])
+          .order("priority", { ascending: false })
+          .limit(10);
+        console.log("[cmdTaskList] fallback tasks=", JSON.stringify(fallback), "err=", fallbackErr);
+        tasks = fallback;
+      }
+    }
+    console.log("[cmdTaskList] returning flexGroupTaskList with", tasks?.length ?? 0, "tasks");
+    return flexGroupTaskList(tasks ?? []);
+  } else {
+    // Private chat: show tasks from workflow instances assigned to this user
+    const { data: instances } = await db
+      .from("workflow_instances")
+      .select("id")
+      .eq("assigned_user_id", userId)
+      .in("status", ["running", "paused"]);
+
+    const statusFilter = showAll ? ["pending", "in_progress", "completed", "cancelled"] : ["in_progress"];
+    if (instances && instances.length > 0) {
+      const instanceIds = instances.map((i: any) => i.id);
+      const { data: wfTasks } = await db
+        .from("tasks")
+        .select("id, title, status, priority, due_date, notes, confirmation_required, workflow_instance:workflow_instances(name)")
+        .in("workflow_instance_id", instanceIds)
+        .in("status", statusFilter)
+        .order("priority", { ascending: false })
+        .limit(10);
+      tasks = wfTasks;
+    }
+    // Fall back to tasks directly assigned to this user
+    if ((!tasks || tasks.length === 0) && employeeId) {
+      const { data: fallback } = await db
+        .from("tasks")
+        .select("id, title, status, priority, due_date, notes, confirmation_required, workflow_instance:workflow_instances(name)")
+        .eq("assignee_id", employeeId)
+        .in("status", statusFilter)
+        .order("priority", { ascending: false })
+        .limit(10);
+      tasks = fallback;
+    }
+    return flexTaskList(tasks ?? [], undefined, liffNewTaskId);
+  }
+}
+
+// ── Task Create Command ──────────────────────────────────────────────────────
+
+export async function cmdTaskCreate(userId: string, title: string, db: SupabaseClient) {
+  if (!title) {
+    // Prompt with instructions
+    return withQuickReplies(
+      {
+        type: "flex",
+        altText: "➕ 新增任務",
+        contents: {
+          type: "bubble",
+          header: {
+            type: "box",
+            layout: "vertical",
+            paddingAll: "12px",
+            backgroundColor: "#E67E22",
+            contents: [{ type: "text", text: "➕ 新增任務", color: "#FFFFFF", weight: "bold", size: "lg" }],
+          },
+          body: {
+            type: "box",
+            layout: "vertical",
+            paddingAll: "16px",
+            contents: [
+              { type: "text", text: "請輸入以下格式：", color: "#555555", size: "sm" },
+              {
+                type: "box",
+                layout: "vertical",
+                margin: "md",
+                paddingAll: "10px",
+                backgroundColor: "#F5F5F5",
+                cornerRadius: "6px",
+                contents: [
+                  { type: "text", text: "/任務 新增 [任務標題]", size: "sm", color: "#E67E22", weight: "bold" },
+                ],
+              },
+              { type: "text", text: "例如：", color: "#AAAAAA", size: "xs", margin: "md" },
+              { type: "text", text: "/任務 新增 盤點倉庫庫存", size: "sm", color: "#333333", margin: "xs" },
+              { type: "text", text: "/任務 新增 整理出貨區", size: "sm", color: "#333333", margin: "xs" },
+            ],
+          },
+        },
+      },
+      [{ label: "📋 任務列表", text: "/任務 列表" }],
+    );
+  }
+
+  const employeeId = await resolveLineUserToEmployeeId(db, userId);
+  if (!employeeId) return text("❌ 找不到您的員工資料。\n請私訊機器人輸入：\n/註冊 你的姓名\n例：/註冊 張小明");
+
+  const { error } = await db.from("tasks").insert({
+    title,
+    assignee_id: employeeId,
+    status: "待處理",
+    priority: "中",
+  });
+
+  if (error) return text(`❌ 建立失敗：${error.message}`);
+  return flexSuccess("✅", `任務已建立`, `「${title}」已加入待處理清單`);
+}
+
+// ── Task Done Command ────────────────────────────────────────────────────────
+
+export async function cmdTaskDone(rawId: string, userId: string, db: SupabaseClient, accessToken: string, groupId?: string | null, displayName?: string) {
+  const idStr = rawId.replace(/[[\]#\s]/g, "");
+  const taskId = parseInt(idStr, 10);
+  if (!taskId || Number.isNaN(taskId)) return text("請提供任務 ID。例如：/任務 #198 完成");
+
+  // userId here is actually employee_id (passed from index.ts as lineUser.employee_id).
+  // Param name is legacy — fix in caller later.
+  const employeeId = typeof userId === "number" ? userId : parseInt(String(userId), 10);
+  if (!employeeId || Number.isNaN(employeeId)) return text("❌ 找不到您的員工資料。\n請私訊機器人輸入：\n/註冊 你的姓名\n例：/註冊 張小明");
+
+  // Fetch the task and verify the user is the assignee
+  const { data: task } = await db
+    .from("tasks")
+    .select("id, title, status, assignee_id, approval_chain_id")
+    .eq("id", taskId)
+    .maybeSingle();
+
+  if (!task) return text(`❌ 找不到任務 #${taskId}。`);
+  if (task.assignee_id !== employeeId) return text(`❌ 此任務不是指派給您，無法完成。`);
+  if (task.status === "已完成") return text(`✅ 任務「${task.title}」已經是完成狀態。`);
+  if (task.status === "已取消") return text(`❌ 任務「${task.title}」已被取消。`);
+
+  // If task has an approval chain, completion needs to go through liff_complete_task_v2
+  // which sets it to 待確認 and creates task_confirmations rows
+  if (task.approval_chain_id) {
+    return text(`⚠️ 此任務需要簽核審核，請至 LIFF 任務頁完成（會建立簽核流程）。\n/任務 ${taskId}`);
+  }
+
+  // Simple completion — DB trigger _task_cascade_on_complete handles the next step
+  // (auto-progress dependents + enqueue LINE notification for the next assignee)
+  const { error: updateErr } = await db
+    .from("tasks")
+    .update({ status: "已完成", completed_at: new Date().toISOString() })
+    .eq("id", task.id);
+
+  if (updateErr) return text(`❌ 完成失敗：${updateErr.message}`);
+
+  // Cascade is now handled by DB trigger _task_cascade_on_complete
+  // (auto-progresses dependents to 進行中, enqueues LINE for next assignees).
+  // Just report what comes next as UX confirmation.
+
+  // Look up the next-up task in the same workflow instance (any status that's still active)
+  let nextTask: { title: string; assigneeName: string } | null = null;
+  if (task.workflow_instance_id) {
+    const { data: nextTasks } = await db
+      .from("tasks")
+      .select("id, title, step_order, assignee")
+      .eq("workflow_instance_id", task.workflow_instance_id)
+      .in("status", ["待處理", "進行中"])
+      .neq("id", task.id)
+      .order("step_order", { ascending: true })
+      .limit(1);
+    if (nextTasks && nextTasks.length > 0) {
+      const nt: any = nextTasks[0];
+      nextTask = { title: nt.title, assigneeName: nt.assignee ?? "—" };
+    }
+  }
+
+  const bodyContents: any[] = [
+    { type: "text", text: `✅ 「${task.title}」已標記為完成`, size: "sm", wrap: true, color: "#27AE60", weight: "bold" },
+  ];
+  if (nextTask) {
+    bodyContents.push({ type: "separator", margin: "md" });
+    bodyContents.push({ type: "text", text: "下一個任務是", size: "xs", color: "#AAAAAA", margin: "md" });
+    bodyContents.push({ type: "text", text: nextTask.title, weight: "bold", size: "sm", wrap: true, margin: "xs" });
+    bodyContents.push({ type: "text", text: `👤 負責人：${nextTask.assigneeName}`, size: "xs", color: "#AAAAAA", margin: "xs" });
+  }
+
+  return withQuickReplies(
+    {
+      type: "flex",
+      altText: `✅ 任務完成：${task.title}`,
+      contents: {
+        type: "bubble",
+        header: {
+          type: "box", layout: "vertical", paddingAll: "12px", backgroundColor: "#27AE60",
+          contents: [
+            { type: "text", text: "🎉 任務完成！", color: "#FFFFFF", weight: "bold", size: "lg" },
+          ],
+        },
+        body: { type: "box", layout: "vertical", paddingAll: "14px", contents: bodyContents },
+        footer: {
+          type: "box", layout: "vertical", paddingAll: "8px",
+          contents: [mkBtn("📋 任務列表", "/任務 列表", "secondary")],
+        },
+      },
+    },
+    [{ label: "📋 任務列表", text: "/任務 列表" }, { label: "⚙️ 流程狀態", text: "/流程 狀態" }],
+  );
+}
+
+// ── Task Update Command ──────────────────────────────────────────────────────
+
+export async function cmdTaskUpdate(rawId: string, note: string, db: SupabaseClient, lineUserRowId?: string, userId?: string) {
+  const idStr = rawId.replace(/[[\]#\s]/g, "");
+  const taskId = parseInt(idStr, 10);
+  if (!taskId || Number.isNaN(taskId)) return text("請提供任務 ID。例如：/任務 #198 更新");
+
+  // userId arg is actually employee_id (passed from index.ts); param name is legacy.
+  const employeeId = userId
+    ? (typeof userId === "number" ? userId : parseInt(String(userId), 10))
+    : null;
+
+  let query = db
+    .from("tasks")
+    .select("id, title, notes")
+    .eq("id", taskId)
+    .neq("status", "已完成");
+  if (employeeId && !Number.isNaN(employeeId)) {
+    query = query.eq("assignee_id", employeeId);
+  }
+  const { data: task } = await query.maybeSingle();
+
+  if (!task) return text(`❌ 找不到任務 #${taskId}，或您不是負責人。`);
+
+  if (!note) {
+    // Save pending action and ask user to type note
+    if (lineUserRowId) {
+      await db.from("line_users")
+        .update({ pending_action: { action: "add_note", task_id: task.id, task_title: task.title } })
+        .eq("id", lineUserRowId);
+    }
+    return text(`📝 請直接輸入「${task.title}」的備註內容：`);
+  }
+
+  const timestamp = new Date().toLocaleString("zh-TW", { timeZone: "Asia/Taipei", hour12: false });
+  const existing = task.notes ? `${task.notes}\n` : "";
+  const newNotes = `${existing}[${timestamp}] ${note}`;
+  const { error: updateErr } = await db.from("tasks").update({ notes: newNotes, updated_at: new Date().toISOString() }).eq("id", task.id);
+  if (updateErr) return text(`❌ 備註更新失敗：${updateErr.message}`);
+  return flexSuccess("📝", "備註已更新", `「${task.title}」\n${note}`);
+}
+
+// ── Task Request Confirmation Command ────────────────────────────────────────
+
+export async function cmdTaskRequestConfirm(rawId: string, userId: string, db: SupabaseClient, accessToken: string, displayName?: string) {
+  const shortId = rawId.replace(/[[\]#\s]/g, "").toLowerCase();
+  if (!shortId) return text("請提供任務 ID。例如：/任務 #abc123 請求確認");
+
+  const employeeId = await resolveLineUserToEmployeeId(db, userId);
+  if (!employeeId) return text("❌ 找不到您的員工資料。\n請私訊機器人輸入：\n/註冊 你的姓名\n例：/註冊 張小明");
+
+  const { data: allTasks } = await db
+    .from("tasks")
+    .select("id, title, confirmation_required, confirmation_status, workflow_instance:workflow_instances(name)")
+    .eq("assignee_id", employeeId)
+    .neq("status", "completed")
+    .limit(300);
+
+  const tasks = allTasks?.filter((t: any) => t.id.toLowerCase().startsWith(shortId));
+  if (!tasks || tasks.length === 0) return text(`❌ 找不到 ID 為 ${shortId} 的任務。`);
+  const task = tasks[0];
+
+  if (!task.confirmation_required) {
+    return text(`任務「${task.title}」不需要確認審批，可直接完成。\n輸入：/任務 ${shortId} 完成`);
+  }
+
+  const isResend = task.confirmation_status === "pending";
+
+  if (!isResend) {
+    // Set confirmation status to pending
+    await db.from("tasks").update({
+      confirmation_status: "pending",
+      confirmation_requested_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }).eq("id", task.id);
+
+    // Reset any existing confirmation records to pending
+    await db.from("task_confirmations")
+      .update({ status: "pending", responded_at: null })
+      .eq("task_id", task.id);
+  }
+
+  // Check if approvers exist; if not, auto-assign manager(s) as approvers
+  const { data: existingConfs } = await db.from("task_confirmations")
+    .select("id")
+    .eq("task_id", task.id)
+    .limit(1);
+
+  if (!existingConfs || existingConfs.length === 0) {
+    // Find managers: first check workflow instance owner, then user's managers
+    const approverCandidates: string[] = [];
+
+    // 1. Workflow instance owner (if task belongs to a workflow)
+    const { data: fullTask } = await db.from("tasks")
+      .select("workflow_instance_id")
+      .eq("id", task.id)
+      .maybeSingle();
+
+    if (fullTask?.workflow_instance_id) {
+      const { data: wfInstance } = await db.from("workflow_instances")
+        .select("assigned_user_id")
+        .eq("id", fullTask.workflow_instance_id)
+        .maybeSingle();
+      if (wfInstance?.assigned_user_id && wfInstance.assigned_user_id !== userId) {
+        approverCandidates.push(wfInstance.assigned_user_id);
+      }
+    }
+
+    // 2. Users with is_line_manager = true (if no workflow owner found)
+    if (approverCandidates.length === 0) {
+      const { data: managers } = await db.from("employees")
+        .select("id")
+        .eq("is_line_manager", true)
+        .neq("id", userId)
+        .limit(5);
+      if (managers) approverCandidates.push(...managers.map((m: any) => m.id));
+    }
+
+    if (approverCandidates.length === 0) {
+      return text(`❌ 無法找到審批人員。請先在管理後台設定任務確認人。`);
+    }
+
+    // Insert approver records
+    const inserts = approverCandidates.map(appId => ({
+      task_id: task.id,
+      approver_id: appId,
+      status: "pending",
+    }));
+    await db.from("task_confirmations").insert(inserts);
+  }
+
+  // Notify approvers via LINE
+  const { data: confirmations } = await db.from("task_confirmations")
+    .select("approver_id")
+    .eq("task_id", task.id)
+    .eq("status", "pending");
+
+  if (confirmations && confirmations.length > 0 && accessToken) {
+    const approverIds = confirmations.map((c: any) => c.approver_id);
+
+    // Resolve approver LINE IDs via line_users then line_employee_mapping
+    for (const approverId of approverIds) {
+      let lineId: string | null = null;
+      const { data: lu } = await db.from("line_users")
+        .select("line_user_id")
+        .eq("employee_id", approverId)
+        .eq("is_verified", true)
+        .maybeSingle();
+      lineId = lu?.line_user_id ?? null;
+
+      if (!lineId) {
+        const { data: mapping } = await db.from("line_users")
+          .select("line_user_id")
+          .eq("employee_id", approverId)
+          .eq("is_verified", true)
+          .maybeSingle();
+        lineId = mapping?.line_user_id ?? null;
+      }
+
+      if (!lineId) continue;
+
+      const requesterName = displayName || "員工";
+      const wfName = (task as any).workflow_instance?.name ?? null;
+      const headerTitle = wfName ? `${wfName} 任務確認請求` : "🔐 任務確認請求";
+      await pushAndLog(lineId, [{
+        type: "flex",
+        altText: `🔐 確認請求：「${task.title}」`,
+        contents: {
+          type: "bubble",
+          size: "kilo",
+          header: {
+            type: "box", layout: "vertical", backgroundColor: "#8b5cf6", paddingAll: "14px",
+            contents: [
+              ...(wfName ? [{ type: "text", text: wfName, size: "xs", color: "#e9d5ff" }] : []),
+              { type: "text", text: "🔐 任務確認請求", weight: "bold", color: "#FFFFFF", size: "md" },
+            ],
+          },
+          body: {
+            type: "box", layout: "vertical", spacing: "sm", paddingAll: "14px",
+            contents: [
+              { type: "text", text: task.title, weight: "bold", size: "md", wrap: true },
+              { type: "text", text: `申請人：${requesterName}`, size: "sm", color: "#666666" },
+              { type: "text", text: "請審核此任務是否完成。", size: "sm", color: "#8b5cf6", wrap: true },
+            ],
+          },
+          footer: {
+            type: "box", layout: "horizontal", spacing: "sm", paddingAll: "14px",
+            contents: [
+              {
+                type: "button", style: "primary", height: "sm", color: "#16a34a",
+                action: { type: "message", label: "✅ 核准", text: `/確認 ${shortId} 核准` },
+              },
+              {
+                type: "button", style: "primary", height: "sm", color: "#dc2626",
+                action: { type: "message", label: "❌ 拒絕", text: `/確認 ${shortId} 拒絕` },
+              },
+            ],
+          },
+        },
+      }], accessToken, db, { sourceType: "system" });
+    }
+  }
+
+  // Add system comment
+  if (!isResend) {
+    await db.from("task_comments").insert({
+      task_id: task.id,
+      content: `🔐 確認請求已送出 (${new Date().toLocaleString("zh-TW", { timeZone: "Asia/Taipei" })})`,
+      source: "system",
+    });
+  }
+
+  const msg = isResend
+    ? `「${task.title}」確認通知已重新發送給審批人員。`
+    : `「${task.title}」已提交確認審批，等待主管回覆。`;
+  return flexSuccess("🔐", isResend ? "確認通知已重送" : "確認請求已送出", msg);
+}
+
+// ── Task Confirm Respond Command ─────────────────────────────────────────────
+
+export async function cmdTaskConfirmRespond(rawId: string, action: string, userId: string, db: SupabaseClient, accessToken: string, notes?: string) {
+  const shortId = rawId.replace(/[[\]#\s]/g, "").toLowerCase();
+  const approved = action === "核准";
+
+  // Find the task by short ID
+  const { data: allTasks } = await db
+    .from("tasks")
+    .select("id, title, confirmation_status")
+    .neq("status", "completed")
+    .limit(300);
+
+  const tasks = allTasks?.filter((t: any) => t.id.toLowerCase().startsWith(shortId));
+  if (!tasks || tasks.length === 0) return text(`❌ 找不到 ID 為 ${shortId} 的任務。`);
+  const task = tasks[0];
+
+  // Check this user is an approver
+  const { data: conf } = await db.from("task_confirmations")
+    .select("id, status")
+    .eq("task_id", task.id)
+    .eq("approver_id", userId)
+    .maybeSingle();
+
+  if (!conf) return text(`❌ 您不是任務「${task.title}」的審批人員。`);
+  if (conf.status !== "pending") return text(`此任務您已回覆：${conf.status === "approved" ? "核准" : "拒絕"}`);
+
+  // Update this approver's response
+  await db.from("task_confirmations").update({
+    status: approved ? "approved" : "rejected",
+    notes: notes || null,
+    responded_at: new Date().toISOString(),
+  }).eq("id", conf.id);
+
+  // Check if all approvers responded
+  const { data: allConfs } = await db.from("task_confirmations")
+    .select("status")
+    .eq("task_id", task.id);
+
+  const confirmations = allConfs || [];
+  const allApproved = confirmations.length > 0 && confirmations.every((c: any) => c.status === "approved");
+  const anyRejected = confirmations.some((c: any) => c.status === "rejected");
+
+  if (allApproved) {
+    await db.from("tasks").update({
+      confirmation_status: "approved",
+      confirmation_responded_at: new Date().toISOString(),
+      confirmation_notes: "所有確認人已核准",
+      status: "已完成",
+      completed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }).eq("id", task.id);
+
+    await db.from("task_comments").insert({
+      task_id: task.id,
+      content: `✅ 所有審批人已核准，任務自動完成 (${new Date().toLocaleString("zh-TW", { timeZone: "Asia/Taipei" })})`,
+      source: "system",
+    });
+
+    // Notify task owner that approval passed and task is completed
+    const { data: approvedTask } = await db.from("tasks")
+      .select("assignee_id, workflow_instance_id")
+      .eq("id", task.id)
+      .maybeSingle();
+
+    if (approvedTask?.assignee_id) {
+      let ownerLineId: string | null = null;
+      const { data: lu } = await db.from("line_users")
+        .select("line_user_id")
+        .eq("employee_id", approvedTask.assignee_id)
+        .eq("is_verified", true)
+        .maybeSingle();
+      ownerLineId = lu?.line_user_id ?? null;
+      if (ownerLineId) {
+        await pushAndLog(ownerLineId, [{
+          type: "flex",
+          altText: `✅ 任務「${task.title}」已核准完成`,
+          contents: {
+            type: "bubble",
+            size: "kilo",
+            header: {
+              type: "box", layout: "vertical", backgroundColor: "#16a34a", paddingAll: "14px",
+              contents: [
+                { type: "text", text: "✅ 任務確認通過", weight: "bold", color: "#FFFFFF", size: "md" },
+              ],
+            },
+            body: {
+              type: "box", layout: "vertical", spacing: "sm", paddingAll: "14px",
+              contents: [
+                { type: "text", text: task.title, weight: "bold", size: "md", wrap: true },
+                { type: "text", text: "所有審批人已核准，任務已自動標記完成。", size: "sm", color: "#666666", wrap: true },
+              ],
+            },
+            footer: {
+              type: "box", layout: "vertical", paddingAll: "14px",
+              contents: [
+                {
+                  type: "button", style: "primary", height: "sm", color: "#4f46e5",
+                  action: { type: "message", label: "📋 查看任務列表", text: "/任務 列表" },
+                },
+              ],
+            },
+          },
+        }], accessToken, db, { sourceType: "system" });
+      }
+    }
+
+    // Check if entire workflow is now complete
+    if (approvedTask?.workflow_instance_id) {
+      await checkWorkflowCompletion(approvedTask.workflow_instance_id, db, accessToken);
+    }
+
+    return flexSuccess("✅", "已核准 — 任務完成", `「${task.title}」所有審批人已核准，任務已標記完成。`);
+  } else if (anyRejected) {
+    // Keep task in_progress, reset confirmation so owner can re-request
+    await db.from("tasks").update({
+      confirmation_status: null,
+      confirmation_responded_at: new Date().toISOString(),
+      confirmation_notes: notes || "審批被拒絕",
+      updated_at: new Date().toISOString(),
+    }).eq("id", task.id);
+
+    await db.from("task_comments").insert({
+      task_id: task.id,
+      content: `❌ 審批被拒絕${notes ? `：${notes}` : ""} (${new Date().toLocaleString("zh-TW", { timeZone: "Asia/Taipei" })})`,
+      source: "system",
+    });
+
+    // Notify task owner to review and re-request
+    const { data: fullTask } = await db.from("tasks")
+      .select("assignee_id")
+      .eq("id", task.id)
+      .maybeSingle();
+
+    if (fullTask?.assignee_id) {
+      // Resolve owner's LINE ID
+      let ownerLineId: string | null = null;
+      const { data: lu } = await db.from("line_users")
+        .select("line_user_id")
+        .eq("employee_id", fullTask.assignee_id)
+        .eq("is_verified", true)
+        .maybeSingle();
+      ownerLineId = lu?.line_user_id ?? null;
+
+      if (ownerLineId) {
+        const sid = shortId.slice(0, 8);
+        await pushAndLog(ownerLineId, [{
+          type: "flex",
+          altText: `❌ 任務「${task.title}」確認被拒絕`,
+          contents: {
+            type: "bubble",
+            size: "kilo",
+            header: {
+              type: "box", layout: "vertical", backgroundColor: "#dc2626", paddingAll: "14px",
+              contents: [
+                { type: "text", text: "❌ 確認請求被拒絕", weight: "bold", color: "#FFFFFF", size: "md" },
+              ],
+            },
+            body: {
+              type: "box", layout: "vertical", spacing: "sm", paddingAll: "14px",
+              contents: [
+                { type: "text", text: task.title, weight: "bold", size: "md", wrap: true },
+                ...(notes ? [{ type: "text", text: `拒絕原因：${notes}`, size: "sm", color: "#dc2626", wrap: true }] : []),
+                { type: "text", text: "請檢視任務後重新送出確認請求。", size: "sm", color: "#666666", wrap: true, margin: "md" },
+              ],
+            },
+            footer: {
+              type: "box", layout: "horizontal", spacing: "sm", paddingAll: "14px",
+              contents: [
+                {
+                  type: "button", style: "secondary", height: "sm",
+                  action: { type: "message", label: "📝 更新備註", text: `/任務 ${sid} 更新 ` },
+                },
+                {
+                  type: "button", style: "primary", height: "sm", color: "#8b5cf6",
+                  action: { type: "message", label: "🔐 重新請求確認", text: `/任務 ${sid} 請求確認` },
+                },
+              ],
+            },
+          },
+        }], accessToken, db, { sourceType: "system" });
+      }
+    }
+
+    return flexSuccess("❌", "已拒絕", `「${task.title}」的確認請求已被拒絕，已通知任務負責人。${notes ? `\n原因：${notes}` : ""}`);
+  }
+
+  // Partial — some approved, waiting for others
+  const pending = confirmations.filter((c: any) => c.status === "pending").length;
+  return flexSuccess(approved ? "✅" : "❌", approved ? "已核准" : "已拒絕", `「${task.title}」— 還有 ${pending} 位審批人尚未回覆。`);
+}
+
+// ── Notes Command ────────────────────────────────────────────────────────────
+
+export async function cmdNotes(userId: string, db: SupabaseClient) {
+  const employeeId = await resolveLineUserToEmployeeId(db, userId);
+  if (!employeeId) return text("❌ 找不到您的員工資料。\n請私訊機器人輸入：\n/註冊 你的姓名\n例：/註冊 張小明");
+
+  const { data: tasks } = await db
+    .from("tasks")
+    .select("id, title, notes, status")
+    .eq("assignee_id", employeeId)
+    .not("notes", "is", null)
+    .neq("notes", "")
+    .order("updated_at", { ascending: false })
+    .limit(5);
+
+  if (!tasks || tasks.length === 0) {
+    return text("📝 目前沒有包含備註的任務。");
+  }
+
+  const bubbles = tasks.map((t: any) => {
+    const shortId = String(t.id).slice(0, 6);
+    const lastNote = t.notes.split("\n").filter(Boolean).slice(-2).join("\n");
+    return {
+      type: "bubble",
+      size: "kilo",
+      header: {
+        type: "box",
+        layout: "vertical",
+        paddingAll: "10px",
+        backgroundColor: "#3498DB",
+        contents: [
+          { type: "text", text: `📝 ${t.title}`, color: "#FFFFFF", weight: "bold", size: "sm", wrap: true, maxLines: 2 },
+          { type: "text", text: `#${shortId} · ${statusLabel(t.status)}`, color: "#D6EAF8", size: "xxs", margin: "xs" },
+        ],
+      },
+      body: {
+        type: "box",
+        layout: "vertical",
+        paddingAll: "10px",
+        contents: [
+          { type: "text", text: lastNote, size: "xs", color: "#555555", wrap: true, maxLines: 6 },
+        ],
+      },
+      footer: {
+        type: "box",
+        layout: "vertical",
+        paddingAll: "8px",
+        contents: [
+          mkBtn("📝 新增備註", `/任務 #${shortId} 更新`, "secondary"),
+        ],
+      },
+    };
+  });
+
+  return {
+    type: "flex",
+    altText: `📝 最近備註（${tasks.length} 件）`,
+    contents: { type: "carousel", contents: bubbles },
+  };
+}
+
+// ── Project Commands ─────────────────────────────────────────────────────────
+// 改用 projects 表 + tasks.project_id（舊 project_tasks 已整併移除）
+
+const STATUS_PALETTE: Record<string, { color: string; emoji: string }> = {
+  "規劃中": { color: "#9CA3AF", emoji: "📋" },
+  "進行中": { color: "#3b82f6", emoji: "🔄" },
+  "已完成": { color: "#16a34a", emoji: "✅" },
+  "已取消": { color: "#6b7280", emoji: "❌" },
+  "暫停":   { color: "#f97316", emoji: "⏸" },
+};
+
+export async function cmdProjectList(db: SupabaseClient) {
+  const { data: projects } = await db
+    .from("projects")
+    .select("id, name, status, priority, owner, progress, end_date, start_date")
+    .in("status", ["規劃中", "進行中", "暫停"])
+    .order("priority", { ascending: false })
+    .order("end_date", { ascending: true })
+    .limit(10);
+
+  if (!projects || projects.length === 0) {
+    return withQuickReplies(text("📭 目前沒有進行中的專案。"), [
+      { label: "📋 任務", text: "/任務 列表" },
+      { label: "⚙️ 流程", text: "/流程 狀態" },
+    ]);
+  }
+
+  // 為每個專案抓 task 統計（並行）
+  const enriched = await Promise.all(projects.map(async (p: any) => {
+    const { data: tasks } = await db
+      .from("tasks")
+      .select("status")
+      .eq("project_id", p.id);
+    const total = tasks?.length ?? 0;
+    const done = tasks?.filter((t: any) => t.status === "completed").length ?? 0;
+    return { ...p, total, done };
+  }));
+
+  const bubbles = enriched.map((p: any) => {
+    const palette = STATUS_PALETTE[p.status] ?? { color: "#4A4A4A", emoji: "📋" };
+    const pct = p.progress ?? (p.total > 0 ? Math.round((p.done / p.total) * 100) : 0);
+    const due = p.end_date ? p.end_date.slice(5).replace("-", "/") : null;
+
+    const barChildren: any[] = [];
+    if (pct > 0) barChildren.push({ type: "box", layout: "vertical", flex: pct, backgroundColor: palette.color, contents: [{ type: "filler" }] });
+    if (pct < 100) barChildren.push({ type: "filler", flex: 100 - pct });
+    if (barChildren.length === 0) barChildren.push({ type: "filler" });
+
+    return {
+      type: "bubble",
+      size: "kilo",
+      header: {
+        type: "box", layout: "vertical", paddingAll: "12px", backgroundColor: palette.color,
+        contents: [
+          { type: "text", text: `${palette.emoji} ${p.name}`, color: "#FFFFFF", weight: "bold", size: "md", wrap: true, maxLines: 2 },
+          { type: "text", text: p.status, color: "#FFFFFFAA", size: "xs", margin: "xs" },
+        ],
+      },
+      body: {
+        type: "box", layout: "vertical", spacing: "sm", paddingAll: "12px",
+        contents: [
+          {
+            type: "box", layout: "horizontal", spacing: "sm", alignItems: "center",
+            contents: [
+              { type: "box", layout: "horizontal", height: "6px", flex: 8, backgroundColor: "#E5E7EB", cornerRadius: "3px", contents: barChildren },
+              { type: "text", text: `${pct}%`, size: "xxs", color: "#666", align: "end", flex: 2 },
+            ],
+          },
+          { type: "box", layout: "horizontal", margin: "sm", contents: [
+            { type: "text", text: "任務", color: "#9CA3AF", size: "xs", flex: 3 },
+            { type: "text", text: `${p.done} / ${p.total}`, size: "xs", color: "#333", flex: 5, weight: "bold" },
+          ]},
+          ...(p.owner ? [{ type: "box", layout: "horizontal", margin: "xs", contents: [
+            { type: "text", text: "負責人", color: "#9CA3AF", size: "xs", flex: 3 },
+            { type: "text", text: p.owner, size: "xs", color: "#333", flex: 5, weight: "bold" },
+          ]}] : []),
+          ...(due ? [{ type: "box", layout: "horizontal", margin: "xs", contents: [
+            { type: "text", text: "截止", color: "#9CA3AF", size: "xs", flex: 3 },
+            { type: "text", text: due, size: "xs", color: "#333", flex: 5, weight: "bold" },
+          ]}] : []),
+          ...(p.priority && p.priority !== "中" ? [{ type: "box", layout: "horizontal", margin: "xs", contents: [
+            { type: "text", text: "優先", color: "#9CA3AF", size: "xs", flex: 3 },
+            { type: "text", text: p.priority, size: "xs", color: p.priority === "高" ? "#dc2626" : "#666", flex: 5, weight: "bold" },
+          ]}] : []),
+          { type: "text", text: `#${p.id}`, color: "#CCC", size: "xxs", margin: "sm" },
+        ],
+      },
+      footer: {
+        type: "box", layout: "vertical", paddingAll: "8px",
+        contents: [
+          { type: "button", style: "secondary", height: "sm",
+            action: { type: "message", label: "📋 看任務", text: `/專案 任務 #${p.id}` } },
+        ],
+      },
+    };
+  });
+
+  return withQuickReplies(
+    { type: "flex", altText: `🏗️ 專案進度（${projects.length} 件）`, contents: { type: "carousel", contents: bubbles } },
+    [{ label: "📋 任務", text: "/任務 列表" }, { label: "⚙️ 流程", text: "/流程 狀態" }],
+  );
+}
+
+export async function cmdProjectDone(projectId: number, db: SupabaseClient): Promise<object> {
+  const { data: p, error } = await db
+    .from("projects")
+    .update({ status: "已完成", progress: 100, updated_at: new Date().toISOString() })
+    .eq("id", projectId)
+    .select("name")
+    .single();
+
+  if (error || !p) return text(`❌ 找不到專案 #${projectId}`);
+
+  return withQuickReplies(
+    flexSuccess("✅", `專案 #${projectId} 完成`, `「${p.name}」已標記為已完成`),
+    [{ label: "🏗️ 專案列表", text: "/專案 列表" }],
+  );
+}
+
+export async function cmdProjectNote(projectId: number, note: string, db: SupabaseClient, author?: string): Promise<object> {
+  // 先確認專案存在
+  const { data: p } = await db.from("projects").select("name").eq("id", projectId).maybeSingle();
+  if (!p) return text(`❌ 找不到專案 #${projectId}`);
+
+  const { error } = await db.from("project_comments").insert({
+    project_id: projectId,
+    author: author || "LINE 使用者",
+    content: note,
+  });
+  if (error) return text(`❌ 備註寫入失敗：${error.message}`);
+
+  return withQuickReplies(
+    text(`📝 已新增專案 #${projectId}「${p.name}」備註：\n${note}`),
+    [{ label: "🏗️ 專案列表", text: "/專案 列表" }],
+  );
+}
+
+export async function cmdProjectTasks(projectId: number, db: SupabaseClient): Promise<object> {
+  const { data: p } = await db.from("projects").select("name").eq("id", projectId).maybeSingle();
+  if (!p) return text(`❌ 找不到專案 #${projectId}`);
+
+  const { data: tasks } = await db
+    .from("tasks")
+    .select("id, title, status, priority, due_date, assignee:employees!tasks_assignee_id_fkey(name)")
+    .eq("project_id", projectId)
+    .neq("status", "cancelled")
+    .order("status", { ascending: true })
+    .order("priority", { ascending: false })
+    .limit(20);
+
+  if (!tasks || tasks.length === 0) {
+    return withQuickReplies(text(`📭 專案「${p.name}」目前沒有任務。`),
+      [{ label: "🏗️ 專案列表", text: "/專案 列表" }]);
+  }
+
+  // 用既有的任務 carousel builder（postback 操作鈕）
+  return flexTaskList(tasks, p.name);
+}
+
+export async function cmdProjectStatus(projectId: number, newStatus: string, db: SupabaseClient): Promise<object> {
+  const validStatuses = Object.keys(STATUS_PALETTE);
+  if (!validStatuses.includes(newStatus)) {
+    return text(`❌ 無效狀態。請使用：${validStatuses.join("、")}`);
+  }
+
+  const updates: any = { status: newStatus, updated_at: new Date().toISOString() };
+  if (newStatus === "已完成") updates.progress = 100;
+
+  const { data: p, error } = await db
+    .from("projects")
+    .update(updates)
+    .eq("id", projectId)
+    .select("name")
+    .single();
+
+  if (error || !p) return text(`❌ 找不到專案 #${projectId}`);
+
+  return withQuickReplies(
+    text(`📋 專案 #${projectId}「${p.name}」狀態已更新為：${newStatus}`),
+    [{ label: "🏗️ 專案列表", text: "/專案 列表" }],
+  );
+}

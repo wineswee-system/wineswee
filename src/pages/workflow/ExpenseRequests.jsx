@@ -1,0 +1,1384 @@
+﻿import { useState, useEffect, useRef } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useReturnNav } from '../../lib/useReturnNav'
+import { useAuth } from '../../contexts/AuthContext'
+import { Plus, X, Send, Settings, Search } from 'lucide-react'
+import { supabase } from '../../lib/supabase'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
+import { getAccounts, getCurrencies } from '../../lib/db'
+import { exportExpenseRequestPdf } from '../../lib/exportPdf'
+import { createApprovalWorkflow } from '../../lib/workflowIntegration'
+import { buildChainBasedSteps } from '../../lib/buildChainSteps'
+import ApprovalDetailModal from '../../components/ApprovalDetailModal'
+import { validateRequired } from '../../lib/formValidation'
+import LoadingSpinner from '../../components/LoadingSpinner'
+import { usePendingApprovals } from '../../lib/usePendingApprovals'
+import { safeStorageName } from '../../lib/storageSanitize'
+
+import ExpenseFormModal from './components/ExpenseFormModal'
+import SettleModal from './components/SettleModal'
+
+import { toast } from '../../lib/toast'
+import { confirm } from '../../lib/confirm'
+import { displaySettleStatus as displayStatus } from '../../lib/displayLabel'
+import { postBindingFillDone } from '../../lib/embeddedBinding'
+const STATUS_COLORS = {
+  '申請中': { bg: 'var(--accent-blue-dim)', color: 'var(--accent-blue)' },
+  '已核准': { bg: 'var(--accent-green-dim)', color: 'var(--accent-green)' },
+  '未送核銷': { bg: 'var(--accent-orange-dim)', color: 'var(--accent-orange)' },  // 視覺提醒：已核准但還沒按「送核銷」
+  '待核銷': { bg: 'var(--accent-yellow-dim)', color: 'var(--accent-yellow)' },
+  '已核銷': { bg: 'var(--accent-cyan-dim)', color: 'var(--accent-cyan)' },
+  '已駁回': { bg: 'var(--accent-red-dim)', color: 'var(--accent-red)' },
+  '核銷已退回': { bg: 'var(--accent-red-dim)', color: 'var(--accent-red)' },
+}
+
+const CURRENCY_SYMBOL = { TWD: 'NT$', USD: 'US$', JPY: '¥', CNY: '¥', EUR: '€', NZD: 'NZ$', AUD: 'A$' }
+const fmtCur = (n, cur) => {
+  if (n == null) return '-'
+  const sym = CURRENCY_SYMBOL[cur] || (cur ?? 'NT$')
+  return `${sym} ${Number(n).toLocaleString()}`
+}
+
+const emptyForm = {
+  employee: '', account_code: '', title: '', description: '',
+  estimated_amount: '', store: '', supplier: '', currency: 'TWD',
+  billing_month: '',
+  acceptance_units: [],
+}
+
+const emptyItem = () => ({ name: '', qty: '', unit_price: '', subtotal: 0 })
+
+// docType: 'expense' = 非經常性費用申請(預設) / 'order' = 叫貨申請單(同表同引擎,靠 doc_type 區分)
+// settleVerb：第二階段動詞 — 費用叫「核銷」，叫貨叫「驗收」（DB 狀態欄位不變,只改顯示）
+const DOC_CFG = {
+  expense: { label: '非經常性費用申請', icon: '📝', subtitle: '事項 / 採購 / 預算申請：先申請核准，發生費用後再驗收入帳',
+             chainFormType: 'expense_request', chainLabel: '費用申請', settleFormType: 'expense_settle', settleLabel: '費用核銷', settleVerb: '核銷' },
+  order:   { label: '叫貨申請單',       icon: '🛒', subtitle: '叫貨申請：先申請核准，到貨後再入庫驗收',
+             chainFormType: 'order_request', chainLabel: '叫貨申請', settleFormType: 'order_settle', settleLabel: '叫貨驗收', settleVerb: '驗收' },
+}
+// 把含「核銷」的顯示字串，依 docType 換成「驗收」（叫貨用）。
+// 先收掉雙標「驗收」→「驗收」，再把單獨「核銷」→「驗收」，避免「驗收(驗收)」。
+const verb = (s, doc) => doc?.settleVerb === '驗收'
+  ? String(s).replace(/核銷\(驗收\)/g, '驗收').replace(/核銷/g, '驗收')
+  : s
+export default function ExpenseRequests({ docType = 'expense' } = {}) {
+  const DOC = DOC_CFG[docType] || DOC_CFG.expense
+  const { profile, hasPermission, isAdmin, isSuperAdmin } = useAuth()
+  // 黑色(restricted)科目只給 財務部(25)/人力資源管理部(26)/admin;一般員工(含manager/店長)只看紅色(all)
+  const canSeeRestrictedAccounts = isAdmin || [25, 26].includes(profile?.department_id)
+  // 非經常性費用申請鎖 super_admin：一般員工只能查看過去紀錄，不能新增/編輯重送/複製/核銷
+  // 叫貨申請單(docType='order')不受影響，維持原本權限
+  const guardCreateExpense = () => {
+    if (docType === 'order' || isSuperAdmin) return true
+    toast.info('此功能需加購模組，請聯繫系統管理員')
+    return false
+  }
+  const canDeleteAll = hasPermission('hr_form.delete_all')
+  const { canApprove } = usePendingApprovals()
+  const navigate = useNavigate()
+  const returnNav = useReturnNav()  // 從「我的待簽」帶 ?returnTo 跳來時，簽完用它回待簽；否則 no-op
+  const [requests, setRequests] = useState([])
+  const [accounts, setAccounts] = useState([])
+  const [currencies, setCurrencies] = useState([])
+  const [employees, setEmployees] = useState([])
+  const [stores, setStores] = useState([])
+  const [departments, setDepartments] = useState([])  // 驗收單位下拉用（含 manager_id）
+  const [organization, setOrganization] = useState(null)  // { name, logo_url } — 印簽呈用
+  const [loading, setLoading] = useState(true)
+  const [showModal, setShowModal] = useState(false)
+  const [showSettleModal, setShowSettleModal] = useState(false)
+  const [showDetail, setShowDetail] = useState(null)
+  const [detailChainSteps, setDetailChainSteps] = useState([])
+  const [loadingChain, setLoadingChain] = useState(false)
+  const detailRowIdRef = useRef(null)
+  const [form, setForm] = useState(emptyForm)
+  const [settleForm, setSettleForm] = useState({ actual_amount: '', notes: '' })
+  const [settleEditMode, setSettleEditMode] = useState(false)  // true=編輯已送出的待核銷單(還沒人簽);false=首次/重新送驗收
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState(null)
+  const [tab, setTab] = useState('all')
+  const [search, setSearch] = useState('')
+  const [isExpense, setIsExpense] = useState(true)
+  const [errors, setErrors] = useState({})
+  const [editingId, setEditingId] = useState(null)  // null = 新增, 數字 = 編輯重送
+  const [carriedAtts, setCarriedAtts] = useState([])  // 複製重送/編輯帶過來的舊附件（彈窗內可刪）
+  const removeCarriedAtt = (idx) => setCarriedAtts(prev => prev.filter((_, i) => i !== idx))
+  const originalEditAttIdsRef = useRef([])  // 編輯模式：記錄原始附件 id，供送出時對比刪除
+  const [files, setFiles] = useState([])
+  const [settleFiles, setSettleFiles] = useState([])
+  const [attachments, setAttachments] = useState({})
+  const [lineItems, setLineItems] = useState([emptyItem()])
+  // 加簽（P3a）：pending extras 索引 by source_id → 用來判斷當前狀態
+  const [pendingExtras, setPendingExtras] = useState({})
+  const load = async () => {
+    setLoading(true)
+    // super_admin 無固定 org(profile.organization_id=null)→ 吃目前切換的 org,否則門市/部門/員工下拉跨 org 混入
+    const orgId = profile?.organization_id ?? getTenantOrgId()
+    let reqQuery = supabase.from('expense_requests').select('*').is('deleted_at', null).eq('doc_type', docType).order('created_at', { ascending: false })
+    if (orgId) reqQuery = reqQuery.eq('organization_id', orgId)
+    // 費用頁用員工的 id/name/dept/編號/門市（下拉+payload）+ signature_url（簽呈 PDF 蓋章），不需 getEmployees 的 56 欄
+    let empQuery = supabase.from('employees')
+      .select('id, name, name_en, employee_number, dept, department_id, store, store_id, position, status, signature_url')
+      .eq('status', '在職').not('is_archived', 'is', true).order('name')
+    if (orgId) empQuery = empQuery.eq('organization_id', orgId)
+    const [reqRes, accRes, empRes, orgRes, extraRes, storeRes, curRes, deptRes] = await Promise.all([
+      reqQuery,
+      getAccounts(orgId),
+      empQuery,
+      orgId ? supabase.from('organizations').select('name, logo_url').eq('id', orgId).maybeSingle() : Promise.resolve({ data: null }),
+      // 加簽（P3a）：撈 pending extras 給 UI 顯示 / 撤銷判斷
+      supabase.from('approval_extra_steps')
+        .select('id, source_id, insert_before_step, assignee_id, requested_by_id, reason, status, created_at')
+        .eq('source_table', 'expense_requests')
+        .eq('status', 'pending'),
+      // 門市清單給費用表單下拉用（manager_id 給「核銷單位→營運部→門市」解析店長）— 限本 org
+      (orgId
+        ? supabase.from('stores').select('id, name, manager_id').eq('organization_id', orgId).order('name')
+        : supabase.from('stores').select('id, name, manager_id').order('name')),
+      getCurrencies(),
+      // 部門清單給「驗收單位」下拉用（manager_id 給解析部門主管）
+      (orgId
+        ? supabase.from('departments').select('id, name, manager_id').eq('organization_id', orgId).order('name')
+        : supabase.from('departments').select('id, name, manager_id').order('name')),
+    ])
+    setRequests(reqRes.data || [])
+    // 依可選範圍過濾:all全體 / restricted限財務人資admin / null背景GL不可選;未跑migration則全顯示
+    const accsRaw = accRes.data || []
+    const hasScope = accsRaw.some(a => a.pick_scope)
+    setAccounts(hasScope
+      ? accsRaw.filter(a => a.pick_scope === 'all' || (a.pick_scope === 'restricted' && canSeeRestrictedAccounts))
+      : accsRaw)
+    setCurrencies(curRes?.data || [])
+    setEmployees((empRes.data || []).filter(e => e.status === '在職'))
+    setStores(storeRes?.data || [])
+    setDepartments(deptRes?.data || [])
+    setOrganization(orgRes?.data || null)
+    // 把 extras 索引化：{ [source_id]: extra_row }（每張單同一 step 只會有一筆 pending）
+    const idx = {}
+    for (const e of (extraRes?.data || [])) idx[e.source_id] = e
+    setPendingExtras(idx)
+    setLoading(false)
+  }
+
+  useEffect(() => { load() }, [profile?.organization_id])
+
+  // 從 Dashboard ApprovalCenter 跳過來時，URL 帶 ?focus=ID → 自動開 detail modal
+  const [searchParams, setSearchParams] = useSearchParams()
+  useEffect(() => {
+    const focus = searchParams.get('focus')
+    if (!focus || !requests.length) return
+    const row = requests.find(r => r.id === Number(focus))
+    if (row) {
+      // 任務「驗收步驟」帶 ?settle=1 → 可核銷狀態直接開核銷 modal，否則開明細
+      const wantSettle = searchParams.get('settle') === '1'
+      if (wantSettle && (row.status === '已核准' || row.status === '核銷已退回')) {
+        openSettle(row)
+      } else {
+        openDetail(row)
+      }
+      // 清掉 URL param 避免重整時又跳出來
+      setSearchParams(sp => { const x = new URLSearchParams(sp); x.delete('focus'); x.delete('settle'); return x }, { replace: true })
+    }
+  }, [requests, searchParams]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 從任務填寫狀態跳過來 ?new=1&binding_id=N → 自動開新增申請 modal
+  // 開完就把 new=1 拿掉，避免關 modal 後重彈；binding_id 留著給 submit 使用
+  useEffect(() => {
+    if (searchParams.get('new') === '1' && !showModal) {
+      const next = new URLSearchParams(searchParams)
+      next.delete('new')
+      setSearchParams(next, { replace: true })
+      if (!guardCreateExpense()) return
+      setEditingId(null)
+      setForm(emptyForm)
+      setLineItems([emptyItem()])
+      setFiles([])
+      setShowModal(true)
+    }
+  }, [searchParams, showModal, setSearchParams]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Load attachments for detail view
+  const loadAttachments = async (requestId) => {
+    const { data } = await supabase.from('expense_request_attachments')
+      .select('*').eq('request_id', requestId).order('created_at')
+    setAttachments(prev => ({ ...prev, [requestId]: data || [] }))
+  }
+
+  const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf', 'text/csv', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']
+  const MAX_SIZE = 10 * 1024 * 1024 // 10MB
+
+  // Upload files to Supabase Storage
+  const uploadFiles = async (requestId, fileList, stage = 'request') => {
+    // ★ 上限：每個 request 每個 stage 最多 20 個附件
+    const MAX_ATTACHMENTS_PER_STAGE = 20
+    const { count: existing } = await supabase
+      .from('expense_request_attachments')
+      .select('id', { count: 'exact', head: true })
+      .eq('request_id', requestId)
+      .eq('stage', stage)
+    const existingCount = existing || 0
+    const remaining = Math.max(0, MAX_ATTACHMENTS_PER_STAGE - existingCount)
+    if (remaining === 0) {
+      toast.error(`已達附件上限 ${MAX_ATTACHMENTS_PER_STAGE} 個，請先刪除舊附件`)
+      return []
+    }
+    if (fileList.length > remaining) {
+      toast.error(`已有 ${existingCount} 個附件，最多再傳 ${remaining} 個（其餘 ${fileList.length - remaining} 個忽略）`)
+      fileList = fileList.slice(0, remaining)
+    }
+
+    const results = []
+    for (const file of fileList) {
+      if (!ALLOWED_TYPES.includes(file.type)) { toast.error(`「${file.name}」不支援此檔案類型`); continue }
+      if (file.size > MAX_SIZE) { toast.error(`「${file.name}」檔案大小超過 10MB`); continue }
+      const path = `expense-requests/${requestId}/${stage}/${Date.now()}_${safeStorageName(file.name)}`
+      const { error: upErr } = await supabase.storage.from('attachments').upload(path, file)
+      if (upErr) {
+        toast.error(`「${file.name}」上傳失敗：${upErr.message || '未知錯誤'}`)
+        console.error('[uploadFiles] storage upload error:', upErr)
+        continue
+      }
+      const { data, error: insertErr } = await supabase.from('expense_request_attachments').insert({
+        request_id: requestId,
+        file_name: file.name,
+        storage_path: path,
+        file_size: file.size,
+        file_type: file.type,
+        stage,
+        uploaded_by: form.employee || '系統',
+      }).select().single()
+      if (insertErr) {
+        toast.error(`「${file.name}」寫入失敗：${insertErr.message || '未知錯誤'}`)
+        console.error('[uploadFiles] db insert error:', insertErr)
+        continue
+      }
+      if (data) results.push(data)
+    }
+    return results
+  }
+
+  // 進入「編輯重送」模式（駁回後申請人想改內容再送出）；asClone=true → 以舊單為範本開全新單(不動原單)
+  const openEditResubmit = (req, asClone = false) => {
+    if (!guardCreateExpense()) return
+    setEditingId(asClone ? null : req.id)
+    // 複製模式：把來源單的舊附件帶進彈窗（可刪/可改），送出時複製留下的；編輯模式不帶
+    // 複製模式 + 編輯模式都帶入舊附件，讓用戶可以看到原始附件並決定保留或刪除
+    supabase.from('expense_request_attachments')
+      .select('id, file_name, storage_path, file_size, file_type, stage')
+      .eq('request_id', req.id).eq('stage', 'request')
+      .then(({ data }) => {
+        const atts = (data || []).map(a => ({
+          ...a,
+          url: supabase.storage.from('attachments').getPublicUrl(a.storage_path).data?.publicUrl,
+        }))
+        setCarriedAtts(atts)
+        if (!asClone) originalEditAttIdsRef.current = atts.map(a => a.id).filter(Boolean)
+      })
+    setForm({
+      employee: req.employee || '',
+      account_code: req.account_code || '',
+      title: req.title || '',
+      description: req.description || '',
+      estimated_amount: req.estimated_amount?.toString() || '',
+      store: req.store || '',
+      supplier: req.supplier || '',
+      billing_month: req.billing_month || '',
+      currency: req.currency || 'TWD',
+      settle_assignee_id: req.settle_assignee_id ? String(req.settle_assignee_id) : '',
+      settle_department_id: req.settle_department_id ? String(req.settle_department_id) : '',
+      settle_store_id: req.settle_store_id ? String(req.settle_store_id) : '',
+      acceptance_units: Array.isArray(req.acceptance_units) ? req.acceptance_units : [],
+    })
+    const items = Array.isArray(req.items) && req.items.length > 0
+      ? req.items.map(it => ({
+          name: it.name || '',
+          qty: it.qty?.toString() || '',
+          unit_price: it.unit_price?.toString() || '',
+          subtotal: Number(it.subtotal) || (Number(it.qty) || 0) * (Number(it.unit_price) || 0),
+        }))
+      : [emptyItem()]
+    setLineItems(items)
+    setIsExpense(docType === 'order' ? true : req.is_expense !== false)
+    setFiles([])
+    setErrors({})
+    setShowModal(true)
+  }
+
+  // Submit new request OR re-submit edited request
+  const handleSubmit = async () => {
+    // 叫貨(order):每列 = 廠商 + 金額(存 subtotal),不看數量;一般費用:品名 + 數量
+    const validItems = docType === 'order'
+      ? lineItems.filter(li => li.name && Number(li.subtotal) > 0)
+      : lineItems.filter(li => li.name && li.qty > 0)
+    const total = validItems.length > 0 ? validItems.reduce((s, li) => s + (Number(li.subtotal) || 0), 0) : Number(form.estimated_amount)
+
+    // 非費用：只驗 申請人 + 主旨；費用：驗會計科目 + 品項合計 + 門市必填
+    if (isExpense) {
+      const validateForm = { ...form, _total: total }
+      if (!validateRequired(validateForm, ['employee', 'account_code', 'title', '_total', 'store', 'settle_assignee_id'], setErrors, { zeroInvalid: true })) return
+    } else {
+      if (!validateRequired(form, ['employee', 'title'], setErrors)) return
+    }
+
+    if (files.length === 0) {
+      const proceed = await confirm('尚未附上任何附件（訂購單、報價單等），確定要直接提交？')
+      if (!proceed) return
+    }
+
+    setSaving(true)
+    const emp = employees.find(e => e.name === form.employee)
+    const acc = isExpense ? accounts.find(a => a.code === form.account_code) : null
+    const payload = {
+      employee: form.employee,
+      employee_id: emp?.id || null,
+      department: emp?.dept || null,
+      is_expense: isExpense,
+      account_code: isExpense ? form.account_code : null,
+      account_name: isExpense ? (acc?.name || '') : null,
+      title: form.title,
+      description: form.description || null,
+      estimated_amount: isExpense ? total : null,
+      // 叫貨:單頭 supplier 存「各列廠商去重彙總」供列表/明細顯示;對帳改讀 items 每列廠商,不靠這欄
+      supplier: docType === 'order'
+        ? ([...new Set(validItems.map(li => li.name).filter(Boolean))].join('、') || null)
+        : (isExpense ? (form.supplier || null) : null),
+      billing_month: docType === 'order' ? (form.billing_month || null) : null,
+      items: isExpense ? validItems : null,
+      store: isExpense ? (form.store || null) : null,
+      currency: isExpense ? (form.currency || 'TWD') : 'TWD',
+      acceptance_units: isExpense ? (form.acceptance_units || []) : [],
+      // 驗收人 — 申請時直接指定一位員工(可含自己);部門/門市改不再使用(留 null)
+      settle_assignee_id: isExpense && form.settle_assignee_id ? Number(form.settle_assignee_id) : null,
+      settle_department_id: null,
+      settle_store_id: null,
+      organization_id: profile?.organization_id ?? null,
+      doc_type: docType,
+    }
+    if (!payload.organization_id) {
+      setError('身份未載入完成，請重新登入再操作')
+      setSaving(false)
+      return
+    }
+
+    // ── 編輯重送路徑 ──
+    if (editingId) {
+      const { error: updErr } = await supabase.from('expense_requests')
+        .update({ ...payload, status: '申請中', reject_reason: null })
+        .eq('id', editingId)
+      if (updErr) { setError(updErr.message); setSaving(false); return }
+
+      if (files.length > 0) {
+        await uploadFiles(editingId, files, 'request')
+      }
+
+      // 編輯模式：刪除用戶在彈窗內移除的原有附件
+      if (originalEditAttIdsRef.current.length > 0) {
+        const keptIds = new Set(carriedAtts.map(a => a.id).filter(Boolean))
+        const toDelete = originalEditAttIdsRef.current.filter(id => !keptIds.has(id))
+        if (toDelete.length > 0) {
+          await supabase.from('expense_request_attachments').delete().in('id', toDelete)
+        }
+        originalEditAttIdsRef.current = []
+      }
+
+      // 重啟對應 workflow_instance 的駁回那關 → DB trigger 自動推 LINE
+      try {
+        const { data: rpcResult, error: rpcErr } = await supabase.rpc('resume_workflow_for_request', {
+          p_type: 'expense_request',
+          p_id: editingId,
+        })
+        if (rpcErr) {
+          console.error('[resume_workflow] error:', rpcErr)
+          toast.error('簽核流程重啟失敗：' + rpcErr.message)
+        } else console.log('[resume_workflow] result:', rpcResult)
+      } catch (e) {
+        console.error('[resume_workflow] failed:', e)
+        toast.error('簽核流程重啟失敗：' + (e.message || '未知錯誤'))
+      }
+
+      setSaving(false)
+      setShowModal(false)
+      setForm(emptyForm)
+      setLineItems([emptyItem()])
+      setFiles([])
+      setEditingId(null)
+      load()
+      return
+    }
+
+    // ── 新增路徑（原邏輯）──
+    payload.status = '申請中'
+    // 從 URL 取 binding_id（任務頁帶過來的）
+    const bindingId = searchParams.get('binding_id')
+    if (bindingId) payload.linked_binding_id = Number(bindingId)
+    const { data, error: insertErr } = await supabase.from('expense_requests').insert(payload).select().single()
+    if (insertErr) { setError(insertErr.message); setSaving(false); return }
+
+    // Upload attachments
+    if (files.length > 0 && data) {
+      await uploadFiles(data.id, files, 'request')
+    }
+
+    // 複製重送：把彈窗內「留下的」舊附件複製到新單。
+    // ★ 連 storage 檔也複製一份到新單自己的路徑 → 各自獨立，刪原單不影響新單（反之亦然）。
+    //   不動原單任何紀錄；copy 失敗才退回共用原路徑（至少看得到）。
+    if (carriedAtts.length > 0 && data) {
+      const rows = []
+      for (const a of carriedAtts) {
+        const newPath = `expense-requests/${data.id}/request/${Date.now()}_${safeStorageName(a.file_name)}`
+        const { error: cpErr } = await supabase.storage.from('attachments').copy(a.storage_path, newPath)
+        rows.push({
+          file_name: a.file_name,
+          storage_path: cpErr ? a.storage_path : newPath,
+          file_size: a.file_size, file_type: a.file_type, stage: 'request',
+          request_id: data.id, uploaded_by: form.employee || '系統',
+        })
+      }
+      await supabase.from('expense_request_attachments').insert(rows)
+    }
+    setCarriedAtts([])
+
+    // Create approval workflow + 把 instance.id 寫回 expense_request 建立雙向 link
+    if (data) {
+      try {
+        const wfResult = await createApprovalWorkflow('expense_request', data, form.employee)
+        if (wfResult?.error) {
+          console.error('[createApprovalWorkflow] error:', wfResult.error)
+          toast.error('簽核流程建立失敗：' + (wfResult.error.message || wfResult.error))
+        }
+        if (wfResult?.instance?.id) {
+          await supabase.from('expense_requests')
+            .update({ workflow_instance_id: wfResult.instance.id })
+            .eq('id', data.id)
+        }
+      } catch (e) {
+        console.error('[createApprovalWorkflow] failed:', e)
+        toast.error('簽核流程建立失敗：' + (e.message || '未知錯誤'))
+      }
+    }
+
+    setSaving(false)
+    setShowModal(false)
+    setForm(emptyForm)
+    setLineItems([emptyItem()])
+    setFiles([])
+    load()
+    postBindingFillDone(bindingId ? Number(bindingId) : null)  // 任務 iframe inline：通知父視窗完成
+  }
+
+  // ★ 走 chain step-by-step 推進（呼 expense_request_step_advance RPC）
+  // RPC 會驗證 caller 是否對應目前 chain step，通過才推進；最後一關才標 '已核准'
+  // 沒綁 chain → RPC 自動 fallback 到舊單關行為
+  const handleApprove = async (req) => {
+    const { data, error } = await supabase.rpc('expense_request_step_advance', {
+      p_id: req.id, p_action: 'approve', p_reason: null,
+    })
+    if (error) { setError(error.message); return }
+    if (!data?.ok) {
+      const msg = {
+        NOT_AUTHENTICATED: '尚未登入',
+        EMPLOYEE_NOT_FOUND: '找不到員工資料（auth_user_id 沒綁）',
+        NOT_FOUND: '找不到此申請',
+        NOT_PENDING: `此申請目前狀態 ${data.current_status}，無法核准`,
+        STEP_NOT_FOUND: `chain 第 ${data.current_step + 1} 關沒設定`,
+        NOT_AUTHORIZED_FOR_STEP: `你不是目前這關的簽核者（第 ${data.current_step + 1} 關需要 ${data.expected_role}）`,
+        PENDING_EXTRA_SIGNER: data?.message || '此單據有加簽請求進行中，請等加簽人完成後再簽核',
+      }[data?.error] || `核准失敗：${data?.error || 'unknown'}`
+      toast.error(msg); return
+    }
+    if (data.fully_approved) {
+      toast.success('已通過全部簽核關卡')
+    } else {
+      toast.success(`已通過第 ${data.advanced_to_step} 關，等下一關簽核`)
+    }
+    load()
+    setShowDetail(null)
+    returnNav()  // 從「我的待簽」點來的，簽完自動回待簽繼續簽下一個（非待簽進來則 no-op）
+  }
+
+  // Open settle modal
+  const openSettle = (req) => {
+    openDetail(req)  // ★ 同時建明細+簽核鏈:關掉送驗收框後露出的明細才不會空鏈,下載簽呈也才有簽核流程
+    if (!guardCreateExpense()) return
+    setSettleEditMode(false)
+    // 重新核銷：保留原本填的金額；首次核銷：以申請金額為預設值
+    setSettleForm({
+      actual_amount: req.actual_amount ?? req.estimated_amount,
+      notes: req.notes || '',
+    })
+    setSettleFiles([])
+    setShowSettleModal(true)
+  }
+
+  // 編輯「已送出、還沒人簽」的待核銷單（不重送、不動鏈；走 update_pending_settle）
+  const openSettleEdit = (req) => {
+    openDetail(req)  // ★ 建簽核鏈:關掉編輯驗收框後露出的明細才有簽核流程、簽呈才正常
+    if (!guardCreateExpense()) return
+    setSettleEditMode(true)
+    setSettleForm({
+      actual_amount: req.actual_amount ?? req.estimated_amount,
+      notes: req.notes || '',
+    })
+    setSettleFiles([])
+    setShowSettleModal(true)
+  }
+
+  // 儲存待核銷編輯：只改金額/備註 + 補收據，不改狀態、不推鏈
+  const handleSaveSettleEdit = async () => {
+    if (!validateRequired(settleForm, ['actual_amount'], setErrors)) {
+      toast.error('請先填寫實際金額')
+      return
+    }
+    setSaving(true)
+    const req = showDetail
+    const { data: res, error: upErr } = await supabase.rpc('update_pending_settle', {
+      p_id: req.id,
+      p_actual_amount: Number(settleForm.actual_amount),
+      p_notes: settleForm.notes || null,
+    })
+    if (upErr) { toast.error('儲存失敗：' + upErr.message); setSaving(false); return }
+    if (!res?.ok) {
+      const map = {
+        ALREADY_SIGNED: '已有人簽核，無法再編輯（請等簽核人退回後重送）',
+        NOT_PENDING_SETTLE: `此單狀態（${res?.status || ''}）無法編輯驗收`,
+        NOT_SETTLE_OWNER: '只有驗收/核銷負責人才能編輯此單',
+        NOT_FOUND: '找不到此單', AMOUNT_REQUIRED: '請填寫實際金額', NOT_AUTHENTICATED: '尚未登入',
+      }
+      toast.error('儲存失敗：' + (map[res?.error] || res?.error || '未知錯誤'))
+      setSaving(false)
+      return
+    }
+    // 補上新增的收據附件（沿用既有 settlement stage 上傳）
+    if (settleFiles.length > 0) {
+      await uploadFiles(req.id, settleFiles, 'settlement')
+    }
+    setSaving(false)
+    setShowSettleModal(false)
+    setSettleEditMode(false)
+    setShowDetail(null)
+    setDetailChainSteps([])
+    toast.success('驗收單已更新')
+    load()
+  }
+
+  // Open detail modal: load attachments + build 2-stage chain steps
+  //
+  // 治本：簽核流程改走後端聚合 RPC get_expense_request_chain_full（一次回完整步驟），
+  // 取代下方一長串序列 await。RPC 輸出與舊組裝逐單比對 174/174 一致
+  // （scripts/_diff_chain_full.mjs）。出問題把 USE_AGGREGATE_CHAIN_RPC 改 false 即回退舊路徑；
+  // 舊邏輯也是 RPC 失敗時的自動 fallback，雙保險。
+  const USE_AGGREGATE_CHAIN_RPC = true
+  const openDetail = async (req) => {
+    detailRowIdRef.current = req.id
+    setShowDetail(req)
+    loadAttachments(req.id)
+    setLoadingChain(true)
+    setDetailChainSteps([])
+
+    // ── 快路徑：一支聚合 RPC 拿完整 finalSteps ──
+    if (USE_AGGREGATE_CHAIN_RPC) {
+      try {
+        const { data, error } = await supabase.rpc('get_expense_request_chain_full', {
+          p_id: req.id,
+          p_applicant_emp_id: req.employee_id ?? null,
+        })
+        if (error) throw error
+        if (detailRowIdRef.current !== req.id) return
+        setDetailChainSteps(Array.isArray(data) ? data : [])
+        setLoadingChain(false)
+        return
+      } catch (e) {
+        // RPC 失敗 → 不中斷使用者，落回下方舊組裝邏輯
+        console.warn('[openDetail] get_expense_request_chain_full 失敗，fallback 舊組裝:', e)
+      }
+    }
+
+    const isPending  = req.status === '待核銷'
+    const isSettled  = req.status === '已核銷'
+    const inSettleStage = isPending || isSettled
+
+    // 預抓 chain steps 對應的 employee 名字 → approverMap，傳給 buildChainBasedSteps
+    let approverMap = {}
+    if (req.approval_chain_id) {
+      const { data: rawSteps } = await supabase
+        .from('approval_chain_steps')
+        .select('target_emp_id')
+        .eq('chain_id', req.approval_chain_id)
+      const empIds = [...new Set((rawSteps || []).map(s => s.target_emp_id).filter(Boolean))]
+      if (empIds.length > 0) {
+        const { data: emps } = await supabase.from('employees').select('id, name').in('id', empIds)
+        approverMap = Object.fromEntries((emps || []).map(e => [e.id, e.name]))
+      }
+    }
+
+    // 餵 buildChainBasedSteps：用 row.current_step（新加的欄位）真實推進度
+    // 沒 chain → buildChainBasedSteps 自己 fallback 給「主管核示」單關
+    const fakeRow = {
+      id: req.id,  // ★ buildChainBasedSteps 用來查 approval_extra_steps（加簽 merge）
+      approval_chain_id: req.approval_chain_id || null,
+      current_step: req.current_step || 0,
+      // ★ 必須帶 employee_id 給 get_chain_step_display_names 解動態 target（applicant_dept_manager 等）
+      employee_id: req.employee_id,
+      // 待核銷 視為 chain 全完，讓 buildChainBasedSteps 把所有 chain step 標 completed
+      status: req.status === '待核銷' ? '已核准' : req.status,
+      approved_at: req.approved_at,
+      reject_reason: req.reject_reason,
+      approver: req.approved_by ? { name: req.approved_by } : null,
+    }
+
+    let baseSteps = []
+    try {
+      baseSteps = await buildChainBasedSteps({
+        row: fakeRow,
+        applicantName: req.employee,
+        applicantCreatedAt: req.created_at,
+        approverMap,
+        sourceTable: 'expense_requests',  // ★ P3b 加簽 merge
+      })
+    } catch (e) {
+      console.error('buildChainBasedSteps failed:', e)
+    }
+
+    // 合併簽核時間軸（每關完成時間）：approval_step_history 由 trigger 自動寫入
+    try {
+      const { data: timeline } = await supabase.rpc('get_approval_timeline', {
+        p_request_type: 'expense_request',
+        p_request_id: req.id,
+      })
+      const tlByStep = {}
+      ;(timeline || []).forEach(t => { tlByStep[t.step_order] = t })
+      // mergeExtraSteps 後 baseSteps = [申請人, ...可能含加簽..., chain_step_0, chain_step_1, ...]
+      // 用獨立 chainStepIdx 對齊 timeline.step_order，跳過 applicant 跟加簽 step
+      let chainStepIdx = 0
+      baseSteps = baseSteps.map(s => {
+        if (s.isApplicant) return s
+        if (s.kind === 'extra') return s
+        const tl = tlByStep[chainStepIdx]
+        chainStepIdx += 1
+        if (!tl || !tl.exited_at) return s
+        if (s.status !== 'completed' && s.status !== 'rejected') return s
+        return { ...s, completedAt: tl.exited_at, durationText: tl.duration_text }
+      })
+    } catch (e) {
+      console.warn('[get_approval_timeline] failed:', e)
+    }
+
+    let finalSteps = baseSteps
+    if (inSettleStage) {
+      if (req.settle_chain_id) {
+        // 有核銷鏈 → 抓真正的步驟並顯示進度
+        // 優先讀快照（凍結的 chain），fallback live chain
+        let rawSettleSteps = []
+        const { data: snapRows } = await supabase
+          .from('request_chain_snapshots')
+          .select('step_order, label, role_name, target_type, target_emp_id')
+          .eq('request_type', 'expense_settle')
+          .eq('request_id', req.id)
+          .order('step_order')
+
+        if (snapRows?.length > 0) {
+          // 快照已有解析好的 target_emp_id，查名字即可
+          const snapEmpIds = [...new Set(snapRows.map(s => s.target_emp_id).filter(Boolean))]
+          let snapEmpMap = {}
+          if (snapEmpIds.length > 0) {
+            const { data: snapEmps } = await supabase.from('employees').select('id, name').in('id', snapEmpIds)
+            snapEmpMap = Object.fromEntries((snapEmps || []).map(e => [e.id, e.name]))
+          }
+          rawSettleSteps = snapRows.map(s => ({
+            ...s,
+            names: s.target_emp_id ? (snapEmpMap[s.target_emp_id] || '') : (s.role_name || s.label || ''),
+          }))
+        } else {
+          // fallback：live chain + get_chain_step_display_names
+          const { data: resolvedSettleSteps } = await supabase.rpc('get_chain_step_display_names', {
+            p_chain_id: req.settle_chain_id,
+            p_applicant_emp_id: req.employee_id,
+          })
+          rawSettleSteps = Array.isArray(resolvedSettleSteps) ? resolvedSettleSteps : []
+        }
+
+        const curStep = req.settle_current_step ?? 0
+        const totalSteps = rawSettleSteps.length
+
+        // 核銷鏈時間軸（同主審批鏈）
+        const settleTlByStep = {}
+        let settleSnapshotCreatedAt = null
+        try {
+          const [{ data: settleTl }, { data: snapshotRow }] = await Promise.all([
+            supabase.rpc('get_approval_timeline', {
+              p_request_type: 'expense_settle',
+              p_request_id: req.id,
+            }),
+            supabase.from('request_chain_snapshots')
+              .select('created_at')
+              .eq('request_type', 'expense_settle')
+              .eq('request_id', req.id)
+              .limit(1)
+              .maybeSingle(),
+          ])
+          ;(settleTl || []).forEach(t => { settleTlByStep[t.step_order] = t })
+          settleSnapshotCreatedAt = snapshotRow?.created_at || null
+        } catch (_) {}
+
+        const settleSteps = rawSettleSteps.map(s => {
+          const empName = s.names || ''
+          const isLastStep = s.step_order === totalSteps - 1
+          let stepStatus, stepName, completedAt, durationText
+          if (isSettled) {
+            stepStatus = 'completed'
+            stepName = isLastStep ? (req.settled_by || empName) : empName
+            completedAt = isLastStep ? req.settled_at : undefined
+          } else if (s.step_order < curStep) {
+            stepStatus = 'completed'
+            stepName = empName
+          } else if (s.step_order === curStep) {
+            stepStatus = 'current'
+            stepName = empName
+          } else {
+            stepStatus = 'pending'
+            stepName = empName
+          }
+          const tl = settleTlByStep[s.step_order]
+          if (tl?.exited_at && (stepStatus === 'completed')) {
+            completedAt = completedAt || tl.exited_at
+            durationText = tl.duration_text
+          }
+          return {
+            label: s.label || s.role_name || `核銷第 ${s.step_order + 1} 關`,
+            name: stepName,
+            status: stepStatus,
+            completedAt,
+            durationText,
+            archival: false,
+            isSettle: true,
+          }
+        })
+        const settleStartAt = settleSnapshotCreatedAt || settleTlByStep[0]?.entered_at || null
+        let settleIntervalText = null
+        if (settleStartAt && req.approved_at) {
+          const diffSec = Math.floor((new Date(settleStartAt) - new Date(req.approved_at)) / 1000)
+          if (diffSec < 3600)       settleIntervalText = `核准後 ${Math.floor(diffSec / 60)} 分鐘送驗收`
+          else if (diffSec < 86400) settleIntervalText = `核准後 ${Math.floor(diffSec / 3600)} 小時送驗收`
+          else                      settleIntervalText = `核准後 ${Math.floor(diffSec / 86400)} 天送驗收`
+        }
+        const settleApplicantStep = {
+          label: '申請人（送核銷/驗收）',
+          name: req.employee,
+          status: 'completed',
+          completedAt: settleStartAt,
+          noteText: settleIntervalText,
+          isSettle: true,
+          isApplicant: true,
+        }
+        finalSteps = [
+          ...baseSteps,
+          { kind: 'settle_divider' },
+          settleApplicantStep,
+          ...settleSteps,
+        ]
+      } else {
+        // 無核銷鏈設定 → fallback 單關佔位
+        finalSteps = [...baseSteps, {
+          label: '財務核章',
+          name: isSettled ? (req.settled_by || '') : '',
+          status: isSettled ? 'completed' : 'current',
+          completedAt: isSettled ? req.settled_at : undefined,
+          archival: false,
+          isSettle: true,
+        }]
+      }
+    }
+
+    if (detailRowIdRef.current !== req.id) return
+    setDetailChainSteps(finalSteps)
+    setLoadingChain(false)
+  }
+
+  // Submit settlement
+  const handleSettle = async () => {
+    if (!validateRequired(settleForm, ['actual_amount'], setErrors)) {
+      toast.error('請先填寫實際金額')
+      return
+    }
+    setSaving(true)
+    const req = showDetail
+    // 送驗收走 SECURITY DEFINER RPC：核銷負責人(非 admin)直接 UPDATE 會被 RLS 靜默擋掉→沒反應。
+    // RPC 內把關(核銷負責人/申請人/admin)並處理重送清鏈。狀態→待核銷 觸發既有掛鏈 trigger。
+    const { data: res, error: upErr } = await supabase.rpc('submit_expense_settle', {
+      p_id: req.id,
+      p_actual_amount: Number(settleForm.actual_amount),
+      p_notes: settleForm.notes || null,
+    })
+    if (upErr) { toast.error('送驗收失敗：' + upErr.message); setSaving(false); return }
+    if (!res?.ok) {
+      const map = {
+        NOT_SETTLE_OWNER: '只有驗收/核銷負責人才能送此單',
+        NOT_SETTLEABLE: `此單狀態（${res?.status || ''}）無法送驗收`,
+        NOT_FOUND: '找不到此單', AMOUNT_REQUIRED: '請填寫實際金額', NOT_AUTHENTICATED: '尚未登入',
+      }
+      toast.error('送驗收失敗：' + (map[res?.error] || res?.error || '未知錯誤'))
+      setSaving(false)
+      return
+    }
+
+    // Upload settlement attachments (receipts)
+    if (settleFiles.length > 0) {
+      await uploadFiles(req.id, settleFiles, 'settlement')
+    }
+
+    setSaving(false)
+    setShowSettleModal(false)
+    // openSettle 為了讓 handleSettle 讀 req 也 setShowDetail(req),但沒建 detailChainSteps；
+    // 核銷 modal 一關,底下那個「空 chain」的明細(showDetail && !showSettleModal)就會露出來
+    // 顯示「尚未設定簽核鏈」→ 一併關掉,別讓殘影跳出來。
+    setShowDetail(null)
+    setDetailChainSteps([])
+    load()
+    postBindingFillDone(null)  // 任務 iframe inline（核銷段）：通知父視窗完成
+    returnNav()  // 從「待送驗收」點來的(帶 returnTo)→ 送完自動回儀表板；無 returnTo 則 no-op
+  }
+
+  // 核銷簽核：呼叫 RPC 推 settle chain 一步；最後一關通過 → 開分錄 + 已核銷
+  // 沒掛 settle_chain_id 時 RPC 內 fallback：直接 confirm（舊行為，admin 一鍵）
+  const handleConfirmSettle = async (req) => {
+    const { data, error } = await supabase.rpc('expense_settle_step_advance', {
+      p_id: req.id,
+      p_action: 'approve',
+      p_reason: null,
+    })
+    if (error) { toast.error(error.message); return }
+    if (!data?.ok) {
+      const map = {
+        NOT_AUTHENTICATED: '尚未登入',
+        EMPLOYEE_NOT_FOUND: '找不到對應員工',
+        NOT_FOUND: '找不到此申請單',
+        NOT_PENDING_SETTLE: `狀態不是待驗收（${data?.current_status}）`,
+        NOT_AUTHORIZED_FOR_STEP: '此關不是你負責',
+        STEP_NOT_FOUND: 'chain step 設定異常',
+        PENDING_EXTRA_STEP: '此關有加簽待處理，請等加簽完成後再核准',
+      }
+      toast.error(verb(map[data?.error] || data?.error || '驗收失敗', DOC))
+      return
+    }
+    toast.success(data.fully_settled ? verb('驗收完成', DOC) : `推進到下一關（第 ${data.advanced_to_step + 1} 關）`)
+    load()
+    setShowDetail(null)
+    returnNav()  // 從「我的待簽」點來的，簽完自動回待簽
+  }
+
+  const handleDelete = async (row) => {
+    if (!(await confirm({ message: '移至最近刪除？可在 60 天內復原。' }))) return
+    const { error } = await supabase.rpc('soft_delete_request', { p_table: 'expense_requests', p_id: row.id, p_deleted_by: profile?.id ?? null })
+    if (error) { toast.error('刪除失敗：' + error.message); return }
+    toast.success('已移至最近刪除')
+    load()
+  }
+
+  // Filter
+  //   '未送核銷' (虛擬) → DB status='已核准'
+  //   '已核准' 卡片數字 = 累計 → 點下去要顯示 4 種狀態
+  const APPROVED_GROUP = ['已核准', '待核銷', '已核銷', '核銷已退回']
+  const q = search.trim()
+  const filtered = requests.filter(r => {
+    if (tab !== 'all') {
+      if (tab === '未送核銷') {
+        if (r.status !== '已核准' || r.is_expense === false) return false  // 非費用核准即完成,不算未送核銷
+      } else if (tab === '已核准') {
+        if (!APPROVED_GROUP.includes(r.status)) return false
+      } else {
+        if (r.status !== tab) return false
+      }
+    }
+    if (!q) return true
+    return [String(r.id), r.employee, r.title, r.account_code].some(f => (f||'').toLowerCase().includes(q.toLowerCase()))
+  })
+
+  const counts = {}
+  requests.forEach(r => { counts[r.status] = (counts[r.status] || 0) + 1 })
+  // 「未送核銷」= DB 內 status='已核准' 還沒按送核銷的(非費用核准即完成,不列入)
+  counts['未送核銷'] = requests.filter(r => r.status === '已核准' && r.is_expense !== false).length
+  // 「已核准」總數 = 已通過簽核累計（含後續核銷階段 + 核准即完成的非費用）
+  counts['已核准'] = requests.filter(r => APPROVED_GROUP.includes(r.status)).length
+
+  if (loading) return <LoadingSpinner />
+
+  return (
+    <div className="fade-in">
+      <div className="page-header">
+        <div className="page-header-row">
+          <div>
+            <h2><span className="header-icon">{DOC.icon}</span> {DOC.label}</h2>
+            <p>{DOC.subtitle}</p>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {hasPermission('approval_chain.edit') && (
+              <>
+                <button className="btn btn-secondary" onClick={() => navigate(`/process/settings/chains/edit?formType=${DOC.chainFormType}&label=${DOC.chainLabel}&mode=amount_grouped`)} title={`設定${DOC.label}的金額分組簽核流程`}>
+                  <Settings size={14} /> 申請簽核
+                </button>
+                <button className="btn btn-secondary" onClick={() => navigate(`/process/settings/chains/edit?formType=${DOC.settleFormType}&label=${DOC.settleLabel}&mode=amount_grouped`)} title={`設定${DOC.settleLabel}的金額分組簽核流程`}>
+                  <Settings size={14} /> {verb('核銷簽核(驗收)', DOC)}
+                </button>
+                {docType === 'expense' && (
+                  <button className="btn btn-secondary" onClick={() => navigate('/process/settings/chains/edit?formType=non_expense_request&label=非費用申請')} title="設定非費用申請的簽核流程">
+                    <Settings size={14} /> 非費用簽核
+                  </button>
+                )}
+              </>
+            )}
+            <button className="btn btn-primary" onClick={() => {
+              if (!guardCreateExpense()) return
+              setEditingId(null)
+              setForm({ ...emptyForm, employee: profile?.name || '' })
+              setLineItems([emptyItem()])
+              setIsExpense(true)
+              setFiles([])
+              setErrors({})
+              setShowModal(true)
+            }}>
+              <Plus size={14} /> 新增申請
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {error && (
+        <div style={{ background: 'var(--accent-red-dim)', color: 'var(--accent-red)', padding: '8px 16px', borderRadius: 8, marginBottom: 16 }}>
+          {error} <button onClick={() => setError(null)} style={{ float: 'right', background: 'none', border: 'none', cursor: 'pointer', color: 'inherit' }}><X size={14} /></button>
+        </div>
+      )}
+
+      {/* Stats */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10, marginBottom: 20 }}>
+        {['申請中', '已核准', '未送核銷', '待核銷', '已核銷', '已駁回', '核銷已退回'].map(s => (
+          <div key={s} className="card" style={{ padding: '12px 16px', cursor: 'pointer', border: tab === s ? `2px solid ${STATUS_COLORS[s].color}` : undefined }}
+            onClick={() => setTab(tab === s ? 'all' : s)}>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{verb(displayStatus(s), DOC)}</div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: STATUS_COLORS[s].color }}>{counts[s] || 0}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Search */}
+      <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', marginBottom: 12 }}>
+        <Search size={13} style={{ position: 'absolute', left: 8, color: 'var(--text-muted)', pointerEvents: 'none' }} />
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="搜尋單號 / 申請人 / 項目"
+          style={{ paddingLeft: 26, paddingRight: search ? 26 : 10, paddingTop: 5, paddingBottom: 5, borderRadius: 6, border: '1px solid var(--border-medium)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: 13, outline: 'none', width: 200 }}
+        />
+        {search && (
+          <button onClick={() => setSearch('')} style={{ position: 'absolute', right: 6, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}>
+            <X size={12} />
+          </button>
+        )}
+      </div>
+
+      {/* Table */}
+      <div className="data-table-wrapper">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th style={{ width: 55 }}>單號</th>
+              <th>申請人</th>
+              <th>科目</th>
+              <th>項目</th>
+              <th style={{ textAlign: 'right' }}>預估金額</th>
+              <th style={{ textAlign: 'right' }}>實際金額</th>
+              <th>狀態</th>
+              <th>日期</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.length === 0 && <tr><td colSpan={9} style={{ textAlign: 'center', padding: 32, color: 'var(--text-secondary)' }}>無資料</td></tr>}
+            {filtered.map(r => {
+              const sc = STATUS_COLORS[r.status] || {}
+              return (
+                <tr key={r.id} onClick={() => openDetail(r)} style={{ cursor: 'pointer' }} title="點擊查看簽核明細">
+                  <td style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>#{r.id}</td>
+                  <td style={{ fontWeight: 600 }}>{r.employee}</td>
+                  <td>
+                    {r.is_expense === false
+                      ? <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 4, background: 'var(--accent-purple-dim)', color: 'var(--accent-purple)', fontWeight: 600 }}>非費用</span>
+                      : <><span style={{ fontFamily: 'monospace', fontSize: 11 }}>{r.account_code}</span> {r.account_name}</>}
+                  </td>
+                  <td style={{ fontWeight: 500 }}>{r.title}</td>
+                  <td style={{ textAlign: 'right', fontFamily: 'monospace' }}>
+                    {r.is_expense === false ? '—' : (
+                      <span>
+                        {fmtCur(r.estimated_amount, r.currency)}
+                        {r.currency && r.currency !== 'TWD' && (
+                          <span style={{ fontSize: 11, fontWeight: 600, marginLeft: 4, padding: '1px 5px', borderRadius: 3,
+                            color: 'var(--accent-orange)', background: 'var(--accent-orange-dim)' }}>{r.currency}</span>
+                        )}
+                      </span>
+                    )}
+                  </td>
+                  <td style={{ textAlign: 'right', fontFamily: 'monospace' }}>
+                    {r.is_expense === false ? '—' : (r.actual_amount != null ? fmtCur(r.actual_amount, r.currency) : '-')}
+                    {r.difference != null && r.difference !== 0 && (
+                      <span style={{ fontSize: 11, color: r.difference > 0 ? 'var(--accent-red)' : 'var(--accent-green)', marginLeft: 4 }}>
+                        ({r.difference > 0 ? '+' : ''}{fmtCur(r.difference, r.currency)})
+                      </span>
+                    )}
+                  </td>
+                  <td><span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 12, fontWeight: 600, background: sc.bg, color: sc.color }}>{verb(displayStatus(r.status), DOC)}</span></td>
+                  <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{r.created_at?.slice(0, 10)}</td>
+                  <td onClick={(e) => e.stopPropagation()}>
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      {r.status === '申請中' && canApprove('expense_requests', r.id) && (() => {
+                        const extra = pendingExtras[r.id]
+                        // 有 pending 加簽顯示提示，否則顯示「點開簽核」提示
+                        if (extra) {
+                          const assigneeName = employees.find(e => e.id === extra.assignee_id)?.name || '加簽人'
+                          return (
+                            <span style={{ fontSize: 11, color: 'var(--accent-orange)', fontWeight: 600 }}>
+                              🪶 加簽中：{assigneeName}
+                            </span>
+                          )
+                        }
+                        return (
+                          <span style={{ fontSize: 11, color: 'var(--accent-cyan)', fontWeight: 600 }}>
+                            點明細簽核
+                          </span>
+                        )
+                      })()}
+                      {r.is_expense !== false && (r.status === '已核准' || r.status === '核銷已退回') && (r.settle_assignee_id === profile?.id || (!r.settle_assignee_id && r.employee_id === profile?.id)) && (
+                        <button className="btn btn-primary" style={{ padding: '4px 8px', fontSize: 11 }} onClick={() => openSettle(r)}>
+                          <Send size={12} /> {verb('驗收', DOC)}
+                        </button>
+                      )}
+                      {r.status === '待核銷' && canApprove('expense_settles', r.id) && (
+                        <span style={{ fontSize: 11, color: 'var(--accent-cyan)', fontWeight: 600 }}>{verb('點明細驗收', DOC)}</span>
+                      )}
+                      {r.status === '核銷已退回' && r.employee === profile?.name && (
+                        <button className="btn btn-primary" style={{ padding: '4px 8px', fontSize: 11, background: 'var(--accent-orange)' }} onClick={() => openSettle(r)}>
+                          ✏️ {verb('重新驗收', DOC)}
+                        </button>
+                      )}
+                      {/* 待核銷 + 還沒人簽(settle_current_step=0)→ 本人可就地編輯金額/備註/收據 */}
+                      {r.status === '待核銷' && (r.settle_current_step ?? 0) === 0 && (r.settle_assignee_id === profile?.id || (!r.settle_assignee_id && r.employee_id === profile?.id)) && (
+                        <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: 11 }} onClick={() => openSettleEdit(r)}>
+                          ✏️ {verb('編輯驗收', DOC)}
+                        </button>
+                      )}
+                      {/* 編輯:駁回/退回可改重送;申請中/待審只有「還沒人簽(current_step=0)」才給編。
+                          簽過就不能改(後端 trg_block_edit_after_signed_expense 亦擋),要改先請簽核人退回。 */}
+                      {r.employee === profile?.name
+                        && (['已駁回','已退回'].includes(r.status)
+                            || (['申請中','待審'].includes(r.status) && (r.current_step || 0) === 0)) && (
+                        <button className="btn btn-primary" style={{ padding: '4px 8px', fontSize: 11, background: 'var(--accent-orange)' }} onClick={() => openEditResubmit(r)}>
+                          ✏️ {(r.status === '已駁回' || r.status === '已退回') ? '編輯重送' : '編輯'}
+                        </button>
+                      )}
+                      {r.employee === profile?.name && (
+                        <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: 11, color: 'var(--accent-cyan)' }} onClick={() => openEditResubmit(r, true)} title="以這張為範本，開一張全新申請（不動原單）">
+                          📋 複製重送
+                        </button>
+                      )}
+                      {canDeleteAll && (
+                        <button className="btn btn-sm btn-secondary" style={{ fontSize: 11, padding: '3px 8px', color: 'var(--accent-red)' }} onClick={() => handleDelete(r)} title="永久刪除">
+                          刪除
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* New Request Modal */}
+      <ExpenseFormModal
+        open={showModal && (docType === 'order' || isSuperAdmin)}
+        onClose={() => { setShowModal(false); setErrors({}); setCarriedAtts([]) }}
+        form={form}
+        setForm={setForm}
+        lineItems={lineItems}
+        setLineItems={setLineItems}
+        files={files}
+        setFiles={setFiles}
+        carriedAtts={carriedAtts}
+        onRemoveCarried={removeCarriedAtt}
+        employees={employees}
+        accounts={accounts}
+        stores={stores}
+        departments={departments}
+        editingId={editingId}
+        isExpense={isExpense}
+        setIsExpense={setIsExpense}
+        onSubmit={handleSubmit}
+        saving={saving}
+        errors={errors}
+        setErrors={setErrors}
+        currency={form.currency}
+        currencies={currencies}
+        onCurrencyChange={v => setForm(f => ({ ...f, currency: v }))}
+        docType={docType}
+        orgId={profile?.organization_id ?? getTenantOrgId()}
+      />
+
+      {/* Settlement Modal */}
+      <SettleModal
+        open={showSettleModal && !!showDetail && (docType === 'order' || isSuperAdmin)}
+        onClose={() => { setShowSettleModal(false); setSettleEditMode(false); setErrors({}); setSettleFiles([]) }}
+        request={showDetail}
+        settleForm={settleForm}
+        setSettleForm={setSettleForm}
+        settleFiles={settleFiles}
+        setSettleFiles={setSettleFiles}
+        onSubmit={settleEditMode ? handleSaveSettleEdit : handleSettle}
+        saving={saving}
+        errors={errors}
+        setErrors={setErrors}
+        settleVerb={DOC.settleVerb}
+        editMode={settleEditMode}
+      />
+
+      {/* Detail Modal — split layout 與其他簽核表單一致 */}
+      {showDetail && !showSettleModal && (() => {
+        const empRow = employees.find(e => e.name === showDetail.employee)
+        // 核銷(驗收)階段:頭部人物卡秀「驗收人」(settle_assignee),而非申請人
+        const inSettleStage = ['待核銷', '已核銷', '核銷已退回'].includes(showDetail.status)
+        const settlerRow = inSettleStage && showDetail.settle_assignee_id
+          ? employees.find(e => e.id === showDetail.settle_assignee_id) : null
+        const headEmp = settlerRow || empRow
+        const isNonExpense = showDetail.is_expense === false
+        const fields = isNonExpense
+          ? [
+              { label: '類型', value: '非費用申請' },
+              { label: '部門', value: showDetail.department || '—' },
+              { label: '主旨', value: showDetail.title || '—' },
+              ...(showDetail.description ? [{ label: '說明', value: showDetail.description, multiline: true }] : []),
+            ]
+          : (() => {
+              // 驗收人:新制直接存 settle_assignee_id(顯示人名);舊單無 assignee 時 fallback 舊部門/門市
+              const settleAssignee = showDetail.settle_assignee_id ? employees.find(e => e.id === showDetail.settle_assignee_id) : null
+              const settleDept = departments.find(d => d.id === showDetail.settle_department_id)
+              const settleStore = stores.find(s => s.id === showDetail.settle_store_id)
+              const settleUnitLabel = settleDept
+                ? (settleStore ? `${settleDept.name}／${settleStore.name}` : settleDept.name)
+                : null
+              return [
+                { label: '申請人', value: showDetail.employee || '—' },
+                { label: '部門', value: showDetail.department || '—' },
+                { label: '科目', value: `${showDetail.account_code || ''} ${showDetail.account_name || ''}`.trim() || '—' },
+                { label: '門市', value: showDetail.store || '—' },
+                { label: '供應商', value: showDetail.supplier || '—' },
+                ...(docType === 'order' && showDetail.billing_month ? [{ label: '帳務月份', value: showDetail.billing_month }] : []),
+                { label: '項目', value: showDetail.title || '—' },
+                ...(settleAssignee
+                    ? [{ label: verb('驗收人', DOC), value: settleAssignee.name }]
+                    : settleUnitLabel ? [{ label: verb('驗收單位', DOC), value: settleUnitLabel }] : []),
+                ...(showDetail.acceptance_units?.length ? [{ label: '驗收單位（多選）', value: showDetail.acceptance_units.join('、') }] : []),
+                ...(showDetail.description ? [{ label: '說明', value: showDetail.description, multiline: true }] : []),
+              ]
+            })()
+
+        // 明細表格 — 始終顯示，無品項時顯示空白提示（非費用整段隱藏）
+        if (!isNonExpense) fields.push({
+          label: docType === 'order' ? '廠商明細' : '品項明細',
+          value: (
+            <div style={{ border: '1px solid var(--border-medium)', borderRadius: 8, overflow: 'hidden' }}>
+              <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ background: 'var(--bg-secondary)' }}>
+                    <th style={{ padding: '6px 8px', textAlign: 'left' }}>{docType === 'order' ? '廠商' : '品名'}</th>
+                    {docType !== 'order' && <th style={{ padding: '6px 8px', textAlign: 'right' }}>數量</th>}
+                    {docType !== 'order' && <th style={{ padding: '6px 8px', textAlign: 'right' }}>單價</th>}
+                    <th style={{ padding: '6px 8px', textAlign: 'right' }}>{docType === 'order' ? '金額' : '小計'}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {showDetail.items?.length > 0
+                    ? showDetail.items.map((li, i) => (
+                        <tr key={i} style={{ borderTop: '1px solid var(--border-subtle)' }}>
+                          <td style={{ padding: '4px 8px' }}>{li.name}</td>
+                          {docType !== 'order' && <td style={{ padding: '4px 8px', textAlign: 'right' }}>{li.qty}</td>}
+                          {docType !== 'order' && <td style={{ padding: '4px 8px', textAlign: 'right', fontFamily: 'monospace' }}>{fmtCur(li.unit_price, showDetail.currency)}</td>}
+                          <td style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 600, fontFamily: 'monospace' }}>{fmtCur(li.subtotal, showDetail.currency)}</td>
+                        </tr>
+                      ))
+                    : (
+                        <tr>
+                          <td colSpan={docType === 'order' ? 2 : 4} style={{ padding: '8px 8px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>{docType === 'order' ? '無廠商明細' : '無品項明細'}</td>
+                        </tr>
+                      )
+                  }
+                </tbody>
+              </table>
+            </div>
+          ),
+        })
+
+        // 三欄金額卡片（非費用隱藏）
+        if (!isNonExpense) fields.push({
+          label: '金額',
+          value: (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, background: 'var(--bg-secondary)', padding: 12, borderRadius: 8 }}>
+              <div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  預估金額
+                  {showDetail.currency && showDetail.currency !== 'TWD' && (
+                    <span style={{ fontSize: 11, fontWeight: 700, padding: '1px 5px', borderRadius: 3,
+                      color: 'var(--accent-orange)', background: 'var(--accent-orange-dim)' }}>{showDetail.currency}</span>
+                  )}
+                </div>
+                <div style={{ fontWeight: 700 }}>{fmtCur(showDetail.estimated_amount, showDetail.currency)}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 2 }}>實際金額</div>
+                <div style={{ fontWeight: 700 }}>{showDetail.actual_amount != null ? fmtCur(showDetail.actual_amount, showDetail.currency) : '—'}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 2 }}>差異</div>
+                <div style={{ fontWeight: 700, color: showDetail.difference > 0 ? 'var(--accent-red)' : 'var(--accent-green)' }}>
+                  {showDetail.difference != null ? fmtCur(showDetail.difference, showDetail.currency) : '—'}
+                </div>
+              </div>
+            </div>
+          ),
+        })
+
+        if (showDetail.reject_reason) fields.push({ label: '駁回原因', value: showDetail.reject_reason, multiline: true })
+        if (showDetail.notes) fields.push({ label: '驗收備註', value: showDetail.notes, multiline: true })
+
+        const atts = (attachments[showDetail.id] || []).map(a => ({
+          url: supabase.storage.from('attachments').getPublicUrl(a.storage_path).data?.publicUrl,
+          name: `${a.file_name}${a.stage === 'settlement' ? '（驗收）' : '（申請）'}`,
+          type: a.file_type,
+        }))
+
+        const handlePrintSignOff = async () => {
+          if (!employees.length) { toast.error('員工清單載入中，請稍候'); return }
+          const win = window.open('', '_blank', 'width=900,height=1100')
+          if (!win) { toast.error('請允許彈出視窗才能列印簽呈'); return }
+          try {
+            const { data: rawAtts } = await supabase.from('expense_request_attachments')
+              .select('file_name, storage_path, file_type')
+              .eq('request_id', showDetail.id)
+              .order('created_at')
+            const pdfAtts = (rawAtts || []).map(a => ({
+              url: supabase.storage.from('attachments').getPublicUrl(a.storage_path).data?.publicUrl,
+              name: a.file_name,
+              type: a.file_type,
+            }))
+            const signatures = Object.fromEntries(
+              employees.filter(e => e.signature_url).map(e => [e.name, e.signature_url])
+            )
+            const approverMap = {}
+            detailChainSteps.forEach(s => { if (s.target_emp_id && s.name) approverMap[s.target_emp_id] = s.name })
+            const _settleAssignee = showDetail.settle_assignee_id ? employees.find(e => e.id === showDetail.settle_assignee_id) : null
+            const _settleDept = departments.find(d => d.id === showDetail.settle_department_id)
+            const _settleStore = stores.find(s => s.id === showDetail.settle_store_id)
+            const _settleUnitLabel = _settleAssignee
+              ? _settleAssignee.name
+              : (_settleDept ? (_settleStore ? `${_settleDept.name}／${_settleStore.name}` : _settleDept.name) : null)
+            exportExpenseRequestPdf(showDetail, {
+              companyName: organization?.name,
+              logoUrl: organization?.logo_url,
+              attachments: pdfAtts,
+              signatures,
+              chainSteps: detailChainSteps.filter(s => s.kind !== 'settle_divider' && !(s.isSettle && s.isApplicant)),
+              approverMap,
+              settleUnitLabel: _settleUnitLabel,
+              _win: win,
+            })
+          } catch (e) {
+            win.close()
+            toast.error('產生簽呈失敗：' + (e.message || '未知錯誤'))
+          }
+        }
+
+        return (
+          <ApprovalDetailModal
+            open={!!showDetail}
+            onClose={() => { setShowDetail(null); setDetailChainSteps([]) }}
+            docTitle={`${DOC.label} #${showDetail.id}`}
+            docNo={showDetail.id}
+            status={showDetail.status}
+            applicant={{
+              name: settlerRow ? settlerRow.name : showDetail.employee,
+              name_en: headEmp?.name_en,
+              position: headEmp?.position,
+              dept: settlerRow ? (settlerRow.dept || settlerRow.department) : showDetail.department,
+              status: headEmp?.status,
+              employee_no: headEmp?.employee_number,
+            }}
+            fields={fields}
+            attachments={atts}
+            createdAt={showDetail.created_at}
+            chainSteps={loadingChain ? [{ label: '載入中…', name: '', status: 'pending' }] : detailChainSteps}
+            onPrint={handlePrintSignOff}
+            headerExtra={
+              // 待核銷 + 還沒人簽(settle_current_step=0)+ 本人 → 明細內也能直接編輯驗收
+              showDetail.status === '待核銷'
+              && (showDetail.settle_current_step ?? 0) === 0
+              && (showDetail.settle_assignee_id === profile?.id || (!showDetail.settle_assignee_id && showDetail.employee_id === profile?.id))
+                ? (
+                  <button className="btn btn-secondary" style={{ fontSize: 14, padding: '8px 14px' }} onClick={() => openSettleEdit(showDetail)}>
+                    ✏️ {verb('編輯驗收', DOC)}
+                  </button>
+                )
+                : null
+            }
+            actions={(() => {
+              // 申請中：走 expense_request_step_advance（支援加簽）
+              // 加簽 / 核准 / 退回 後重抓 row 跟 chainSteps，不關 modal
+              // 讓加簽成功時時間軸馬上顯示加簽人那一關（不用使用者自己重開 modal）
+              const refreshDetail = async () => {
+                await load()
+                const { data: fresh } = await supabase
+                  .from('expense_requests')
+                  .select('*')
+                  .eq('id', showDetail.id)
+                  .maybeSingle()
+                if (fresh) openDetail(fresh)
+                else setShowDetail(null)
+              }
+              if (showDetail.status === '申請中' && canApprove('expense_requests', showDetail.id)) {
+                return {
+                  sourceTable: 'expense_requests',
+                  row: showDetail,
+                  onApprove: async (r) => handleApprove(r),
+                  onReject: async (r, reason) => {
+                    const { data, error } = await supabase.rpc('expense_request_step_advance', {
+                      p_id: r.id, p_action: 'reject', p_reason: reason,
+                    })
+                    if (error) { toast.error(error.message); return }
+                    if (!data?.ok) { toast.error(`退回失敗：${data?.error || 'unknown'}`); return }
+                  },
+                  onChanged: refreshDetail,
+                }
+              }
+              // 待核銷：走 expense_settle_step_advance（支援加簽）
+              if (showDetail.status === '待核銷' && canApprove('expense_settles', showDetail.id)) {
+                return {
+                  sourceTable: 'expense_settles',
+                  row: { ...showDetail, current_step: showDetail.settle_current_step ?? 0 },
+                  onApprove: async (r) => handleConfirmSettle(r),
+                  onReject: async (_r, reason) => {
+                    const { data, error } = await supabase.rpc('expense_settle_step_advance', {
+                      p_id: showDetail.id, p_action: 'reject', p_reason: reason,
+                    })
+                    if (error) { toast.error('退回失敗：' + error.message); return }
+                    if (!data?.ok) { toast.error('退回失敗：' + (data?.error || 'unknown')); return }
+                  },
+                  onChanged: refreshDetail,
+                  approveLabel: verb('核准驗收', DOC),
+                  rejectLabel: verb('驗收退回', DOC),
+                }
+              }
+              return null
+            })()}
+          />
+        )
+      })()}
+
+    </div>
+  )
+}

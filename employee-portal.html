@@ -1,0 +1,1478 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>員工入口 — SME Ops</title>
+<style>
+:root {
+  --primary: #4f6ef7;
+  --primary-light: #e8ecfe;
+  --primary-dark: #3b54c4;
+  --success: #22c55e;
+  --success-light: #dcfce7;
+  --warning: #f59e0b;
+  --warning-light: #fef3c7;
+  --danger: #ef4444;
+  --danger-light: #fee2e2;
+  --info: #3b82f6;
+  --gray-50: #f9fafb;
+  --gray-100: #f3f4f6;
+  --gray-200: #e5e7eb;
+  --gray-300: #d1d5db;
+  --gray-400: #9ca3af;
+  --gray-500: #6b7280;
+  --gray-600: #4b5563;
+  --gray-700: #374151;
+  --gray-800: #1f2937;
+  --gray-900: #111827;
+  --orange: #f97316;
+  --orange-light: #fff7ed;
+  --purple: #8b5cf6;
+  --purple-light: #ede9fe;
+  --radius: 10px;
+  --radius-sm: 6px;
+  --radius-lg: 14px;
+  --shadow: 0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
+  --shadow-md: 0 4px 6px rgba(0,0,0,.05), 0 2px 4px rgba(0,0,0,.04);
+  --shadow-lg: 0 10px 15px rgba(0,0,0,.08), 0 4px 6px rgba(0,0,0,.04);
+  --transition: .2s ease;
+  --sidebar-w: 220px;
+  --header-h: 56px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 15px; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans TC', sans-serif;
+  background: #f0f2f5; color: var(--gray-800);
+  line-height: 1.5; min-height: 100vh;
+}
+button { font: inherit; cursor: pointer; border: none; background: none; }
+input, select, textarea {
+  font: inherit; border: 1px solid var(--gray-300); border-radius: var(--radius-sm);
+  padding: 8px 12px; width: 100%; outline: none; transition: border var(--transition);
+  background: #fff;
+}
+input:focus, select:focus, textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79,110,247,.12); }
+a { color: var(--primary); text-decoration: none; }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--gray-200); font-size: .9rem; }
+th { background: var(--gray-50); font-weight: 600; color: var(--gray-600); font-size: .8rem; text-transform: uppercase; letter-spacing: .3px; }
+tbody tr:hover { background: var(--gray-50); }
+tbody tr:nth-child(even) { background: #fafbfc; }
+tbody tr:nth-child(even):hover { background: var(--gray-100); }
+
+/* Header */
+.header {
+  position: fixed; top: 0; left: 0; right: 0; height: var(--header-h);
+  background: #fff; border-bottom: 1px solid var(--gray-200);
+  display: flex; align-items: center; padding: 0 20px; z-index: 100;
+  box-shadow: 0 1px 3px rgba(0,0,0,.04);
+}
+.header-logo { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1.1rem; color: var(--primary); }
+.header-logo svg { width: 28px; height: 28px; }
+.header-right { margin-left: auto; display: flex; align-items: center; gap: 16px; }
+.header-bell { position: relative; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: background var(--transition); cursor: pointer; }
+.header-bell:hover { background: var(--gray-100); }
+.header-bell .badge { position: absolute; top: 4px; right: 4px; width: 8px; height: 8px; background: var(--danger); border-radius: 50%; border: 2px solid #fff; }
+.header-avatar { width: 34px; height: 34px; border-radius: 50%; background: var(--primary-light); color: var(--primary); display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: .85rem; cursor: pointer; }
+.hamburger { display: none; width: 36px; height: 36px; align-items: center; justify-content: center; border-radius: var(--radius-sm); cursor: pointer; margin-right: 8px; }
+.hamburger:hover { background: var(--gray-100); }
+.hamburger span { display: block; width: 18px; height: 2px; background: var(--gray-600); position: relative; }
+.hamburger span::before, .hamburger span::after { content: ''; position: absolute; left: 0; width: 18px; height: 2px; background: var(--gray-600); }
+.hamburger span::before { top: -6px; }
+.hamburger span::after { top: 6px; }
+
+/* Sidebar */
+.sidebar {
+  position: fixed; top: var(--header-h); left: 0; bottom: 0; width: var(--sidebar-w);
+  background: #fff; border-right: 1px solid var(--gray-200); overflow-y: auto;
+  z-index: 90; transition: transform .25s ease;
+  padding: 8px 0;
+}
+.sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.3); z-index: 89; }
+.nav-item {
+  display: flex; align-items: center; gap: 10px; padding: 10px 18px;
+  color: var(--gray-600); font-size: .9rem; cursor: pointer;
+  transition: all var(--transition); border-radius: 0; margin: 1px 8px; border-radius: var(--radius-sm);
+}
+.nav-item:hover { background: var(--gray-100); color: var(--gray-800); }
+.nav-item.active { background: var(--primary-light); color: var(--primary); font-weight: 600; }
+.nav-item .nav-icon { width: 20px; text-align: center; font-size: 1rem; flex-shrink: 0; }
+.nav-item .nav-label { white-space: nowrap; }
+.nav-section { padding: 16px 18px 6px; font-size: .7rem; color: var(--gray-400); text-transform: uppercase; letter-spacing: .5px; font-weight: 600; }
+
+/* Main */
+.main {
+  margin-left: var(--sidebar-w); margin-top: var(--header-h);
+  padding: 28px 32px; min-height: calc(100vh - var(--header-h));
+}
+.main-inner { max-width: 1400px; margin: 0 auto; }
+
+/* Cards */
+.card {
+  background: #fff; border-radius: var(--radius-lg); box-shadow: var(--shadow);
+  padding: 22px; margin-bottom: 20px;
+}
+.card-title { font-size: 1rem; font-weight: 700; margin-bottom: 14px; color: var(--gray-800); display: flex; align-items: center; gap: 8px; }
+.card-title .icon { font-size: 1.1rem; }
+
+/* Buttons */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 8px 18px; border-radius: var(--radius-sm); font-weight: 600; font-size: .85rem;
+  transition: all var(--transition); cursor: pointer; border: none;
+}
+.btn-primary { background: var(--primary); color: #fff; }
+.btn-primary:hover { background: var(--primary-dark); }
+.btn-success { background: var(--success); color: #fff; }
+.btn-success:hover { background: #16a34a; }
+.btn-danger { background: var(--danger); color: #fff; }
+.btn-danger:hover { background: #dc2626; }
+.btn-outline { background: #fff; color: var(--primary); border: 1px solid var(--primary); }
+.btn-outline:hover { background: var(--primary-light); }
+.btn-sm { padding: 5px 12px; font-size: .8rem; }
+.btn-lg { padding: 12px 28px; font-size: 1rem; }
+
+/* Status badges */
+.badge-status {
+  display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: .75rem; font-weight: 600;
+}
+.badge-approved { background: var(--success-light); color: #16a34a; }
+.badge-pending { background: var(--warning-light); color: #d97706; }
+.badge-rejected { background: var(--danger-light); color: var(--danger); }
+.badge-info { background: var(--primary-light); color: var(--primary); }
+
+/* Grid */
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+
+/* Dashboard layout */
+.dash-grid { display: grid; grid-template-columns: 1fr 340px; gap: 20px; }
+
+/* Quick action grid */
+.quick-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.quick-action-btn {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 6px; padding: 16px 8px; background: var(--gray-50); border-radius: var(--radius);
+  cursor: pointer; transition: all var(--transition); border: 1px solid var(--gray-100);
+  font-size: .8rem; color: var(--gray-700); font-weight: 500;
+}
+.quick-action-btn:hover { background: var(--primary-light); border-color: var(--primary); color: var(--primary); transform: translateY(-1px); box-shadow: var(--shadow-md); }
+.quick-action-btn .qa-icon { font-size: 1.3rem; }
+
+/* Clock widget */
+.clock-display { text-align: center; padding: 16px 0; }
+.clock-time { font-size: 2.4rem; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--gray-800); letter-spacing: 1px; }
+.clock-date { font-size: .85rem; color: var(--gray-500); margin-top: 2px; }
+.clock-btns { display: flex; gap: 10px; margin-top: 14px; }
+.clock-btns .btn { flex: 1; padding: 10px; }
+.clock-status { margin-top: 10px; font-size: .8rem; color: var(--gray-500); }
+
+/* Calendar */
+.cal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.cal-header h3 { font-size: 1rem; font-weight: 700; }
+.cal-nav { display: flex; gap: 6px; }
+.cal-nav button { width: 30px; height: 30px; border-radius: var(--radius-sm); background: var(--gray-100); display: flex; align-items: center; justify-content: center; font-size: .9rem; }
+.cal-nav button:hover { background: var(--gray-200); }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; background: var(--gray-200); border-radius: var(--radius); overflow: hidden; }
+.cal-day-header { background: var(--gray-50); padding: 8px 4px; text-align: center; font-size: .75rem; font-weight: 600; color: var(--gray-500); }
+.cal-day {
+  background: #fff; min-height: 70px; padding: 4px 6px; position: relative; cursor: pointer;
+  transition: background var(--transition);
+}
+.cal-day:hover { background: var(--gray-50); }
+.cal-day.today { background: var(--primary-light); }
+.cal-day.other-month { color: var(--gray-300); }
+.cal-day .day-num { font-size: .8rem; font-weight: 600; margin-bottom: 2px; }
+.cal-day .shift-tag {
+  font-size: .65rem; padding: 1px 5px; border-radius: 3px; display: inline-block;
+  font-weight: 500; margin-top: 1px;
+}
+.shift-morning { background: #dbeafe; color: #1d4ed8; }
+.shift-afternoon { background: #fef3c7; color: #b45309; }
+.shift-night { background: #ede9fe; color: #6d28d9; }
+.shift-off { background: var(--gray-100); color: var(--gray-500); }
+.shift-full { background: #dcfce7; color: #16a34a; }
+
+/* Tabs */
+.tabs { display: flex; gap: 0; border-bottom: 2px solid var(--gray-200); margin-bottom: 16px; }
+.tab-btn {
+  padding: 8px 18px; font-size: .85rem; font-weight: 500; color: var(--gray-500);
+  cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px;
+  transition: all var(--transition);
+}
+.tab-btn:hover { color: var(--gray-700); }
+.tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 600; }
+
+/* Modal */
+.modal-overlay {
+  display: none; position: fixed; inset: 0; background: rgba(0,0,0,.4);
+  z-index: 200; align-items: center; justify-content: center;
+}
+.modal-overlay.show { display: flex; }
+.modal {
+  background: #fff; border-radius: var(--radius-lg); box-shadow: var(--shadow-lg);
+  width: 90%; max-width: 520px; max-height: 85vh; overflow-y: auto; padding: 24px;
+}
+.modal-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 18px; display: flex; align-items: center; justify-content: space-between; }
+.modal-close { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 1.2rem; cursor: pointer; color: var(--gray-400); }
+.modal-close:hover { background: var(--gray-100); color: var(--gray-600); }
+.form-group { margin-bottom: 14px; }
+.form-group label { display: block; font-size: .82rem; font-weight: 600; color: var(--gray-600); margin-bottom: 4px; }
+.form-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+
+/* Stats row */
+.stat-card {
+  background: #fff; border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow);
+  text-align: center;
+}
+.stat-value { font-size: 1.6rem; font-weight: 700; color: var(--gray-800); }
+.stat-label { font-size: .78rem; color: var(--gray-500); margin-top: 2px; }
+
+/* Contacts mini list */
+.contact-item { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--gray-100); }
+.contact-item:last-child { border-bottom: none; }
+.contact-avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--primary-light); color: var(--primary); display: flex; align-items: center; justify-content: center; font-size: .75rem; font-weight: 600; flex-shrink: 0; }
+.contact-name { font-size: .85rem; font-weight: 500; }
+.contact-role { font-size: .75rem; color: var(--gray-400); }
+
+/* Reminder list */
+.reminder-item { display: flex; align-items: flex-start; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--gray-100); font-size: .83rem; }
+.reminder-item:last-child { border-bottom: none; }
+.reminder-dot { width: 6px; height: 6px; border-radius: 50%; margin-top: 7px; flex-shrink: 0; }
+
+/* Announcement */
+.announce-item { padding: 10px 0; border-bottom: 1px solid var(--gray-100); }
+.announce-item:last-child { border-bottom: none; }
+.announce-tag { font-size: .7rem; padding: 2px 8px; border-radius: 3px; font-weight: 600; margin-right: 6px; }
+.announce-title { font-size: .88rem; font-weight: 500; }
+.announce-date { font-size: .73rem; color: var(--gray-400); margin-top: 2px; }
+
+/* Flow items */
+.flow-list-scroll { max-height: 360px; overflow-y: auto; }
+.flow-item { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--gray-100); }
+.flow-item:last-child { border-bottom: none; }
+.flow-icon { width: 36px; height: 36px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; font-size: 1rem; flex-shrink: 0; }
+.flow-info { flex: 1; min-width: 0; }
+.flow-title { font-size: .85rem; font-weight: 600; }
+.flow-desc { font-size: .78rem; color: var(--gray-500); }
+.flow-status { flex-shrink: 0; }
+
+/* Quick launch row */
+.quick-launch { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+.quick-launch .btn { font-size: .8rem; padding: 6px 14px; }
+
+/* Off-request calendar */
+.off-cal-day { cursor: pointer; }
+.off-cal-day.selected { background: var(--primary-light); }
+.off-cal-day.selected .day-num { color: var(--primary); font-weight: 700; }
+
+/* Profile info */
+.profile-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.profile-field { margin-bottom: 10px; }
+.profile-label { font-size: .78rem; color: var(--gray-400); margin-bottom: 2px; }
+.profile-value { font-size: .9rem; font-weight: 500; }
+
+/* Salary breakdown */
+.salary-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--gray-100); font-size: .88rem; }
+.salary-row:last-child { border-bottom: none; }
+.salary-total { font-size: 1.3rem; font-weight: 700; color: var(--primary); }
+
+/* Page title */
+.page-title { font-size: 1.3rem; font-weight: 700; margin-bottom: 20px; color: var(--gray-800); }
+
+/* Leave balance cards */
+.leave-balances { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+.leave-bal-card {
+  flex: 1; min-width: 140px; padding: 14px; border-radius: var(--radius); text-align: center;
+  border: 1px solid var(--gray-200);
+}
+.leave-bal-type { font-size: .8rem; color: var(--gray-500); margin-bottom: 4px; }
+.leave-bal-num { font-size: 1.5rem; font-weight: 700; }
+.leave-bal-total { font-size: .75rem; color: var(--gray-400); }
+
+/* Large clock page */
+.big-clock { font-size: 4rem; font-weight: 700; font-variant-numeric: tabular-nums; text-align: center; letter-spacing: 2px; }
+.big-date { font-size: 1.1rem; color: var(--gray-500); text-align: center; margin-top: 4px; }
+
+/* Legend */
+.legend { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 10px; }
+.legend-item { display: flex; align-items: center; gap: 5px; font-size: .78rem; color: var(--gray-600); }
+.legend-color { width: 14px; height: 14px; border-radius: 3px; }
+
+/* Approval chain */
+.approval-chain { display: flex; align-items: center; gap: 0; margin-top: 8px; padding: 4px 0; }
+.approval-step { display: flex; align-items: center; gap: 4px; font-size: .72rem; color: var(--gray-500); }
+.approval-step .step-circle {
+  width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  font-size: .65rem; font-weight: 600; border: 2px solid var(--gray-300); background: #fff;
+}
+.approval-step.done .step-circle { background: var(--success); border-color: var(--success); color: #fff; }
+.approval-step.current .step-circle { background: var(--warning-light); border-color: var(--warning); color: var(--warning); }
+.approval-step.waiting .step-circle { background: var(--gray-100); border-color: var(--gray-300); color: var(--gray-400); }
+.approval-connector { width: 20px; height: 2px; background: var(--gray-300); margin: 0 2px; }
+.approval-connector.done { background: var(--success); }
+.approval-step .step-label { font-size: .68rem; }
+
+/* Contact full list */
+.contact-full-item { display: flex; align-items: center; gap: 12px; padding: 12px; border-bottom: 1px solid var(--gray-100); cursor: pointer; border-radius: var(--radius-sm); }
+.contact-full-item:hover { background: var(--gray-50); }
+.contact-full-item:last-child { border-bottom: none; }
+.contact-full-avatar { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: .9rem; font-weight: 700; flex-shrink: 0; }
+.contact-full-info { flex: 1; min-width: 0; }
+.contact-full-name { font-size: .9rem; font-weight: 600; }
+.contact-full-meta { font-size: .78rem; color: var(--gray-500); }
+.contact-full-phone { font-size: .78rem; color: var(--gray-400); flex-shrink: 0; }
+
+/* Outing records */
+.outing-record { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--gray-100); }
+.outing-record:last-child { border-bottom: none; }
+.outing-time { font-size: .85rem; font-weight: 600; color: var(--primary); min-width: 50px; }
+.outing-info { flex: 1; }
+.outing-reason { font-size: .85rem; font-weight: 500; }
+.outing-note { font-size: .78rem; color: var(--gray-400); }
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .dash-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 768px) {
+  .hamburger { display: flex; }
+  .sidebar { transform: translateX(-100%); }
+  .sidebar.open { transform: translateX(0); }
+  .sidebar-overlay.open { display: block; }
+  .main { margin-left: 0; }
+  .dash-grid { grid-template-columns: 1fr; }
+  .grid-3 { grid-template-columns: 1fr; }
+  .grid-4 { grid-template-columns: 1fr 1fr; }
+  .profile-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="header">
+  <div class="hamburger" onclick="toggleSidebar()"><span></span></div>
+  <div class="header-logo">
+    <svg viewBox="0 0 28 28" fill="none"><rect width="28" height="28" rx="6" fill="#4f6ef7"/><path d="M7 14h4l3-6 4 12 3-6h4" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    SME Ops
+  </div>
+  <div class="header-right">
+    <div class="header-bell" onclick="alert('尚無新通知')">
+      <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"/></svg>
+      <div class="badge"></div>
+    </div>
+    <div class="header-avatar" onclick="navigate('/profile')">王</div>
+  </div>
+</header>
+
+<!-- Sidebar -->
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+<nav class="sidebar" id="sidebar">
+  <div class="nav-section">主選單</div>
+  <div class="nav-item active" data-route="/" onclick="navigate('/')">
+    <span class="nav-icon">&#127968;</span><span class="nav-label">首頁</span>
+  </div>
+  <div class="nav-item" data-route="/clock" onclick="navigate('/clock')">
+    <span class="nav-icon">&#128336;</span><span class="nav-label">打卡</span>
+  </div>
+  <div class="nav-item" data-route="/schedule" onclick="navigate('/schedule')">
+    <span class="nav-icon">&#128197;</span><span class="nav-label">班表</span>
+  </div>
+  <div class="nav-item" data-route="/leave" onclick="navigate('/leave')">
+    <span class="nav-icon">&#128203;</span><span class="nav-label">請假</span>
+  </div>
+  <div class="nav-item" data-route="/overtime" onclick="navigate('/overtime')">
+    <span class="nav-icon">&#9200;</span><span class="nav-label">加班申請</span>
+  </div>
+  <div class="nav-item" data-route="/punch" onclick="navigate('/punch')">
+    <span class="nav-icon">&#128260;</span><span class="nav-label">補打卡</span>
+  </div>
+  <div class="nav-item" data-route="/outing" onclick="navigate('/outing')">
+    <span class="nav-icon">&#9992;&#65039;</span><span class="nav-label">外出登記</span>
+  </div>
+  <div class="nav-item" data-route="/salary" onclick="navigate('/salary')">
+    <span class="nav-icon">&#128176;</span><span class="nav-label">薪資單</span>
+  </div>
+  <div class="nav-item" data-route="/expense" onclick="navigate('/expense')">
+    <span class="nav-icon">&#128176;</span><span class="nav-label">費用申請</span>
+  </div>
+  <div class="nav-item" data-route="/attendance" onclick="navigate('/attendance')">
+    <span class="nav-icon">&#128202;</span><span class="nav-label">出勤紀錄</span>
+  </div>
+  <div class="nav-item" data-route="/off-request" onclick="navigate('/off-request')">
+    <span class="nav-icon">&#128197;</span><span class="nav-label">希望排休</span>
+  </div>
+  <div class="nav-item" data-route="/flows" onclick="navigate('/flows')">
+    <span class="nav-icon">&#128221;</span><span class="nav-label">流程中心</span>
+  </div>
+  <div class="nav-item" data-route="/contacts" onclick="navigate('/contacts')">
+    <span class="nav-icon">&#128101;</span><span class="nav-label">通訊錄</span>
+  </div>
+  <div class="nav-item" data-route="/profile" onclick="navigate('/profile')">
+    <span class="nav-icon">&#128100;</span><span class="nav-label">個人資料</span>
+  </div>
+</nav>
+
+<!-- Main content -->
+<div class="main">
+  <div class="main-inner" id="app"></div>
+</div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal" id="modalContent"></div>
+</div>
+
+<script>
+// ========== DEMO DATA ==========
+const EMPLOYEE = {
+  name: '王小明', empId: 'EMP-2024-001', dept: '資訊部', position: '前端工程師',
+  email: 'xiaoming.wang@company.com', phone: '0912-345-678', joinDate: '2023-03-15',
+  birthday: '1995-08-22', address: '台北市信義區松仁路100號', gender: '男',
+  emergencyName: '王大明', emergencyPhone: '0922-111-222', emergencyRel: '父親',
+  bankName: '中國信託', bankAccount: '1234-5678-9012-3456'
+};
+
+const SHIFTS = {
+  M: { label: '早班', tag: 'shift-morning', time: '08:00-16:00' },
+  A: { label: '午班', tag: 'shift-afternoon', time: '12:00-20:00' },
+  N: { label: '晚班', tag: 'shift-night', time: '16:00-00:00' },
+  F: { label: '全天', tag: 'shift-full', time: '09:00-18:00' },
+  O: { label: '休假', tag: 'shift-off', time: '' }
+};
+
+// Generate schedule for current month
+function genSchedule(year, month) {
+  const pattern = ['F','F','F','F','F','O','O','M','M','A','A','F','F','O','O','M','F','F','A','F','O','O','F','F','F','M','M','F','O','O','F'];
+  const days = new Date(year, month + 1, 0).getDate();
+  const schedule = {};
+  for (let d = 1; d <= days; d++) schedule[d] = pattern[(d - 1) % pattern.length];
+  return schedule;
+}
+
+const LEAVE_BALANCE = [
+  { type: '特休', used: 3, total: 14 },
+  { type: '事假', used: 1, total: 14 },
+  { type: '病假', used: 2, total: 30 },
+  { type: '家庭照顧假', used: 0, total: 7 }
+];
+
+const LEAVE_HISTORY = [
+  { id: 'L001', type: '特休', start: '2026-04-10', end: '2026-04-10', days: 1, reason: '個人事務', status: 'approved' },
+  { id: 'L002', type: '病假', start: '2026-03-22', end: '2026-03-23', days: 2, reason: '身體不適', status: 'approved' },
+  { id: 'L003', type: '特休', start: '2026-04-25', end: '2026-04-27', days: 3, reason: '出國旅遊', status: 'pending' },
+  { id: 'L004', type: '事假', start: '2026-02-14', end: '2026-02-14', days: 1, reason: '搬家', status: 'approved' }
+];
+
+const OT_HISTORY = [
+  { id: 'OT001', date: '2026-04-05', start: '18:00', end: '21:00', hours: 3, reason: '專案趕工', status: 'approved' },
+  { id: 'OT002', date: '2026-04-12', start: '18:00', end: '20:00', hours: 2, reason: '系統上線', status: 'pending' },
+  { id: 'OT003', date: '2026-03-28', start: '18:00', end: '22:00', hours: 4, reason: '季度結算', status: 'approved' }
+];
+
+const PUNCH_HISTORY = [
+  { id: 'P001', date: '2026-04-08', time: '08:03', type: '上班', reason: '忘記打卡', status: 'approved' },
+  { id: 'P002', date: '2026-04-15', time: '17:58', type: '下班', reason: '系統異常', status: 'pending' }
+];
+
+const SALARY_DATA = {
+  month: '2026-03',
+  income: [
+    { item: '本薪', amount: 55000 },
+    { item: '伙食津貼', amount: 2400 },
+    { item: '交通津貼', amount: 1500 },
+    { item: '加班費', amount: 3200 },
+    { item: '績效獎金', amount: 5000 }
+  ],
+  deduction: [
+    { item: '勞保', amount: 1100 },
+    { item: '健保', amount: 820 },
+    { item: '勞退自提', amount: 3300 },
+    { item: '所得稅', amount: 3650 }
+  ]
+};
+
+const ATTENDANCE_DATA = [
+  { date: '04/01', weekday: '三', clockIn: '08:55', clockOut: '18:05', hours: '9.2', status: '正常' },
+  { date: '04/02', weekday: '四', clockIn: '08:48', clockOut: '18:10', hours: '9.4', status: '正常' },
+  { date: '04/03', weekday: '五', clockIn: '09:12', clockOut: '18:30', hours: '9.3', status: '遲到' },
+  { date: '04/04', weekday: '六', clockIn: '-', clockOut: '-', hours: '-', status: '休假' },
+  { date: '04/05', weekday: '日', clockIn: '-', clockOut: '-', hours: '-', status: '休假' },
+  { date: '04/06', weekday: '一', clockIn: '08:50', clockOut: '18:00', hours: '9.2', status: '正常' },
+  { date: '04/07', weekday: '二', clockIn: '08:58', clockOut: '18:02', hours: '9.1', status: '正常' },
+  { date: '04/08', weekday: '三', clockIn: '08:03', clockOut: '18:15', hours: '10.2', status: '補卡' },
+  { date: '04/09', weekday: '四', clockIn: '08:45', clockOut: '18:00', hours: '9.3', status: '正常' },
+  { date: '04/10', weekday: '五', clockIn: '-', clockOut: '-', hours: '-', status: '特休' },
+  { date: '04/11', weekday: '六', clockIn: '-', clockOut: '-', hours: '-', status: '休假' },
+  { date: '04/12', weekday: '日', clockIn: '-', clockOut: '-', hours: '-', status: '休假' },
+  { date: '04/13', weekday: '一', clockIn: '08:52', clockOut: '18:08', hours: '9.3', status: '正常' },
+  { date: '04/14', weekday: '二', clockIn: '08:47', clockOut: '18:01', hours: '9.2', status: '正常' },
+  { date: '04/15', weekday: '三', clockIn: '08:55', clockOut: '17:58', hours: '9.1', status: '補卡' },
+  { date: '04/16', weekday: '四', clockIn: '08:50', clockOut: '18:05', hours: '9.3', status: '正常' },
+  { date: '04/17', weekday: '五', clockIn: '08:53', clockOut: '-', hours: '-', status: '上班中' }
+];
+
+const ANNOUNCEMENTS = [
+  { tag: '排班', tagColor: '#dbeafe', tagText: '#1d4ed8', title: '4月份排班表已發佈', date: '2026-04-18', pinned: true, detail: '各位同仁好，4月份排班表已正式發佈，請至「班表」頁面確認您的班次。如有任何問題，請於 4/20 前向主管反映。\n\n注意事項：\n1. 本月因連假調整，部分班次有異動\n2. 請特別留意國定假日出勤安排\n3. 如需換班請走流程中心申請' },
+  { tag: '人事', tagColor: '#fef3c7', tagText: '#b45309', title: '五一勞動節放假公告', date: '2026-04-15', pinned: false, detail: '依據勞動基準法規定，5月1日（五）為勞動節，全體員工放假一日。\n\n放假日期：2026年5月1日（星期五）\n補班安排：無需補班\n\n請各部門提前完成工作交接，確保業務不中斷。如有需要值班的部門，請主管安排輪值人員並通報人資部。' },
+  { tag: '福利', tagColor: '#ede9fe', tagText: '#6d28d9', title: '員工健康檢查通知', date: '2026-04-10', pinned: false, detail: '公司年度員工健康檢查即將開始，請同仁配合以下事項：\n\n檢查日期：2026年5月5日～5月9日\n檢查地點：台北市立聯合醫院仁愛院區\n報到時間：上午 7:30～8:00\n\n注意事項：\n1. 檢查前一天晚上10點後請勿進食\n2. 請攜帶健保卡及員工證\n3. 報名截止日：4/25\n\n請至人資系統填寫報名表。' },
+  { tag: '訓練', tagColor: '#dcfce7', tagText: '#16a34a', title: '新品上市教育訓練報名', date: '2026-04-08', pinned: false, detail: '公司即將推出新產品線，為確保全體同仁熟悉產品特性與銷售策略，特安排教育訓練課程。\n\n課程資訊：\n日期：2026年4月22日（二）14:00-17:00\n地點：總部3F訓練教室\n講師：產品部 張經理\n\n課程內容：\n1. 新品特色與市場定位\n2. 銷售話術與FAQ\n3. 實機操作演練\n\n請於 4/18 前至訓練系統完成報名。' }
+];
+
+const CONTACTS = [
+  { name: '李經理', role: '直屬主管', initials: '李' },
+  { name: '張HR', role: '人資專員', initials: '張' },
+  { name: '陳財務', role: '薪資窗口', initials: '陳' },
+  { name: '林同事', role: '資訊部', initials: '林' }
+];
+
+const CONTACTS_FULL = [
+  { name: '李明哲', initials: '李', position: '資訊部經理', dept: '資訊部', store: '總部', phone: '0912-111-001', avatarBg: '#dbeafe', avatarColor: '#1d4ed8' },
+  { name: 'Vicky 陳', initials: 'V', position: '前端工程師', dept: '資訊部', store: '總部', phone: '0912-111-002', avatarBg: '#ede9fe', avatarColor: '#6d28d9' },
+  { name: 'Ken 黃', initials: 'K', position: '後端工程師', dept: '資訊部', store: '總部', phone: '0912-111-003', avatarBg: '#dcfce7', avatarColor: '#16a34a' },
+  { name: 'Dave 林', initials: 'D', position: 'UI設計師', dept: '資訊部', store: '總部', phone: '0912-111-004', avatarBg: '#fef3c7', avatarColor: '#b45309' },
+  { name: 'Alicia 王', initials: 'A', position: '人資專員', dept: '人資部', store: '總部', phone: '0912-222-001', avatarBg: '#fee2e2', avatarColor: '#ef4444' },
+  { name: 'Zoey 張', initials: 'Z', position: '人資主管', dept: '人資部', store: '總部', phone: '0912-222-002', avatarBg: '#dbeafe', avatarColor: '#1d4ed8' },
+  { name: '學文', initials: '學', position: '財務專員', dept: '財務部', store: '總部', phone: '0912-333-001', avatarBg: '#dcfce7', avatarColor: '#16a34a' },
+  { name: '趙雅琪', initials: '趙', position: '業務經理', dept: '業務部', store: '信義店', phone: '0912-444-001', avatarBg: '#fff7ed', avatarColor: '#f97316' },
+  { name: '吳建宏', initials: '吳', position: '店長', dept: '門市部', store: '大安店', phone: '0912-555-001', avatarBg: '#ede9fe', avatarColor: '#6d28d9' },
+  { name: '楊美玲', initials: '楊', position: '會計', dept: '財務部', store: '總部', phone: '0912-333-002', avatarBg: '#fef3c7', avatarColor: '#b45309' },
+  { name: '周志豪', initials: '周', position: '倉管人員', dept: '物流部', store: '中和倉庫', phone: '0912-666-001', avatarBg: '#dbeafe', avatarColor: '#1d4ed8' },
+  { name: '許淑芬', initials: '許', position: '客服主管', dept: '客服部', store: '總部', phone: '0912-777-001', avatarBg: '#fee2e2', avatarColor: '#ef4444' }
+];
+
+const EXPENSE_HISTORY = [
+  { id: 'EX001', category: '交通', amount: 1250, date: '2026-04-14', desc: '拜訪客戶計程車費', status: 'pending' },
+  { id: 'EX002', category: '餐飲', amount: 680, date: '2026-04-05', desc: '部門聚餐', status: 'approved' },
+  { id: 'EX003', category: '設備', amount: 3500, date: '2026-03-28', desc: '鍵盤滑鼠更換', status: 'approved' },
+  { id: 'EX004', category: '住宿', amount: 2800, date: '2026-03-15', desc: '出差高雄住宿', status: 'approved' }
+];
+
+const OUTING_RECORDS = [
+  { time: '09:30', type: 'out', reason: '拜訪客戶', note: '台北101大樓', status: '已簽退' },
+  { time: '11:45', type: 'in', reason: '拜訪客戶', note: '返回辦公室', status: '已簽退' },
+  { time: '14:00', type: 'out', reason: '開會', note: '合作廠商會議', status: '外出中' }
+];
+
+const FLOWS_MY = [
+  { icon: '📋', iconBg: '#dbeafe', title: '特休申請 - 4/25~4/27', desc: '等待主管審核', status: 'pending', date: '04/16',
+    approvalChain: [{role:'申請人',status:'done'},{role:'主管',status:'current'},{role:'HR',status:'waiting'}] },
+  { icon: '⏰', iconBg: '#fef3c7', title: '加班申請 - 4/12', desc: '等待主管審核', status: 'pending', date: '04/12',
+    approvalChain: [{role:'申請人',status:'done'},{role:'主管',status:'current'},{role:'HR',status:'waiting'}] },
+  { icon: '💰', iconBg: '#fff7ed', title: '費用申請 - 交通費 $1,250', desc: '等待主管審核', status: 'pending', date: '04/14',
+    approvalChain: [{role:'申請人',status:'done'},{role:'主管',status:'current'},{role:'財務',status:'waiting'}] },
+  { icon: '📋', iconBg: '#dbeafe', title: '特休申請 - 4/10', desc: '已核准', status: 'approved', date: '04/08',
+    approvalChain: [{role:'申請人',status:'done'},{role:'主管',status:'done'},{role:'HR',status:'done'}] },
+  { icon: '💰', iconBg: '#fff7ed', title: '費用申請 - 餐飲費 $680', desc: '已核准', status: 'approved', date: '04/05',
+    approvalChain: [{role:'申請人',status:'done'},{role:'主管',status:'done'},{role:'財務',status:'done'}] }
+];
+const FLOWS_ASSIGNED = [
+  { icon: '🔄', iconBg: '#ede9fe', title: '陳小華 - 補打卡申請', desc: '需要您的審核', status: 'pending', date: '04/16' },
+  { icon: '📋', iconBg: '#dbeafe', title: '林小美 - 事假申請', desc: '需要您的審核', status: 'pending', date: '04/15' }
+];
+
+const REMINDERS = [
+  { color: '#ef4444', text: '今天是薪資單發放日' },
+  { color: '#f59e0b', text: '五月希望排休截止：4/25' },
+  { color: '#3b82f6', text: '部門會議 14:00' },
+  { color: '#22c55e', text: '員工旅遊投票截止：4/20' }
+];
+
+// ========== STATE ==========
+let clockedIn = false;
+let clockInTime = null;
+let currentFlowTab = 'my';
+let selectedOffDays = new Set();
+let scheduleYear, scheduleMonth;
+const now = new Date();
+scheduleYear = now.getFullYear();
+scheduleMonth = now.getMonth();
+
+// ========== ROUTING ==========
+function navigate(route) {
+  window.location.hash = route;
+  // close sidebar on mobile
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebarOverlay').classList.remove('open');
+}
+
+function getRoute() {
+  const hash = window.location.hash.slice(1) || '/';
+  return hash;
+}
+
+window.addEventListener('hashchange', render);
+window.addEventListener('load', render);
+
+function render() {
+  const route = getRoute();
+  const app = document.getElementById('app');
+  // Update active nav
+  document.querySelectorAll('.nav-item').forEach(n => {
+    n.classList.toggle('active', n.dataset.route === route);
+  });
+  closeModal();
+
+  const pages = {
+    '/': renderDashboard,
+    '/clock': renderClock,
+    '/schedule': renderSchedule,
+    '/leave': renderLeave,
+    '/overtime': renderOvertime,
+    '/punch': renderPunch,
+    '/outing': renderOuting,
+    '/salary': renderSalary,
+    '/expense': renderExpense,
+    '/attendance': renderAttendance,
+    '/off-request': renderOffRequest,
+    '/flows': renderFlows,
+    '/contacts': renderContacts,
+    '/profile': renderProfile
+  };
+  const fn = pages[route] || renderDashboard;
+  app.innerHTML = fn();
+  afterRender(route);
+}
+
+function afterRender(route) {
+  if (route === '/' || route === '/clock') startClock();
+  if (route === '/off-request') bindOffCalendar();
+}
+
+// ========== SIDEBAR TOGGLE ==========
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('sidebarOverlay').classList.toggle('open');
+}
+
+// ========== MODAL ==========
+function openModal(html) {
+  document.getElementById('modalContent').innerHTML = html;
+  document.getElementById('modalOverlay').classList.add('show');
+}
+function closeModal() {
+  document.getElementById('modalOverlay').classList.remove('show');
+}
+document.getElementById('modalOverlay').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+
+// ========== CLOCK ==========
+let clockInterval;
+function startClock() {
+  clearInterval(clockInterval);
+  function tick() {
+    const el = document.getElementById('liveTime');
+    const el2 = document.getElementById('liveDate');
+    if (!el) { clearInterval(clockInterval); return; }
+    const n = new Date();
+    el.textContent = n.toLocaleTimeString('zh-TW', { hour12: false });
+    if (el2) {
+      const opts = { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' };
+      el2.textContent = n.toLocaleDateString('zh-TW', opts);
+    }
+  }
+  tick();
+  clockInterval = setInterval(tick, 1000);
+}
+
+function doPunchIn() {
+  clockedIn = true;
+  clockInTime = new Date();
+  render();
+}
+function doPunchOut() {
+  clockedIn = false;
+  clockInTime = null;
+  render();
+}
+
+// ========== HELPERS ==========
+function statusBadge(s) {
+  const map = { approved: ['已核准','badge-approved'], pending: ['待審核','badge-pending'], rejected: ['已退回','badge-rejected'] };
+  const [text, cls] = map[s] || ['未知','badge-info'];
+  return `<span class="badge-status ${cls}">${text}</span>`;
+}
+
+function formatMoney(n) { return n.toLocaleString(); }
+
+function buildCalendar(year, month, scheduleData, isOffSelect) {
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const prevDays = new Date(year, month, 0).getDate();
+  const today = new Date();
+  const todayDate = today.getDate();
+  const todayMonth = today.getMonth();
+  const todayYear = today.getFullYear();
+
+  const dayHeaders = ['日','一','二','三','四','五','六'];
+  let html = '<div class="cal-grid">';
+  dayHeaders.forEach(d => html += `<div class="cal-day-header">${d}</div>`);
+
+  // Previous month days
+  for (let i = firstDay - 1; i >= 0; i--) {
+    html += `<div class="cal-day other-month"><div class="day-num">${prevDays - i}</div></div>`;
+  }
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const isToday = (d === todayDate && month === todayMonth && year === todayYear);
+    const classes = ['cal-day'];
+    if (isToday) classes.push('today');
+    if (isOffSelect) {
+      classes.push('off-cal-day');
+      if (selectedOffDays.has(d)) classes.push('selected');
+    }
+
+    let content = `<div class="day-num">${d}</div>`;
+    if (scheduleData && scheduleData[d]) {
+      const s = SHIFTS[scheduleData[d]];
+      if (s) content += `<div class="shift-tag ${s.tag}">${s.label}</div>`;
+    }
+
+    const onclick = isOffSelect ? ` onclick="toggleOffDay(${d})"` : '';
+    html += `<div class="${classes.join(' ')}"${onclick}>${content}</div>`;
+  }
+
+  // Fill remaining cells
+  const totalCells = firstDay + daysInMonth;
+  const remaining = (7 - totalCells % 7) % 7;
+  for (let i = 1; i <= remaining; i++) {
+    html += `<div class="cal-day other-month"><div class="day-num">${i}</div></div>`;
+  }
+
+  html += '</div>';
+  return html;
+}
+
+function monthLabel(y, m) {
+  return `${y}年${m + 1}月`;
+}
+
+// ========== PAGE RENDERERS ==========
+
+function renderDashboard() {
+  const schedule = genSchedule(scheduleYear, scheduleMonth);
+  return `
+    <div class="dash-grid">
+      <!-- LEFT (WIDE) COLUMN -->
+      <div>
+        <!-- Quick actions + announcements side by side -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;">
+          <div class="card" style="margin-bottom:0;">
+            <div class="card-title"><span class="icon">&#9889;</span> 快速操作</div>
+            <div class="quick-actions">
+              <div class="quick-action-btn" onclick="navigate('/clock')"><span class="qa-icon">&#128336;</span>打卡</div>
+              <div class="quick-action-btn" onclick="navigate('/leave')"><span class="qa-icon">&#128203;</span>請假</div>
+              <div class="quick-action-btn" onclick="navigate('/overtime')"><span class="qa-icon">&#9200;</span>加班</div>
+              <div class="quick-action-btn" onclick="navigate('/punch')"><span class="qa-icon">&#128260;</span>補打卡</div>
+              <div class="quick-action-btn" onclick="navigate('/salary')"><span class="qa-icon">&#128176;</span>薪資單</div>
+              <div class="quick-action-btn" onclick="navigate('/off-request')"><span class="qa-icon">&#128197;</span>排休</div>
+            </div>
+          </div>
+          <div class="card" style="margin-bottom:0;">
+            <div class="card-title"><span class="icon">&#128227;</span> 公告</div>
+            ${ANNOUNCEMENTS.map((a, i) => `
+              <div class="announce-item" style="cursor:pointer" onclick="openAnnouncementDetail(${i})">
+                ${a.pinned ? '<span class="announce-tag" style="background:#fee2e2;color:#ef4444">置頂</span>' : ''}
+                <span class="announce-tag" style="background:${a.tagColor};color:${a.tagText}">${a.tag}</span>
+                <span class="announce-title">${a.title}</span>
+                <div class="announce-date">${a.date}</div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+
+        <!-- Flow center -->
+        <div class="card">
+          <div class="card-title"><span class="icon">&#128221;</span> 流程中心</div>
+          <div class="tabs" id="dashFlowTabs">
+            <div class="tab-btn active" onclick="switchDashFlowTab('my',this)">我發起的</div>
+            <div class="tab-btn" onclick="switchDashFlowTab('assigned',this)">指派給我的</div>
+          </div>
+          <div class="quick-launch">
+            <button class="btn btn-outline btn-sm" onclick="navigate('/leave')">+ 請假</button>
+            <button class="btn btn-outline btn-sm" onclick="navigate('/overtime')">+ 加班</button>
+            <button class="btn btn-outline btn-sm" onclick="navigate('/punch')">+ 補打卡</button>
+            <button class="btn btn-outline btn-sm" onclick="openExpenseModal()">+ 費用</button>
+            <button class="btn btn-outline btn-sm" onclick="openSwapShiftModal()">+ 換班</button>
+          </div>
+          <div id="dashFlowContent" class="flow-list-scroll">
+            ${renderFlowList(FLOWS_MY)}
+          </div>
+        </div>
+
+        <!-- Calendar -->
+        <div class="card">
+      <div class="cal-header">
+        <h3>&#128197; ${monthLabel(scheduleYear, scheduleMonth)}</h3>
+        <div class="cal-nav">
+          <button onclick="changeMonth(-1)">&lt;</button>
+          <button onclick="changeMonth(1)">&gt;</button>
+        </div>
+      </div>
+      ${buildCalendar(scheduleYear, scheduleMonth, schedule, false)}
+      <div class="legend">
+        <div class="legend-item"><div class="legend-color shift-full"></div>全天</div>
+        <div class="legend-item"><div class="legend-color shift-morning"></div>早班</div>
+        <div class="legend-item"><div class="legend-color shift-afternoon"></div>午班</div>
+        <div class="legend-item"><div class="legend-color shift-night"></div>晚班</div>
+        <div class="legend-item"><div class="legend-color shift-off"></div>休假</div>
+      </div>
+    </div>
+      </div>
+
+      <!-- RIGHT (NARROW) COLUMN -->
+      <div>
+        <div class="card">
+          <div class="card-title"><span class="icon">&#128337;</span> 打卡</div>
+          <div class="clock-display">
+            <div class="clock-time" id="liveTime">--:--:--</div>
+            <div class="clock-date" id="liveDate"></div>
+            <div class="clock-btns">
+              ${clockedIn
+                ? '<button class="btn btn-danger btn-block" onclick="doPunchOut()">&#128308; 下班打卡</button>'
+                : '<button class="btn btn-success btn-block" onclick="doPunchIn()">&#128994; 上班打卡</button>'
+              }
+            </div>
+            <div class="clock-status">${clockedIn ? '已上班打卡 ' + (clockInTime ? clockInTime.toLocaleTimeString('zh-TW', {hour12:false}) : '') : '尚未打卡'}</div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title"><span class="icon">&#128276;</span> 今日提醒</div>
+          ${REMINDERS.map(r => '<div class="reminder-item"><div class="reminder-dot" style="background:' + r.color + '"></div><div>' + r.text + '</div></div>').join('')}
+        </div>
+        <div class="card">
+          <div class="card-title"><span class="icon">&#128101;</span> 常用聯絡人</div>
+          ${CONTACTS.map(c => '<div class="contact-item"><div class="contact-avatar">' + c.initials + '</div><div><div class="contact-name">' + c.name + '</div><div class="contact-role">' + c.role + '</div></div></div>').join('')}
+          <div style="text-align:center;margin-top:10px"><button class="btn btn-outline btn-sm" onclick="navigate('/contacts')">查看全部聯絡人</button></div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function switchDashFlowTab(tab, el) {
+  document.querySelectorAll('#dashFlowTabs .tab-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  const list = tab === 'my' ? FLOWS_MY : FLOWS_ASSIGNED;
+  document.getElementById('dashFlowContent').innerHTML = renderFlowList(list);
+}
+
+function renderFlowList(items) {
+  if (!items.length) return '<div style="padding:16px;text-align:center;color:var(--gray-400);font-size:.85rem">暫無資料</div>';
+  return items.map(f => {
+    let chainHtml = '';
+    if (f.approvalChain) {
+      chainHtml = '<div class="approval-chain">';
+      f.approvalChain.forEach((step, i) => {
+        const icon = step.status === 'done' ? '&#10003;' : step.status === 'current' ? '&#9203;' : '&bull;';
+        chainHtml += `<div class="approval-step ${step.status}"><div class="step-circle">${icon}</div><span class="step-label">${step.role}</span></div>`;
+        if (i < f.approvalChain.length - 1) {
+          chainHtml += `<div class="approval-connector ${step.status === 'done' ? 'done' : ''}"></div>`;
+        }
+      });
+      chainHtml += '</div>';
+    }
+    return `
+    <div class="flow-item" style="flex-wrap:wrap">
+      <div class="flow-icon" style="background:${f.iconBg}">${f.icon}</div>
+      <div class="flow-info">
+        <div class="flow-title">${f.title}</div>
+        <div class="flow-desc">${f.desc} &middot; ${f.date}</div>
+      </div>
+      <div class="flow-status">${statusBadge(f.status)}</div>
+      ${chainHtml ? `<div style="width:100%;padding-left:48px">${chainHtml}</div>` : ''}
+    </div>
+  `;
+  }).join('');
+}
+
+function changeMonth(delta) {
+  scheduleMonth += delta;
+  if (scheduleMonth > 11) { scheduleMonth = 0; scheduleYear++; }
+  if (scheduleMonth < 0) { scheduleMonth = 11; scheduleYear--; }
+  render();
+}
+
+// ========== CLOCK PAGE ==========
+function renderClock() {
+  return `
+    <div class="page-title">&#128336; 打卡</div>
+    <div class="grid-2">
+      <div class="card" style="text-align:center">
+        <div class="big-clock" id="liveTime">--:--:--</div>
+        <div class="big-date" id="liveDate"></div>
+        <div style="margin-top:20px;display:flex;gap:12px;justify-content:center">
+          ${clockedIn
+            ? `<button class="btn btn-danger btn-lg" onclick="doPunchOut()">&#128308; 下班打卡</button>`
+            : `<button class="btn btn-success btn-lg" onclick="doPunchIn()">&#128994; 上班打卡</button>`
+          }
+        </div>
+        <div style="margin-top:12px;font-size:.85rem;color:var(--gray-500)">${clockedIn ? '已上班打卡 ' + (clockInTime ? clockInTime.toLocaleTimeString('zh-TW',{hour12:false}) : '') : '尚未打卡'}</div>
+        <div style="margin-top:6px;font-size:.8rem;color:var(--gray-400)">&#128205; GPS: 25.0330, 121.5654 (辦公室)</div>
+      </div>
+      <div>
+        <div class="card">
+          <div class="card-title">今日紀錄</div>
+          <table>
+            <tr><th>類型</th><th>時間</th><th>狀態</th></tr>
+            <tr><td>上班</td><td>${clockedIn && clockInTime ? clockInTime.toLocaleTimeString('zh-TW',{hour12:false}) : '08:53'}</td><td><span class="badge-status badge-approved">正常</span></td></tr>
+            ${clockedIn ? '' : '<tr><td>下班</td><td>18:05</td><td><span class="badge-status badge-approved">正常</span></td></tr>'}
+          </table>
+        </div>
+        <div class="card">
+          <div class="card-title">本週出勤</div>
+          <table>
+            <thead><tr><th>日期</th><th>上班</th><th>下班</th><th>時數</th><th>狀態</th></tr></thead>
+            <tbody>
+              ${ATTENDANCE_DATA.slice(-7).map(a => `
+                <tr>
+                  <td>${a.date} (${a.weekday})</td><td>${a.clockIn}</td><td>${a.clockOut}</td>
+                  <td>${a.hours}</td>
+                  <td><span class="badge-status ${a.status==='正常'||a.status==='上班中'?'badge-approved':a.status==='遲到'?'badge-rejected':a.status==='補卡'?'badge-info':'badge-pending'}">${a.status}</span></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// ========== SCHEDULE PAGE ==========
+function renderSchedule() {
+  const schedule = genSchedule(scheduleYear, scheduleMonth);
+  return `
+    <div class="page-title">&#128197; 班表</div>
+    <div class="card">
+      <div class="cal-header">
+        <h3>${monthLabel(scheduleYear, scheduleMonth)}</h3>
+        <div class="cal-nav">
+          <button onclick="changeMonth(-1)">&lt;</button>
+          <button onclick="changeMonth(1)">&gt;</button>
+        </div>
+      </div>
+      ${buildCalendar(scheduleYear, scheduleMonth, schedule, false)}
+      <div class="legend">
+        <div class="legend-item"><div class="legend-color shift-full"></div>全天 09:00-18:00</div>
+        <div class="legend-item"><div class="legend-color shift-morning"></div>早班 08:00-16:00</div>
+        <div class="legend-item"><div class="legend-color shift-afternoon"></div>午班 12:00-20:00</div>
+        <div class="legend-item"><div class="legend-color shift-night"></div>晚班 16:00-00:00</div>
+        <div class="legend-item"><div class="legend-color shift-off"></div>休假</div>
+      </div>
+    </div>
+  `;
+}
+
+// ========== LEAVE PAGE ==========
+function renderLeave() {
+  return `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <div class="page-title" style="margin-bottom:0">&#128203; 請假</div>
+      <button class="btn btn-primary" onclick="openLeaveModal()">+ 新增請假</button>
+    </div>
+    <div class="leave-balances">
+      ${LEAVE_BALANCE.map(b => `
+        <div class="leave-bal-card">
+          <div class="leave-bal-type">${b.type}</div>
+          <div class="leave-bal-num">${b.total - b.used}</div>
+          <div class="leave-bal-total">剩餘 / ${b.total} 天</div>
+        </div>
+      `).join('')}
+    </div>
+    <div class="card">
+      <div class="card-title">申請紀錄</div>
+      <table>
+        <thead><tr><th>單號</th><th>假別</th><th>起</th><th>迄</th><th>天數</th><th>事由</th><th>狀態</th></tr></thead>
+        <tbody>
+          ${LEAVE_HISTORY.map(l => `
+            <tr><td>${l.id}</td><td>${l.type}</td><td>${l.start}</td><td>${l.end}</td><td>${l.days}</td><td>${l.reason}</td><td>${statusBadge(l.status)}</td></tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function openLeaveModal() {
+  openModal(`
+    <div class="modal-title">新增請假<span class="modal-close" onclick="closeModal()">&times;</span></div>
+    <div class="form-group"><label>假別</label><select><option>特休</option><option>事假</option><option>病假</option><option>家庭照顧假</option><option>喪假</option><option>婚假</option></select></div>
+    <div class="form-group"><label>起始日</label><input type="date" value="2026-04-21"></div>
+    <div class="form-group"><label>結束日</label><input type="date" value="2026-04-21"></div>
+    <div class="form-group"><label>事由</label><textarea rows="3" placeholder="請輸入請假事由..."></textarea></div>
+    <div class="form-group"><label>職務代理人</label><select><option value="">請選擇代理人</option><option>Vicky</option><option>Ken</option><option>Dave</option><option>Alicia</option><option>Zoey</option><option>學文</option></select></div>
+    <div class="form-group"><label>附件</label><input type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" style="padding:6px"><div style="font-size:.75rem;color:var(--gray-400);margin-top:4px">上傳附檔（診斷證明等）</div></div>
+    <div class="form-actions">
+      <button class="btn btn-outline" onclick="closeModal()">取消</button>
+      <button class="btn btn-primary" onclick="closeModal();alert('請假單已送出！')">送出申請</button>
+    </div>
+  `);
+}
+
+// ========== OVERTIME PAGE ==========
+function renderOvertime() {
+  return `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <div class="page-title" style="margin-bottom:0">&#9200; 加班申請</div>
+      <button class="btn btn-primary" onclick="openOTModal()">+ 新增加班</button>
+    </div>
+    <div class="card">
+      <div class="card-title">申請紀錄</div>
+      <table>
+        <thead><tr><th>單號</th><th>日期</th><th>開始</th><th>結束</th><th>時數</th><th>事由</th><th>狀態</th></tr></thead>
+        <tbody>
+          ${OT_HISTORY.map(o => `
+            <tr><td>${o.id}</td><td>${o.date}</td><td>${o.start}</td><td>${o.end}</td><td>${o.hours}</td><td>${o.reason}</td><td>${statusBadge(o.status)}</td></tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function openOTModal() {
+  openModal(`
+    <div class="modal-title">新增加班申請<span class="modal-close" onclick="closeModal()">&times;</span></div>
+    <div class="form-group"><label>加班日期</label><input type="date" value="2026-04-18"></div>
+    <div class="form-group"><label>開始時間</label><input type="time" value="18:00"></div>
+    <div class="form-group"><label>結束時間</label><input type="time" value="21:00"></div>
+    <div class="form-group"><label>加班事由</label><textarea rows="3" placeholder="請輸入加班事由..."></textarea></div>
+    <div class="form-group"><label>補償方式</label><div style="display:flex;gap:20px;padding:6px 0"><label style="display:flex;align-items:center;gap:6px;font-size:.88rem;font-weight:400;cursor:pointer"><input type="radio" name="otCompensation" value="pay" checked style="width:auto"> 加班費</label><label style="display:flex;align-items:center;gap:6px;font-size:.88rem;font-weight:400;cursor:pointer"><input type="radio" name="otCompensation" value="comp" style="width:auto"> 換補休</label></div></div>
+    <div class="form-actions">
+      <button class="btn btn-outline" onclick="closeModal()">取消</button>
+      <button class="btn btn-primary" onclick="closeModal();alert('加班單已送出！')">送出申請</button>
+    </div>
+  `);
+}
+
+// ========== PUNCH CORRECTION PAGE ==========
+function renderPunch() {
+  return `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <div class="page-title" style="margin-bottom:0">&#128260; 補打卡</div>
+      <button class="btn btn-primary" onclick="openPunchModal()">+ 新增補打卡</button>
+    </div>
+    <div class="card">
+      <div class="card-title">申請紀錄</div>
+      <table>
+        <thead><tr><th>單號</th><th>日期</th><th>補卡時間</th><th>類型</th><th>事由</th><th>狀態</th></tr></thead>
+        <tbody>
+          ${PUNCH_HISTORY.map(p => `
+            <tr><td>${p.id}</td><td>${p.date}</td><td>${p.time}</td><td>${p.type}</td><td>${p.reason}</td><td>${statusBadge(p.status)}</td></tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function openPunchModal() {
+  openModal(`
+    <div class="modal-title">新增補打卡<span class="modal-close" onclick="closeModal()">&times;</span></div>
+    <div class="form-group"><label>補卡日期</label><input type="date" value="2026-04-17"></div>
+    <div class="form-group"><label>補卡時間</label><input type="time" value="09:00"></div>
+    <div class="form-group"><label>類型</label><select><option>上班</option><option>下班</option></select></div>
+    <div class="form-group"><label>原因</label><textarea rows="3" placeholder="請輸入補打卡原因..."></textarea></div>
+    <div class="form-actions">
+      <button class="btn btn-outline" onclick="closeModal()">取消</button>
+      <button class="btn btn-primary" onclick="closeModal();alert('補打卡單已送出！')">送出申請</button>
+    </div>
+  `);
+}
+
+// ========== SALARY PAGE ==========
+function renderSalary() {
+  const totalIncome = SALARY_DATA.income.reduce((s, i) => s + i.amount, 0);
+  const totalDeduction = SALARY_DATA.deduction.reduce((s, i) => s + i.amount, 0);
+  const net = totalIncome - totalDeduction;
+
+  return `
+    <div class="page-title">&#128176; 薪資單</div>
+    <div class="card" style="margin-bottom:16px">
+      <div class="form-group" style="max-width:200px;margin-bottom:0">
+        <label>月份</label>
+        <input type="month" value="${SALARY_DATA.month}">
+      </div>
+    </div>
+    <div class="grid-3">
+      <div class="stat-card">
+        <div class="stat-label">應發合計</div>
+        <div class="stat-value" style="color:var(--success)">$${formatMoney(totalIncome)}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">應扣合計</div>
+        <div class="stat-value" style="color:var(--danger)">$${formatMoney(totalDeduction)}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">實發金額</div>
+        <div class="stat-value" style="color:var(--primary)">$${formatMoney(net)}</div>
+      </div>
+    </div>
+    <div class="grid-2" style="margin-top:16px">
+      <div class="card">
+        <div class="card-title" style="color:var(--success)">&#128316; 應發項目</div>
+        ${SALARY_DATA.income.map(i => `
+          <div class="salary-row"><span>${i.item}</span><span>$${formatMoney(i.amount)}</span></div>
+        `).join('')}
+        <div class="salary-row" style="font-weight:700;border-top:2px solid var(--gray-200);margin-top:4px;padding-top:10px">
+          <span>小計</span><span>$${formatMoney(totalIncome)}</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title" style="color:var(--danger)">&#128317; 應扣項目</div>
+        ${SALARY_DATA.deduction.map(d => `
+          <div class="salary-row"><span>${d.item}</span><span>$${formatMoney(d.amount)}</span></div>
+        `).join('')}
+        <div class="salary-row" style="font-weight:700;border-top:2px solid var(--gray-200);margin-top:4px;padding-top:10px">
+          <span>小計</span><span>$${formatMoney(totalDeduction)}</span>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="text-align:center;margin-top:16px">
+      <div style="font-size:.9rem;color:var(--gray-500);margin-bottom:4px">${SALARY_DATA.month} 實發薪資</div>
+      <div class="salary-total">NT$ ${formatMoney(net)}</div>
+      <button class="btn btn-primary" style="margin-top:14px" onclick="alert('PDF 下載功能開發中')">&#128196; 下載薪資條 PDF</button>
+    </div>
+  `;
+}
+
+// ========== ATTENDANCE PAGE ==========
+function renderAttendance() {
+  const normal = ATTENDANCE_DATA.filter(a => a.status === '正常').length;
+  const late = ATTENDANCE_DATA.filter(a => a.status === '遲到').length;
+  const leave = ATTENDANCE_DATA.filter(a => a.status === '特休').length;
+  const workDays = ATTENDANCE_DATA.filter(a => a.hours !== '-').length;
+
+  return `
+    <div class="page-title">&#128202; 出勤紀錄</div>
+    <div class="grid-4" style="margin-bottom:20px">
+      <div class="stat-card"><div class="stat-value">${workDays}</div><div class="stat-label">出勤天數</div></div>
+      <div class="stat-card"><div class="stat-value" style="color:var(--success)">${normal}</div><div class="stat-label">正常</div></div>
+      <div class="stat-card"><div class="stat-value" style="color:var(--danger)">${late}</div><div class="stat-label">遲到</div></div>
+      <div class="stat-card"><div class="stat-value" style="color:var(--info)">${leave}</div><div class="stat-label">請假</div></div>
+    </div>
+    <div class="card">
+      <div class="card-title">2026年4月出勤明細</div>
+      <table>
+        <thead><tr><th>日期</th><th>星期</th><th>上班</th><th>下班</th><th>工時</th><th>狀態</th></tr></thead>
+        <tbody>
+          ${ATTENDANCE_DATA.map(a => `
+            <tr>
+              <td>${a.date}</td><td>${a.weekday}</td><td>${a.clockIn}</td><td>${a.clockOut}</td><td>${a.hours}</td>
+              <td><span class="badge-status ${a.status==='正常'||a.status==='上班中'?'badge-approved':a.status==='遲到'?'badge-rejected':a.status==='補卡'?'badge-info':'badge-pending'}">${a.status}</span></td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+// ========== OFF REQUEST PAGE ==========
+function renderOffRequest() {
+  const nextMonth = scheduleMonth === 11 ? 0 : scheduleMonth + 1;
+  const nextYear = scheduleMonth === 11 ? scheduleYear + 1 : scheduleYear;
+
+  return `
+    <div class="page-title">&#128197; 希望排休</div>
+    <div class="card">
+      <p style="font-size:.88rem;color:var(--gray-600);margin-bottom:14px">
+        請點選日曆中您希望排休的日期（最多可選 8 天），截止日：${nextYear}/${nextMonth + 1}/25
+      </p>
+      <div class="cal-header">
+        <h3>${monthLabel(nextYear, nextMonth)}</h3>
+      </div>
+      <div id="offCalendar">
+        ${buildCalendar(nextYear, nextMonth, null, true)}
+      </div>
+      <div style="margin-top:14px;display:flex;align-items:center;justify-content:space-between">
+        <div style="font-size:.85rem;color:var(--gray-500)">已選 <strong id="offCount">${selectedOffDays.size}</strong> / 8 天</div>
+        <button class="btn btn-primary" onclick="submitOffRequest()">送出希望排休</button>
+      </div>
+    </div>
+  `;
+}
+
+function toggleOffDay(d) {
+  if (selectedOffDays.has(d)) {
+    selectedOffDays.delete(d);
+  } else {
+    if (selectedOffDays.size >= 8) { alert('最多選擇 8 天'); return; }
+    selectedOffDays.add(d);
+  }
+  render();
+}
+
+function bindOffCalendar() { /* re-render handles state */ }
+
+function submitOffRequest() {
+  if (selectedOffDays.size === 0) { alert('請至少選擇一天'); return; }
+  const days = [...selectedOffDays].sort((a,b) => a - b).join(', ');
+  alert(`已送出希望排休：第 ${days} 日`);
+  selectedOffDays.clear();
+  render();
+}
+
+// ========== FLOWS PAGE ==========
+function renderFlows() {
+  return `
+    <div class="page-title">&#128221; 流程中心</div>
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-title">快速發起</div>
+      <div class="quick-launch">
+        <button class="btn btn-outline" onclick="openLeaveModal()">+ 請假單</button>
+        <button class="btn btn-outline" onclick="openOTModal()">+ 加班單</button>
+        <button class="btn btn-outline" onclick="openPunchModal()">+ 補打卡</button>
+        <button class="btn btn-outline" onclick="openExpenseModal()">+ 費用申請</button>
+        <button class="btn btn-outline" onclick="openBizTripModal()">+ 出差申請</button>
+        <button class="btn btn-outline" onclick="openSwapShiftModal()">+ 換班申請</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="tabs" id="flowTabs">
+        <div class="tab-btn ${currentFlowTab==='my'?'active':''}" onclick="switchFlowTab('my',this)">我發起的</div>
+        <div class="tab-btn ${currentFlowTab==='assigned'?'active':''}" onclick="switchFlowTab('assigned',this)">指派給我的</div>
+      </div>
+      <div id="flowContent">
+        ${renderFlowList(currentFlowTab === 'my' ? FLOWS_MY : FLOWS_ASSIGNED)}
+      </div>
+    </div>
+  `;
+}
+
+function switchFlowTab(tab, el) {
+  currentFlowTab = tab;
+  document.querySelectorAll('#flowTabs .tab-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  const list = tab === 'my' ? FLOWS_MY : FLOWS_ASSIGNED;
+  document.getElementById('flowContent').innerHTML = renderFlowList(list);
+}
+
+// ========== PROFILE PAGE ==========
+function renderProfile() {
+  return `
+    <div class="page-title">&#128100; 個人資料</div>
+    <div class="profile-grid">
+      <div class="card">
+        <div class="card-title">&#128100; 基本資料</div>
+        <div class="profile-field"><div class="profile-label">姓名</div><div class="profile-value">${EMPLOYEE.name}</div></div>
+        <div class="profile-field"><div class="profile-label">員工編號</div><div class="profile-value">${EMPLOYEE.empId}</div></div>
+        <div class="profile-field"><div class="profile-label">部門</div><div class="profile-value">${EMPLOYEE.dept}</div></div>
+        <div class="profile-field"><div class="profile-label">職位</div><div class="profile-value">${EMPLOYEE.position}</div></div>
+        <div class="profile-field"><div class="profile-label">到職日</div><div class="profile-value">${EMPLOYEE.joinDate}</div></div>
+        <div class="profile-field"><div class="profile-label">生日</div><div class="profile-value">${EMPLOYEE.birthday}</div></div>
+        <div class="profile-field"><div class="profile-label">性別</div><div class="profile-value">${EMPLOYEE.gender}</div></div>
+      </div>
+      <div class="card">
+        <div class="card-title">&#128222; 聯絡資訊</div>
+        <div class="profile-field"><div class="profile-label">Email</div><div class="profile-value">${EMPLOYEE.email}</div></div>
+        <div class="profile-field"><div class="profile-label">手機</div><div class="profile-value">${EMPLOYEE.phone}</div></div>
+        <div class="profile-field"><div class="profile-label">地址</div><div class="profile-value">${EMPLOYEE.address}</div></div>
+      </div>
+      <div class="card">
+        <div class="card-title">&#127973; 緊急聯絡人</div>
+        <div class="profile-field"><div class="profile-label">姓名</div><div class="profile-value">${EMPLOYEE.emergencyName}</div></div>
+        <div class="profile-field"><div class="profile-label">關係</div><div class="profile-value">${EMPLOYEE.emergencyRel}</div></div>
+        <div class="profile-field"><div class="profile-label">電話</div><div class="profile-value">${EMPLOYEE.emergencyPhone}</div></div>
+      </div>
+      <div class="card">
+        <div class="card-title">&#127974; 銀行帳戶</div>
+        <div class="profile-field"><div class="profile-label">銀行</div><div class="profile-value">${EMPLOYEE.bankName}</div></div>
+        <div class="profile-field"><div class="profile-label">帳號</div><div class="profile-value">${EMPLOYEE.bankAccount}</div></div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <div class="card-title">&#128274; 修改密碼</div>
+      <div style="max-width:400px">
+        <div class="form-group"><label>目前密碼</label><input type="password" placeholder="請輸入目前密碼"></div>
+        <div class="form-group"><label>新密碼</label><input type="password" placeholder="請輸入新密碼"></div>
+        <div class="form-group"><label>確認新密碼</label><input type="password" placeholder="請再次輸入新密碼"></div>
+        <div class="form-actions" style="justify-content:flex-start"><button class="btn btn-primary" onclick="alert('密碼修改成功！')">更新密碼</button></div>
+      </div>
+    </div>
+  `;
+}
+
+// ========== ANNOUNCEMENT DETAIL ==========
+function openAnnouncementDetail(index) {
+  const a = ANNOUNCEMENTS[index];
+  openModal(`
+    <div class="modal-title">
+      <span>${a.pinned ? '<span class="announce-tag" style="background:#fee2e2;color:#ef4444">置頂</span> ' : ''}<span class="announce-tag" style="background:${a.tagColor};color:${a.tagText}">${a.tag}</span> ${a.title}</span>
+      <span class="modal-close" onclick="closeModal()">&times;</span>
+    </div>
+    <div style="font-size:.8rem;color:var(--gray-400);margin-bottom:14px">發佈日期：${a.date}</div>
+    <div style="font-size:.88rem;line-height:1.7;white-space:pre-line;color:var(--gray-700)">${a.detail}</div>
+    <div class="form-actions"><button class="btn btn-outline" onclick="closeModal()">關閉</button></div>
+  `);
+}
+
+// ========== EXPENSE PAGE ==========
+function renderExpense() {
+  return `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <div class="page-title" style="margin-bottom:0">&#128176; 費用申請</div>
+      <button class="btn btn-primary" onclick="openExpenseModal()">+ 新增費用</button>
+    </div>
+    <div class="card">
+      <div class="card-title">申請紀錄</div>
+      <table>
+        <thead><tr><th>單號</th><th>類別</th><th>金額</th><th>日期</th><th>說明</th><th>狀態</th></tr></thead>
+        <tbody>
+          ${EXPENSE_HISTORY.map(e => `
+            <tr><td>${e.id}</td><td>${e.category}</td><td>$${formatMoney(e.amount)}</td><td>${e.date}</td><td>${e.desc}</td><td>${statusBadge(e.status)}</td></tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function openExpenseModal() {
+  openModal(`
+    <div class="modal-title">新增費用申請<span class="modal-close" onclick="closeModal()">&times;</span></div>
+    <div class="form-group"><label>費用類別</label><select><option>交通</option><option>住宿</option><option>餐飲</option><option>設備</option><option>其他</option></select></div>
+    <div class="form-group"><label>金額</label><input type="number" placeholder="請輸入金額"></div>
+    <div class="form-group"><label>日期</label><input type="date" value="2026-04-17"></div>
+    <div class="form-group"><label>說明</label><textarea rows="3" placeholder="請輸入費用說明..."></textarea></div>
+    <div class="form-group"><label>收據附件</label><input type="file" accept=".pdf,.jpg,.jpeg,.png" style="padding:6px"><div style="font-size:.75rem;color:var(--gray-400);margin-top:4px">上傳收據照片或 PDF</div></div>
+    <div class="form-actions">
+      <button class="btn btn-outline" onclick="closeModal()">取消</button>
+      <button class="btn btn-primary" onclick="closeModal();alert('費用申請已送出！')">送出申請</button>
+    </div>
+  `);
+}
+
+// ========== BUSINESS TRIP MODAL ==========
+function openBizTripModal() {
+  openModal(`
+    <div class="modal-title">新增出差申請<span class="modal-close" onclick="closeModal()">&times;</span></div>
+    <div class="form-group"><label>出差地點</label><input type="text" placeholder="請輸入出差目的地"></div>
+    <div class="form-group"><label>開始日期</label><input type="date" value="2026-04-21"></div>
+    <div class="form-group"><label>結束日期</label><input type="date" value="2026-04-22"></div>
+    <div class="form-group"><label>出差目的</label><textarea rows="3" placeholder="請輸入出差目的..."></textarea></div>
+    <div class="form-group"><label>預估費用</label><input type="number" placeholder="請輸入預估費用"></div>
+    <div class="form-actions">
+      <button class="btn btn-outline" onclick="closeModal()">取消</button>
+      <button class="btn btn-primary" onclick="closeModal();alert('出差申請已送出！')">送出申請</button>
+    </div>
+  `);
+}
+
+// ========== SWAP SHIFT MODAL ==========
+function openSwapShiftModal() {
+  openModal(`
+    <div class="modal-title">換班申請<span class="modal-close" onclick="closeModal()">&times;</span></div>
+    <div class="form-group"><label>換班同事</label><select><option value="">請選擇同事</option><option>Vicky</option><option>Ken</option><option>Dave</option><option>Alicia</option><option>Zoey</option><option>學文</option></select></div>
+    <div class="form-group"><label>我的班次日期</label><input type="date" value="2026-04-21"></div>
+    <div class="form-group"><label>對方班次日期</label><input type="date" value="2026-04-22"></div>
+    <div class="form-group"><label>換班原因</label><textarea rows="3" placeholder="請輸入換班原因..."></textarea></div>
+    <div class="form-actions">
+      <button class="btn btn-outline" onclick="closeModal()">取消</button>
+      <button class="btn btn-primary" onclick="closeModal();alert('換班申請已送出！')">送出申請</button>
+    </div>
+  `);
+}
+
+// ========== OUTING PAGE ==========
+function renderOuting() {
+  return `
+    <div class="page-title">&#9992;&#65039; 外出登記</div>
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title">&#128205; 外出登記</div>
+        <div style="padding:10px 0;font-size:.85rem;color:var(--gray-500);margin-bottom:10px">
+          <span style="font-weight:600">目前位置：</span>25.0330, 121.5654（辦公室附近）
+        </div>
+        <div class="form-group"><label>外出原因</label><select id="outingReason"><option>拜訪客戶</option><option>開會</option><option>送貨</option><option>其他</option></select></div>
+        <div class="form-group"><label>備註</label><textarea id="outingNote" rows="3" placeholder="請輸入備註..."></textarea></div>
+        <div style="display:flex;gap:10px;margin-top:16px">
+          <button class="btn btn-success" style="flex:1" onclick="alert('外出簽到成功！時間：' + new Date().toLocaleTimeString('zh-TW',{hour12:false}))">&#128994; 外出簽到</button>
+          <button class="btn btn-danger" style="flex:1" onclick="alert('外出簽退成功！時間：' + new Date().toLocaleTimeString('zh-TW',{hour12:false}))">&#128308; 外出簽退</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">&#128203; 今日外出紀錄</div>
+        ${OUTING_RECORDS.length === 0 ? '<div style="padding:16px;text-align:center;color:var(--gray-400);font-size:.85rem">尚無外出紀錄</div>' :
+          OUTING_RECORDS.map(r => `
+            <div class="outing-record">
+              <div class="outing-time">${r.time}</div>
+              <div class="outing-info">
+                <div class="outing-reason">${r.type === 'out' ? '&#128314; 外出' : '&#128315; 返回'} — ${r.reason}</div>
+                <div class="outing-note">${r.note}</div>
+              </div>
+              <span class="badge-status ${r.status === '外出中' ? 'badge-pending' : 'badge-approved'}">${r.status}</span>
+            </div>
+          `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+// ========== CONTACTS PAGE ==========
+let contactSearch = '';
+let contactDeptFilter = '';
+
+function renderContacts() {
+  const depts = [...new Set(CONTACTS_FULL.map(c => c.dept))];
+  let filtered = CONTACTS_FULL;
+  if (contactSearch) {
+    const q = contactSearch.toLowerCase();
+    filtered = filtered.filter(c => c.name.toLowerCase().includes(q) || c.position.toLowerCase().includes(q) || c.dept.toLowerCase().includes(q));
+  }
+  if (contactDeptFilter) {
+    filtered = filtered.filter(c => c.dept === contactDeptFilter);
+  }
+
+  return `
+    <div class="page-title">&#128101; 通訊錄</div>
+    <div class="card" style="margin-bottom:16px">
+      <div style="display:flex;gap:12px;flex-wrap:wrap">
+        <div style="flex:1;min-width:200px"><input type="text" placeholder="搜尋姓名、職位、部門..." value="${contactSearch}" oninput="contactSearch=this.value;document.getElementById('app').innerHTML=renderContacts()"></div>
+        <div style="min-width:150px"><select onchange="contactDeptFilter=this.value;document.getElementById('app').innerHTML=renderContacts()"><option value="">全部部門</option>${depts.map(d => `<option ${contactDeptFilter===d?'selected':''}>${d}</option>`).join('')}</select></div>
+      </div>
+    </div>
+    <div class="card">
+      ${filtered.length === 0 ? '<div style="padding:16px;text-align:center;color:var(--gray-400);font-size:.85rem">找不到符合的聯絡人</div>' :
+        filtered.map((c, i) => `
+          <div class="contact-full-item" onclick="openContactDetail(${CONTACTS_FULL.indexOf(c)})">
+            <div class="contact-full-avatar" style="background:${c.avatarBg};color:${c.avatarColor}">${c.initials}</div>
+            <div class="contact-full-info">
+              <div class="contact-full-name">${c.name}</div>
+              <div class="contact-full-meta">${c.position} &middot; ${c.dept} &middot; ${c.store}</div>
+            </div>
+            <div class="contact-full-phone">&#128222; ${c.phone}</div>
+          </div>
+        `).join('')}
+    </div>
+  `;
+}
+
+function openContactDetail(index) {
+  const c = CONTACTS_FULL[index];
+  openModal(`
+    <div class="modal-title">
+      <span>聯絡人資訊</span>
+      <span class="modal-close" onclick="closeModal()">&times;</span>
+    </div>
+    <div style="text-align:center;margin-bottom:18px">
+      <div style="width:64px;height:64px;border-radius:50%;background:${c.avatarBg};color:${c.avatarColor};display:inline-flex;align-items:center;justify-content:center;font-size:1.5rem;font-weight:700;margin-bottom:8px">${c.initials}</div>
+      <div style="font-size:1.1rem;font-weight:700">${c.name}</div>
+      <div style="font-size:.85rem;color:var(--gray-500)">${c.position}</div>
+    </div>
+    <div class="profile-field"><div class="profile-label">部門</div><div class="profile-value">${c.dept}</div></div>
+    <div class="profile-field"><div class="profile-label">門市/據點</div><div class="profile-value">${c.store}</div></div>
+    <div class="profile-field"><div class="profile-label">電話</div><div class="profile-value">${c.phone}</div></div>
+    <div class="form-actions"><button class="btn btn-outline" onclick="closeModal()">關閉</button></div>
+  `);
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,265 @@
+// Rule-based flow generator (fallback when no AI key)
+export function generateFlowByRules(prompt) {
+  const p = prompt.toLowerCase()
+  const TEMPLATES = {
+    onboard: {
+      match: ['新人', '到職', '入職', '報到', 'onboard', '新員工'],
+      name: '新人到職 SOP', category: 'HR',
+      description: '新進員工到職標準流程，從報到到獨立上線',
+      steps: [
+        { title: '人事資料建檔', role: '人資部', priority: '高', description: '身分證影本、存摺影本、勞保加保' },
+        { title: '設備與帳號開通', role: '管理部', priority: '高', description: 'Email、系統帳號、POS 權限、LINE 群組' },
+        { title: '工作環境介紹', role: '店長', priority: '中', description: '門市導覽、設備使用、安全逃生路線' },
+        { title: '公司制度說明', role: '人資部', priority: '中', description: '出勤規則、請假流程、薪資結構、福利制度' },
+        { title: '營運 SOP 教學', role: '店長', priority: '高', description: '開關店流程、收銀、商品知識、客服話術' },
+        { title: 'POS 系統實操訓練', role: '管理部', priority: '高', description: '結帳、退貨、庫存查詢、電子發票' },
+        { title: '實習跟班（3天）', role: '店長', priority: '中', description: '跟隨資深人員實習，熟悉日常流程' },
+        { title: '獨立上線確認', role: '督導', priority: '高', description: '考核通過、正式排班' },
+      ],
+    },
+    inventory: {
+      match: ['盤點', '庫存', 'inventory', '倉庫'],
+      name: '每月盤點 SOP', category: '倉管',
+      description: '每月庫存盤點標準流程，確保帳實相符',
+      steps: [
+        { title: '盤點日期通知', role: '督導', priority: '中', description: '提前 3 天通知各門市' },
+        { title: '列印盤點表', role: '倉儲物流部', priority: '中', description: '匯出庫存清單' },
+        { title: '實體商品清點', role: '店長', priority: '高', description: '逐項清點數量，記錄在盤點表' },
+        { title: '差異比對', role: '倉儲物流部', priority: '高', description: '系統帳面 vs 實際數量' },
+        { title: '差異原因調查', role: '督導', priority: '高', description: '損耗、破損、失竊、系統錯誤' },
+        { title: '庫存調整', role: '倉儲物流部', priority: '中', description: '系統調整，填寫異動原因' },
+        { title: '盤點報告', role: '倉儲物流部', priority: '中', description: '彙整結果、計算盤差率' },
+        { title: '主管審核', role: '營運部', priority: '高', description: '審閱報告、簽核歸檔' },
+      ],
+    },
+    store: {
+      match: ['開店', '新店', '展店', '開幕', '門市'],
+      name: '新店開幕 SOP', category: '展店',
+      description: '開設新門市完整標準作業流程',
+      steps: [
+        { title: '場地評估與選址', role: '展店事業部', priority: '高', description: '商圈分析、人流、租金比較' },
+        { title: '租約簽訂', role: '總經理室', priority: '高', description: '議價、合約審閱、簽約' },
+        { title: '營業登記與許可', role: '管理部', priority: '高', description: '營業登記、許可證辦理' },
+        { title: '裝潢設計確認', role: '品牌行銷部', priority: '高', description: '平面圖、施工圖、品牌規範' },
+        { title: '裝潢施工', role: '管理部', priority: '高', description: '發包、進度追蹤、工程會議' },
+        { title: '設備採購安裝', role: '管理部', priority: '高', description: 'POS、監視器、冷藏設備' },
+        { title: '人員招募', role: '人資部', priority: '中', description: '開缺、面試、錄取' },
+        { title: '教育訓練', role: '營運部', priority: '中', description: 'SOP 教學、POS 訓練' },
+        { title: '首批進貨', role: '倉儲物流部', priority: '中', description: '備貨、驗收入庫、系統建檔' },
+        { title: '陳列上架', role: '營運部', priority: '中', description: '商品陳列、標價、動線確認' },
+        { title: '行銷規劃', role: '品牌行銷部', priority: '中', description: '開幕優惠、社群宣傳' },
+        { title: '試營運', role: '營運部', priority: '高', description: '模擬消費、測試流程、修正' },
+        { title: '正式開幕', role: '營運部', priority: '高', description: '開幕活動、首日數據追蹤' },
+      ],
+    },
+    complaint: {
+      match: ['客訴', '投訴', '客戶抱怨', '客服'],
+      name: '客訴處理 SOP', category: '營運',
+      description: '顧客投訴處理標準流程',
+      steps: [
+        { title: '接收客訴', role: '門市人員', priority: '高', description: '記錄內容、客戶資訊、訴求' },
+        { title: '初步安撫', role: '門市人員', priority: '高', description: '致歉、表達重視、告知處理時程' },
+        { title: '事件調查', role: '店長', priority: '高', description: '了解經過、調閱監視器' },
+        { title: '擬定方案', role: '督導', priority: '中', description: '退換貨/賠償方案' },
+        { title: '回覆客戶', role: '店長', priority: '高', description: '通知處理結果、執行補救' },
+        { title: '內部檢討', role: '營運部', priority: '中', description: '檢討會議、制定預防措施' },
+        { title: '結案歸檔', role: '管理部', priority: '低', description: '更新紀錄、歸檔' },
+      ],
+    },
+    purchase: {
+      match: ['採購', '進貨', '購買', '供應商'],
+      name: '採購申請 SOP', category: '採購',
+      description: '設備與原物料採購標準流程',
+      steps: [
+        { title: '需求提出', role: '店長', priority: '中', description: '填寫品項、數量、規格、預算' },
+        { title: '採購審核', role: '採購部', priority: '中', description: '確認需求合理性、預算' },
+        { title: '供應商詢價', role: '採購部', priority: '中', description: '向 2-3 家詢價比較' },
+        { title: '比價與議價', role: '採購部', priority: '中', description: '選定供應商' },
+        { title: '主管核准', role: '總經理室', priority: '高', description: '大額採購需核准' },
+        { title: '到貨驗收', role: '倉儲物流部', priority: '高', description: '核對品項、數量、品質' },
+        { title: '入庫建檔', role: '倉儲物流部', priority: '中', description: '系統入庫、設定庫存' },
+        { title: '請款付款', role: '管理部', priority: '中', description: '核對發票、安排付款' },
+      ],
+    },
+    marketing: {
+      match: ['行銷', '活動', '促銷', '企劃', '宣傳'],
+      name: '行銷活動企劃 SOP', category: '行銷',
+      description: '行銷活動從企劃到執行的完整流程',
+      steps: [
+        { title: '活動目標設定', role: '行銷部', priority: '高', description: '確認目標（營收/會員/曝光）、KPI' },
+        { title: '企劃案撰寫', role: '行銷部', priority: '高', description: '活動內容、預算、時程表' },
+        { title: '主管審核', role: '營運部', priority: '中', description: '審核企劃、預算核准' },
+        { title: '素材設計', role: '設計部', priority: '中', description: '視覺設計、文案、印刷物' },
+        { title: '通路準備', role: '行銷部', priority: '中', description: '社群排程、EDM、門市佈置' },
+        { title: '活動執行', role: '門市/行銷部', priority: '高', description: '上線執行、即時監控' },
+        { title: '數據追蹤', role: '行銷部', priority: '中', description: '追蹤 KPI、每日回報' },
+        { title: '結案報告', role: '行銷部', priority: '中', description: '成效分析、ROI 計算、檢討' },
+      ],
+    },
+    finance: {
+      match: ['報帳', '報銷', '核銷', '費用', '財務'],
+      name: '費用報銷 SOP', category: '財務',
+      description: '員工費用報銷申請流程',
+      steps: [
+        { title: '填寫報銷單', role: '申請人', priority: '中', description: '金額、用途、附上收據' },
+        { title: '主管審核', role: '部門主管', priority: '中', description: '確認費用合理性' },
+        { title: '財務覆核', role: '財務部', priority: '高', description: '核對金額、收據、科目' },
+        { title: '款項撥付', role: '財務部', priority: '中', description: '匯款或現金發放' },
+        { title: '記帳歸檔', role: '財務部', priority: '低', description: '入帳、收據歸檔' },
+      ],
+    },
+    training: {
+      match: ['訓練', '培訓', '教育', '課程'],
+      name: '員工培訓 SOP', category: 'HR',
+      description: '員工教育訓練規劃與執行流程',
+      steps: [
+        { title: '需求評估', role: '人資部', priority: '中', description: '蒐集各部門訓練需求' },
+        { title: '課程規劃', role: '人資部', priority: '中', description: '排定課程、講師、場地' },
+        { title: '通知與報名', role: '人資部', priority: '中', description: '發布公告、確認出席' },
+        { title: '教材準備', role: '講師', priority: '中', description: '準備教材、測驗題目' },
+        { title: '課程執行', role: '講師', priority: '高', description: '授課、實作演練' },
+        { title: '測驗評核', role: '人資部', priority: '中', description: '考試或實作評核' },
+        { title: '成果紀錄', role: '人資部', priority: '低', description: '登錄時數、成績歸檔' },
+      ],
+    },
+    daily_open: {
+      match: ['開店', '早班', '開門', '營業前'],
+      name: '每日開店 SOP', category: '營運',
+      description: '每日營業前的標準準備流程',
+      steps: [
+        { title: '抵達門市、關閉保全', role: '開店人員', priority: '高', description: '使用員工門禁進入、解除保全系統' },
+        { title: '開啟電源與設備', role: '開店人員', priority: '高', description: '燈光、冷氣、冰箱、音響、電子看板' },
+        { title: '環境清潔檢查', role: '開店人員', priority: '高', description: '地板、桌面、廁所、門口、垃圾清運' },
+        { title: 'POS 開機與備用金清點', role: '開店人員', priority: '高', description: '開啟收銀機、確認備用金金額正確' },
+        { title: '商品陳列與補貨', role: '開店人員', priority: '中', description: '檢查貨架、補齊缺貨、效期確認' },
+        { title: '冷藏/冷凍溫度記錄', role: '開店人員', priority: '高', description: '記錄設備溫度，異常立即通報' },
+        { title: '營業前最終巡檢', role: '店長', priority: '中', description: '確認一切就緒、開門營業' },
+      ],
+    },
+    daily_close: {
+      match: ['關店', '晚班', '打烊', '營業後'],
+      name: '每日關店 SOP', category: '營運',
+      description: '每日營業結束的標準收尾流程',
+      steps: [
+        { title: '最後客人離場確認', role: '關店人員', priority: '高', description: '確認所有客人已離開' },
+        { title: 'POS 日結與對帳', role: '關店人員', priority: '高', description: '列印日結報表、現金清點、信用卡/電子支付核對' },
+        { title: '營業額填報', role: '關店人員', priority: '中', description: '登錄系統、拍照日結單' },
+        { title: '商品收納與冷藏', role: '關店人員', priority: '中', description: '生鮮收冷藏、貴重品上鎖' },
+        { title: '環境清潔', role: '關店人員', priority: '高', description: '地板拖洗、桌面消毒、垃圾打包' },
+        { title: '設備關閉', role: '關店人員', priority: '高', description: '關冷氣、電子看板、非必要燈光（冰箱維持）' },
+        { title: '門窗上鎖、啟動保全', role: '關店人員', priority: '高', description: '檢查後門、啟動保全系統、確認監視器運作' },
+      ],
+    },
+    food_safety: {
+      match: ['食安', '衛生', '食品安全', 'HACCP', '稽核'],
+      name: '食品安全衛生管理 SOP', category: '營運',
+      description: '食品業衛生安全日常管理流程',
+      steps: [
+        { title: '人員健康檢查', role: '店長', priority: '高', description: '每日測量體溫、確認無傳染病症狀' },
+        { title: '個人衛生確認', role: '全員', priority: '高', description: '制服清潔、頭髮束好、指甲修剪、洗手消毒' },
+        { title: '食材驗收', role: '驗收人員', priority: '高', description: '檢查溫度、包裝完整、效期標示' },
+        { title: '冷鏈溫度記錄', role: '值班人員', priority: '高', description: '冷藏 0-7°C、冷凍 -18°C 以下，異常通報' },
+        { title: '調理區消毒', role: '廚房人員', priority: '高', description: '砧板、刀具、工作檯面消毒' },
+        { title: '成品溫度確認', role: '出餐人員', priority: '中', description: '熱食 60°C 以上、冷食 7°C 以下' },
+        { title: '清潔消毒紀錄', role: '值班人員', priority: '中', description: '填寫衛生檢查表、拍照存檔' },
+        { title: '廢棄物處理', role: '值班人員', priority: '中', description: '廚餘分類、過期品銷毀記錄' },
+      ],
+    },
+    customer_service: {
+      match: ['服務', '接待', '顧客', '服務流程'],
+      name: '顧客服務標準流程', category: '營運',
+      description: '門市接待顧客的完整服務標準',
+      steps: [
+        { title: '迎賓招呼', role: '門市人員', priority: '高', description: '微笑問候、歡迎光臨，主動引導' },
+        { title: '需求了解', role: '門市人員', priority: '高', description: '詢問需求、推薦適合商品/服務' },
+        { title: '商品介紹', role: '門市人員', priority: '中', description: '功能說明、比較建議、促銷告知' },
+        { title: '結帳服務', role: '收銀人員', priority: '高', description: '確認品項金額、告知付款方式、開立發票' },
+        { title: '會員經營', role: '門市人員', priority: '中', description: '邀請加入會員、LINE 好友、點數告知' },
+        { title: '包裝送客', role: '門市人員', priority: '中', description: '商品包裝、感謝惠顧、歡迎再來' },
+        { title: '售後關懷', role: '客服人員', priority: '低', description: '滿意度追蹤、回購提醒（VIP 客戶）' },
+      ],
+    },
+    shift_handover: {
+      match: ['交接', '換班', '交班', '接班'],
+      name: '班次交接 SOP', category: '營運',
+      description: '班次交接的標準流程，確保資訊不斷檔',
+      steps: [
+        { title: '現金與POS核對', role: '交班人員', priority: '高', description: '清點現金、核對 POS 報表、記錄差額' },
+        { title: '未完成事項交代', role: '交班人員', priority: '高', description: '待處理訂單、客訴、設備異常' },
+        { title: '庫存狀態通報', role: '交班人員', priority: '中', description: '缺貨品項、到貨預期、效期提醒' },
+        { title: '設備狀態確認', role: '接班人員', priority: '中', description: '設備運作、溫度、清潔狀況' },
+        { title: '交接簽名', role: '雙方', priority: '高', description: '交接本簽名、確認無遺漏' },
+      ],
+    },
+    seasonal_promotion: {
+      match: ['節慶', '檔期', '季節', '過年', '中秋', '母親節'],
+      name: '節慶檔期企劃 SOP', category: '行銷',
+      description: '節慶促銷活動從規劃到執行的完整流程',
+      steps: [
+        { title: '檔期選定與目標設定', role: '行銷部', priority: '高', description: '選定節慶、設定營收目標、預算分配' },
+        { title: '商品企劃', role: '採購部', priority: '高', description: '節慶商品選品、定價、獨家商品開發' },
+        { title: '備貨與庫存規劃', role: '倉儲物流部', priority: '高', description: '預估銷量、下單備貨、安全庫存設定' },
+        { title: '視覺與文宣製作', role: '設計部', priority: '中', description: '海報、社群素材、店內佈置設計' },
+        { title: '門市佈置', role: '營運部', priority: '中', description: '陳列變更、POP 佈置、氛圍營造' },
+        { title: '社群與廣告投放', role: '行銷部', priority: '中', description: 'FB/IG 貼文、LINE 推播、Google 廣告' },
+        { title: '活動執行與即時調整', role: '營運部', priority: '高', description: '開賣、即時追蹤銷量、補貨調度' },
+        { title: '檔期結案分析', role: '行銷部', priority: '中', description: '銷售數據、ROI、客戶回饋、改善建議' },
+      ],
+    },
+    equipment_maintenance: {
+      match: ['設備', '維修', '保養', '維護', '機器'],
+      name: '設備維護保養 SOP', category: '營運',
+      description: '門市設備定期保養與故障處理流程',
+      steps: [
+        { title: '設備巡檢', role: '值班人員', priority: '中', description: '每日檢查設備運作狀態、記錄異常' },
+        { title: '定期保養排程', role: '管理部', priority: '中', description: '依保養週期安排：冷氣/冰箱/烤箱等' },
+        { title: '故障通報', role: '門市人員', priority: '高', description: '填寫報修單：設備名稱、故障描述、照片' },
+        { title: '維修派工', role: '管理部', priority: '高', description: '聯繫維修商、預約時間、確認費用' },
+        { title: '維修執行', role: '維修人員', priority: '高', description: '現場維修、更換零件' },
+        { title: '驗收確認', role: '店長', priority: '高', description: '測試設備正常運作、簽收' },
+        { title: '紀錄歸檔', role: '管理部', priority: '低', description: '更新設備維修履歷、保固追蹤' },
+      ],
+    },
+    employee_leave: {
+      match: ['離職', '離開', '資遣', '退出'],
+      name: '員工離職交接 SOP', category: 'HR',
+      description: '員工離職時的完整交接流程',
+      steps: [
+        { title: '離職面談', role: '人資部', priority: '高', description: '了解離職原因、挽留評估' },
+        { title: '離職申請核准', role: '部門主管', priority: '高', description: '確認最後工作日、交接人選' },
+        { title: '工作交接', role: '離職員工', priority: '高', description: '整理手上工作、文件、客戶名單，交接給指定人員' },
+        { title: '資產歸還', role: '離職員工', priority: '高', description: '制服、鑰匙、設備、識別證' },
+        { title: '帳號權限關閉', role: '管理部', priority: '高', description: '系統帳號、Email、LINE 群組移除' },
+        { title: '薪資結算', role: '人資部', priority: '高', description: '最後薪資、特休未休折算、資遣費計算' },
+        { title: '勞健保退保', role: '人資部', priority: '高', description: '辦理退保、開立離職證明' },
+        { title: '離職問卷', role: '人資部', priority: '低', description: '匿名問卷、改善建議收集' },
+      ],
+    },
+
+  }
+
+  // Match keywords
+  for (const tpl of Object.values(TEMPLATES)) {
+    if (tpl.match.some(kw => p.includes(kw))) {
+      return { name: tpl.name, category: tpl.category, description: tpl.description, steps: tpl.steps }
+    }
+  }
+
+  // Generic fallback
+  const name = prompt.length > 20 ? prompt.slice(0, 20) + '...' : prompt
+  return {
+    name: `${name} SOP`,
+    category: '營運',
+    description: `根據「${prompt}」自動生成的流程`,
+    steps: [
+      { title: '需求確認', role: '負責人', priority: '高', description: '確認目標、範圍、時程' },
+      { title: '方案規劃', role: '負責人', priority: '高', description: '擬定執行計畫' },
+      { title: '資源準備', role: '負責人', priority: '中', description: '人力、物料、預算確認' },
+      { title: '主管核准', role: '主管', priority: '中', description: '審核計畫、核准執行' },
+      { title: '任務執行', role: '執行團隊', priority: '高', description: '依計畫執行' },
+      { title: '進度追蹤', role: '負責人', priority: '中', description: '定期回報進度' },
+      { title: '成果驗收', role: '主管', priority: '高', description: '確認完成、品質檢查' },
+      { title: '結案歸檔', role: '負責人', priority: '低', description: '文件整理、經驗記錄' },
+    ],
+  }
+}

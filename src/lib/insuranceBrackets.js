@@ -1,0 +1,218 @@
+/**
+ * 勞健保級距載入器
+ *
+ * 從 DB labor_ins_brackets / health_ins_brackets 載入年度級距表，
+ * 提供 sync lookup helper 給 payroll.js 使用。
+ *
+ * 設計：
+ * - 帶 year 快取（同 process 共用），避免每張薪資單都打 DB
+ * - 載入失敗或 DB 沒有該年度資料時，回傳 null（payroll.js 會 fallback 到 hardcoded）
+ * - row 結構：{ year, grade, insured_salary, min_salary, employee_premium, employer_premium }
+ *
+ * Bracket 語意：
+ * - 月薪 X 落入「min_salary <= X <= insured_salary」的那個 grade
+ * - 高於最後一級的 insured_salary → 一律取最後一級（cap）
+ */
+
+import { supabase } from './supabase'
+
+// year -> Promise<{labor, health, year}> | null
+const cache = new Map()
+
+/**
+ * 載入指定年度的勞健保級距表（含快取）
+ *
+ * @param {number} year - 西元年（如 2026）
+ * @returns {Promise<{labor: Array, health: Array, year: number} | null>}
+ *   若 DB 沒資料或載入失敗，回傳 null（呼叫端可 fallback）
+ */
+export async function loadInsuranceBrackets(year) {
+  if (!year || !Number.isFinite(year)) return null
+  if (cache.has(year)) return cache.get(year)
+
+  const p = (async () => {
+    const [laborRes, healthRes, pensionRes, occRes] = await Promise.all([
+      supabase.from('labor_ins_brackets').select('*').eq('year', year).order('grade'),
+      supabase.from('health_ins_brackets').select('*').eq('year', year).order('grade'),
+      supabase.from('labor_pension_brackets').select('*').eq('year', year).order('monthly_wage'),
+      supabase.from('labor_occ_injury_brackets').select('*').eq('year', year).order('insured_salary'),
+    ])
+    if (laborRes.error) throw laborRes.error
+    if (healthRes.error) throw healthRes.error
+    // 勞退/職災表可能尚未建立(舊年度)→ 不致命,回空陣列
+    const labor = laborRes.data || []
+    const health = healthRes.data || []
+    const pension = pensionRes.error ? [] : (pensionRes.data || [])
+    const occ = occRes.error ? [] : (occRes.data || [])
+    if (labor.length === 0 || health.length === 0) {
+      // 該年度沒資料
+      return null
+    }
+    return { labor, health, pension, occ, year }
+  })()
+
+  cache.set(year, p)
+  try {
+    return await p
+  } catch (e) {
+    // 載入失敗：清掉 cache 讓下次重試
+    cache.delete(year)
+    console.error('[insuranceBrackets] load failed for year', year, e)
+    return null
+  }
+}
+
+/**
+ * 從 brackets 陣列中找對應月薪的 grade row
+ *
+ * @param {Array} brackets - 已 sort by grade asc 的 bracket 陣列
+ * @param {number} salary - 月薪
+ * @param {number} startInsured - 起算的最低 insured_salary（FT 從 29500，PT 鐵則從 11100）
+ * @returns {object | null} bracket row，或 null（陣列空）
+ */
+function findBracketRow(brackets, salary, startInsured) {
+  if (!brackets || brackets.length === 0) return null
+  // 找第一個 insured_salary >= startInsured 且 >= salary 的級距
+  for (const b of brackets) {
+    if (b.insured_salary < startInsured) continue
+    if (b.insured_salary >= salary) return b
+  }
+  // 超過最高級 → 取最後一級（cap）
+  return brackets[brackets.length - 1]
+}
+
+/**
+ * 勞保級距查找
+ *
+ * 業務鐵則：
+ * - PT 一律投保 11,100（forcePartTimeMin: true 預設）
+ * - FT 最低 29,500（基本工資），最高 cap 在「>= 45,800 對應的最後 FT 級距」
+ *   （DB 表 grade 35 = 45,800，之後 grade 36+ 雖然 insured_salary 上升，
+ *    但 employee_premium 凍結在 1,145；我們直接照 DB 用，不另作 cap 邏輯）
+ *
+ * @param {Array} laborBrackets - DB labor brackets (whole year, all 82 grades)
+ * @param {number} salary - 月薪
+ * @param {object} [opts]
+ * @param {boolean} [opts.isPartTime=false]
+ * @param {boolean} [opts.forcePartTimeMin=true]
+ * @returns {object | null}
+ */
+export function findLaborBracket(laborBrackets, salary, opts = {}) {
+  const { isPartTime = false, forcePartTimeMin = true } = opts
+  if (!laborBrackets || laborBrackets.length === 0) return null
+
+  if (isPartTime && forcePartTimeMin) {
+    // PT 鐵則：固定 11,100
+    return laborBrackets.find(b => b.insured_salary === 11100) || null
+  }
+
+  // FT：從 29,500 起算。月薪 < 29,500 也對齊 29,500 級
+  // 注意：勞保實際的法定 cap 是 45,800（grade 35）。
+  // 但 DB 表有 1–82 級，我們不主動 cap，由 employee_premium 凍結在 1,145 來反映「>= 45,800 都一樣」。
+  return findBracketRow(laborBrackets, salary, 29500)
+}
+
+/**
+ * 健保級距查找
+ *
+ * 健保無 PT 例外 — 一律從第 1 級（29,500）起算
+ * 最高級 313,000（grade 82）
+ *
+ * @param {Array} healthBrackets - DB health brackets
+ * @param {number} salary - 月薪
+ * @returns {object | null}
+ */
+export function findHealthBracket(healthBrackets, salary) {
+  return findBracketRow(healthBrackets, salary, 29500)
+}
+
+/**
+ * PT 投保金額查表（11,100 ~ 29,500 區間，跟 FT 不同的範圍）
+ *
+ * 法規嚴格說 PT 投保用「最近 3 個月平均收入」對應級距，但實務常用
+ * 當月薪資（時薪 × 工時）當估算。誤差小且免去歷史平均計算負擔。
+ *
+ * - salary < 11,100 → 11,100（PT 法定最低投保）
+ * - 11,100 ~ 29,500 → 找第一個 >= salary 的級距
+ * - salary > 29,500 → 29,500（PT 法定上限）
+ *
+ * @param {Array} brackets - labor 或 health brackets（同一演算法都適用）
+ * @param {number} salary - PT 當月薪資（時薪 × 工時 + 常規津貼）
+ * @returns {number} PT 適用投保金額，找不到 brackets 時 fallback 到 11,100
+ */
+export function findPTInsuredSalary(brackets, salary) {
+  const PT_MIN = 11100
+  const PT_MAX = 29500
+  if (!brackets || brackets.length === 0) return PT_MIN
+
+  // 篩出 PT 範圍內級距，並依 insured_salary 升序排（防 DB 排序不可靠）
+  const ptBrackets = brackets
+    .filter(b => b.insured_salary >= PT_MIN && b.insured_salary <= PT_MAX)
+    .slice()
+    .sort((a, b) => a.insured_salary - b.insured_salary)
+  if (ptBrackets.length === 0) return PT_MIN
+
+  for (const b of ptBrackets) {
+    if (b.insured_salary >= salary) return b.insured_salary
+  }
+  // 超過 PT_MAX → cap
+  return PT_MAX
+}
+
+/**
+ * 勞退月提繳級距查找（對齊 DB _pension_bracket_row）
+ *
+ * 勞退月提繳工資 = 第一個 monthly_wage >= 實際工資 的級距；超過最高級 → 最高級（150,000 cap）。
+ * 與勞保不同：勞退表獨立(1,500~150,000)，不可拿勞保級距(封頂 45,800)硬套。
+ *
+ * @param {Array} pensionBrackets - DB labor_pension_brackets（含 monthly_wage）
+ * @param {number} salary - 實際工資（本薪 + 津貼）
+ * @returns {object | null} bracket row（含 monthly_wage），或 null
+ */
+export function findPensionBracket(pensionBrackets, salary) {
+  if (!pensionBrackets || pensionBrackets.length === 0) return null
+  const sorted = [...pensionBrackets].sort((a, b) => (a.monthly_wage || 0) - (b.monthly_wage || 0))
+  for (const b of sorted) {
+    if ((b.monthly_wage || 0) >= salary) return b
+  }
+  return sorted[sorted.length - 1]   // 超過最高級 → cap 150,000
+}
+
+/**
+ * 職災級距查找（獨立表 labor_occ_injury_brackets，上限 72,800）
+ * 第一個 insured_salary >= 實際工資 的級距；超過最高級 → 最高級（72,800 cap）
+ * @param {Array} occBrackets
+ * @param {number} salary
+ * @returns {object | null}
+ */
+export function findOccBracket(occBrackets, salary) {
+  if (!occBrackets || occBrackets.length === 0) return null
+  const sorted = [...occBrackets].sort((a, b) => (a.insured_salary || 0) - (b.insured_salary || 0))
+  for (const b of sorted) {
+    if ((b.insured_salary || 0) >= salary) return b
+  }
+  return sorted[sorted.length - 1]   // cap 72,800
+}
+
+/**
+ * 從投保金額反查 row（給「指定投保金額」場景用，如手動指定 insured_salary）
+ *
+ * @param {Array} brackets
+ * @param {number} insuredSalary
+ * @returns {object | null}
+ */
+export function findBracketByInsured(brackets, insuredSalary) {
+  if (!brackets || brackets.length === 0) return null
+  for (const b of brackets) {
+    if (b.insured_salary >= insuredSalary) return b
+  }
+  return brackets[brackets.length - 1]
+}
+
+/**
+ * 清除快取（給測試或手動 refresh 用）
+ */
+export function clearInsuranceBracketsCache(year) {
+  if (year) cache.delete(year)
+  else cache.clear()
+}

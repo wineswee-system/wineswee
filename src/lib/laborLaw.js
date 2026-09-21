@@ -1,0 +1,451 @@
+/**
+ * 台灣勞動法規合規引擎
+ *
+ * 涵蓋三大法律：
+ * 1. 勞動基準法（勞基法）
+ * 2. 性別平等工作法（性平法）
+ * 3. 職業安全衛生法
+ *
+ * 本模組專注於「工時與排班」相關規定
+ *
+ * 2026 重大更新：
+ * - 基本工資：月薪 29,500 / 時薪 196
+ * - 國定假日：採「只補假不補班」新制
+ * - 職安法修正：職場霸凌專章、罰則提高至300萬
+ * - 病假新制：10天內不得不利處分、全勤按比例扣
+ */
+
+import { parseShiftRange, MAX_CONSECUTIVE_WORK_DAYS, MAX_CONSECUTIVE_WORK_DAYS_FT } from './scheduleUtils'
+
+// ══════════════════════════════════════
+//  勞基法 — 工時與排班規定
+// ══════════════════════════════════════
+
+export const LABOR_STANDARDS = {
+  // ── 第30條：正常工時 ──
+  normalHours: {
+    law: '勞基法 §30',
+    title: '正常工作時間',
+    daily: 8,      // 每日不得超過 8 小時
+    weekly: 40,    // 每週不得超過 40 小時
+    desc: '勞工正常工作時間，每日不得超過 8 小時，每週不得超過 40 小時。',
+    note: '雇主經工會或勞資會議同意，得將其2週內2日之正常工時分配於其他工作日（彈性工時）。',
+  },
+
+  // ── 第30-1條：變形工時（4週彈性工時）──
+  flexibleHours: {
+    law: '勞基法 §30-1',
+    title: '四週變形工時',
+    biWeekly: 80,    // 2週不超過80小時
+    fourWeekly: 160,  // 4週不超過160小時
+    maxDaily: 10,     // 單日最高10小時
+    desc: '經工會或勞資會議同意，得採四週彈性工時制：4週內正常工時不得超過160小時，單日不超過10小時。',
+  },
+
+  // ── 第32條：延長工時（加班）──
+  overtime: {
+    law: '勞基法 §32',
+    title: '延長工作時間',
+    maxDaily: 4,         // 一日延長連同正常不超過12小時
+    maxMonthly: 46,      // 每月不得超過46小時
+    maxMonthlyAgreed: 54, // 經工會同意，每月不超過54小時（每3個月不超過138小時）
+    maxQuarterly: 138,
+    desc: '延長工時連同正常工時一日不超過12小時。每月延長工時不得超過46小時；經工會同意得延長至54小時，但每3個月合計不超過138小時。',
+    rates: [
+      { desc: '延長工時前2小時', rate: 1.34, formula: '時薪 × 1⅓' },
+      { desc: '延長工時第3-4小時', rate: 1.67, formula: '時薪 × 1⅔' },
+      { desc: '休息日前2小時', rate: 1.34, formula: '時薪 × 1⅓' },
+      { desc: '休息日第3-8小時', rate: 1.67, formula: '時薪 × 1⅔' },
+      { desc: '休息日第9-12小時', rate: 2.67, formula: '時薪 × 2⅔' },
+      { desc: '例假日出勤', rate: 2.0, formula: '加倍工資' },
+      { desc: '國定假日出勤', rate: 2.0, formula: '加倍工資' },
+    ],
+  },
+
+  // ── 第34條：輪班間隔 ──
+  shiftInterval: {
+    law: '勞基法 §34',
+    title: '輪班間隔',
+    minHours: 11,  // 更換班次至少間隔11小時
+    minHoursAgreed: 8, // 經工會同意得縮短為8小時
+    desc: '勞工工作採輪班制者，更換班次時，至少應有連續11小時之休息時間；經工會同意得縮短為8小時。',
+  },
+
+  // ── 第35條：休息時間 ──
+  breakTime: {
+    law: '勞基法 §35',
+    title: '休息時間',
+    after4Hours: 30, // 工作4小時至少休息30分鐘
+    desc: '勞工繼續工作4小時，至少應有30分鐘之休息。但實行輪班制或工作有連續性或緊急性者，雇主得在工作時間內另行調配。',
+  },
+
+  // ── 第36條：例假與休息日 ──
+  restDays: {
+    law: '勞基法 §36',
+    title: '例假與休息日',
+    restPerWeek: 1,    // 每7天至少1天例假
+    offPerWeek: 1,     // 每7天至少1天休息日
+    totalPerWeek: 2,   // 合計每週至少2天
+    desc: '勞工每7日中應有2日之休息，其中1日為例假，1日為休息日。例假日除天災、事變外不得使勞工工作。',
+    detail: [
+      '例假（§36-1）：非天災事變不得要求出勤，違者處罰',
+      '休息日（§36-2）：經勞工同意可出勤，但須給加班費',
+      '2週彈性：每2週至少2日例假+2日休息日',
+      '4週彈性：每4週至少4日例假+4日休息日',
+    ],
+  },
+
+  // ── 第37條：國定假日 ──
+  nationalHolidays: {
+    law: '勞基法 §37',
+    title: '國定假日',
+    desc: '紀念日、勞動節及其他中央主管機關規定應放假之日，均應休假。',
+    note2026: '2026年起採「只補假不補班」新制。國定假日逢週六→前一個週五補假；逢週日→後一個週一補假。全年無補班日。',
+    holidays2026: [
+      { date: '01-01', name: '元旦', weekday: '四' },
+      { date: '02-15', name: '小年夜', weekday: '日' },
+      { date: '02-16', name: '除夕', weekday: '一' },
+      { date: '02-17', name: '春節初一', weekday: '二' },
+      { date: '02-18', name: '春節初二', weekday: '三' },
+      { date: '02-19', name: '春節初三', weekday: '四' },
+      { date: '02-28', name: '和平紀念日', weekday: '六' },
+      { date: '04-04', name: '兒童節', weekday: '六' },
+      { date: '04-05', name: '清明節', weekday: '日' },
+      { date: '05-01', name: '勞動節', weekday: '五' },
+      { date: '05-31', name: '端午節', weekday: '日' },
+      { date: '09-21', name: '中秋節', weekday: '一' },
+      { date: '10-10', name: '國慶日', weekday: '六' },
+    ],
+  },
+
+  // ── 第49條：女性夜間工作 ──
+  femaleNightWork: {
+    law: '勞基法 §49',
+    title: '女性夜間工作限制',
+    nightStart: 22,  // 晚上10點
+    nightEnd: 6,     // 早上6點
+    desc: '雇主不得使女工於午後10時至翌晨6時之時間內工作。但經工會或勞資會議同意，且符合安全衛生條件者，不在此限。',
+    conditions: [
+      '提供必要之安全衛生設施',
+      '提供交通工具或安排女工宿舍',
+      '經工會或勞資會議同意',
+      '妊娠或哺乳期間之女工，不得於夜間工作',
+    ],
+  },
+
+  // ── 第84-1條：責任制 ──
+  exemptWorkers: {
+    law: '勞基法 §84-1',
+    title: '責任制工作者',
+    desc: '經中央主管機關核定公告之監督、管理人員或責任制專業人員等，得由勞雇雙方另行約定工作時間、例假、休假。但仍應報當地主管機關核備。',
+    note: '即便是責任制，仍不得損及勞工健康及福祉，且須經勞工書面同意。',
+  },
+}
+
+// ══════════════════════════════════════
+//  性平法 — 排班相關
+// ══════════════════════════════════════
+
+export const GENDER_EQUALITY = {
+  // ── 第15條：產假期間 ──
+  maternityProtection: {
+    law: '性平法 §15',
+    title: '產假期間不得排班',
+    desc: '女性員工產假期間，雇主不得安排其工作。',
+  },
+
+  // ── 第18條：哺乳時間 ──
+  nursingTime: {
+    law: '性平法 §18',
+    title: '哺乳時間',
+    desc: '子女未滿2歲需受僱者親自哺(集)乳者，除規定之休息時間外，雇主應每日另給哺(集)乳時間60分鐘（可分2次各30分鐘）。',
+    impact: '排班時應將哺乳時間視為工作時間，不得扣薪。',
+  },
+
+  // ── 第19條：減少工時 ──
+  reducedHours: {
+    law: '性平法 §19',
+    title: '育兒減少工時',
+    desc: '受僱於僱用30人以上之雇主之受僱者，撫育未滿3歲子女，得向雇主請求每天減少工作時間1小時（減少之工時不得請求報酬）或調整工作時間。',
+  },
+
+  // ── 第21條：防止不利對待 ──
+  antiRetaliation: {
+    law: '性平法 §21',
+    title: '禁止不利對待',
+    desc: '受僱者依性平法相關規定為請求時，雇主不得拒絕。受僱者為上述請求時，雇主不得視為缺勤而影響全勤獎金、考績或為其他不利之處分。',
+  },
+}
+
+// ══════════════════════════════════════
+//  職業安全衛生法 — 排班相關
+// ══════════════════════════════════════
+
+export const OCCUPATIONAL_SAFETY = {
+  overworkPrevention: {
+    law: '職安法 §6-2',
+    title: '過勞預防',
+    desc: '雇主對於輪班、夜間工作、長時間工作等異常工作負荷促發疾病之預防，應採取必要之安全衛生措施。',
+    measures: [
+      '辨識及評估高風險群',
+      '安排醫師面談及健康指導',
+      '調整或縮短工作時間',
+      '更換工作內容',
+      '提供保健指導及促進方案',
+    ],
+  },
+
+  healthCheck: {
+    law: '職安法 §20',
+    title: '特殊健康檢查',
+    desc: '對從事特別危害健康作業者，應定期施行特殊健康檢查，並建立健康檢查手冊。夜間工作者應每年施行特殊健康檢查。',
+  },
+
+  pregnantWorker: {
+    law: '職安法 §30-1',
+    title: '妊娠與哺乳期間保護',
+    desc: '雇主不得使妊娠中之女性勞工從事危險性或有害性工作。對於哺乳期間之女性勞工，不得使其從事有害母乳之工作。',
+    prohibitedWork: [
+      '處理有害物質之作業',
+      '鋅、鉛等有害物質之工作',
+      '起重機、人字臂起重桿之運轉工作',
+      '振動機械或動力衝剪機械之操作',
+      '一定重量以上之重物搬運',
+    ],
+  },
+
+  // ── 2025/12 三讀通過，2026施行 ──
+  workplaceBullying: {
+    law: '職安法修正案（2026新增專章）',
+    title: '職場霸凌防治',
+    desc: '2025年12月立法院三讀通過職安法修正案，新增「職場霸凌」專章，為職安法自102年全文修正以來最大幅度調整。',
+    measures: [
+      '明確定義職場霸凌行為',
+      '事業單位應訂定防治措施、申訴管道',
+      '通報機制與調查程序',
+      '行政罰最高300萬、刑事罰最高關5年',
+      '死亡職災罰鍰提高至150萬',
+    ],
+    note: '施行日期由行政院另定，預計2026年內上路。',
+  },
+
+  sourceSafety: {
+    law: '職安法修正案（2026強化）',
+    title: '源頭防災與承攬管理',
+    desc: '一定規模以上工程業主應在規劃階段即分析潛在危害，採取預防作為並編列安全衛生費用。加強承攬安全管理。',
+  },
+}
+
+// ══════════════════════════════════════
+//  排班合規驗證
+// ══════════════════════════════════════
+
+export function validateSchedule(schedules, weekDates, shiftDefs = [], employees = []) {
+  const warnings = []
+  const errors = []
+
+  // 連續工作上限依員工類型:兼職 6 天(七休一)、正職 12 天(變形工時但書)。
+  //   有給 employees 時才分辨正職(→12);沒給則一律 6(保守,向下相容)。
+  const ptNames = new Set(
+    (employees || [])
+      .filter(e => e.employment_type === '兼職' || e.employment_type === 'PT' || e.employment_category === 'parttime')
+      .map(e => e.name)
+  )
+  const hasEmployees = (employees || []).length > 0
+  const consecutiveLimitFor = (empName) =>
+    ptNames.has(empName) ? MAX_CONSECUTIVE_WORK_DAYS
+      : (hasEmployees ? MAX_CONSECUTIVE_WORK_DAYS_FT : MAX_CONSECUTIVE_WORK_DAYS)
+
+  // 單日排班上限（gross span，actual_start→actual_end）：最多 12h = 11 工作 + 1 休息（四週變形）
+  const DAILY_MAX_SPAN_HOURS = 12
+
+  // 'HH:MM[:SS]' → 小數小時（如 '12:30' → 12.5）；無法解析回 null
+  const _hm = (t) => {
+    if (!t || typeof t !== 'string') return null
+    const m = t.match(/^(\d{1,2}):(\d{2})/)
+    if (!m) return null
+    return parseInt(m[1], 10) + parseInt(m[2], 10) / 60
+  }
+
+  // Build shift time lookup from definitions（用小數小時，保留分鐘）
+  const shiftTimeMap = {}
+  shiftDefs.forEach(d => {
+    const start = _hm(d.start_time)
+    const end = _hm(d.end_time)
+    // 帶上班別休息(手動休息如兩頭班/長休班),供淨工時計算 — 不然長休班會用 span 誤判超時
+    if (start != null && end != null) shiftTimeMap[d.name] = { start, end, manual_break: d.manual_break, break_minutes: d.break_minutes }
+  })
+
+  // 統一解析一筆班的上下班時間（小數小時，0–24）。優先序：
+  //   1) schedules.actual_start/actual_end（計薪用回填的可靠時間）
+  //   2) shift_definitions 名稱對照
+  //   3) parseShiftRange 解析班別字串（含分鐘、跨午夜，如 '12:30~1'、'18~0'）
+  // 回傳 { start, end, hours }；跨午夜（end<=start）工時 +24。解析不出回 null。
+  const resolveShift = (s) => {
+    let start = _hm(s.actual_start)
+    let end = _hm(s.actual_end)
+    const def = shiftTimeMap[s.shift]
+    if (start == null || end == null) {
+      if (def) { start = def.start; end = def.end }
+    }
+    if (start == null || end == null) {
+      const p = parseShiftRange(s.shift)
+      if (p) { start = _hm(p.start); end = _hm(p.end) }
+    }
+    if (start == null || end == null) return null
+    const hours = end > start ? end - start : (24 - start + end)
+    // 淨工時 = span − 休息(優先 schedule.rest_minutes → 班別 manual_break → 階梯公式),對齊計薪 net_work_hours
+    let restMin
+    if (s.rest_minutes != null) restMin = Math.max(0, Number(s.rest_minutes) || 0)
+    else if (def?.manual_break) restMin = Math.max(0, Number(def.break_minutes) || 0)
+    else restMin = hours < 5 ? 0 : hours < 9 ? 30 : 60
+    const netHours = Math.max(0, hours - restMin / 60)
+    return { start, end, hours, netHours }
+  }
+
+  // Group by employee
+  const byEmployee = {}
+  schedules.forEach(s => {
+    if (!byEmployee[s.employee]) byEmployee[s.employee] = []
+    byEmployee[s.employee].push(s)
+  })
+
+  for (const [emp, empSchedules] of Object.entries(byEmployee)) {
+    const workDays = empSchedules.filter(s => s.shift && s.shift !== '休')
+    const restDays = empSchedules.filter(s => s.shift === '休')
+
+    // H10: 四週變形工時制不檢查每週休假（由月制 off_requests 控制）
+    // 原規則：每週至少2天休息 (§36) — 已停用
+
+    // H2: 單日淨工時上限 — 正常+延長 ≤ 12h（勞基法 §32）;讀班別休息,不用 span(長休班會誤判)
+    for (const s of workDays) {
+      const net = resolveShift(s)?.netHours
+      if (net && net > DAILY_MAX_SPAN_HOURS) {
+        errors.push({
+          employee: emp,
+          constraint: 'H2',
+          law: '單日工時上限',
+          message: `${emp} ${s.date} 班次「${s.shift}」單日淨工時 ${net.toFixed(1)}h 超過上限 ${DAILY_MAX_SPAN_HOURS}h（勞基法 §32）`,
+          severity: 'error',
+        })
+      }
+    }
+
+    // 週/cycle 工時上限已移到 validateLeisureQuota（cycle-aware：標準工時 7 天/變形依 cycle）
+    // 原來這裡寫的 weeklyHours = sum(empSchedules) 等於把整段排班當一週，遇到月資料會 240h 誤報
+
+    // H5 一例一休檢查改在月制 / 變形工時 layer 算（cycle-based）
+    // 4 週變形：每 2 週 ≥1 例 + 4 週 ≥4 例 4 休
+    // 標準工時：每 7 天 ≥1 例 + ≥1 休
+    // 這段邏輯放在 src/lib/scheduleValidator.js 跟排班演算法處理，這裡不做硬擋
+
+    // H3: 連續工作不超過6天 (§36 七休一)
+    // ★ 掃「整份排班」按日曆天相鄰數連續上班，不再只吃單週 weekDates 窗 ——
+    //   否則跨週的連上(如週六→下週)會被 7 天窗切成兩段而漏報，且永遠封頂在 7。
+    //   上班日 = resolveShift 解析得出班次(讀那格實際上下班時間)；
+    //   例假/休息/特休/國定假/病假 / 當天沒排班 → 解析不出 → 打斷連續，
+    //   不必維護「哪些字串算休息」的假別黑名單。
+    const _dayNum = (d) => Math.round(new Date(`${d}T00:00:00Z`).getTime() / 86400000)
+    const sortedWorkDays = empSchedules
+      .filter(s => resolveShift(s))
+      .map(s => _dayNum(s.date))
+      .sort((a, b) => a - b)
+    let consecutiveWork = 0
+    let maxConsecutive = 0
+    let prevDayNum = null
+    for (const dn of sortedWorkDays) {
+      if (dn === prevDayNum) continue          // 同日多筆班次不重複計數
+      consecutiveWork = (prevDayNum !== null && dn === prevDayNum + 1) ? consecutiveWork + 1 : 1
+      maxConsecutive = Math.max(maxConsecutive, consecutiveWork)
+      prevDayNum = dn
+    }
+    const consecutiveLimit = consecutiveLimitFor(emp)
+    if (maxConsecutive > consecutiveLimit) {
+      errors.push({
+        employee: emp,
+        constraint: 'H3',
+        law: '勞基法 §36',
+        message: `${emp} 連續工作 ${maxConsecutive} 天，超過上限 ${consecutiveLimit} 天`,
+        severity: 'error',
+      })
+    }
+
+    // H4: 輪班間隔檢查 (§34) — 更換班次至少連續 11 小時休息
+    // 先按日期排序、只比「相鄰日」，避免拿不連續的兩天誤算間隔
+    const _dayNo = (d) => Math.round(new Date(`${d}T00:00:00Z`).getTime() / 86400000)
+    const workSorted = empSchedules
+      .filter(s => s.shift && s.shift !== '休' && s.shift !== '例假')
+      .slice()
+      .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
+    for (let i = 1; i < workSorted.length; i++) {
+      const prev = workSorted[i - 1]
+      const curr = workSorted[i]
+      if (_dayNo(curr.date) - _dayNo(prev.date) !== 1) continue // 只檢查相鄰日
+
+      const prevTime = resolveShift(prev)
+      const currTime = resolveShift(curr)
+      if (!prevTime || !currTime) continue
+
+      const prevEnd = prevTime.end
+      const currStart = currTime.start
+      const prevCrossesMidnight = prevTime.end <= prevTime.start // e.g., 18:00~00:00
+
+      // prev 跨午夜 → 在 curr 當天 prevEnd 點下班；否則 prev 當天下班、curr 隔天上班
+      const gap = prevCrossesMidnight ? (currStart - prevEnd) : (currStart + (24 - prevEnd))
+
+      if (gap < LABOR_STANDARDS.shiftInterval.minHours) {
+        errors.push({
+          employee: emp,
+          constraint: 'H4',
+          law: '勞基法 §34',
+          message: `${emp} ${prev.date}→${curr.date} 兩班之間休息 ${gap.toFixed(1)}h，未達 ${LABOR_STANDARDS.shiftInterval.minHours}h（${prev.shift}→${curr.shift}）`,
+          severity: 'error',
+        })
+      }
+    }
+  }
+
+  return { errors, warnings, isValid: errors.length === 0 }
+}
+
+/**
+ * Parse a shift string like '14-22' or '6-14' into { start, end }.
+ * Fallback for when shiftDefs are not provided.
+ */
+function parseShiftString(shift) {
+  if (!shift || typeof shift !== 'string') return null
+  // 同時接受 "11-20"（舊格式）和 "11~20"（新格式，避免 Excel 誤判為日期）
+  const match = shift.match(/^(\d{1,2})[-~](\d{1,2})$/)
+  if (!match) return null
+  return { start: parseInt(match[1], 10), end: parseInt(match[2], 10) }
+}
+
+// ══════════════════════════════════════
+//  加班費計算
+// ══════════════════════════════════════
+
+export function calculateOvertimePay(baseSalary, overtimeHours, type = 'weekday') {
+  const hourlyRate = Math.round(baseSalary / 30 / 8)
+
+  if (type === 'weekday') {
+    // 平日加班
+    const first2 = Math.min(overtimeHours, 2)
+    const rest = Math.max(0, overtimeHours - 2)
+    return Math.round(hourlyRate * first2 * 1.34 + hourlyRate * rest * 1.67)
+  }
+
+  if (type === 'restday') {
+    // 休息日
+    const first2 = Math.min(overtimeHours, 2)
+    const next6 = Math.min(Math.max(0, overtimeHours - 2), 6)
+    const rest = Math.max(0, overtimeHours - 8)
+    return Math.round(hourlyRate * first2 * 1.34 + hourlyRate * next6 * 1.67 + hourlyRate * rest * 2.67)
+  }
+
+  if (type === 'holiday') {
+    // 例假日/國定假日
+    return Math.round(hourlyRate * overtimeHours * 2)
+  }
+
+  return 0
+}

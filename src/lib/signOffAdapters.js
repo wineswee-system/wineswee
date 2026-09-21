@@ -1,0 +1,561 @@
+/**
+ * 各 HR 表單 → 簽呈 PDF adapters
+ *
+ * 每個 export 都收 (row, opts) 然後丟給 printSignOff。
+ * opts 至少要 { companyName, logoUrl }；可選 chainSteps / approverMap / approverName。
+ *
+ * 新增表單只要在這裡多加 10 行 mapping，不用碰 printSignOff 本體。
+ */
+
+import { printSignOff } from './printSignOff'
+
+// ─── 共用 helpers ───
+const fmtDate = (s) => s ? String(s).slice(0, 10).replace(/-/g, '/') : ''
+const fmtMoney = (n) => n != null ? `NT$ ${Number(n).toLocaleString()}` : ''
+const baseOpts = (opts = {}) => ({
+  companyName: opts.companyName || '',
+  logoUrl: opts.logoUrl || '',
+  chainSteps: opts.chainSteps || [],
+  approverMap: opts.approverMap || {},
+  // 任何 caller 可以直接傳 attachments 進來；adapter 也可以再合併自己從 row 抽出來的
+  attachments: opts.attachments || [],
+  // 簽章圖 map：{ '簽核人姓名': 'url' }
+  signatures: opts.signatures || {},
+  // 預先開好的 window（避免 popup blocker），由 caller 在 click handler 同步開
+  _win: opts._win,
+})
+
+// 把單一 attachment_url（TEXT 欄位）轉成標準陣列格式
+const singleUrlToAtt = (url) => {
+  if (!url) return []
+  const name = String(url).split('?')[0].split('/').pop() || '附件'
+  return [{ url, name }]
+}
+
+// 把 leave_requests.attachments（jsonb 陣列，元素可能是字串或 {url,name}）標準化
+const normalizeAttList = (arr) => {
+  if (!Array.isArray(arr)) return []
+  return arr.map((it, i) => {
+    if (typeof it === 'string') {
+      const name = it.split('?')[0].split('/').pop() || `附件 ${i + 1}`
+      return { url: it, name }
+    }
+    return it
+  }).filter(a => a?.url)
+}
+
+// ─── 1. 請假申請 leave_requests ───
+export function printLeaveSignOff(row, opts = {}) {
+  if (!row) return
+  const period = row.start_date === row.end_date || !row.end_date
+    ? fmtDate(row.start_date) + (row.start_time ? ` ${row.start_time}~${row.end_time || ''}` : '')
+    : `${fmtDate(row.start_date)} ~ ${fmtDate(row.end_date)}`
+  const duration = row.hours && row.hours < 8
+    ? `${row.hours} 小時`
+    : `${row.days || 0} 天`
+
+  const base = baseOpts(opts)
+  const rowAtts = normalizeAttList(row.attachments)
+  const attachments = [...base.attachments, ...rowAtts]
+
+  printSignOff({
+    ...base,
+    attachments,
+    docTitle: '請假申請',
+    docNo: row.id,
+    applicant: { name: row.employee, dept: opts.dept || '' },
+    date: fmtDate(row.created_at) || fmtDate(row.start_date),
+    subject: `${row.type || '請假'} 申請（${duration}）`,
+    sections: [{
+      title: '說明',
+      rows: [
+        ['假別', row.type || ''],
+        ['期間', period],
+        ['天/時數', duration],
+        ['事由', row.reason || ''],
+      ],
+    }],
+    status: row.status || '',
+    rejectReason: row.reject_reason || '',
+    finalApprover: row.approver && row.approver !== '-'
+      ? { name: row.approver, approved_at: row.approved_at }
+      : undefined,
+    simpleSign: ['呈文者', '直屬主管', '人資核章'],
+    simpleSignApproverIdx: 1,  // 中間「直屬主管」是實際核可者
+  })
+}
+
+// ─── 2. 加班申請 overtime_requests ───
+export function printOvertimeSignOff(row, opts = {}) {
+  if (!row) return
+  printSignOff({
+    ...baseOpts(opts),
+    docTitle: row.is_pre_approval ? '預先加班申請' : '加班補登申請',
+    docNo: row.id,
+    applicant: { name: row.employee, dept: opts.dept || '' },
+    date: fmtDate(row.created_at) || fmtDate(row.date),
+    subject: `${fmtDate(row.date)} 加班 ${row.hours || 0} 小時`,
+    sections: [{
+      title: '說明',
+      rows: [
+        ['加班類型', row.is_pre_approval ? '預先申請' : '事後補登'],
+        ['加班日期', fmtDate(row.date)],
+        ...(row.store ? [['加班門市', row.store]] : []),
+        ['時數', `${row.hours || 0} 小時`],
+        ['折算方式', (row.ot_type === 'comp_time' || row.is_comp_leave) ? '換補休' : '換現金'],
+        ['事由', row.reason || ''],
+      ],
+    }],
+    status: row.status || '',
+    rejectReason: row.reject_reason || '',
+    finalApprover: row.approver
+      ? { name: row.approver, approved_at: row.approved_at }
+      : undefined,
+    simpleSign: ['呈文者', '直屬主管', '人資核章'],
+    simpleSignApproverIdx: 1,  // 中間「直屬主管」是實際核可者
+  })
+}
+
+// ─── 3. 出差申請 business_trips ───
+export function printTripSignOff(row, opts = {}) {
+  if (!row) return
+  const period = row.start_date === row.end_date || !row.end_date
+    ? fmtDate(row.start_date)
+    : `${fmtDate(row.start_date)} ~ ${fmtDate(row.end_date)}`
+  printSignOff({
+    ...baseOpts(opts),
+    docTitle: '出差申請',
+    docNo: row.id,
+    applicant: { name: row.employee, dept: opts.dept || '' },
+    date: fmtDate(row.created_at) || fmtDate(row.start_date),
+    subject: `${row.destination || '出差'}（${period}）`,
+    sections: [{
+      title: '說明',
+      rows: [
+        ['出差地點', row.destination || ''],
+        ['期間', period],
+        ['預估費用', fmtMoney(row.budget)],
+        ['出差目的', row.purpose || ''],
+      ],
+    }],
+    status: row.status || '',
+    rejectReason: row.reject_reason || '',
+    finalApprover: row.approver
+      ? { name: row.approver, approved_at: row.approved_at }
+      : undefined,
+    simpleSign: ['呈文者', '直屬主管', '人資/財務'],
+    simpleSignApproverIdx: 1,
+  })
+}
+
+// ─── 4. 費用報銷 expenses（單階段，跟 expense_requests 兩階段不同）───
+export function printExpenseSimpleSignOff(row, opts = {}) {
+  if (!row) return
+  printSignOff({
+    ...baseOpts(opts),
+    docTitle: '費用報銷',
+    docNo: row.id,
+    applicant: { name: row.employee, dept: opts.dept || '' },
+    date: fmtDate(row.created_at) || fmtDate(row.date),
+    subject: `${row.category || '費用'} ${fmtMoney(row.amount)}`,
+    sections: [{
+      title: '說明',
+      rows: [
+        ['費用類別', row.category || ''],
+        ['發生日期', fmtDate(row.date)],
+        ['金額', fmtMoney(row.amount)],
+        ['是否有收據', row.receipt ? '有' : '無'],
+        ['用途', row.description || ''],
+      ],
+    }, ...(Array.isArray(row.items) && row.items.filter(it => it?.name || Number(it?.subtotal) > 0).length ? [{
+      title: `品項明細（${row.items.length} 項）`,
+      rows: row.items.map(it => [it.name || '(未命名)', `${Number(it.qty || 1)} × ${fmtMoney(it.unit_price)} = ${fmtMoney(it.subtotal)}`]),
+    }] : [])],
+    status: row.status || '',
+    rejectReason: row.reject_reason || '',
+    finalApprover: row.approver
+      ? { name: row.approver, approved_at: row.approved_at }
+      : undefined,
+    simpleSign: ['呈文者', '直屬主管', '財務核章'],
+    simpleSignApproverIdx: 1,
+  })
+}
+
+// ─── 5. 補打卡 clock_corrections ───
+//   type 'clock_in'/'clock_out'（LIFF 老資料可能還有 '上班打卡'/'下班打卡' 中文值）
+//   correction_time、approver
+export function printClockCorrectionSignOff(row, opts = {}) {
+  if (!row) return
+  const typeRaw = row.type || ''
+  const typeLabel = (typeRaw === 'clock_in' || typeRaw === '上班打卡') ? '上班打卡'
+                  : (typeRaw === 'clock_out' || typeRaw === '下班打卡') ? '下班打卡'
+                  : typeRaw
+  const time = row.correction_time || ''
+  const approverName = row.approver?.name || row.approver || ''
+
+  printSignOff({
+    ...baseOpts(opts),
+    docTitle: '補打卡申請',
+    docNo: row.id,
+    applicant: { name: row.employee, dept: opts.dept || '' },
+    date: fmtDate(row.created_at) || fmtDate(row.date),
+    subject: `${fmtDate(row.date)} ${typeLabel} ${time}`,
+    sections: [{
+      title: '說明',
+      rows: [
+        ['日期', fmtDate(row.date)],
+        ['打卡類型', typeLabel],
+        ['補登時間', time],
+        ['原因', row.reason || ''],
+      ],
+    }],
+    status: row.status || '',
+    rejectReason: row.reject_reason || '',
+    finalApprover: approverName
+      ? { name: approverName, approved_at: row.approved_at }
+      : undefined,
+    simpleSign: ['呈文者', '直屬主管', '人資核章'],
+    simpleSignApproverIdx: 1,  // 中間「直屬主管」是實際核可者
+  })
+}
+
+// ─── 6. 離職申請 resignation_requests ───
+// row 預期已 join employee:employees(id,name,name_en,position) + approver:employees!approver_id(name)
+export function printResignationSignOff(row, opts = {}) {
+  if (!row) return
+  const base = baseOpts(opts)
+  const attachments = [...base.attachments, ...singleUrlToAtt(row.attachment_url)]
+
+  printSignOff({
+    ...base,
+    attachments,
+    docTitle: '離職申請',
+    docNo: row.id,
+    applicant: {
+      name: row.employee?.name || '',
+      name_en: row.employee?.name_en,
+      dept: opts.dept || row.employee?.position || '',
+    },
+    date: fmtDate(row.created_at),
+    subject: `離職申請（預計 ${fmtDate(row.planned_resign_date)} 離職）`,
+    sections: [
+      {
+        title: '說明',
+        rows: [
+          ['預計離職日', fmtDate(row.planned_resign_date)],
+          ['離職原因', row.reason || ''],
+          ['原因說明', row.reason_detail || ''],
+        ],
+      },
+      ...(row.handover_notes ? [{
+        title: '交接事項',
+        text: row.handover_notes,
+      }] : []),
+    ],
+    status: row.status || '',
+    rejectReason: row.reject_reason || '',
+    finalApprover: row.approver
+      ? {
+          name: row.approver.name || row.approver,
+          signature_url: row.approver.signature_url,
+          approved_at: row.approved_at,
+        }
+      : undefined,
+    simpleSign: ['呈文者', '直屬主管', '人資核章'],
+    simpleSignApproverIdx: 1,  // 中間「直屬主管」是實際核可者
+  })
+}
+
+// ─── 8. 錄取簽呈 offer_letters ───
+// ol: offer_letters row (may include ol.candidates.name via join)
+// opts: { companyName, logoUrl, candidateName, chainSteps, approverMap }
+export function printHireApprovalSignOff(ol, opts = {}) {
+  if (!ol) return
+  const base = baseOpts(opts)
+  const candidateName = opts.candidateName || ol.candidates?.name || '—'
+
+  // 實際錄取簽核鏈(offer_approval_steps)→ 智慧渲染簽核欄;狀態中文轉 printSignOff 的 token。
+  // 沒鏈(舊單/未設簽核人)才 fallback 靜態 3 格。
+  const chainSteps = (ol.steps || [])
+    .slice()
+    .sort((a, b) => (a.step_order || 0) - (b.step_order || 0))
+    .map((s, idx) => ({
+      label: `第 ${idx + 1} 關`,
+      name: s.approver?.name || '—',
+      status: s.status === '已核准' ? 'completed'
+            : (s.status === '已駁回' || s.status === '已拒絕') ? 'rejected'
+            : 'pending',
+      completedBy: s.approver?.name,
+      completedAt: s.decided_at,
+      rejectReason: s.reason,
+    }))
+
+  printSignOff({
+    ...base,
+    chainSteps,
+    docTitle: '錄取核准簽呈',
+    docNo: ol.id,
+    applicant: {
+      name: opts.submitterName || opts.companyName || '',
+      dept: '人力資源部',
+    },
+    date: fmtDate(ol.created_at),
+    subject: `聘用 ${candidateName} 擔任 ${ol.position || '—'} 一職`,
+    sections: [
+      {
+        title: '候選人資訊',
+        rows: [
+          ['姓名',     candidateName],
+          ['應聘職位', ol.position || '—'],
+          ['部門',     ol.dept     || '—'],
+        ],
+      },
+      {
+        title: '薪資與到職條件',
+        rows: [
+          ['月薪',   ol.salary        ? `NT$ ${Number(ol.salary).toLocaleString()}` : '—'],
+          ['到職日', fmtDate(ol.start_date)],
+          ['試用期', ol.probation_days ? `${ol.probation_days} 天` : '—'],
+        ],
+      },
+    ],
+    status: ol.status || '',
+    rejectReason: ol.reject_reason || '',
+    finalApprover: ol.status === '已核准'
+      ? { name: opts.approverName || '', approved_at: ol.approved_at }
+      : undefined,
+    simpleSign: ['人資呈文', '部門主管', 'CEO 核章'],
+  })
+}
+
+// ─── 7. 人事異動 personnel_transfer_requests ───
+// row 預期已 join employee:employees(...) + approver + departments / stores 對照
+// ─── 9. 留停申請 leave_of_absence_requests ───
+export function printLoaSignOff(row, opts = {}) {
+  if (!row) return
+  const base = baseOpts(opts)
+  const attachments = [...base.attachments, ...singleUrlToAtt(row.attachment_url)]
+
+  printSignOff({
+    ...base,
+    attachments,
+    docTitle: '留職停薪申請',
+    docNo: row.id,
+    applicant: {
+      name: row.employee?.name || '',
+      name_en: row.employee?.name_en,
+      dept: opts.dept || row.employee?.position || '',
+    },
+    date: fmtDate(row.created_at),
+    subject: `${row.reason_type || '留停'}（${fmtDate(row.start_date)} ~ ${fmtDate(row.planned_end_date)}）`,
+    sections: [
+      {
+        title: '說明',
+        rows: [
+          ['留停類型', row.reason_type || ''],
+          ['開始日期', fmtDate(row.start_date)],
+          ['預計結束', fmtDate(row.planned_end_date)],
+          ['原因說明', row.reason_detail || ''],
+        ],
+      },
+      ...(row.handover_notes ? [{ title: '交接事項', text: row.handover_notes }] : []),
+    ],
+    status: row.status || '',
+    rejectReason: row.reject_reason || '',
+    finalApprover: row.approver
+      ? {
+          name: row.approver.name || row.approver,
+          signature_url: row.approver.signature_url,
+          approved_at: row.approved_at,
+        }
+      : undefined,
+    simpleSign: ['呈文者', '直屬主管', '人資核章'],
+    simpleSignApproverIdx: 1,
+  })
+}
+
+
+// ─── 10. 自訂表單 form_submissions ───
+// row: form_submission row（data 用前先 _resolve_form_submission_data 解 picker）
+// opts: { template: {name, fields}, applicantName, applicantDept, ... }
+export function printFormSubmissionSignOff(row, opts = {}) {
+  if (!row || !opts.template) return
+  const base = baseOpts(opts)
+  const tpl = opts.template
+  const data = row.data_resolved || row.data || {}
+
+  const fmtVal = (val, type) => {
+    if (val == null || val === '') return ''
+    if (Array.isArray(val)) return val.join(', ')
+    if (type === 'date') return fmtDate(val)
+    if (typeof val === 'object') return JSON.stringify(val)
+    return String(val)
+  }
+  const rows = (tpl.fields || [])
+    .filter(f => f.type !== 'file')
+    .map(f => [f.label || f.key, fmtVal(data[f.key], f.type)])
+
+  // file 欄位 → attachments
+  const fieldAtts = []
+  for (const f of (tpl.fields || []).filter(f => f.type === 'file')) {
+    const v = data[f.key]
+    if (Array.isArray(v)) {
+      for (const item of v) {
+        if (typeof item === 'string') fieldAtts.push({ url: item, name: item.split('/').pop() || '附件' })
+        else if (item?.url) fieldAtts.push(item)
+      }
+    } else if (typeof v === 'string' && v) {
+      fieldAtts.push({ url: v, name: v.split('/').pop() || '附件' })
+    }
+  }
+  const attachments = [...base.attachments, ...fieldAtts]
+
+  printSignOff({
+    ...base,
+    attachments,
+    docTitle: tpl.name || '自訂表單',
+    docNo: row.id,
+    applicant: { name: opts.applicantName || '', dept: opts.applicantDept || '' },
+    date: fmtDate(row.created_at),
+    subject: tpl.name || '',
+    sections: [{ title: '申請內容', rows }],
+    status: row.status || '',
+    rejectReason: row.reject_reason || '',
+    simpleSign: ['呈文者', '直屬主管', '主管核章'],
+    simpleSignApproverIdx: 1,
+  })
+}
+
+
+// ─── 11. 商品調撥 goods_transfer_requests（兩階段：申請 + 驗收）───
+// row: goods_transfer_requests row + 預期帶 items + from_label/to_label denorm
+// opts: { companyName, logoUrl, chainSteps, signatures, attachments, applicantDept }
+export function printGoodsTransferSignOff(row, opts = {}) {
+  if (!row) return
+  const base = baseOpts(opts)
+
+  const typeLabel = {
+    warehouse_to_store: '總倉 → 門市',
+    store_to_store:     '門市 → 門市',
+    store_to_warehouse: '門市 → 總倉',
+  }[row.transfer_type] || row.transfer_type
+
+  const items = Array.isArray(row.items) ? row.items : []
+  const totalQty = items.reduce((s, it) => s + Number(it.requested_qty || 0), 0)
+
+  // 明細 section（每行 product_code + name + 數量）
+  const itemRows = items.map(it => [
+    `${it.product_code || ''} · ${it.product_name || ''}${it.spec ? ` (${it.spec})` : ''}`,
+    `${it.requested_qty || 0}${it.unit ? ' ' + it.unit : ''}${it.received_qty != null ? ` (實收 ${it.received_qty})` : ''}`,
+  ])
+
+  // 原因（複選 + 其他）
+  const reasonsText = [
+    ...(Array.isArray(row.reasons) ? row.reasons : []),
+    row.reason_other,
+  ].filter(Boolean).join('、')
+
+  const sections = [
+    {
+      title: '調撥資訊',
+      rows: [
+        ['單號',     row.document_no || ''],
+        ['調撥類型', typeLabel],
+        ['路線',     `${row.from_label || '—'}  →  ${row.to_label || '—'}`],
+        ['需求日期', fmtDate(row.needed_date)],
+        ['申請原因', reasonsText || '—'],
+      ],
+    },
+    {
+      title: `商品明細（共 ${items.length} 項 / ${totalQty} 件）`,
+      rows: itemRows.length ? itemRows : [['—', '無明細']],
+    },
+  ]
+
+  // 驗收段（如果已填驗收）
+  if (row.receipt_submitted_at) {
+    sections.push({
+      title: '驗收資訊',
+      rows: [
+        ['驗收送出時間', fmtDate(row.receipt_submitted_at)],
+        ['驗收完成時間', fmtDate(row.receipt_approved_at) || '—'],
+      ],
+    })
+  }
+
+  printSignOff({
+    ...base,
+    docTitle: '商品調撥申請',
+    docNo: row.document_no || row.id,
+    applicant: {
+      name: row.applicant_name || '',
+      dept: opts.applicantDept || '',
+    },
+    date: fmtDate(row.created_at),
+    subject: `${typeLabel} ${row.from_label || ''} → ${row.to_label || ''}（${items.length} 項）`,
+    sections,
+    status: row.status || '',
+    rejectReason: row.reject_reason || '',
+    // 不用 simpleSign — chainSteps 由 caller 從 snapshot+history 組好傳進來
+    simpleSign: ['呈文者', '審核人'],
+    simpleSignApproverIdx: 1,
+  })
+}
+
+
+export function printTransferSignOff(row, opts = {}) {
+  if (!row) return
+  // 兼容兩種 row shape：(a) 已 join old_dept/new_dept/old_store/new_store 物件
+  //                       (b) 純 FK id + opts.deptMap / storeMap 對照
+  const resolveName = (joined, mapVal, fkVal) => joined?.name || mapVal?.[fkVal] || (typeof fkVal === 'string' ? fkVal : '')
+  const oldDept  = resolveName(row.old_dept,  opts.deptMap,  row.old_department_id  ?? row.old_department)
+  const newDept  = resolveName(row.new_dept,  opts.deptMap,  row.new_department_id  ?? row.new_department)
+  const oldStore = resolveName(row.old_store, opts.storeMap, row.old_store_id       ?? row.old_store)
+  const newStore = resolveName(row.new_store, opts.storeMap, row.new_store_id       ?? row.new_store)
+
+  const changeRows = []
+  if (oldDept !== newDept || newDept) changeRows.push(['部門', `${oldDept || '—'}  →  ${newDept || '—'}`])
+  if (oldStore !== newStore || newStore) changeRows.push(['門市', `${oldStore || '—'}  →  ${newStore || '—'}`])
+  if (row.new_position) changeRows.push(['職務', `${row.old_position || '—'}  →  ${row.new_position || '—'}`])
+  if (row.new_role) changeRows.push(['角色', `${row.old_role || '—'}  →  ${row.new_role || '—'}`])
+  if (row.new_base_salary != null) changeRows.push(['底薪', `${fmtMoney(row.old_base_salary)}  →  ${fmtMoney(row.new_base_salary)}`])
+
+  const base = baseOpts(opts)
+  const attachments = [...base.attachments, ...singleUrlToAtt(row.attachment_url)]
+
+  printSignOff({
+    ...base,
+    attachments,
+    docTitle: '人事異動申請',
+    docNo: row.id,
+    applicant: {
+      name: row.employee?.name || '',
+      name_en: row.employee?.name_en,
+      dept: oldDept || row.employee?.position || '',
+    },
+    date: fmtDate(row.created_at),
+    subject: `${row.transfer_type || '異動'}（生效日 ${fmtDate(row.effective_date)}）`,
+    sections: [
+      {
+        title: '異動內容',
+        rows: [
+          ['異動類型', row.transfer_type || ''],
+          ['生效日期', fmtDate(row.effective_date)],
+          ...changeRows,
+        ],
+      },
+      ...(row.reason ? [{ title: '異動原因', text: row.reason }] : []),
+    ],
+    status: row.status || '',
+    rejectReason: row.reject_reason || '',
+    finalApprover: row.approver
+      ? {
+          name: row.approver.name || row.approver,
+          signature_url: row.approver.signature_url,
+          approved_at: row.approved_at,
+        }
+      : undefined,
+    simpleSign: ['呈文者', '直屬主管', '人資核章'],
+    simpleSignApproverIdx: 1,  // 中間「直屬主管」是實際核可者
+  })
+}

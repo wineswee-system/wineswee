@@ -1,0 +1,110 @@
+import { supabase } from '../supabase'
+
+export const getWorkflows = (options = {}) => {
+  let q = supabase.from('workflows').select('*').order('id')
+  if (options.orgId) q = q.eq('organization_id', options.orgId)
+  return q.limit(options.limit ?? 200)
+}
+
+export const createWorkflow = (data) =>
+  supabase.from('workflows').insert(data).select().single()
+
+export const updateWorkflow = (id, data) =>
+  supabase.from('workflows').update(data).eq('id', id).select().single()
+
+export const deleteWorkflow = (id, orgId) => {
+  let q = supabase.from('workflows').delete().eq('id', id)
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
+
+export const getWorkflowInstances = (options = {}) => {
+  let q = supabase.from('workflow_instances').select('*').order('started_at', { ascending: false })
+  if (options.orgId) q = q.eq('organization_id', options.orgId)
+  if (options.excludeTemplates?.length) {
+    // 用 .neq() 逐一排除（PostgREST `not in` 對中文 + 引號 escape 不可靠，
+    // 原本 `"${n}"` 雙引號是 SQL identifier 不是字串字面值 → 整個 filter 沒生效，
+    // 造成 HR 簽核（如「費用申請簽核」）跑進流程頁面）
+    for (const name of options.excludeTemplates) {
+      q = q.neq('template_name', name)
+    }
+  }
+  return q.limit(options.limit ?? 200)
+}
+
+export const createWorkflowInstance = (data) =>
+  supabase.from('workflow_instances').insert(data).select().single()
+
+export const updateWorkflowInstance = (id, data) =>
+  supabase.from('workflow_instances').update(data).eq('id', id).select().single()
+
+export const deleteWorkflowInstance = (id, orgId) => {
+  let q = supabase.from('workflow_instances').delete().eq('id', id)
+  if (orgId) q = q.eq('organization_id', orgId)
+  return q
+}
+
+// Workflow steps live in the tasks table (task_type='process_step').
+// These wrappers keep call-site compatibility while targeting tasks.
+export const getWorkflowSteps = (instanceId) => {
+  const q = supabase.from('tasks').select('*').order('step_order')
+  return instanceId ? q.eq('workflow_instance_id', instanceId) : q
+}
+
+export const createWorkflowStep = (data) => {
+  const { instance_id, ...rest } = data
+  return supabase
+    .from('tasks')
+    .insert({ ...rest, workflow_instance_id: instance_id ?? rest.workflow_instance_id, task_type: 'process_step' })
+    .select()
+    .single()
+}
+
+export const createWorkflowStepsBatch = (rows) =>
+  supabase
+    .from('tasks')
+    .insert(rows.map(({ instance_id, ...rest }) => ({
+      ...rest,
+      workflow_instance_id: instance_id ?? rest.workflow_instance_id,
+      task_type: 'process_step',
+    })))
+    .select()
+
+export const updateWorkflowStep = (id, data) =>
+  supabase.from('tasks').update(data).eq('id', id).select().single()
+
+export const deleteWorkflowStep = (id) =>
+  supabase.from('tasks').delete().eq('id', id)
+
+export const getWorkflowCategories = () =>
+  supabase.from('workflow_categories').select('*').eq('scope', 'workflow').order('sort_order').order('id')
+
+export const createWorkflowCategory = (data) =>
+  supabase.from('workflow_categories').insert({ scope: 'workflow', ...data }).select().single()
+
+export const deleteWorkflowCategory = (id) =>
+  supabase.from('workflow_categories').delete().eq('id', id)
+
+export const getCategories = (scope) =>
+  supabase.from('workflow_categories').select('*').eq('scope', scope).order('sort_order').order('id')
+
+export const createCategory = ({ scope, name, color, sort_order }) =>
+  supabase.from('workflow_categories').insert({ scope, name, color, sort_order }).select().single()
+
+export const updateCategory = (id, data) =>
+  supabase.from('workflow_categories').update(data).eq('id', id).select().single()
+
+export const deleteCategory = (id) =>
+  supabase.from('workflow_categories').delete().eq('id', id)
+
+export const getTags = () =>
+  supabase.from('tags').select('*').order('sort_order').order('id')
+
+export const createTag = (data) =>
+  supabase.from('tags').insert(data).select().single()
+
+export const updateTag = (id, data) =>
+  supabase.from('tags').update(data).eq('id', id).select().single()
+
+export const deleteTag = (id) =>
+  supabase.from('tags').delete().eq('id', id)

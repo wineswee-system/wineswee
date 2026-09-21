@@ -1,0 +1,653 @@
+﻿/**
+ * 共用簽核明細 modal
+ *
+ * 左側：表單內容（申請人卡 + 動態欄位 + 附件 + 表單編號 / 申請時間）
+ * 右側：垂直簽核時間軸（每關 status 動態渲染：已核 / 等候 / 駁回）
+ *
+ * 設計參照 104 人資那種「簽核流程：簽核中」面板。
+ * 對任何走簽核鏈或單關核可的表單都通用，每個 caller 把自己的 fields/chain mapping 過來即可。
+ */
+
+import { useEffect, useMemo, useState } from 'react'
+import { X, Printer, FileText, Image as ImageIcon, User, AlertTriangle } from 'lucide-react'
+import { ModalOverlay } from './Modal'
+import { supabase } from '../lib/supabase'
+import ApprovalActionBar from './ApprovalActionBar'
+
+const STATUS_BADGE = {
+  '申請中': { bg: 'rgba(99,102,241,0.12)', color: '#6366f1', text: '簽核中' },
+  '待審核': { bg: 'rgba(99,102,241,0.12)', color: '#6366f1', text: '簽核中' },
+  '已核准': { bg: 'rgba(34,197,94,0.12)', color: '#0a6b2e', text: '已核准' },
+  '已核銷': { bg: 'rgba(34,197,94,0.12)', color: '#0a6b2e', text: '已驗收' },
+  '已駁回': { bg: 'rgba(239,68,68,0.12)', color: '#9c1f1f', text: '已駁回' },
+  '已拒絕': { bg: 'rgba(239,68,68,0.12)', color: '#9c1f1f', text: '已拒絕' },
+  '已退回': { bg: 'rgba(239,68,68,0.12)', color: '#9c1f1f', text: '已退回' },
+  '已取消': { bg: 'rgba(156,163,175,0.12)', color: '#6b7280', text: '已取消' },
+}
+
+import { fmtDateTimeTW } from '../lib/datetime'
+const fmtDateTime = fmtDateTimeTW
+
+// requestType → approval_extra_steps.source_table（給加簽關撈用）
+const REQTYPE_TO_TABLE = {
+  leave: 'leave_requests', overtime: 'overtime_requests', trip: 'business_trips',
+  correction: 'clock_corrections', off_request: 'off_requests', expense: 'expense_requests',
+  expense_request: 'expense_requests', expense_settle: 'expense_requests',
+  resignation: 'resignation_requests', transfer: 'personnel_transfer_requests',
+  loa: 'leave_of_absence_requests', headcount: 'headcount_requests',
+  goods_transfer: 'goods_transfer_requests', cover: 'shift_cover_requests',
+  store_audit: 'store_audits', form_submission: 'form_submissions',
+}
+
+// "10:57:00" → "10:57"（給加班當天班表/打卡顯示用）
+const hhmm = (t) => (t ? String(t).slice(0, 5) : '')
+
+// 這些單型審核時自動帶「當天班表 + 打卡」對照（走 get_request_day_context）
+const DAY_CTX_TYPES = new Set(['overtime', 'leave', 'correction', 'trip'])
+
+/**
+ * @param {Object} props
+ * @param {boolean} props.open
+ * @param {Function} props.onClose
+ * @param {string} props.docTitle           '加班單' / '請假單' …
+ * @param {string|number} [props.docNo]     表單編號
+ * @param {string} [props.status]           '申請中' / '已核准' / '已駁回' …
+ * @param {Object} props.applicant          { name, name_en?, position?, status?, employee_no?, avatar_url?, dept? }
+ * @param {Array} props.fields              [{ label, value, multiline? }]
+ * @param {Array} [props.attachments]       [{ url, name, type? }]
+ * @param {string} [props.createdAt]        申請時間 (ISO)
+ * @param {Array} props.chainSteps          [{ label, name, status, completedAt?, rejectReason? }]
+ *                                          status: 'completed' / 'current' / 'pending' / 'rejected'
+ * @param {Function} [props.onPrint]        下載簽呈 callback
+ */
+export default function ApprovalDetailModal({
+  open, onClose,
+  docTitle, docNo, status,
+  applicant = {},
+  fields = [],
+  attachments = [],
+  createdAt,
+  chainSteps = [],
+  onPrint,
+  headerExtra,   // 可選:額外塞在 header 動作區(下載簽呈左側)的節點,如「編輯驗收」按鈕。預設無→不影響其他表單。
+  // 廠商 #7：簽核時間軸 — 傳 requestType + requestId 自動 fetch get_approval_timeline
+  //   requestType: 'leave' | 'overtime' | 'trip' | 'correction' | 'expense' | 'expense_request'
+  requestType,
+  requestId,
+  // 簽核動作（modal 底部 ApprovalActionBar 用）— 可選；只有當前是 pending 且 caller 可簽時傳
+  //   sourceTable: 'leave_requests' / 'expense_requests' / ... 對應 approval_extra_steps.source_table
+  //   row:         { id, current_step, employee_id } — 給加簽用
+  //   onApprove:   async (row) => void
+  //   onReject:    async (row, reason) => void
+  //   onChanged:   () => void — action 完後 reload
+  actions,
+}) {
+  const [timeline, setTimeline] = useState([])
+
+  // 拉 chain step 進站/出站時間（每關停留多久）
+  useEffect(() => {
+    if (!open || !requestType || !requestId) { setTimeline([]); return }
+    let cancelled = false
+    supabase.rpc('get_approval_timeline', {
+      p_request_type: requestType,
+      p_request_id: Number(requestId),
+    }).then(({ data, error }) => {
+      if (cancelled) return
+      if (error) { console.warn('get_approval_timeline failed:', error); return }
+      setTimeline(Array.isArray(data) ? data : [])
+    })
+    return () => { cancelled = true }
+  }, [open, requestType, requestId])
+
+  // 加班/請假/補打卡/出差：自動帶入當天的班表 + 打卡（審核時對照,判斷單子合不合理）
+  //   請假/出差取 start_date 當天。走通用 get_request_day_context RPC(繞前端 RLS)。
+  const [otDay, setOtDay] = useState(null)
+  useEffect(() => {
+    if (!open || !DAY_CTX_TYPES.has(requestType) || !requestId) { setOtDay(null); return }
+    let cancelled = false
+    supabase.rpc('get_request_day_context', { p_type: requestType, p_id: Number(requestId) })
+      .then(({ data }) => { if (!cancelled) setOtDay(data || null) })
+    return () => { cancelled = true }
+  }, [open, requestType, requestId])
+
+  // 加班防呆:比對加班時間 vs 當天班表 / 打卡,標紅提示不合理處
+  //   A = 加班時段落在排定班表內(非額外工時)；B = 加班時段與當天打卡無交集(人不在場)
+  //   C = 當天排定工時 + 本次加班 > 12 小時(看班表判斷單日加班上限;無排班以標準 8h 計)
+  const otWarnings = useMemo(() => {
+    if (requestType !== 'overtime' || !otDay) return []
+    const toMin = t => { if (!t) return null; const [h, m] = String(t).slice(0, 5).split(':').map(Number); return h * 60 + m }
+    const overlap = (aS, aE, bS, bE) => Math.max(0, Math.min(aE, bE) - Math.max(aS, bS))
+    const fmtH = h => (Number.isInteger(h) ? String(h) : h.toFixed(1))
+    let s = toMin(otDay.req_start), e = toMin(otDay.req_end)
+    if (s == null || e == null) return []
+    if (e <= s) e += 1440  // 跨午夜
+    const w = []
+    const scheds = (otDay.schedule || []).filter(x => x.actual_start && x.actual_end)
+    const inSchedule = scheds.some(x => { let ss = toMin(x.actual_start), se = toMin(x.actual_end); if (se <= ss) se += 1440; return overlap(s, e, ss, se) > 0 })
+    if (inSchedule) w.push('加班時段落在排定班表內 — 屬正常工時、非額外加班')
+    const att = otDay.attendance
+    if (att && att.clock_in) {
+      let ci = toMin(att.clock_in), co = att.clock_out ? toMin(att.clock_out) : null
+      if (co != null && co <= ci) co += 1440
+      if (overlap(s, e, ci, co != null ? co : 1440) === 0) w.push('加班時段與當天打卡無交集 — 該時段員工不在場')
+    }
+    // C：單日加班上限 = 12 − 當天排定工時（排 10h → 上限 2h；無排班以標準 8h 計 → 上限 4h）
+    //     時數皆為「淨工時」(扣休息:≥9h→60、≥5h→30、else 0),對齊計薪
+    const brkOf = m => (m >= 540 ? 60 : m >= 300 ? 30 : 0)
+    const otH = Math.max(0, (e - s) - brkOf(e - s)) / 60
+    let schedMin = 0
+    for (const x of scheds) {
+      let ss = toMin(x.actual_start), se = toMin(x.actual_end)
+      if (se <= ss) se += 1440
+      let seg = se - ss
+      if (x.actual_start_2 && x.actual_end_2) {   // 兩頭班第二段
+        let ss2 = toMin(x.actual_start_2), se2 = toMin(x.actual_end_2)
+        if (se2 <= ss2) se2 += 1440
+        seg += se2 - ss2
+      }
+      const brk = x.rest_minutes != null ? x.rest_minutes : brkOf(seg)   // 手動休息優先,否則公式
+      schedMin += Math.max(0, seg - brk)
+    }
+    const schedH = scheds.length ? schedMin / 60 : 8   // 無排班 → 以標準 8h 為基準
+    const cap = Math.max(0, 12 - schedH)
+    if (otH > cap + 0.01) {
+      w.push(scheds.length
+        ? `當天排定 ${fmtH(schedH)} 小時 → 單日加班上限約 ${fmtH(cap)} 小時,本次 ${fmtH(otH)} 小時已超過（單日總工時逾 12 小時）`
+        : `當天無排班（以標準 8 小時計）→ 單日加班上限約 4 小時,本次 ${fmtH(otH)} 小時已超過（單日總工時逾 12 小時）`)
+    }
+    return w
+  }, [requestType, otDay])
+
+  // 把 timeline 的 duration_text 合併進 chainSteps
+  // 注意：chainSteps = [applicantStep, ...可能含加簽..., chain_step_0, chain_step_1, ...]
+  // timeline.step_order 從 0 開始，只對應「實際 chain step」(不含 applicant / extra)
+  // 用獨立 chainStepIdx 對齊，避免 applicant cell 拿到第 0 關 duration 這種錯位
+  const mergedChainSteps = useMemo(() => {
+    if (!timeline.length) return chainSteps
+    let chainStepIdx = 0
+    return chainSteps.map(s => {
+      if (s.isApplicant) return s
+      if (s.kind === 'extra') return s
+      if (s.kind === 'settle_divider') return s
+      const t = timeline.find(x => x.step_order === chainStepIdx)
+      chainStepIdx += 1
+      if (!t) return s
+      // 不蓋過 caller 已算好的 durationText（buildChainBasedSteps 對加簽 step
+      // 自己算 duration，RPC 不一定有對應 entry）
+      // exited_at = 該關核准/駁回、移交下一關的時間 → 當作「這關幾點簽的」completedAt 顯示
+      // 用時間軸實際進/出站重算狀態:chain 推進不一定同步更新 workflow_steps.status
+      //   → 已簽的關會卡在 current(空心)。已出站=已簽核(實心) / 已進站未出站=當前這關。
+      let liveStatus = s.status
+      if (s.status !== 'rejected') {
+        if (t.exited_at) liveStatus = 'completed'
+        else if (t.entered_at && s.status !== 'completed') liveStatus = 'current'
+      }
+      return {
+        ...s,
+        status: liveStatus,
+        durationText: s.durationText || t.duration_text,
+        completedAt: s.completedAt || t.exited_at || null,
+      }
+    })
+  }, [chainSteps, timeline])
+
+  // 加簽關：前端直查 approval_extra_steps 會 permission denied → 走 SECURITY DEFINER RPC
+  const [extraSteps, setExtraSteps] = useState([])
+  useEffect(() => {
+    const st = actions?.sourceTable || REQTYPE_TO_TABLE[requestType]
+    const rid = actions?.row?.id || requestId
+    if (!open || !st || !rid) { setExtraSteps([]); return }
+    let cancelled = false
+    supabase.rpc('list_request_extra_steps', { p_source_table: st, p_source_id: Number(rid) })
+      .then(({ data }) => { if (!cancelled) setExtraSteps(Array.isArray(data) ? data : []) })
+    return () => { cancelled = true }
+  }, [open, requestType, requestId, actions])
+
+  // 把加簽關插進 timeline（插在第 insert_before_step 個實際 chain step 之前）；
+  // 統一由這裡插，略過 caller 自帶的 extra 避免重複。
+  const finalChainSteps = useMemo(() => {
+    if (!extraSteps.length) return mergedChainSteps
+    const toStep = ex => ({
+      kind: 'extra', label: '加簽', name: ex.assignee_name || '',
+      status: ex.status === 'approved' ? 'completed' : ex.status === 'rejected' ? 'rejected' : 'current',
+      completedAt: ex.approved_at, rejectReason: ex.reject_reason || '',
+      extraReason: ex.reason || '', extraRequesterName: ex.requester_name || '',
+      processorNote: ex.processor_note || '',   // 加簽人核准/退回時留的備註 → 顯示給發起加簽的下一關
+    })
+    const byBefore = {}
+    for (const ex of extraSteps) (byBefore[ex.insert_before_step] ||= []).push(ex)
+    const out = []
+    let chainIdx = 0
+    const used = new Set()
+    for (const s of mergedChainSteps) {
+      if (s.kind === 'extra') continue
+      const isChain = !s.isApplicant && s.kind !== 'settle_divider'
+      if (isChain) {
+        for (const ex of (byBefore[chainIdx] || [])) { out.push(toStep(ex)); used.add(ex.id) }
+        chainIdx += 1
+      }
+      out.push(s)
+    }
+    for (const ex of extraSteps) if (!used.has(ex.id)) out.push(toStep(ex))  // insert_before_step 超出鏈長 → 補末端
+    return out
+  }, [mergedChainSteps, extraSteps])
+
+  if (!open) return null
+
+  const overallBadge = STATUS_BADGE[status] || STATUS_BADGE['申請中']
+
+  return (
+    <ModalOverlay onClose={onClose}>
+      <div onClick={(e) => e.stopPropagation()} style={{
+        background: 'var(--bg-card)', borderRadius: 12,
+        width: 'min(960px, 96vw)', maxHeight: '88vh',
+        display: 'flex', flexDirection: 'column',
+        overflow: 'hidden',
+        border: '1px solid var(--border-medium)',
+        boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+      }}>
+        {/* Header bar */}
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '16px 22px',
+          borderBottom: '1px solid var(--border-subtle)',
+          flexShrink: 0,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <h3 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>{docTitle}</h3>
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {headerExtra}
+            {onPrint && (
+              <button className="btn btn-secondary" style={{ fontSize: 14, padding: '8px 14px' }} onClick={onPrint}>
+                <Printer size={14} /> 下載簽呈
+              </button>
+            )}
+            <button onClick={onClose} style={{
+              background: 'transparent', border: 'none', cursor: 'pointer',
+              color: 'var(--text-muted)', padding: 4, display: 'flex',
+            }}>
+              <X size={22} />
+            </button>
+          </div>
+        </div>
+
+        {/* Body: split layout */}
+        <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+          {/* LEFT: form details */}
+          <div style={{ flex: 1, padding: 24, overflowY: 'auto', minWidth: 0 }}>
+            {/* Applicant card */}
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 16,
+              padding: 14, marginBottom: 20,
+              background: 'var(--bg-secondary)',
+              borderRadius: 10,
+              border: '1px solid var(--border-subtle)',
+            }}>
+              <div style={{
+                width: 64, height: 64, borderRadius: '50%',
+                background: 'var(--bg-card)',
+                border: '2px solid var(--border-medium)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                overflow: 'hidden', flexShrink: 0,
+              }}>
+                {applicant.avatar_url ? (
+                  <img src={applicant.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : (
+                  <User size={32} color="var(--text-muted)" />
+                )}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 18, fontWeight: 700, lineHeight: 1.3 }}>
+                  {applicant.name || '—'}
+                  {applicant.name_en && <span style={{ color: 'var(--text-muted)', fontWeight: 500, marginLeft: 6, fontSize: 15 }}>{applicant.name_en}</span>}
+                </div>
+                {applicant.position && (
+                  <div style={{ fontSize: 14, color: 'var(--text-muted)', marginTop: 3 }}>
+                    {applicant.position}{applicant.dept ? `　·　${applicant.dept}` : ''}
+                  </div>
+                )}
+                <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                  {applicant.status && (
+                    <span style={{
+                      padding: '3px 10px', borderRadius: 4, fontSize: 12, fontWeight: 700,
+                      background: applicant.status === '在職' ? 'rgba(34,197,94,0.15)' : 'rgba(156,163,175,0.15)',
+                      color: applicant.status === '在職' ? '#0a6b2e' : '#6b7280',
+                    }}>{applicant.status}</span>
+                  )}
+                  {applicant.employee_no && (
+                    <span style={{ fontSize: 13, color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+                      {applicant.employee_no}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Dynamic fields */}
+            {fields.map((f, i) => (
+              <div key={i} style={{ marginBottom: 18 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 5 }}>
+                  {f.label}
+                </div>
+                <div style={{
+                  fontSize: 16, color: 'var(--text-primary)',
+                  whiteSpace: f.multiline ? 'pre-wrap' : 'normal',
+                  lineHeight: 1.6,
+                }}>
+                  {(f.value == null || f.value === '') ? <span style={{ color: 'var(--text-muted)' }}>—</span> : f.value}
+                </div>
+              </div>
+            ))}
+
+            {/* 當天出勤（審核參考）— 自動帶入班表 + 打卡（加班/請假/補打卡/出差通用）*/}
+            {DAY_CTX_TYPES.has(requestType) && otDay && (
+              <div style={{ marginBottom: 18, padding: 12, borderRadius: 10, background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  📋 當天班表 · 打卡（審核參考{otDay.date ? `：${otDay.date}` : ''}）
+                </div>
+                {otWarnings.length > 0 && (
+                  <div style={{ marginBottom: 10, padding: '8px 10px', borderRadius: 8, background: 'var(--accent-red-dim)', border: '1px solid var(--accent-red)' }}>
+                    {otWarnings.map((w, i) => (
+                      <div key={i} style={{ fontSize: 12.5, color: 'var(--accent-red)', fontWeight: 600, display: 'flex', alignItems: 'flex-start', gap: 6, lineHeight: 1.5 }}>
+                        <AlertTriangle size={13} style={{ flexShrink: 0, marginTop: 2 }} /> {w}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>當天班表</div>
+                    <div style={{ fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.6 }}>
+                      {(otDay.schedule || []).length === 0
+                        ? <span style={{ color: 'var(--text-muted)' }}>無排班</span>
+                        : otDay.schedule.map((s, i) => (
+                            <div key={i}>
+                              {s.absence_type ? s.absence_type : (s.actual_start ? `${hhmm(s.actual_start)}–${hhmm(s.actual_end)}` : (s.shift || '—'))}
+                              {s.store && <span style={{ color: 'var(--text-muted)', marginLeft: 6 }}>· {s.store}</span>}
+                            </div>
+                          ))}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>當天打卡</div>
+                    <div style={{ fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.6 }}>
+                      {!otDay.attendance
+                        ? <span style={{ color: 'var(--text-muted)' }}>無打卡</span>
+                        : <>
+                            上班 {hhmm(otDay.attendance.clock_in) || '—'} / 下班 {hhmm(otDay.attendance.clock_out) || <span style={{ color: 'var(--accent-orange)' }}>尚未下班</span>}
+                            {otDay.attendance.total_hours ? <span style={{ color: 'var(--text-muted)' }}>（{otDay.attendance.total_hours}h）</span> : null}
+                            {otDay.attendance.is_late && otDay.attendance.late_minutes > 0
+                              ? <span style={{ color: 'var(--accent-red)' }}>・遲到 {otDay.attendance.late_minutes} 分</span> : null}
+                          </>}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Attachments */}
+            <div style={{ marginBottom: 18 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 8 }}>
+                附件
+              </div>
+              {attachments.length === 0 ? (
+                <div style={{ fontSize: 15, color: 'var(--text-muted)' }}>無附件</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {attachments.map((a, i) => {
+                    const isImage = a.type?.startsWith('image') || /\.(jpe?g|png|gif|webp|svg)/i.test(a.name || a.url || '')
+                    return (
+                      <a key={i} href={a.url} target="_blank" rel="noreferrer"
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 10,
+                          padding: '8px 12px',
+                          background: 'var(--bg-secondary)', borderRadius: 6,
+                          border: '1px solid var(--border-subtle)',
+                          fontSize: 14, color: 'var(--accent-cyan)',
+                          textDecoration: 'none',
+                        }}>
+                        {isImage ? <ImageIcon size={16} /> : <FileText size={16} />}
+                        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {a.name || '附件'}
+                        </span>
+                      </a>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Footer meta */}
+            <div style={{
+              marginTop: 20, paddingTop: 14,
+              borderTop: '1px dashed var(--border-subtle)',
+              fontSize: 13, color: 'var(--text-muted)',
+              display: 'flex', flexDirection: 'column', gap: 4,
+            }}>
+              {docNo && <div>表單編號：<span style={{ fontFamily: 'monospace' }}>{docNo}</span></div>}
+              {createdAt && <div>申請時間：{fmtDateTime(createdAt)}</div>}
+            </div>
+          </div>
+
+          {/* RIGHT: chain timeline */}
+          <div style={{
+            width: 320, flexShrink: 0,
+            background: 'var(--bg-secondary)',
+            borderLeft: '1px solid var(--border-subtle)',
+            padding: 24, overflowY: 'auto',
+          }}>
+            <div style={{
+              fontSize: 17, fontWeight: 700, marginBottom: 22,
+              display: 'flex', alignItems: 'center', gap: 10,
+            }}>
+              簽核流程：
+              <span style={{
+                padding: '4px 14px', borderRadius: 12, fontSize: 13, fontWeight: 700,
+                background: overallBadge.bg, color: overallBadge.color,
+              }}>{overallBadge.text}</span>
+            </div>
+
+            <ChainTimeline steps={finalChainSteps} />
+          </div>
+        </div>
+
+        {/* Footer: 簽核操作列（僅 pending 且 caller 可簽核時顯示）
+            ★ 加 hasRealPending check — 之前只看 caller 傳了 actions 就 render，
+              導致「已核准」/「已退回」狀態還顯示核准/退回按鈕（可重複按）。
+              已核准的 chain 內所有 step 都 completed → 不該再顯示。 */}
+        {actions && actions.sourceTable && actions.row &&
+          mergedChainSteps.some(s => (s.status === 'pending' || s.status === 'current') && !s.archival) && (
+          <ApprovalActionBar
+            sourceTable={actions.sourceTable}
+            row={actions.row}
+            onApprove={actions.onApprove}
+            onReject={actions.onReject}
+            onChanged={actions.onChanged}
+            approveLabel={actions.approveLabel}
+            rejectLabel={actions.rejectLabel}
+            hideExtra={actions.hideExtra}
+          />
+        )}
+      </div>
+    </ModalOverlay>
+  )
+}
+
+// ─── 內部：垂直時間軸 ───
+function ChainTimeline({ steps }) {
+  if (!steps || steps.length === 0) {
+    return <div style={{ fontSize: 14, color: 'var(--text-muted)', textAlign: 'center', padding: 24 }}>
+      尚未設定簽核鏈
+    </div>
+  }
+
+  // 終點 dot：依整體狀態決定
+  //   任一 rejected → 失敗紅
+  //   有非 archival 的 pending/current → 等待中（灰）
+  //   其他（全 completed，或剩下都是 archival 存檔關卡）→ 簽核完成（綠）
+  const hasRejected = steps.some(s => s.status === 'rejected')
+  const hasRealPending = steps.some(s => (s.status === 'pending' || s.status === 'current') && !s.archival)
+  let closeStateText, closeStateColor, closeStateBg
+  if (hasRejected) {
+    closeStateText = '簽核失敗'; closeStateColor = '#ef4444'; closeStateBg = '#ef4444'
+  } else if (hasRealPending) {
+    closeStateText = '等待簽核'; closeStateColor = 'var(--text-muted)'; closeStateBg = 'var(--border-medium)'
+  } else {
+    closeStateText = '簽核完成'; closeStateColor = '#0a6b2e'; closeStateBg = '#22c55e'
+  }
+
+  return (
+    <div style={{ position: 'relative', paddingLeft: 34 }}>
+      {/* Vertical line */}
+      <div style={{
+        position: 'absolute', left: 10, top: 8, bottom: 8,
+        width: 3, background: 'var(--border-medium)',
+      }} />
+
+      {steps.map((step, i) => {
+        if (step.kind === 'settle_divider') {
+          return (
+            <div key={i} style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              margin: '6px 0 18px',
+              position: 'relative',
+            }}>
+              <div style={{
+                position: 'absolute', left: -25, top: '50%', transform: 'translateY(-50%)',
+                width: 22, height: 22, borderRadius: '50%',
+                background: '#f97316',
+                border: '4px solid var(--bg-secondary)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#fff' }} />
+              </div>
+              <div style={{
+                fontSize: 12, fontWeight: 700, letterSpacing: '0.05em',
+                color: '#f97316',
+                padding: '3px 10px',
+                background: 'rgba(249,115,22,0.10)',
+                borderRadius: 20,
+                border: '1px solid rgba(249,115,22,0.25)',
+              }}>驗收流程</div>
+            </div>
+          )
+        }
+        return <TimelineDot key={i} step={step} index={i} isLast={i === steps.length - 1} />
+      })}
+
+      {/* 終點 */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 6, position: 'relative' }}>
+        <div style={{
+          position: 'absolute', left: -25,
+          width: 22, height: 22, borderRadius: '50%',
+          background: closeStateBg,
+          border: '4px solid var(--bg-secondary)',
+        }} />
+        <div style={{ fontSize: 16, color: closeStateColor, fontWeight: 600 }}>{closeStateText}</div>
+      </div>
+    </div>
+  )
+}
+
+function TimelineDot({ step, index, isLast }) {
+  // current 改成「空心圈」跟 completed 的「實心」做區分，讓現在輪到誰簽一目了然
+  // 核銷鏈（isSettle）用橘色，審批鏈用 cyan
+  const accentColor = step.isSettle ? '#f97316' : '#0ea5e9'
+  const dotStyle = {
+    completed: { fill: accentColor, border: accentColor },
+    current:   { fill: 'transparent', border: accentColor },
+    pending:   { fill: 'transparent', border: 'var(--border-medium)' },
+    rejected:  { fill: '#ef4444', border: '#ef4444' },
+  }[step.status] || { fill: 'transparent', border: 'var(--border-medium)' }
+  const labelColors = {
+    completed: accentColor,
+    current: accentColor,
+    pending: 'var(--text-muted)',
+    rejected: '#ef4444',
+  }
+
+  return (
+    <div style={{ position: 'relative', marginBottom: 22 }}>
+      <div style={{
+        position: 'absolute', left: -25, top: 4,
+        width: 22, height: 22, borderRadius: '50%',
+        background: dotStyle.fill,
+        border: `3px solid ${dotStyle.border}`,
+        boxShadow: '0 0 0 4px var(--bg-secondary)',
+      }} />
+      <div style={{
+        fontSize: 16, fontWeight: 700,
+        color: labelColors[step.status] || 'var(--text-muted)',
+        lineHeight: 1.3,
+        display: 'flex', alignItems: 'center', gap: 6,
+      }}>
+        {step.label}
+        {step.archival && (
+          <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-muted)', padding: '1px 6px', borderRadius: 4, background: 'var(--bg-card)', border: '1px solid var(--border-subtle)' }}>
+            存檔
+          </span>
+        )}
+      </div>
+      {step.name && (
+        <div style={{ fontSize: 15, color: 'var(--text-primary)', marginTop: 4 }}>
+          {step.name}
+        </div>
+      )}
+      {step.completedAt && (
+        <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 3 }}>
+          {fmtDateTime(step.completedAt)}
+        </div>
+      )}
+      {step.durationText && step.durationText !== '0 秒' && (
+        <div style={{
+          fontSize: 12, color: 'var(--text-secondary)', marginTop: 4,
+          display: 'inline-flex', alignItems: 'center', gap: 4,
+          padding: '2px 8px', borderRadius: 4,
+          background: step.status === 'current' ? 'rgba(99,102,241,0.08)' : 'transparent',
+        }}>
+          ⏱ 停留 {step.durationText}
+        </div>
+      )}
+      {step.noteText && (
+        <div style={{
+          fontSize: 12, color: 'var(--text-muted)', marginTop: 4,
+          display: 'inline-flex', alignItems: 'center', gap: 4,
+          padding: '2px 8px', borderRadius: 4,
+          background: 'rgba(249,115,22,0.08)',
+        }}>
+          📋 {step.noteText}
+        </div>
+      )}
+      {step.status === 'rejected' && step.rejectReason && (
+        <div style={{
+          fontSize: 13, color: '#9c1f1f', marginTop: 6,
+          padding: '6px 10px', borderRadius: 5,
+          background: 'rgba(239,68,68,0.08)',
+        }}>
+          {step.rejectReason}
+        </div>
+      )}
+      {/* 加簽回覆卡:發起原因 + 加簽人核准時留的備註（讓發起加簽的下一關看到判斷）*/}
+      {step.kind === 'extra' && (step.extraReason || step.processorNote) && (
+        <div style={{
+          marginTop: 8, padding: '10px 12px', borderRadius: 8,
+          border: '1px solid var(--border-subtle)', background: 'var(--bg-card)',
+          display: 'flex', flexDirection: 'column', gap: 6,
+        }}>
+          {step.extraReason && (
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.4 }}>
+              🪶 {step.extraRequesterName ? `${step.extraRequesterName} 發起加簽：` : '加簽原因：'}{step.extraReason}
+            </div>
+          )}
+          {step.status === 'completed' && step.processorNote && (
+            <div style={{ fontSize: 13, display: 'flex', gap: 6, alignItems: 'flex-start' }}>
+              <span style={{ flexShrink: 0, color: 'var(--accent-green)', fontWeight: 600 }}>✅ 核准回覆</span>
+              <span style={{ color: 'var(--text-primary)', lineHeight: 1.4 }}>{step.processorNote}</span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}

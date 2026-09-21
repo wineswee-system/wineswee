@@ -1,0 +1,918 @@
+import { useState, useEffect } from 'react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
+import { Calculator, Users, Search, Edit2 } from 'lucide-react'
+import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../contexts/AuthContext'
+import LoadingSpinner from '../../components/LoadingSpinner'
+import Modal, { Field } from '../../components/Modal'
+import { toast } from '../../lib/toast'
+
+const TYPE_LABEL = {
+  annual: '特休假', '補休': '補休', sick: '病假', personal: '事假',
+  menstrual: '生理假', marriage: '婚假', bereavement: '喪假',
+  official: '公假', maternity: '產假', paternity: '陪產假',
+  parental: '育嬰假', family_care: '家庭照顧假',
+  occupational: '公傷病假', prenatal: '產檢假', unpaid: '無薪假',
+}
+const TYPE_CODE = Object.fromEntries(Object.entries(TYPE_LABEL).map(([k, v]) => [v, k]))
+
+// legal limits in DAYS (per year, except menstrual which is per month)
+const LEGAL_LIMITS = {
+  sick: 30, personal: 14, menstrual: 1,  // 1 day/month × 12 months
+  marriage: 8, bereavement: 8, family_care: 7,
+  paternity: 7, prenatal: 7,  // 產檢假 2022 修法 5→7 天（性平法 §15）
+}
+// 這些假別沒有固定年度天數，只在有資料時才顯示
+//   產假(maternity)移出:女性要能看到額度(分娩56天上限);男性由性別過濾擋掉(line 216)。
+//   實際天數依情形(分娩8週56/妊娠3月以上流產4週28/2~3月1週7/未滿2月5天),申請時依日期取,56為上限。
+const EVENT_BASED = new Set(['official', 'parental', 'occupational', 'unpaid'])
+
+const ANNUAL_TYPES = [
+  'annual', '補休', 'sick', 'personal', 'menstrual',
+  'marriage', 'bereavement', 'official', 'maternity', 'paternity', 'unpaid',
+  'family_care', 'occupational', 'prenatal', 'parental',
+]
+
+// 0.5h 級距(104 有半小時假;整數四捨五入會吃掉 0.5h)
+const daysToHours = (d) => Math.round(Number(d || 0) * 8 * 2) / 2
+const hoursToHours = (h) => Math.round(Number(h || 0) * 2) / 2
+const _todayStr = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` })()
+
+export default function LeaveBalances() {
+  const { profile, isAdmin } = useAuth()
+  // 假別餘額權限：只有 admin/super_admin 看全部 + 批次調整/結算/逐列調整；
+  //   其餘角色（含 manager、office_staff、store_staff）只看自己、唯讀。
+  const currentYear = new Date().getFullYear()
+
+  const [employees, setEmployees]     = useState([])
+  const [selectedEmpId, setSelectedEmpId] = useState(null)
+  const [yearFilter, setYearFilter]   = useState(currentYear)
+  const [statusFilter, setStatusFilter] = useState('在職')
+  const [nameSearch, setNameSearch]   = useState('')
+  const [activeTab, setActiveTab]     = useState('annual')
+
+  const [dbBalances, setDbBalances]     = useState([])
+  const [leaveRequests, setLeaveRequests] = useState([])
+  const [pendingRequests, setPendingRequests] = useState([])
+  const [tableRows, setTableRows]       = useState([])
+
+  const [empLoading, setEmpLoading]   = useState(true)
+  const [dataLoading, setDataLoading] = useState(false)
+
+  // bulk adjust modal
+  const [showBulkModal, setShowBulkModal]   = useState(false)
+  const [bulkSelectedIds, setBulkSelectedIds] = useState([])
+  const [bulkSearch, setBulkSearch]         = useState('')
+  const [bulkLeaveType, setBulkLeaveType]   = useState('annual')
+  const [bulkDays, setBulkDays]             = useState('')
+  const [bulkUnit, setBulkUnit]             = useState('day')   // 'day' | 'hour'
+  const [bulkYear, setBulkYear]             = useState(currentYear)
+  const [bulkSaving, setBulkSaving]         = useState(false)
+
+  // single-employee edit modal
+  const [editRow, setEditRow]       = useState(null)  // { type, label, dbId, totalDays, carryOverDays, expiresAt }
+  const [editTotalDays, setEditTotalDays]   = useState('')
+  const [editCarryOver, setEditCarryOver]   = useState('')
+  const [editExpiresAt, setEditExpiresAt]   = useState('')
+  const [editSaving, setEditSaving] = useState(false)
+
+  // cashout modal
+  const [showCashoutModal, setShowCashoutModal] = useState(false)
+  const [cashoutItems, setCashoutItems]   = useState([])
+  const [cashoutLoading, setCashoutLoading] = useState(false)
+  const [cashoutSaving, setCashoutSaving] = useState(false)
+
+  // 特休多種寫法（annual / 特休假 / 特休 / 特別休假）統一歸 annual
+  const ANNUAL_ALIASES = new Set(['annual', '特休假', '特休', '特別休假'])
+  const normalizeType = (t) => (ANNUAL_ALIASES.has(t) ? 'annual' : (TYPE_CODE[t] || t))
+
+  // 特休 §38 額度已收斂到後端 leave_annual_entitlement RPC(唯一真相,含第一年滿6月=3天修正)。
+  // 前端不再自算階梯 → 原 calcStatutoryLeave 已移除,改由 load() 呼叫 RPC 帶入 annualEnt。
+
+  // 產假天數一律 56(分娩8週,§50)—— 年資只影響「薪資」(≥6月全薪/<6月半薪,在計薪引擎處理),不影響天數。
+  //   (28 天是妊娠3個月以上「流產」,非分娩,不套在這)
+  const calcMaternityDays = () => 56
+
+  // ── load employee list ────────────────────────────────────────────────────
+  useEffect(() => {
+    const load = async () => {
+      setEmpLoading(true)
+      const orgId = profile?.organization_id ?? getTenantOrgId()
+      const { data } = await supabase.from('employees')
+        .select('id, name, employee_number, dept, store, status, employment_type, salary_type, join_date, weekly_hours, gender')
+        .eq('organization_id', orgId).order('name')
+      let emps = data || []
+      if (!isAdmin && profile?.id) {
+        emps = emps.filter(e => e.id === profile.id)
+        setSelectedEmpId(profile.id)
+      }
+      setEmployees(emps)
+      setEmpLoading(false)
+    }
+    if (profile?.organization_id) load()
+  }, [profile?.organization_id])
+
+  // ── 換員工時,年份 tab 自動落在「特休現在期(週年期含今天)」所在年份 ──
+  //   (週年月在下半年者現在期存前一年 year;之後 HR 仍可自由切 tab,故只依賴 selectedEmpId)
+  useEffect(() => {
+    if (!selectedEmpId) return
+    let cancelled = false
+    ;(async () => {
+      const todayStr = new Date().toISOString().slice(0, 10)
+      const { data } = await supabase
+        .from('leave_balances')
+        .select('year, period_start, expires_at')
+        .eq('employee_id', selectedEmpId)
+        .eq('leave_type', 'annual')
+      if (cancelled || !Array.isArray(data)) return
+      const cur = data.find(b =>
+        (!b.period_start || String(b.period_start).slice(0, 10) <= todayStr) &&
+        (!b.expires_at   || String(b.expires_at).slice(0, 10)   >= todayStr))
+      if (cur && cur.year) setYearFilter(cur.year)
+    })()
+    return () => { cancelled = true }
+  }, [selectedEmpId])
+
+  // ── load data when employee or year changes ───────────────────────────────
+  useEffect(() => {
+    if (!selectedEmpId) { setTableRows([]); return }
+    const load = async () => {
+      setDataLoading(true)
+      const orgId = profile?.organization_id ?? getTenantOrgId()
+      const yearStart = `${yearFilter}-01-01`
+      const yearEnd   = `${yearFilter + 1}-01-01`
+      const [balRes, lrRes, pendRes, compRes] = await Promise.all([
+        supabase.from('leave_balances').select('*')
+          .eq('year', yearFilter).eq('organization_id', orgId).eq('employee_id', selectedEmpId),
+        supabase.from('leave_requests').select('employee_id,type,days,hours,start_date,status')
+          .eq('organization_id', orgId).eq('employee_id', selectedEmpId)
+          .is('deleted_at', null)
+          .in('status', ['已核准']).gte('start_date', yearStart).lt('start_date', yearEnd),
+        supabase.from('leave_requests').select('employee_id,type,days,hours,start_date,status')
+          .eq('organization_id', orgId).eq('employee_id', selectedEmpId)
+          .is('deleted_at', null)
+          .in('status', ['待審核', '審核中']).gte('start_date', yearStart).lt('start_date', yearEnd),
+        // 補休：改讀 comp_time_ledger（與補休管理 tab / 104 同源，不用 leave_balances 那套髒的）
+        // 可休/已休要算「賺過的全部」(active 未用完 + exhausted 已用完),不能只算 active,
+        // 否則已用完的 11 筆被排除→可休/已休失真(只剩餘正確)。排除 settled(已折現非休)。
+        supabase.from('comp_time_ledger').select('hours,hours_used,hours_reserved,status,ot_date,expires_at')
+          .eq('employee_id', selectedEmpId).in('status', ['active', 'exhausted']),
+      ])
+      const bals    = balRes.data  || []
+      const lrs     = lrRes.data   || []
+      const pending = pendRes.data || []
+      const comp    = compRes.data || []
+      setDbBalances(bals)
+      setLeaveRequests(lrs)
+      setPendingRequests(pending)
+      const emp = employees.find(e => e.id === selectedEmpId)
+      // ★特休額度單一真相 = leave_annual_entitlement RPC(基準年=yearFilter 到職週年期)
+      //   一次拿 FT 天數 + PT 實排比例時數,退掉前端各自複刻的 §38 階梯(calcStatutoryLeave)
+      let annualEnt = null
+      if (emp?.join_date) {
+        const { data: ent } = await supabase.rpc('leave_annual_entitlement',
+          { p_emp_id: selectedEmpId, p_ref_year: yearFilter })
+        annualEnt = ent
+      }
+      setTableRows(buildRows(emp, bals, lrs, pending, comp, annualEnt))
+      setDataLoading(false)
+    }
+    load()
+  }, [selectedEmpId, yearFilter, employees])
+
+  // ── build table rows ──────────────────────────────────────────────────────
+  const buildRows = (emp, bals, lrs, pending, comp = [], annualEnt = null) => {
+    if (!emp) return []
+    // 補休：以 comp_time_ledger 為準（可休=sum(hours)、已休=sum(hours_used)）
+    const compTotal    = comp.reduce((s, c) => s + Number(c.hours || 0), 0)
+    const compUsed     = comp.reduce((s, c) => s + Number(c.hours_used || 0), 0)      // 已休=核准實扣
+    const compReserved = comp.reduce((s, c) => s + Number(c.hours_reserved || 0), 0)  // 簽核中=待審預留(軟扣)
+    const balByType = {}
+    for (const b of bals) balByType[normalizeType(b.leave_type)] = b
+
+    const usedByType   = {}    // type → hours used
+    const pendByType   = {}    // type → hours pending
+    const usedByTypeMonth = {} // 'menstrual-MM' → hours used
+
+    for (const lr of lrs) {
+      const code = normalizeType(lr.type)
+      const h = lr.hours ? hoursToHours(lr.hours) : daysToHours(lr.days)
+      usedByType[code] = (usedByType[code] || 0) + h
+      if (code === 'menstrual' && lr.start_date) {
+        const mm = lr.start_date.slice(5, 7)
+        const key = `menstrual-${mm}`
+        usedByTypeMonth[key] = (usedByTypeMonth[key] || 0) + h
+      }
+    }
+    for (const lr of pending) {
+      const code = normalizeType(lr.type)
+      const h = lr.hours ? hoursToHours(lr.hours) : daysToHours(lr.days)
+      pendByType[code] = (pendByType[code] || 0) + h
+    }
+
+    const gender = emp.gender
+    const rows = []
+
+    for (const type of ANNUAL_TYPES) {
+      // 女性專屬假別(生理假/產假/產檢假/哺乳,leave_types.gender=female)男性不顯示
+      if (['menstrual', 'maternity', 'prenatal', 'nursing'].includes(type) && gender === '男') continue
+      // 男性專屬(陪產假)女性不顯示
+      if (type === 'paternity' && gender === '女') continue
+
+      const dbBal  = balByType[type]
+      // 可休期間已過(expires_at < 今天)→ 不顯示(補休除外,走 comp_time_ledger;
+      //   生理假除外:每月展開12列、額度非單一到期,若 dbBal 舊列只到某月會誤整批濾掉)
+      if (type !== '補休' && type !== 'menstrual' && dbBal?.expires_at && dbBal.expires_at < _todayStr) continue
+      const dbTotal = Number(dbBal?.total_days || 0)
+      let computedDays = 0
+
+      if (type === 'annual') {
+        // ★特休額度單一真相走 leave_annual_entitlement RPC(基準年=yearFilter 週年期,含修好的第一年3天)
+        //   FT 回天數;PT 回實排比例時數(已含 min(1,近6月週均/40))→ /8 換回天數走既有 daysToHours
+        if (annualEnt?.is_pt) computedDays = (Number(annualEnt.pt_hours) || 0) / 8
+        else computedDays = Number(annualEnt?.ft_days) || 0
+      }
+      else if (type === 'maternity') computedDays = calcMaternityDays(emp)
+      else if (type === 'menstrual') computedDays = 12  // annual total (12 × 1 day)
+      else computedDays = LEGAL_LIMITS[type] ?? 0
+
+      // 有 DB 餘額(104 匯入為準) → 直接用；否則用法定計算值
+      // ── 未生效(該期起日 > 今天,如特休下一週年尚未到)→ 仍顯示額度,但標「未生效」+可申請0 ──
+      //   (不再把可休歸 0,避免主管看到 0 誤以為「沒特休」;真正能不能請由「可申請」把關)
+      const _pad2s = (n) => String(n).padStart(2, '0')
+      let _periodStartStr
+      if (dbBal?.period_start) _periodStartStr = dbBal.period_start
+      else if (type === 'annual' && emp.join_date) {
+        const _jj = new Date(emp.join_date)
+        // 特休生效日:第一個週年期(到職當年)滿6個月才生效 → 到職+6個月;第二年起=到職週年日
+        const _es = new Date(_jj)
+        if (yearFilter === _jj.getFullYear()) _es.setMonth(_es.getMonth() + 6)
+        else _es.setFullYear(yearFilter)
+        _periodStartStr = `${_es.getFullYear()}-${_pad2s(_es.getMonth() + 1)}-${_pad2s(_es.getDate())}`
+      } else _periodStartStr = `${yearFilter}-01-01`
+      // 補休走 comp_time_ledger 滾動帳(生效日=加班日,非年度1/1),不套年度「未生效」判斷;
+      // 否則切到未來年度分頁會拿假的 ${yearFilter}-01-01 誤標「未生效」+可申請歸0(明明還能請)
+      const notStarted     = type !== '補休' && _periodStartStr > _todayStr
+      // 特休(annual)104對齊後:leave_balances 才是單一真相 → 有實際存量(>0)用存量、無才用 §38 RPC。
+      //   (楊學文80h/陳佩璇61.5h 等 104>§38 者顯示才對得上後端上限;離職/未匯入者 total=0 → fallback §38)
+      //   其餘假別同樣「有存量用存量」。carry_over 一律另計。
+      const effectiveDays  = dbTotal > 0 ? dbTotal : computedDays       // 未生效不歸 0,照顯示額度
+      const carryOverDays  = Number(dbBal?.carry_over_days || 0)
+      // 補休：可休直接用 comp_time_ledger 加總（小時，不經 days 換算）
+      const totalHours     = type === '補休' ? compTotal : daysToHours(effectiveDays + carryOverDays)
+
+      // annual period
+      let rangeStr = `${yearFilter}/01/01 ～ ${yearFilter}/12/31`
+      let periodLabel = `${yearFilter} 年`
+
+      // 補休：可休區間 = comp_time_ledger 實際起迄(反映加班日/手動加給日 ～ 到期日),不用預設年度
+      if (type === '補休' && comp.length) {
+        const starts = comp.map(c => c.ot_date).filter(Boolean).sort()
+        const ends   = comp.map(c => c.expires_at).filter(Boolean).sort()
+        if (starts.length && ends.length) {
+          rangeStr = `${starts[0].replace(/-/g, '/')} ～ ${ends[ends.length - 1].replace(/-/g, '/')}`
+          // 補休是滾動帳、不綁日曆年度:「假勤年/月/日」改印補休帳實際跨的年份(加班日年～到期年),
+          // 不再跟著分頁年度(${yearFilter})亂跑造成「歸到2027」的誤會
+          const y0 = starts[0].slice(0, 4), y1 = ends[ends.length - 1].slice(0, 4)
+          periodLabel = y0 === y1 ? `${y0} 年` : `${y0}～${y1} 年`
+        }
+      }
+
+      let annualStartStr = null, annualEndStr = null
+      if (type === 'annual') {
+        if (emp.join_date) {
+          const join = new Date(emp.join_date)
+          // 第一個週年期:特休滿6個月才生效 → 可休起日=到職+6個月;第二年起=到職週年日
+          const startYear = yearFilter === join.getFullYear()
+            ? new Date(join.getFullYear(), join.getMonth() + 6, join.getDate())
+            : new Date(yearFilter, join.getMonth(), join.getDate())
+          const endYear   = new Date(yearFilter + 1, join.getMonth(), join.getDate() - 1)
+          const pad2 = (n) => String(n).padStart(2, '0')
+          const iso = (d) => `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`
+          annualStartStr = iso(startYear)
+          annualEndStr   = iso(endYear)
+          rangeStr = `${annualStartStr.replace(/-/g,'/')} ～ ${annualEndStr.replace(/-/g,'/')}`
+        }
+        periodLabel = `${yearFilter} 年`
+      }
+
+      // 有 104 匯入的可休期間 → 顯示它的起迄（優先於前端自算）
+      if (dbBal?.period_start && dbBal?.expires_at) {
+        rangeStr = `${dbBal.period_start.replace(/-/g, '/')} ～ ${dbBal.expires_at.replace(/-/g, '/')}`
+      }
+
+      if (type === 'menstrual') {
+        // expand into 12 monthly rows
+        for (let m = 1; m <= 12; m++) {
+          const mm  = String(m).padStart(2, '0')
+          const key = `menstrual-${mm}`
+          const daysInMonth = new Date(yearFilter, m, 0).getDate()
+          const usedH   = usedByTypeMonth[key]   || 0
+          const pendH   = 0  // per-month pending would need date range filter; simplify to 0
+          const totalH  = 8  // 1 day per month = 8 hours
+          const remH    = totalH - usedH
+          const canApply = Math.max(0, remH - pendH)
+          rows.push({
+            _key: key, type, isMonthly: true,
+            label: '生理假',
+            period: `${yearFilter}年${mm}月`,
+            range: `${yearFilter}/${mm}/01 ～ ${yearFilter}/${mm}/${String(daysInMonth).padStart(2,'0')}`,
+            totalHours: totalH, usedHours: usedH, remainingHours: remH,
+            pendingHours: pendH, canApplyHours: canApply,
+            dbId: dbBal?.id, isManual: dbTotal > 0,
+          })
+        }
+        continue
+      }
+
+      // 特休：已休/簽核中只算落在「可休區間」內的（避免把上一週年年度的特休算進本期）
+      const inAnnual = (lr) => normalizeType(lr.type) === 'annual'
+        && lr.start_date && lr.start_date >= annualStartStr && lr.start_date <= annualEndStr
+      const sumH = (arr) => arr.reduce((s, lr) => s + (lr.hours ? hoursToHours(lr.hours) : daysToHours(lr.days)), 0)
+      // 已休：補休→comp_time_ledger；有 104 leave_balance→讀 used_days；否則從請假單算
+      // 已休來源:補休→ledger;特休→leave_balances.used_days(104匯入,含舊系統已休);
+      //   其餘法定假別→一律從請假單算(那些的 used_days 未維護=0,不能讀)
+      const usedH    = type === '補休'
+        ? compUsed
+        : (type === 'annual'
+          ? (dbBal ? daysToHours(Number(dbBal.used_days || 0)) : (annualStartStr ? sumH(lrs.filter(inAnnual)) : (usedByType[type] || 0)))
+          : (usedByType[type] || 0))
+      // 補休簽核中=comp_time_ledger 的 hours_reserved(軟扣/待審預留);其餘走請假單 pending
+      // 補休簽核中=comp_time_ledger 的 hours_reserved(軟扣/待審預留);其餘走請假單 pending
+      const pendH    = type === '補休'
+        ? compReserved
+        : ((type === 'annual' && annualStartStr) ? sumH(pending.filter(inAnnual)) : (pendByType[type] || 0))
+      const remH     = totalHours - usedH
+      const canApply = notStarted ? 0 : Math.max(0, remH - pendH)   // 未生效→現在不可申請
+
+      // 事件制假別（無固定天數）：沒有 DB 記錄且沒有用過就不顯示
+      if (EVENT_BASED.has(type) && !dbBal && usedH === 0) continue
+
+      rows.push({
+        _key: type, type, isMonthly: false,
+        label: TYPE_LABEL[type] || type,
+        period: periodLabel,
+        range: rangeStr,
+        totalHours, usedHours: usedH, remainingHours: remH,
+        pendingHours: pendH, canApplyHours: canApply,
+        dbId: dbBal?.id, isManual: dbTotal > 0,
+        notStarted, effectiveFrom: notStarted ? _periodStartStr : null,   // 未生效 + 生效日(給 UI 標註)
+        // PT 實排折算暫停(待班表匯入)—— 但已有匯入剩餘值(dbTotal>0)就不顯示,那些是人資手算匯入的真值
+        ptPaused: !!(type === 'annual' && annualEnt?.is_pt && annualEnt?.pt_paused && !(dbTotal > 0)),
+      })
+    }
+
+    // 殘骸/非標準假別（104 舊系統結算等，不在 ANNUAL_TYPES）→ 直接以 leave_balances 顯示
+    const standardSet = new Set(ANNUAL_TYPES)
+    for (const [lt, b] of Object.entries(balByType)) {
+      if (standardSet.has(lt)) continue
+      if (b.expires_at && b.expires_at < _todayStr) continue  // 期間已過 → 不顯示(如謀職假5/31已過)
+      const notStarted = b.period_start && b.period_start > _todayStr
+      const total = notStarted ? 0 : daysToHours(Number(b.total_days || 0) + Number(b.carry_over_days || 0))
+      const used  = daysToHours(Number(b.used_days || 0))
+      if (total === 0 && used === 0) continue
+      const rng = b.period_start && b.expires_at
+        ? `${b.period_start.replace(/-/g, '/')} ～ ${b.expires_at.replace(/-/g, '/')}`
+        : (b.expires_at ? `～ ${String(b.expires_at).replace(/-/g, '/')}` : `${yearFilter}/01/01 ～ ${yearFilter}/12/31`)
+      rows.push({
+        _key: lt, type: lt, isMonthly: false,
+        label: TYPE_LABEL[lt] || lt,
+        period: `${yearFilter} 年`,
+        range: rng,
+        totalHours: total, usedHours: used, remainingHours: total - used,
+        // 簽核中=該假別的待審核請假單(如舊人資系統補休結算 待審核)→ 顯示在自己這列
+        pendingHours: pendByType[lt] || 0, canApplyHours: Math.max(0, total - used - (pendByType[lt] || 0)),
+        dbId: b.id, isManual: true,
+      })
+    }
+
+    return rows
+  }
+
+  // ── bulk submit ───────────────────────────────────────────────────────────
+  const openEditRow = (r) => {
+    const dbBal = dbBalances.find(b => b.id === r.dbId)
+    setEditRow(r)
+    setEditTotalDays(dbBal ? String(dbBal.total_days ?? '') : '')
+    setEditCarryOver(dbBal ? String(dbBal.carry_over_days ?? '') : '')
+    setEditExpiresAt(dbBal?.expires_at || '')
+  }
+
+  const handleEditSubmit = async () => {
+    if (editTotalDays === '') { toast.warning(editRow?.type === '補休' ? '請輸入天數' : '請輸入總天數'); return }
+    // 補休:手動加給(comp_time_ledger),天數×8→小時,今天起一年到期,過期折現
+    if (editRow.type === '補休') {
+      const hours = Number(editTotalDays) * 8
+      if (hours <= 0) { toast.warning('補休只能加正數天'); return }
+      try {
+        setEditSaving(true)
+        const { error } = await supabase.rpc('add_manual_comp_time', { p_emp_ids: [selectedEmpId], p_hours: hours })
+        if (error) throw error
+        toast.success(`已加 ${editTotalDays} 天（${hours} 小時）補休`)
+        setEditRow(null)
+        const id = selectedEmpId; setSelectedEmpId(null); setTimeout(() => setSelectedEmpId(id), 0)
+      } catch (err) { toast.error('加補休失敗：' + (err.message || '未知錯誤')) }
+      finally { setEditSaving(false) }
+      return
+    }
+    try {
+      setEditSaving(true)
+      const payload = {
+        employee_id: selectedEmpId, year: yearFilter,
+        leave_type: editRow.type,
+        total_days: Number(editTotalDays),
+        carry_over_days: Number(editCarryOver) || 0,
+        expires_at: editExpiresAt || null,
+        organization_id: profile?.organization_id,
+      }
+      if (editRow.dbId) {
+        const { error } = await supabase.from('leave_balances').update(payload).eq('id', editRow.dbId)
+        if (error) throw error
+      } else {
+        const { error } = await supabase.from('leave_balances').insert({ ...payload, used_days: 0 })
+        if (error) throw error
+      }
+      toast.success('已儲存')
+      setEditRow(null)
+      const id = selectedEmpId
+      setSelectedEmpId(null); setTimeout(() => setSelectedEmpId(id), 0)
+    } catch (err) {
+      toast.error('儲存失敗：' + (err.message || '未知錯誤'))
+    } finally {
+      setEditSaving(false)
+    }
+  }
+
+  const handleBulkSubmit = async () => {
+    if (!bulkSelectedIds.length) { toast.warning('請選擇員工'); return }
+    if (bulkDays === '' || isNaN(Number(bulkDays))) { toast.warning(bulkUnit === 'hour' ? '請輸入小時數' : '請輸入天數'); return }
+    // 小時模式存 total_days 時除以 8
+    const days = bulkUnit === 'hour' ? Number(bulkDays) / 8 : Number(bulkDays)
+    const orgId = profile?.organization_id ?? getTenantOrgId()
+    // 補休走 comp_time_ledger(手動加給,過期折現),不寫 leave_balances
+    if (bulkLeaveType === '補休') {
+      const hours = bulkUnit === 'hour' ? Number(bulkDays) : Number(bulkDays) * 8
+      if (hours <= 0) { toast.warning('補休只能加正數'); return }
+      try {
+        setBulkSaving(true)
+        const { data, error } = await supabase.rpc('add_manual_comp_time', { p_emp_ids: bulkSelectedIds, p_hours: hours })
+        if (error) throw error
+        toast.success(`已加 ${bulkSelectedIds.length} 人補休 ${hours} 小時（從今天起一年到期）`)
+        setShowBulkModal(false)
+        const id = selectedEmpId; setSelectedEmpId(null); setTimeout(() => setSelectedEmpId(id), 0)
+      } catch (err) { toast.error('加補休失敗：' + (err.message || '未知錯誤')) }
+      finally { setBulkSaving(false) }
+      return
+    }
+    try {
+      setBulkSaving(true)
+      const { data: existing } = await supabase.from('leave_balances')
+        .select('id, employee_id, total_days')
+        .eq('year', bulkYear).eq('leave_type', bulkLeaveType).eq('organization_id', orgId)
+        .in('employee_id', bulkSelectedIds)
+      const existingMap = {}
+      for (const r of existing || []) existingMap[r.employee_id] = r
+
+      const toUpdate = [], toInsert = []
+      for (const empId of bulkSelectedIds) {
+        if (existingMap[empId]) {
+          toUpdate.push({ id: existingMap[empId].id, total_days: Number(existingMap[empId].total_days || 0) + days })
+        } else {
+          toInsert.push({ employee_id: empId, year: bulkYear, leave_type: bulkLeaveType, total_days: Math.max(0, days), used_days: 0, organization_id: orgId })
+        }
+      }
+      for (const r of toUpdate) {
+        const { error } = await supabase.from('leave_balances').update({ total_days: r.total_days }).eq('id', r.id)
+        if (error) throw error
+      }
+      if (toInsert.length) {
+        const { error } = await supabase.from('leave_balances').insert(toInsert)
+        if (error) throw error
+      }
+      const displayVal = Number(bulkDays)
+      const unit = bulkUnit === 'hour' ? '小時' : '天'
+      toast.success(`已更新 ${bulkSelectedIds.length} 人的 ${TYPE_LABEL[bulkLeaveType]} (${displayVal > 0 ? '+' : ''}${displayVal} ${unit})`)
+      setShowBulkModal(false)
+      // reload
+      const id = selectedEmpId
+      setSelectedEmpId(null)
+      setTimeout(() => setSelectedEmpId(id), 0)
+    } catch (err) {
+      toast.error('儲存失敗：' + (err.message || '未知錯誤'))
+    } finally {
+      setBulkSaving(false)
+    }
+  }
+
+  // ── cashout ───────────────────────────────────────────────────────────────
+  const openCashout = async () => {
+    setCashoutLoading(true); setShowCashoutModal(true)
+    try {
+      const { data, error } = await supabase.rpc('cashout_annual_leave', { p_org: profile?.organization_id, p_year: yearFilter, p_dry_run: true })
+      if (error) throw error
+      setCashoutItems((data?.items || []).map(it => ({
+        bal: { id: it.balance_id, employee_id: it.employee_id },
+        unused: Number(it.unused_days), dailyRate: Number(it.daily_rate),
+        cashoutAmount: Number(it.amount), empName: it.name,
+      })))
+    } catch { toast.error('結算資料載入失敗'); setShowCashoutModal(false) }
+    finally { setCashoutLoading(false) }
+  }
+
+  const handleCashoutConfirm = async () => {
+    try {
+      setCashoutSaving(true)
+      const { data, error } = await supabase.rpc('cashout_annual_leave', { p_org: profile?.organization_id, p_year: yearFilter, p_dry_run: false })
+      if (error) throw error
+      toast.success(`已結清 ${data?.processed_count ?? 0} 人，共 NT$ ${Number(data?.total_amount || 0).toLocaleString()}`)
+      setShowCashoutModal(false); setCashoutItems([])
+    } catch (err) { toast.error('結算失敗：' + (err.message || '未知錯誤')) }
+    finally { setCashoutSaving(false) }
+  }
+
+  // ── derived ───────────────────────────────────────────────────────────────
+  const yearOptions = []
+  for (let y = currentYear - 2; y <= currentYear + 1; y++) yearOptions.push(y)
+
+  const selectedEmp = employees.find(e => e.id === selectedEmpId)
+
+  const filteredEmployees = employees.filter(e => {
+    if (statusFilter && e.status !== statusFilter) return false
+    if (nameSearch) {
+      const q = nameSearch.toLowerCase()
+      return e.name?.toLowerCase().includes(q) || (e.employee_number || '').toLowerCase().includes(q)
+    }
+    return true
+  })
+
+  // 補休列的 type 是 '補休'(非 'comp')→ 篩 'comp' 會永遠空、補休列誤跑年度tab
+  const annualRows = tableRows.filter(r => r.type !== '補休')
+  const compRows   = tableRows.filter(r => r.type === '補休')
+
+  if (empLoading) return <LoadingSpinner />
+
+  const cellStyle = { padding: '9px 12px', fontSize: 13, borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }
+  const numCell   = (h, color) => (
+    <td style={{ ...cellStyle, textAlign: 'center', fontWeight: 600, color: color || 'var(--text-primary)' }}>
+      {h > 0 ? `${h}小時` : <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>0小時</span>}
+    </td>
+  )
+
+  return (
+    <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', height: 'calc((100vh - var(--topnav-height)) / var(--app-font-scale, 1))', overflow: 'hidden' }}>
+      {/* Header */}
+      <div className="page-header" style={{ marginBottom: 12 }}>
+        <div className="page-header-row">
+          <div>
+            <h2><span className="header-icon">📊</span> 假勤明細</h2>
+          </div>
+          {isAdmin && (
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-ghost" onClick={() => {
+                setBulkSelectedIds([]); setBulkSearch(''); setBulkLeaveType('annual')
+                setBulkDays(''); setBulkUnit('day'); setBulkYear(currentYear); setShowBulkModal(true)
+              }} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Users size={14} /> 批次調整天數
+              </button>
+              <button className="btn btn-ghost" onClick={openCashout} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Calculator size={14} /> 特休結算
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Filter bar */}
+      <div style={{
+        display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap',
+        padding: '10px 14px', marginBottom: 12,
+        background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 10,
+      }}>
+        <select className="form-input" style={{ fontSize: 13, width: 90 }}
+          value={yearFilter} onChange={e => setYearFilter(Number(e.target.value))}>
+          {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
+        </select>
+        {isAdmin && (
+          <>
+            <select className="form-input" style={{ fontSize: 13, width: 100 }}
+              value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+              <option value="在職">在職</option>
+              <option value="離職">離職</option>
+              <option value="">全部</option>
+            </select>
+            <div style={{ position: 'relative', flex: '1 1 180px', maxWidth: 260 }}>
+              <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+              <input className="form-input" placeholder="姓名或員編" style={{ paddingLeft: 32, fontSize: 13, width: '100%' }}
+                value={nameSearch} onChange={e => setNameSearch(e.target.value)} />
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Main split panel */}
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden', border: '1px solid var(--border-medium)', borderRadius: 12, background: 'var(--bg-card)', minHeight: 0 }}>
+
+        {/* Left: employee list */}
+        {isAdmin && (
+          <div style={{ width: 176, flexShrink: 0, borderRight: '1px solid var(--border-medium)', overflowY: 'auto' }}>
+            {filteredEmployees.length === 0 && (
+              <div style={{ padding: 16, fontSize: 12, color: 'var(--text-muted)', textAlign: 'center' }}>無員工</div>
+            )}
+            {filteredEmployees.map(emp => {
+              const selected = emp.id === selectedEmpId
+              return (
+                <div key={emp.id}
+                  onClick={() => setSelectedEmpId(emp.id)}
+                  style={{
+                    padding: '11px 14px', cursor: 'pointer',
+                    borderBottom: '1px solid var(--border-subtle)',
+                    borderLeft: selected ? '3px solid var(--accent-cyan)' : '3px solid transparent',
+                    background: selected ? 'var(--accent-cyan-dim)' : 'transparent',
+                    transition: 'background .15s',
+                  }}>
+                  <div style={{ fontWeight: selected ? 700 : 500, fontSize: 13, color: selected ? 'var(--accent-cyan)' : 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {emp.name}
+                    {emp.employee_number && <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 4 }}>({emp.employee_number})</span>}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{emp.dept || emp.store || '—'}</div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {/* Right: tabs + table */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
+          {!selectedEmpId ? (
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12, color: 'var(--text-muted)' }}>
+              <div style={{ fontSize: 36 }}>👈</div>
+              <div style={{ fontSize: 14 }}>請從左側選擇員工</div>
+            </div>
+          ) : (
+            <>
+              {/* Tabs */}
+              <div style={{ display: 'flex', borderBottom: '1px solid var(--border-medium)', padding: '0 20px', flexShrink: 0 }}>
+                {[['annual', '年度假勤'], ['comp', '補休管理']].map(([key, label]) => (
+                  <button key={key} onClick={() => setActiveTab(key)} style={{
+                    padding: '12px 20px', fontSize: 14, fontWeight: activeTab === key ? 700 : 400,
+                    color: activeTab === key ? 'var(--accent-cyan)' : 'var(--text-muted)',
+                    borderBottom: activeTab === key ? '2px solid var(--accent-cyan)' : '2px solid transparent',
+                    background: 'none', border: 'none', borderRadius: 0, cursor: 'pointer',
+                    marginBottom: -1,
+                  }}>{label}</button>
+                ))}
+              </div>
+
+              {/* Table */}
+              {dataLoading ? (
+                <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>載入中...</div>
+              ) : (
+                <div style={{ flex: 1, overflowY: 'auto' }}>
+                  {activeTab === 'annual' && (
+                    <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'auto' }}>
+                      <thead>
+                        <tr style={{ background: 'var(--bg-secondary)', position: 'sticky', top: 0, zIndex: 1 }}>
+                          {['假勤項目','假勤年/月/日','可休區間','可休','已休','剩餘','簽核中','可申請', ...(isAdmin ? [''] : [])].map((h, i) => (
+                            <th key={i} style={{ padding: '10px 12px', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textAlign: h === '假勤項目' ? 'left' : 'center', whiteSpace: 'nowrap', borderBottom: '1px solid var(--border-medium)' }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {annualRows.length === 0 && (
+                          <tr><td colSpan={8} style={{ ...cellStyle, textAlign: 'center', padding: 32, color: 'var(--text-muted)' }}>尚無假勤記錄</td></tr>
+                        )}
+                        {annualRows.map((r, idx) => {
+                          const remColor = r.remainingHours > 0 ? 'var(--accent-green)' : r.remainingHours < 0 ? 'var(--accent-red)' : 'var(--text-muted)'
+                          return (
+                            <tr key={r._key} style={{ background: idx % 2 === 0 ? 'transparent' : 'var(--bg-secondary)' }}>
+                              <td style={{ ...cellStyle, fontWeight: 600, color: 'var(--text-primary)' }}>
+                                {r.label}
+                                {r.notStarted && (
+                                  <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 500, color: 'var(--accent-orange)', background: 'var(--accent-orange-dim)', padding: '1px 6px', borderRadius: 4, whiteSpace: 'nowrap' }}>
+                                    未生效 · {String(r.effectiveFrom || '').replace(/-/g, '/')} 生效
+                                  </span>
+                                )}
+                                {r.ptPaused && (
+                                  <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 500, color: 'var(--accent-blue)', background: 'var(--accent-blue-dim)', padding: '1px 6px', borderRadius: 4, whiteSpace: 'nowrap' }}>
+                                    待班表匯入
+                                  </span>
+                                )}
+                              </td>
+                              <td style={{ ...cellStyle, textAlign: 'center' }}>{r.period}</td>
+                              <td style={{ ...cellStyle, textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>{r.range}</td>
+                              {numCell(r.totalHours)}
+                              {numCell(r.usedHours, r.usedHours > 0 ? 'var(--accent-orange)' : null)}
+                              <td style={{ ...cellStyle, textAlign: 'center', fontWeight: 700, color: remColor }}>
+                                {r.remainingHours > 0 ? `${r.remainingHours}小時` : r.remainingHours < 0 ? `${r.remainingHours}小時` : <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>0小時</span>}
+                              </td>
+                              {numCell(r.pendingHours, r.pendingHours > 0 ? 'var(--accent-purple)' : null)}
+                              {numCell(r.canApplyHours, 'var(--accent-cyan)')}
+                              {isAdmin && !r.isMonthly && (
+                                <td style={{ ...cellStyle, textAlign: 'center' }}>
+                                  <button className="btn btn-sm btn-ghost" style={{ padding: '2px 10px', fontSize: 12 }}
+                                    onClick={() => openEditRow(r)}>
+                                    <Edit2 size={11} style={{ marginRight: 3 }} />調整
+                                  </button>
+                                </td>
+                              )}
+                              {isAdmin && r.isMonthly && <td style={cellStyle} />}
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  )}
+
+                  {activeTab === 'comp' && (
+                    <div style={{ padding: 24 }}>
+                      {compRows.length === 0 ? (
+                        <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 40 }}>
+                          <div style={{ fontSize: 32, marginBottom: 12 }}>📭</div>
+                          尚無補休記錄
+                        </div>
+                      ) : (
+                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                          <thead>
+                            <tr style={{ background: 'var(--bg-secondary)' }}>
+                              {['假勤項目','可休區間','可休','已休','剩餘','簽核中','可申請'].map(h => (
+                                <th key={h} style={{ padding: '10px 12px', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textAlign: h === '假勤項目' ? 'left' : 'center', whiteSpace: 'nowrap', borderBottom: '1px solid var(--border-medium)' }}>{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {compRows.map(r => (
+                              <tr key={r._key}>
+                                <td style={{ ...cellStyle, fontWeight: 600, color: 'var(--text-primary)' }}>{r.label}</td>
+                                <td style={{ ...cellStyle, textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>{r.range}</td>
+                                {numCell(r.totalHours)}
+                                {numCell(r.usedHours, r.usedHours > 0 ? 'var(--accent-orange)' : null)}
+                                <td style={{ ...cellStyle, textAlign: 'center', fontWeight: 700, color: r.remainingHours > 0 ? 'var(--accent-green)' : 'var(--accent-red)' }}>
+                                  {r.remainingHours}小時
+                                </td>
+                                {numCell(r.pendingHours, r.pendingHours > 0 ? 'var(--accent-purple)' : null)}
+                                {numCell(r.canApplyHours, 'var(--accent-cyan)')}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Single row edit modal */}
+      {editRow && (
+        <Modal title={`調整假別天數 — ${selectedEmp?.name} · ${editRow.label}`}
+          onClose={() => setEditRow(null)} onSubmit={handleEditSubmit}
+          submitLabel={editSaving ? '儲存中...' : '儲存'} submitDisabled={editSaving}>
+          <div style={{ padding: '8px 12px', marginBottom: 12, background: 'var(--bg-secondary)', borderRadius: 8, fontSize: 13, color: 'var(--text-muted)' }}>
+            目前：{editRow.totalHours} 小時（{editRow.totalHours / 8} 天）· 已休：{editRow.usedHours} 小時
+          </div>
+          {editRow.type === '補休' ? (
+            <>
+              <Field label="加補休（天數）" required>
+                <input className="form-input" type="number" min="0" step="0.5" style={{ width: '100%' }} placeholder="例：1 = 8 小時"
+                  value={editTotalDays} onChange={e => setEditTotalDays(e.target.value)} />
+              </Field>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>
+                手動加補休：天數 × 8 小時 · 從今天起一年到期 · 過期未用折現（原時薪）。此為「加給」，會累加到現有補休。
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <Field label="總天數（手動覆蓋）" required>
+                  <input className="form-input" type="number" min="0" step="0.5" style={{ width: '100%' }}
+                    placeholder={String(editRow.totalHours / 8)}
+                    value={editTotalDays} onChange={e => setEditTotalDays(e.target.value)} />
+                </Field>
+                <Field label="遞延天數">
+                  <input className="form-input" type="number" min="0" step="0.5" style={{ width: '100%' }} placeholder="0"
+                    value={editCarryOver} onChange={e => setEditCarryOver(e.target.value)} />
+                </Field>
+              </div>
+              <Field label="到期日">
+                <input className="form-input" type="date" style={{ width: '100%' }}
+                  value={editExpiresAt} onChange={e => setEditExpiresAt(e.target.value)} />
+              </Field>
+            </>
+          )}
+        </Modal>
+      )}
+
+      {/* Bulk Modal */}
+      {showBulkModal && (() => {
+        const filtEmps = employees.filter(e =>
+          !bulkSearch || e.name.includes(bulkSearch) || (e.dept || '').includes(bulkSearch)
+        )
+        const allSel = filtEmps.length > 0 && filtEmps.every(e => bulkSelectedIds.includes(e.id))
+        const toggleAll = () => allSel
+          ? setBulkSelectedIds(ids => ids.filter(id => !filtEmps.find(e => e.id === id)))
+          : setBulkSelectedIds(ids => [...new Set([...ids, ...filtEmps.map(e => e.id)])])
+        const toggleOne = (id) => setBulkSelectedIds(ids => ids.includes(id) ? ids.filter(i => i !== id) : [...ids, id])
+        return (
+          <Modal title="批次調整假別天數" onClose={() => setShowBulkModal(false)}
+            onSubmit={handleBulkSubmit}
+            submitLabel={bulkSaving ? '儲存中...' : `確認套用（${bulkSelectedIds.length} 人）`}
+            submitDisabled={bulkSaving || !bulkSelectedIds.length || bulkDays === ''}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 16 }}>
+              <Field label="年度" required>
+                <select className="form-input" style={{ width: '100%' }} value={bulkYear} onChange={e => setBulkYear(Number(e.target.value))}>
+                  {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
+                </select>
+              </Field>
+              <Field label="假別" required>
+                <select className="form-input" style={{ width: '100%' }} value={bulkLeaveType} onChange={e => setBulkLeaveType(e.target.value)}>
+                  {ANNUAL_TYPES.map(t => <option key={t} value={t}>{TYPE_LABEL[t] || t}</option>)}
+                </select>
+              </Field>
+              <Field label="調整數量" required>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <input className="form-input" type="number" step={bulkUnit === 'hour' ? 1 : 0.5}
+                    style={{ flex: 1 }} placeholder="正數加、負數扣"
+                    value={bulkDays} onChange={e => setBulkDays(e.target.value)} />
+                  <select className="form-input" style={{ width: 72 }} value={bulkUnit} onChange={e => setBulkUnit(e.target.value)}>
+                    <option value="day">天</option>
+                    <option value="hour">小時</option>
+                  </select>
+                </div>
+              </Field>
+            </div>
+            <Field label={`選擇員工（已選 ${bulkSelectedIds.length} / ${employees.length}）`}>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                <input className="form-input" placeholder="搜尋員工或部門..." value={bulkSearch}
+                  onChange={e => setBulkSearch(e.target.value)} style={{ flex: 1, fontSize: 13 }} />
+                <button className="btn btn-sm btn-ghost" onClick={toggleAll} style={{ whiteSpace: 'nowrap' }}>
+                  {allSel ? '取消全選' : '全選'}
+                </button>
+              </div>
+              <div style={{ maxHeight: 260, overflowY: 'auto', border: '1px solid var(--border-subtle)', borderRadius: 8 }}>
+                {filtEmps.length === 0 && <div style={{ padding: 16, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>查無員工</div>}
+                {filtEmps.map(e => (
+                  <label key={e.id} style={{
+                    display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', cursor: 'pointer',
+                    borderBottom: '1px solid var(--border-subtle)',
+                    background: bulkSelectedIds.includes(e.id) ? 'var(--accent-cyan-dim)' : 'transparent',
+                  }}>
+                    <input type="checkbox" checked={bulkSelectedIds.includes(e.id)} onChange={() => toggleOne(e.id)} />
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{e.name}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{e.dept || '—'} · {e.store || '—'}</div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </Field>
+          </Modal>
+        )
+      })()}
+
+      {/* Cashout Modal */}
+      {showCashoutModal && (
+        <Modal title="特休結算 — 未休年假結清" onClose={() => setShowCashoutModal(false)}
+          onSubmit={handleCashoutConfirm}
+          submitLabel={cashoutSaving ? '結算中...' : '確認結算'}
+          submitDisabled={cashoutSaving || cashoutLoading || cashoutItems.length === 0}>
+          {cashoutLoading ? (
+            <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)' }}>載入結算資料中...</div>
+          ) : cashoutItems.length === 0 ? (
+            <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)' }}>目前無員工有未使用特休天數</div>
+          ) : (
+            <>
+              <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>
+                以下員工有未使用特休，確認後將依日薪計算結清金額並寫入獎金紀錄，同時將特休餘額歸零。
+              </p>
+              <div className="data-table-wrapper">
+                <table className="data-table">
+                  <thead><tr><th>員工</th><th>未休天數</th><th>日薪</th><th>應結清金額</th></tr></thead>
+                  <tbody>
+                    {cashoutItems.map(({ bal, unused, dailyRate, cashoutAmount, empName }) => (
+                      <tr key={bal.id}>
+                        <td style={{ fontWeight: 600 }}>{empName}</td>
+                        <td><span style={{ color: 'var(--accent-orange)', fontWeight: 600 }}>{unused} 天</span></td>
+                        <td style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
+                          {dailyRate > 0 ? `NT$ ${Math.round(dailyRate).toLocaleString()}` : '—'}
+                        </td>
+                        <td><span style={{ color: 'var(--accent-green)', fontWeight: 700 }}>
+                          {cashoutAmount > 0 ? `NT$ ${cashoutAmount.toLocaleString()}` : '—'}
+                        </span></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div style={{ marginTop: 12, padding: '10px 14px', background: 'var(--accent-orange-dim)', borderRadius: 8, fontSize: 12, color: 'var(--text-secondary)' }}>
+                結算後各員工特休餘額將設為 0，此操作無法復原，請確認後再送出。
+              </div>
+            </>
+          )}
+        </Modal>
+      )}
+    </div>
+  )
+}

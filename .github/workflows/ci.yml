@@ -1,0 +1,61 @@
+name: CI
+
+# PR 與推上 main 時自動跑：單元測試 + 正式 build。
+# 這是品質 gate——壞掉的測試或 build 失敗會擋住合併，避免回歸進 main。
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# 同一分支連續 push 時，取消上一輪還在跑的，省 runner
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Unit tests (vitest)
+        run: npm test
+
+      - name: Production build
+        run: npm run build
+        env:
+          # build 不會真的連線，給 placeholder 讓 Vite inline 不報錯
+          VITE_SUPABASE_URL: https://placeholder.supabase.co
+          VITE_SUPABASE_ANON_KEY: placeholder-anon-key-for-ci-build-only
+
+  # 只對 PR「變動的 .js/.jsx」跑 ESLint：既有技術債(169 error)不擋合併，
+  # 但新 code 引入任何 error(含 hooks 規則、用未定義元件)會擋住，守住新程式碼品質。
+  lint-changed:
+    name: Lint changed files
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - name: ESLint on changed JS/JSX
+        run: |
+          git fetch origin "${{ github.base_ref }}" --depth=1
+          FILES=$(git diff --name-only --diff-filter=ACM "origin/${{ github.base_ref }}...HEAD" -- '*.js' '*.jsx' | grep -vE '^(scripts/|.*config\.js$)' || true)
+          if [ -z "$FILES" ]; then echo "沒有變動的 JS/JSX，略過"; exit 0; fi
+          echo "Lint 變動檔："; echo "$FILES"
+          echo "$FILES" | xargs npx eslint

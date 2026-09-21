@@ -1,0 +1,44 @@
+[
+ {
+  "id": 1,
+  "title": "最新活動",
+  "image": "https://www.wineswee.com/storage/upload/news/image/2026-05-21/HEgneYtjqnbfjCrrfJ1PgqrET8Enq4D8vMBDXOYT.jpg",
+  "url": "https://www.wineswee.com/news/1"
+ },
+ {
+  "id": 2,
+  "title": "新品上架",
+  "image": "https://www.wineswee.com/storage/upload/news/image/2023-12-20/OireEG6Wo1muhJ2s7K3XksP3kkiIdGhsBjsqXeB8.jpg",
+  "url": "https://www.wineswee.com/news/2"
+ },
+ {
+  "id": 3,
+  "title": "宅配說明",
+  "image": "https://www.wineswee.com/storage/upload/news/image/2025-10-03/OWfzGNW5G2qoyP14QejODfDOvMRjqp5TnWrTRxB5.jpg",
+  "url": "https://www.wineswee.com/news/3"
+ },
+ {
+  "id": 4,
+  "title": "新手購物流程",
+  "image": "https://www.wineswee.com/storage/upload/news/image/2025-10-03/qvAuCyBd0XxrJDruXyN7oV77H2TOIbNvhokTpURJ.jpg",
+  "url": "https://www.wineswee.com/news/4"
+ },
+ {
+  "id": 5,
+  "title": "MENU菜單",
+  "image": "https://www.wineswee.com/storage/upload/news/image/2026-07-20/vYKDNGhmS4NME8XqYQx8EKdRVXCJ6OYN2ms53wXs.jpg",
+  "url": "https://www.wineswee.com/news/5"
+ },
+ {
+  "id": 6,
+  "title": "酒品知識專區",
+  "image": "https://www.wineswee.com/storage/upload/news/image/2025-11-06/9PlIhZHEMZNJg2EJ1nfFWXzUfAG7tjU6G3Nsdnnz.jpg",
+  "url": "https://www.wineswee.com/news/6"
+ },
+ {
+  "id": 7,
+  "title": "無限暢飲專區",
+  "image": "https://www.wineswee.com/storage/upload/news/image/2026-05-08/NjCLUpNayAhBkXBuxkKLkQOqbgdMWMM6qoUNwAgL.jpg",
+  "url": "https://www.wineswee.com/news/7"
+ }
+]

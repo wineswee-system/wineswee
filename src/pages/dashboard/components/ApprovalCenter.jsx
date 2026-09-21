@@ -1,0 +1,974 @@
+﻿import { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { supabase } from '../../../lib/supabase'
+import { useAuth } from '../../../contexts/AuthContext'
+import { usePendingApprovals } from '../../../lib/usePendingApprovals'
+import LoadingSpinner from '../../../components/LoadingSpinner'
+import ApprovalDetailModal from '../../../components/ApprovalDetailModal'
+import { buildFormChainSteps } from '../../../lib/buildChainSteps'
+import { toast } from '../../../lib/toast'
+import { confirm } from '../../../lib/confirm'
+import {
+  Users, Wallet, Calendar, ClipboardCheck, CalendarOff,
+  ChevronRight, CheckCircle2, Inbox, FileCheck, FileText, ShoppingCart, Search,
+} from 'lucide-react'
+
+// 已簽核 type → 路由 (對齊 GROUPS 的 route)，給 SignedView row 跳轉用
+const SIGNED_TYPE_ROUTE = {
+  leave: '/hr/leave', overtime: '/hr/overtime', trip: '/hr/travel',
+  correction: '/hr/punch-correction', expense: '/hr/expenses',
+  expense_request: '/hr/expense-requests',
+  resignation: '/hr/forms/resignation', loa: '/hr/forms/loa',
+  transfer: '/hr/forms/transfer', headcount: '/hr/forms/headcount',
+  form_submission: '/hr/forms/submissions',
+  off_request: '/hr/off-requests',
+  shift_swap: '/hr/shift-swaps',
+  task_confirmation: '/process/task-confirmations',
+  expense_settle: '/hr/expense-requests',
+  workflow: '/process/workflows',
+}
+const SIGNED_TYPE_LABEL = {
+  leave: '請假', overtime: '加班', trip: '出差', correction: '補打卡',
+  expense: '經常性費用', expense_request: '非經常性費用申請',
+  resignation: '離職', loa: '留停', transfer: '異動', headcount: '人力需求',
+  form_submission: '表單申請',
+  off_request: '希望休', shift_swap: '換班',
+  task_confirmation: '任務確認', expense_settle: '費用驗收',
+  workflow: '流程簽核',
+}
+
+/**
+ * 簽核中心面板 — 一進儀表板看到所有跨類型的待簽
+ *
+ * 4 大群組（人事 / 經費 / 排班 / 任務）× 子 tab。
+ * 點 row → 跳到對應 HR 頁面，自動 focus 該 row 開 detail modal。
+ *
+ * 對齊 LIFF Approve.jsx 結構，但 row 互動改成「導頁」而非 inline 操作
+ * （因 Web HR 頁已有更完整的 ApprovalDetailModal + ApprovalActionBar）。
+ */
+
+// ── 就地開明細 + 當場簽核（不跳 HR 頁）支援的類型 ──
+//   formType→form_chain_configs(live fallback用) / snap→snapshot request_type / source→加簽用表
+const INPLACE = {
+  leave:      { formType: 'leave',    snap: 'leave_request',    source: 'leave_requests',    title: '請假申請' },
+  overtime:   { formType: 'overtime', snap: 'overtime_request', source: 'overtime_requests', title: '加班申請' },
+  trip:       { formType: 'trip',     snap: 'trip',             source: 'business_trips',    title: '出差申請' },
+  correction: { formType: 'punch',    snap: 'correction',       source: 'clock_corrections', title: '補打卡申請' },
+}
+const hhmm = (t) => (t ? String(t).slice(0, 5) : '')
+
+// 各類型 → ApprovalDetailModal 左側欄位（含申請的開始/結束時間）
+function buildDetailFields(type, row) {
+  const rej = row.reject_reason ? [{ label: '駁回原因', value: row.reject_reason, multiline: true }] : []
+  const timeRange = (row.start_time || row.end_time) ? `${hhmm(row.start_time)}–${hhmm(row.end_time)}` : null
+  switch (type) {
+    case 'overtime':
+      return [
+        { label: '加班類型', value: row.is_pre_approval ? '預先申請' : '事後補登' },
+        { label: '加班日期', value: row.date },
+        { label: '加班時間', value: timeRange || '—' },
+        { label: '加班門市', value: row.store || '—' },
+        { label: '時數', value: `${row.hours || 0} 小時` },
+        { label: '折算方式', value: (row.ot_type === 'comp_time' || row.is_comp_leave) ? '換補休' : '換現金' },
+        { label: '事由', value: row.reason, multiline: true },
+        ...rej,
+      ]
+    case 'leave':
+      return [
+        { label: '假別', value: row.type || '請假' },
+        { label: '請假期間', value: `${row.start_date || ''} ~ ${row.end_date || row.start_date || ''}` },
+        { label: '時間', value: timeRange || '整天' },
+        { label: '時數 / 天數', value: (row.unit === '小時' || (row.hours && !row.days)) ? `${row.hours || 0} 小時` : `${row.days || 0} 天` },
+        { label: '事由', value: row.reason, multiline: true },
+        ...rej,
+      ]
+    case 'correction':
+      return [
+        { label: '類型', value: row.type || '補打卡' },
+        { label: '日期', value: row.date },
+        { label: '補登時間', value: hhmm(row.correction_time) || '—' },
+        { label: '原打卡時間', value: row.original_time ? hhmm(row.original_time) : '無紀錄' },
+        { label: '事由', value: row.reason, multiline: true },
+        ...rej,
+      ]
+    case 'trip':
+      return [
+        { label: '目的地', value: row.destination },
+        { label: '出差期間', value: `${row.start_date || ''} ~ ${row.end_date || ''}` },
+        { label: '目的', value: row.purpose, multiline: true },
+        ...(row.budget ? [{ label: '預算', value: `NT$ ${Number(row.budget).toLocaleString()}` }] : []),
+        ...rej,
+      ]
+    default:
+      return []
+  }
+}
+
+const GROUPS = [
+  {
+    key: 'hr', label: '人事', icon: Users, color: 'var(--accent-cyan)',
+    tabs: [
+      { key: 'leave',        label: '請假',   table: 'leave_requests',     route: '/hr/leave',             pendingStatus: '待審核' },
+      { key: 'overtime',     label: '加班',   table: 'overtime_requests',  route: '/hr/overtime',          pendingStatus: '待審核' },
+      { key: 'trip',         label: '出差',   table: 'business_trips',     route: '/hr/travel',            pendingStatus: '待審核' },
+      { key: 'correction',   label: '補打卡', table: 'clock_corrections',  route: '/hr/punch-correction',  pendingStatus: '待審核' },
+      { key: 'expense',      label: '經常性費用', table: 'expenses',       route: '/hr/expenses',          pendingStatus: '待審核' },
+    ],
+  },
+  {
+    key: 'finance', label: '經費', icon: Wallet, color: 'var(--accent-green)',
+    tabs: [
+      // docType:'expense' → 同表 expense_requests 但只收費用單（叫貨單 doc_type='order' 切到下面「叫貨」群組）
+      { key: 'expense_request', label: '申請', table: 'expense_requests', route: '/hr/expense-requests', pendingStatus: '申請中', docType: 'expense' },
+      { key: 'expense_settle',  label: '驗收', table: 'expense_requests', route: '/hr/expense-requests', pendingStatus: '待核銷', docType: 'expense' },
+    ],
+  },
+  {
+    key: 'order', label: '叫貨', icon: ShoppingCart, color: 'var(--accent-purple)',
+    tabs: [
+      // 同 expense_requests 表，doc_type='order' 才收；route 走叫貨頁
+      { key: 'order_request', label: '申請', table: 'expense_requests', route: '/process/order-requests', pendingStatus: '申請中', docType: 'order' },
+      { key: 'order_settle',  label: '驗收', table: 'expense_requests', route: '/process/order-requests', pendingStatus: '待核銷', docType: 'order' },
+    ],
+  },
+  {
+    key: 'people', label: '人事異動', icon: Calendar, color: 'var(--accent-purple)',
+    tabs: [
+      { key: 'resignation',   label: '離職',     table: 'resignation_requests',         route: '/hr/forms/resignation', pendingStatus: '申請中' },
+      { key: 'loa',           label: '留停',     table: 'leave_of_absence_requests',    route: '/hr/forms/loa',         pendingStatus: '申請中' },
+      { key: 'transfer',      label: '異動',     table: 'personnel_transfer_requests',  route: '/hr/forms/transfer',    pendingStatus: '申請中' },
+      { key: 'hire_approval', label: '錄取',     table: 'offer_letters',                route: '/hr/recruitment',       pendingStatus: '待審' },
+      { key: 'headcount',     label: '人力需求', table: 'headcount_requests',           route: '/hr/forms/headcount',   pendingStatus: '申請中' },
+    ],
+  },
+  {
+    key: 'schedule', label: '排班', icon: CalendarOff, color: 'var(--accent-orange)',
+    tabs: [
+      { key: 'off_request',        label: '希望休',     table: 'off_requests', route: '/hr/off-requests', pendingStatus: '待審核' },
+      { key: 'shift_swap_peer',    label: '換班-我同意', table: 'shift_swaps',  route: '/hr/shift-swaps',  pendingStatus: '待對方同意' },
+      { key: 'shift_swap_manager', label: '換班-我核准', table: 'shift_swaps',  route: '/hr/shift-swaps',  pendingStatus: '待主管核准' },
+    ],
+  },
+  {
+    key: 'task', label: '任務', icon: ClipboardCheck, color: 'var(--accent-cyan)',
+    tabs: [
+      { key: 'task_confirmation', label: '任務確認', table: 'task_confirmations', route: '/process/task-confirmations', pendingStatus: 'pending' },
+    ],
+  },
+  {
+    key: 'form', label: '自訂表單', icon: FileText, color: 'var(--accent-blue)',
+    tabs: [
+      { key: 'form_submission',         label: '表單申請', table: 'form_submissions',        route: '/hr/forms/submissions',   pendingStatus: '申請中' },
+      { key: 'goods_transfer_apply',    label: '調撥-申請', table: 'goods_transfer_requests', route: '/process/transfer-requests', pendingStatus: '申請審核中' },
+      { key: 'goods_transfer_receipt',  label: '調撥-驗收', table: 'goods_transfer_requests', route: '/process/transfer-requests', pendingStatus: '驗收審核中' },
+    ],
+  },
+]
+
+// tab.key → usePendingApprovals 的 key（核銷走 expense_settles 而非 expense_requests）
+const PERM_KEY_MAP = {
+  leave: 'leave_requests',
+  overtime: 'overtime_requests',
+  trip: 'business_trips',
+  correction: 'clock_corrections',
+  expense: 'expenses',
+  expense_request: 'expense_requests',
+  expense_settle: 'expense_settles',
+  order_request: 'expense_requests',   // 叫貨單同 expense_requests 表，撈同一份 id 後依 doc_type 過濾
+  order_settle:  'expense_settles',
+  resignation:   'resignation_requests',
+  loa:           'leave_of_absence_requests',
+  transfer:      'personnel_transfer_requests',
+  hire_approval: 'offer_letters',
+  headcount:     'headcount_requests',
+  form_submission: 'form_submissions',
+  // 排班 / 任務（2026-06-06 migration 20260606060000 補進 RPC）
+  off_request: 'off_requests',
+  shift_swap_peer: 'shift_swaps',
+  shift_swap_manager: 'shift_swaps',
+  task_confirmation: 'task_confirmations',
+  // 商品調撥（snapshot-aware，RPC 已支援）
+  goods_transfer_apply:   'goods_transfer_apply_requests',
+  goods_transfer_receipt: 'goods_transfer_receipt_requests',
+}
+
+// ── 待簽核 view (原 ApprovalCenter 內容 1:1 不動) ────────────────────────
+function PendingApprovalsView() {
+  const navigate = useNavigate()
+  const { profile } = useAuth()
+  const { pendingByTable, loading: pendingLoading, reload: reloadPending } = usePendingApprovals()
+  const [activeGroup, setActiveGroup] = useState('hr')
+  const [activeTab, setActiveTab] = useState('leave')
+  const [data, setData] = useState({})
+  const [loading, setLoading] = useState(true)
+
+  // 通過/退回後「立即」把該列從畫面移除(不等重撈);reloadPending 再刷新 pendingByTable
+  //   (否則 reload 會用舊的 pendingByTable id 把剛簽的單又撈回來 → 要手動刷新才消失)
+  const removeFromData = (tabKey, id) =>
+    setData(d => ({ ...d, [tabKey]: (d[tabKey] || []).filter(r => r.id !== id) }))
+
+  // 🪶 待我會簽的加簽（web_list_my_extra_assignments）
+  const [extras, setExtras] = useState([])
+  const loadExtras = async () => {
+    const { data: ex } = await supabase.rpc('web_list_my_extra_assignments')
+    setExtras(Array.isArray(ex) ? ex : [])
+  }
+  const approveExtra = async (ex) => {
+    const { error } = await supabase.rpc('process_extra_signer', {
+      p_extra_step_id: ex.id, p_processor_id: profile?.id, p_action: 'approve',
+    })
+    if (error) { toast.error('核准失敗：' + error.message); return }
+    toast.success('已核准會簽')
+    loadExtras(); reloadPending()
+  }
+  const rejectExtra = async (ex) => {
+    const reason = window.prompt('退回原因（必填）：')
+    if (!reason || !reason.trim()) return
+    const { error } = await supabase.rpc('process_extra_signer', {
+      p_extra_step_id: ex.id, p_processor_id: profile?.id, p_action: 'reject', p_reject_reason: reason.trim(),
+    })
+    if (error) { toast.error('退回失敗：' + error.message); return }
+    toast.success('已退回會簽')
+    loadExtras(); reloadPending()
+  }
+
+  const reload = async () => {
+    if (!profile?.organization_id) return
+    setLoading(true)
+    const allTabs = GROUPS.flatMap(g => g.tabs)
+    // RPC 已經幫我們算好「我這關該簽的 id 集合」(pendingByTable)，
+    // 直接用 .in('id', ids) 撈 row，不再 .eq('status') 全表掃，
+    // 避免細粒度 RLS 把 row 擋掉造成 badge 對得上但內容空。
+    const results = await Promise.all(
+      allTabs.map(t => {
+        const permKey = PERM_KEY_MAP[t.key] || t.table
+        const ids = pendingByTable[permKey] || []
+        if (ids.length === 0) return Promise.resolve({ data: [] })
+        return supabase.from(t.table)
+          .select(t.table === 'task_confirmations' ? '*, task:tasks(title, store, assignee)' : '*')
+          .in('id', ids)
+          .order('created_at', { ascending: false })
+      })
+    )
+    const map = {}
+    allTabs.forEach((t, i) => {
+      let rows = results[i].data || []
+      // shift_swap_peer / shift_swap_manager 共用 'shift_swaps' permKey，
+      // 撈回後依當前 sub-tab 的 pendingStatus 再 filter
+      if (t.key === 'shift_swap_peer' || t.key === 'shift_swap_manager') {
+        rows = rows.filter(r => r.status === t.pendingStatus)
+      }
+      // 費用 / 叫貨同表 expense_requests，撈回同一份 id 後依 doc_type 拆群組
+      if (t.docType) {
+        rows = rows.filter(r => (r.doc_type || 'expense') === t.docType)
+      }
+      map[t.key] = rows
+    })
+    setData(map)
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    if (pendingLoading) return
+    reload()
+    loadExtras()
+  }, [profile?.organization_id, pendingLoading, pendingByTable]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 計算各 tab / group 的 count
+  const tabCounts = {}
+  for (const g of GROUPS) {
+    for (const t of g.tabs) {
+      tabCounts[t.key] = (data[t.key] || []).length
+    }
+  }
+  const groupCounts = {}
+  for (const g of GROUPS) {
+    groupCounts[g.key] = g.tabs.reduce((s, t) => s + (tabCounts[t.key] || 0), 0)
+  }
+  const totalCount = Object.values(groupCounts).reduce((s, c) => s + c, 0)
+
+  // 自動切到有資料的 group
+  useEffect(() => {
+    if (loading || totalCount === 0) return
+    if (groupCounts[activeGroup] === 0) {
+      const target = GROUPS.find(g => groupCounts[g.key] > 0)
+      if (target) {
+        setActiveGroup(target.key)
+        setActiveTab(target.tabs[0].key)
+      }
+    }
+  }, [loading, totalCount]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // group 切換時把 tab 設為該 group 第一個
+  const changeGroup = (key) => {
+    setActiveGroup(key)
+    const firstTab = GROUPS.find(g => g.key === key)?.tabs[0]
+    if (firstTab) setActiveTab(firstTab.key)
+  }
+
+  const activeGroupDef = GROUPS.find(g => g.key === activeGroup)
+  const activeTabDef = activeGroupDef?.tabs.find(t => t.key === activeTab)
+  const rows = data[activeTab] || []
+  // 申請人姓名篩選(只看某人的單,避免其他人干擾);切 tab/group 會清空(見下方 effect)
+  const [nameQuery, setNameQuery] = useState('')
+  const filteredRows = nameQuery.trim()
+    ? rows.filter(r => (r.employee || '').toLowerCase().includes(nameQuery.trim().toLowerCase()))
+    : rows
+
+  // ── 就地開明細 modal（leave/overtime/trip/correction）；其餘仍跳 HR 頁 ──
+  const [detail, setDetail] = useState(null)        // { type, row, emp }
+  const [detailChain, setDetailChain] = useState([])
+  const [loadingChain, setLoadingChain] = useState(false)
+  const detailIdRef = useRef(null)
+
+  const openDetail = async (row, tabDef) => {
+    const type = tabDef.key
+    // 任務確認：不開簽核鏈 modal，直接開該任務的完整編輯頁(含簽核 tab 的核准/拒絕按鈕)
+    if (type === 'task_confirmation') {
+      // 跳「流程管理」開該任務所屬工作流(簽核者 RLS 已可讀該流程/任務);非工作流任務回任務頁
+      const tid = row.task_id || row.id
+      const { data: t } = await supabase.from('tasks').select('workflow_instance_id').eq('id', tid).maybeSingle()
+      if (t?.workflow_instance_id) navigate(`/process/workflows?focus=${t.workflow_instance_id}`)
+      else navigate(`/process/tasks?focus=${tid}&tab=approval`)
+      return
+    }
+    if (!INPLACE[type]) {
+      // 複雜類型（費用/調撥/人事異動…）仍跳 HR 頁，帶 focus + returnTo
+      navigate(`${tabDef.route}?focus=${row.id}&returnTo=/`)
+      return
+    }
+    const cfg = INPLACE[type]
+    detailIdRef.current = row.id
+    setDetail({ type, row, emp: null })
+    setDetailChain([])
+    setLoadingChain(true)
+
+    // 申請人卡片資料（頭像/職位/在職狀態/員編）
+    const { data: emp } = await supabase.from('employees')
+      .select('id, name, name_en, position, status, employee_number, avatar_url')
+      .eq('id', row.employee_id).maybeSingle()
+    if (detailIdRef.current === row.id) {
+      setDetail(d => (d && d.row.id === row.id ? { ...d, emp } : d))
+    }
+
+    // 補打卡照片:附件存在多型 form_attachments(form_type='correction'),撈出組 URL 讓審核人看得到
+    if (type === 'correction') {
+      supabase.from('form_attachments')
+        .select('storage_bucket, storage_path')
+        .eq('form_type', 'correction').eq('form_id', row.id)
+        .then(({ data: atts }) => {
+          if (detailIdRef.current !== row.id) return
+          const urls = (atts || [])
+            .map(a => supabase.storage.from(a.storage_bucket || 'attachments').getPublicUrl(a.storage_path).data?.publicUrl)
+            .filter(Boolean)
+          setDetail(d => (d && d.row.id === row.id ? { ...d, row: { ...d.row, attachments: urls } } : d))
+        })
+    }
+
+    // 簽核鏈（snapshot 優先，對齊 HR 頁顯示）
+    const steps = await buildFormChainSteps({
+      formType: cfg.formType,
+      organizationId: profile?.organization_id,
+      applicantName: row.employee,
+      applicantId: row.employee_id,
+      applicantCreatedAt: row.created_at,
+      recordStatus: row.status,
+      approverName: row.approver,
+      approvedAt: row.approved_at,
+      rejectReason: row.reject_reason,
+      requestType: cfg.snap,
+      requestId: row.id,
+      currentStep: row.current_step,
+    })
+    if (detailIdRef.current !== row.id) return
+    setDetailChain(steps)
+    setLoadingChain(false)
+  }
+  const closeDetail = () => { detailIdRef.current = null; setDetail(null); setDetailChain([]) }
+
+  // ── inline 逐張核准/退回（對齊 LIFF）+ 批次通過 ──
+  // 各 tab.key → 對應通過/退回 RPC。有支援的才顯示 inline 按鈕與勾選批次。
+  const approveAction = async (tabKey, id, action, reason) => {
+    if (['leave', 'overtime', 'trip', 'correction'].includes(tabKey))
+      return supabase.rpc('web_advance_chain_request', { p_type: tabKey, p_id: id, p_action: action, p_reason: reason })
+    if (['expense_request', 'order_request'].includes(tabKey))
+      return supabase.rpc('expense_request_step_advance', { p_id: id, p_action: action, p_reason: reason })
+    if (['expense_settle', 'order_settle'].includes(tabKey))
+      return supabase.rpc('expense_settle_step_advance', { p_id: id, p_action: action, p_reason: reason })
+    if (tabKey === 'expense')  // 經常性費用(報帳)：走逐關 step-advance（鏈安全）
+      return supabase.rpc('expense_step_advance', { p_id: id, p_action: action, p_reason: reason })
+    if (tabKey === 'hire_approval')  // 錄取：走專屬動態簽核鏈 advance
+      return supabase.rpc('advance_offer_approval', { p_offer_id: id, p_action: action, p_reason: reason })
+    return { error: { message: '此類型暫不支援 inline 簽核（請點開內容操作）' } }
+  }
+  const tabSupportsInline = (tabKey) =>
+    ['leave', 'overtime', 'trip', 'correction', 'expense', 'expense_request', 'order_request', 'expense_settle', 'order_settle', 'hire_approval'].includes(tabKey)
+  const isOk = (res) => !res.error && res.data?.ok !== false
+
+  const [rowBusy, setRowBusy] = useState(null)     // 正在處理的 id
+  const [selected, setSelected] = useState(() => new Set())
+  const [bulkBusy, setBulkBusy] = useState(false)
+  useEffect(() => { setSelected(new Set()); setNameQuery('') }, [activeTab, activeGroup])
+
+  const toggleSel = (id) => setSelected(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
+
+  const approveRow = async (row, action) => {
+    let reason = null
+    if (action === 'reject') {
+      reason = window.prompt('請輸入退回原因：')
+      if (reason === null) return   // 取消
+    }
+    setRowBusy(row.id)
+    const res = await approveAction(activeTab, row.id, action, reason)
+    setRowBusy(null)
+    if (!isOk(res)) { toast.error((action === 'approve' ? '通過' : '退回') + '失敗：' + (res.error?.message || res.data?.error || '未知')); return }
+    toast.success(action === 'approve' ? '已通過' : '已退回')
+    setSelected(s => { const n = new Set(s); n.delete(row.id); return n })
+    removeFromData(activeTab, row.id)   // 立即從畫面移除
+    reloadPending()                     // 刷新 pendingByTable(→ useEffect 觸發 reload 校正)
+  }
+
+  const bulkApprove = async () => {
+    const ids = filteredRows.filter(r => selected.has(r.id)).map(r => r.id)
+    if (!ids.length) return
+    if (!(await confirm({ message: `確定批次通過 ${ids.length} 張「${activeTabDef?.label}」？` }))) return
+    setBulkBusy(true)
+    let ok = 0, fail = 0
+    const doneIds = []
+    for (const id of ids) { const res = await approveAction(activeTab, id, 'approve', null); if (isOk(res)) { ok++; doneIds.push(id) } else fail++ }
+    setBulkBusy(false)
+    setSelected(new Set())
+    toast[fail ? 'warning' : 'success'](`批次通過完成：成功 ${ok}${fail ? `、失敗 ${fail}` : ''}`)
+    setData(d => ({ ...d, [activeTab]: (d[activeTab] || []).filter(r => !doneIds.includes(r.id)) }))  // 立即移除成功的
+    reloadPending()
+  }
+
+  if (loading) {
+    return (
+      <div style={{ padding: 40, textAlign: 'center' }}>
+        <LoadingSpinner />
+      </div>
+    )
+  }
+
+  // 🪶 加簽區塊（有待我會簽就顯示，獨立於一般 chain 待簽）
+  const extrasBlock = extras.length > 0 ? (
+    <div style={{
+      background: 'var(--bg-card)', border: '1px solid var(--accent-purple)',
+      borderRadius: 12, overflow: 'hidden', marginBottom: 12,
+    }}>
+      <div style={{ padding: '10px 16px', background: 'var(--accent-purple-dim)', color: 'var(--accent-purple)', fontWeight: 700, fontSize: 14 }}>
+        🪶 待我會簽的加簽（{extras.length}）
+      </div>
+      {extras.map(ex => (
+        <div key={ex.id} style={{
+          display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px',
+          borderTop: '1px solid var(--border-subtle)',
+        }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>
+              {ex.form_label} <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>#{ex.source_id}</span>
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
+              {ex.requester_name} 發起{ex.reason ? ` · ${ex.reason}` : ''}
+            </div>
+          </div>
+          <button onClick={() => approveExtra(ex)} style={{
+            padding: '6px 14px', borderRadius: 8, border: 'none', cursor: 'pointer',
+            background: 'var(--accent-green)', color: '#fff', fontSize: 13, fontWeight: 600,
+          }}>核准</button>
+          <button onClick={() => rejectExtra(ex)} style={{
+            padding: '6px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600,
+            background: 'transparent', color: 'var(--accent-red)', border: '1px solid var(--accent-red)',
+          }}>退回</button>
+        </div>
+      ))}
+    </div>
+  ) : null
+
+  if (totalCount === 0 && extras.length === 0) {
+    return (
+      <div style={{
+        background: 'var(--bg-card)', border: '1px solid var(--border-medium)',
+        borderRadius: 12, padding: '60px 24px', textAlign: 'center',
+      }}>
+        <CheckCircle2 size={48} style={{ color: 'var(--accent-green)', marginBottom: 12 }} />
+        <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)' }}>
+          🎉 太好了，你沒有待簽核的單
+        </div>
+        <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 6 }}>
+          所有跨類型的待簽都會出現在這裡
+        </div>
+      </div>
+    )
+  }
+
+  if (totalCount === 0) {
+    return <div>{extrasBlock}</div>
+  }
+
+  return (
+    <>
+    {extrasBlock}
+    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 12, overflow: 'hidden' }}>
+      {/* Group tabs（橫排）*/}
+      <div style={{
+        display: 'flex', gap: 0,
+        borderBottom: '1px solid var(--border-subtle)',
+        background: 'var(--bg-secondary)',
+      }}>
+        {GROUPS.map(g => {
+          const Icon = g.icon
+          const count = groupCounts[g.key]
+          const isActive = g.key === activeGroup
+          return (
+            <button key={g.key} onClick={() => changeGroup(g.key)} style={{
+              flex: 1, padding: '12px 8px',
+              background: isActive ? 'var(--bg-card)' : 'transparent',
+              border: 'none', cursor: 'pointer',
+              borderBottom: isActive ? `3px solid ${g.color}` : '3px solid transparent',
+              color: isActive ? g.color : 'var(--text-muted)',
+              fontSize: 13, fontWeight: 700,
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6,
+              position: 'relative',
+              transition: 'all .15s',
+            }}>
+              <Icon size={20} />
+              <span>{g.label}</span>
+              {count > 0 && (
+                <span style={{
+                  position: 'absolute', top: 6, right: 8,
+                  background: g.color, color: '#fff',
+                  fontSize: 11, fontWeight: 700,
+                  padding: '1px 6px', borderRadius: 10, minWidth: 18, textAlign: 'center',
+                }}>{count}</span>
+              )}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Sub-tabs */}
+      {activeGroupDef && activeGroupDef.tabs.length > 1 && (
+        <div style={{
+          display: 'flex', gap: 4, padding: '8px 16px',
+          borderBottom: '1px solid var(--border-subtle)',
+          overflowX: 'auto',
+        }}>
+          {activeGroupDef.tabs.map(t => {
+            const isActive = t.key === activeTab
+            const cnt = tabCounts[t.key]
+            return (
+              <button key={t.key} onClick={() => setActiveTab(t.key)} style={{
+                padding: '6px 12px', borderRadius: 16,
+                background: isActive ? activeGroupDef.color : 'transparent',
+                color: isActive ? '#fff' : 'var(--text-muted)',
+                border: '1px solid ' + (isActive ? activeGroupDef.color : 'var(--border-subtle)'),
+                fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: 6,
+                whiteSpace: 'nowrap',
+              }}>
+                {t.label}
+                {cnt > 0 && (
+                  <span style={{
+                    background: isActive ? 'rgba(255,255,255,0.25)' : activeGroupDef.color,
+                    color: '#fff',
+                    fontSize: 11, fontWeight: 700,
+                    padding: '1px 6px', borderRadius: 8,
+                  }}>{cnt}</span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Row list */}
+      <div style={{ padding: 16 }}>
+        {/* 申請人姓名篩選 — 只看某個人的單 */}
+        {rows.length > 0 && (
+          <div style={{ position: 'relative', marginBottom: 10 }}>
+            <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
+            <input
+              value={nameQuery}
+              onChange={e => setNameQuery(e.target.value)}
+              placeholder="篩選申請人姓名…"
+              style={{ width: '100%', boxSizing: 'border-box', padding: '8px 30px', borderRadius: 8, border: '1px solid var(--border-medium)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: 13 }}
+            />
+            {nameQuery && (
+              <button onClick={() => setNameQuery('')} title="清除篩選" style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 14, lineHeight: 1 }}>✕</button>
+            )}
+          </div>
+        )}
+        {rows.length === 0 ? (
+          <div style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+            此類別目前沒有待簽核
+          </div>
+        ) : filteredRows.length === 0 ? (
+          <div style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+            查無「{nameQuery}」的待簽單
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {tabSupportsInline(activeTab) && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '2px 2px 6px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                  <input type="checkbox"
+                    checked={selected.size > 0 && selected.size === filteredRows.length}
+                    ref={el => { if (el) el.indeterminate = selected.size > 0 && selected.size < filteredRows.length }}
+                    onChange={e => setSelected(e.target.checked ? new Set(filteredRows.map(r => r.id)) : new Set())} />
+                  全選{nameQuery ? '(篩選後)' : ''}
+                </label>
+                {selected.size > 0 && (
+                  <button onClick={bulkApprove} disabled={bulkBusy} style={{
+                    marginLeft: 'auto', padding: '6px 14px', borderRadius: 8, border: 'none',
+                    cursor: bulkBusy ? 'default' : 'pointer', background: 'var(--accent-green)', color: '#fff',
+                    fontSize: 13, fontWeight: 700, opacity: bulkBusy ? 0.6 : 1,
+                  }}>{bulkBusy ? '處理中…' : `批次通過 (${selected.size})`}</button>
+                )}
+              </div>
+            )}
+            {filteredRows.map(row => (
+              <ApprovalRow
+                key={`${activeTab}-${row.id}`}
+                row={row} tabDef={activeTabDef}
+                groupColor={activeGroupDef.color}
+                onClick={() => openDetail(row, activeTabDef)}
+                inline={tabSupportsInline(activeTab)}
+                checked={selected.has(row.id)}
+                onToggle={() => toggleSel(row.id)}
+                onApprove={() => approveRow(row, 'approve')}
+                onReject={() => approveRow(row, 'reject')}
+                busy={rowBusy === row.id}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+
+    {/* ─── 就地明細 + 當場簽核 modal ─── */}
+    {detail && INPLACE[detail.type] && (
+      <ApprovalDetailModal
+        open={!!detail}
+        onClose={closeDetail}
+        docTitle={detail.type === 'overtime' && detail.row.is_pre_approval ? '預先加班申請' : INPLACE[detail.type].title}
+        docNo={detail.row.id}
+        status={detail.row.status}
+        applicant={{
+          name: detail.row.employee,
+          name_en: detail.emp?.name_en,
+          position: detail.emp?.position,
+          status: detail.emp?.status,
+          employee_no: detail.emp?.employee_number || (detail.row.employee_id ? `ID ${detail.row.employee_id}` : undefined),
+          avatar_url: detail.emp?.avatar_url,
+        }}
+        fields={buildDetailFields(detail.type, detail.row)}
+        attachments={(detail.row.attachments || []).map(url => ({
+          url,
+          name: decodeURIComponent(String(url).split('?')[0].split('/').pop() || '附件'),
+        }))}
+        createdAt={detail.row.created_at}
+        chainSteps={loadingChain ? [{ label: '載入中…', name: '', status: 'pending' }] : detailChain}
+        requestType={detail.type}
+        requestId={detail.row.id}
+        actions={{
+          sourceTable: INPLACE[detail.type].source,
+          row: detail.row,
+          onApprove: async () => {
+            const res = await approveAction(detail.type, detail.row.id, 'approve', null)
+            if (!isOk(res)) { toast.error('通過失敗：' + (res.error?.message || res.data?.error || '未知')); throw new Error('approve failed') }
+            toast.success('已通過')
+            removeFromData(detail.type, detail.row.id)   // 立即從清單移除
+          },
+          onReject: async (_r, reason) => {
+            const res = await approveAction(detail.type, detail.row.id, 'reject', reason)
+            if (!isOk(res)) { toast.error('退回失敗：' + (res.error?.message || res.data?.error || '未知')); throw new Error('reject failed') }
+            toast.success('已退回')
+            removeFromData(detail.type, detail.row.id)
+          },
+          onChanged: () => { closeDetail(); reloadPending(); loadExtras() },
+        }}
+      />
+    )}
+
+    </>
+  )
+}
+
+// 各表的 title / subtitle 萃取
+function getRowDisplay(row, tabKey) {
+  switch (tabKey) {
+    case 'leave':
+      return {
+        title: `${row.employee} · ${row.type || '請假'}`,
+        subtitle: `${row.start_date || ''} ~ ${row.end_date || row.start_date || ''}`,
+      }
+    case 'overtime':
+      return {
+        title: `${row.employee} · 加班 ${row.hours || 0}h`,
+        subtitle: row.date,
+      }
+    case 'trip':
+      return {
+        title: `${row.employee} · ${row.destination || '出差'}`,
+        subtitle: `${row.start_date || ''} ~ ${row.end_date || ''}`,
+      }
+    case 'correction':
+      return {
+        title: `${row.employee} · ${row.type || '補打卡'}`,
+        subtitle: `${row.date || ''} ${row.correction_time || ''}`,
+      }
+    case 'expense':
+      return {
+        title: `${row.employee} · ${row.title || '費用報帳'}`,
+        subtitle: `NT$ ${Number(row.amount || 0).toLocaleString()}`,
+      }
+    case 'expense_request':
+      return {
+        title: `${row.employee} · ${row.title || '費用申請'}`,
+        subtitle: `NT$ ${Number(row.estimated_amount || 0).toLocaleString()}`,
+      }
+    case 'expense_settle':
+      return {
+        title: `${row.employee} · 驗收 ${row.title || ''}`,
+        subtitle: `實際 NT$ ${Number(row.actual_amount || row.estimated_amount || 0).toLocaleString()}`,
+      }
+    case 'order_request':
+      return {
+        title: `${row.employee} · 叫貨 ${row.title || ''}`,
+        subtitle: `${row.supplier ? row.supplier + ' · ' : ''}預估 NT$ ${Number(row.estimated_amount || 0).toLocaleString()}`,
+      }
+    case 'order_settle':
+      return {
+        title: `${row.employee} · 驗收 ${row.title || ''}`,
+        subtitle: `實收 NT$ ${Number(row.actual_amount || row.estimated_amount || 0).toLocaleString()}`,
+      }
+    case 'loa':
+      return {
+        title: `${row.employee?.name || '—'} · 留職停薪`,
+        subtitle: `${row.start_date || ''} ~ ${row.planned_end_date || ''}（${row.reason_type || '—'}）`,
+      }
+    case 'off_request':
+      return {
+        title: `${row.employee || '—'} · 希望休`,
+        subtitle: row.date || '—',
+      }
+    case 'shift_swap_peer':
+    case 'shift_swap_manager':
+      return {
+        title: `換班申請 #${row.id}`,
+        subtitle: `${row.source_date || ''} ↔ ${row.target_date || ''}`,
+      }
+    case 'task_confirmation':
+      return {
+        title: row.task?.title || row.task_title || `任務 #${row.task_id || row.id}`,
+        subtitle: `第 ${(row.step_order ?? 0) + 1} 關 · 任務 #${row.task_id || row.id}`,
+      }
+    case 'resignation':
+      return {
+        title: `${row.employee?.name || '—'} · 離職申請`,
+        subtitle: `預計 ${row.planned_resign_date || '—'}`,
+      }
+    case 'transfer':
+      return {
+        title: `${row.employee?.name || '—'} · ${row.transfer_type || '人事異動'}`,
+        subtitle: `生效 ${row.effective_date || '—'}`,
+      }
+    case 'headcount':
+      return {
+        title: `${row.job_title || '人力需求'} × ${row.headcount || 0} 人`,
+        subtitle: row.form_no || `#${row.id}`,
+      }
+    case 'form_submission':
+      return {
+        title: row.template?.name || row.template_name || `自訂表單 #${row.id}`,
+        subtitle: `申請人：${row.applicant?.name || row.applicant_name || '—'}`,
+      }
+    default:
+      return { title: `#${row.id}`, subtitle: '' }
+  }
+}
+
+function ApprovalRow({ row, tabDef, groupColor, onClick, inline, checked, onToggle, onApprove, onReject, busy }) {
+  const display = getRowDisplay(row, tabDef.key)
+  const daysOpen = row.created_at
+    ? Math.floor((Date.now() - new Date(row.created_at).getTime()) / 86400000)
+    : 0
+  const isOverdue = daysOpen >= 3
+  const stop = (e) => e.stopPropagation()
+
+  return (
+    <div onClick={onClick} style={{
+      padding: 12, borderRadius: 10,
+      border: '1px solid var(--border-subtle)',
+      background: 'var(--bg-secondary)',
+      cursor: 'pointer',
+      transition: 'border-color .12s, background .12s',
+      display: 'flex', alignItems: 'center', gap: 12,
+    }}
+    onMouseEnter={(e) => { e.currentTarget.style.borderColor = groupColor }}
+    onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border-subtle)' }}>
+      {inline && (
+        <input type="checkbox" checked={!!checked} onClick={stop} onChange={onToggle}
+          style={{ flexShrink: 0, width: 16, height: 16, cursor: 'pointer' }} />
+      )}
+      <span style={{
+        fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 6,
+        background: groupColor, color: '#fff', flexShrink: 0,
+      }}>{tabDef.label}</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
+          {display.title}
+        </div>
+        {display.subtitle && (
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+            {display.subtitle}
+          </div>
+        )}
+      </div>
+      {isOverdue && (
+        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent-red)', flexShrink: 0 }}>
+          🚨 {daysOpen} 天
+        </span>
+      )}
+      {inline ? (
+        <div style={{ display: 'flex', gap: 6, flexShrink: 0 }} onClick={stop}>
+          <button onClick={onApprove} disabled={busy} style={{
+            padding: '5px 12px', borderRadius: 8, border: 'none', cursor: busy ? 'default' : 'pointer',
+            background: 'var(--accent-green)', color: '#fff', fontSize: 12, fontWeight: 700, opacity: busy ? 0.6 : 1,
+          }}>{busy ? '…' : '通過'}</button>
+          <button onClick={onReject} disabled={busy} style={{
+            padding: '5px 12px', borderRadius: 8, cursor: busy ? 'default' : 'pointer',
+            background: 'transparent', color: 'var(--accent-red)', border: '1px solid var(--accent-red)',
+            fontSize: 12, fontWeight: 600, opacity: busy ? 0.6 : 1,
+          }}>退回</button>
+        </div>
+      ) : (
+        <ChevronRight size={16} color="var(--text-muted)" />
+      )}
+    </div>
+  )
+}
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// 已簽核 view — 從 web_list_my_signed_approvals RPC 拉
+// ════════════════════════════════════════════════════════════════════════════
+function SignedApprovalsView() {
+  const navigate = useNavigate()
+  const today = new Date()
+  const [yearMonth, setYearMonth] = useState(`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`)
+  const [list, setList] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    setLoading(true)
+    supabase.rpc('web_list_my_signed_approvals', { p_year_month: yearMonth })
+      .then(({ data }) => {
+        if (data?.error) { console.warn('web_list_my_signed_approvals:', data.error); setList([]) }
+        else setList(Array.isArray(data) ? data : [])
+        setLoading(false)
+      })
+  }, [yearMonth])
+
+  const handleRowClick = (row) => {
+    const route = SIGNED_TYPE_ROUTE[row.source_type]
+    if (route) navigate(`${route}?focus=${row.source_id}`)
+  }
+
+  return (
+    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-medium)', borderRadius: 12, padding: 16 }}>
+      {/* 月份切換 */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>{yearMonth} 我已簽核 · {list.length} 件</div>
+        <input className="form-input" type="month" value={yearMonth}
+          onChange={e => setYearMonth(e.target.value)}
+          style={{ width: 160 }} />
+      </div>
+
+      {loading ? (
+        <div style={{ padding: 40, textAlign: 'center' }}><LoadingSpinner /></div>
+      ) : list.length === 0 ? (
+        <div style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+          這個月你還沒簽核過任何單
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {list.map((row, i) => {
+            const actionLabel = row.my_action === 'approved' ? '✓ 核准' : '✗ 退回'
+            const actionColor = row.my_action === 'approved' ? 'var(--accent-green)' : 'var(--accent-red)'
+            const typeLabel = SIGNED_TYPE_LABEL[row.source_type] || row.source_type
+            return (
+              <div key={`${row.source_type}-${row.source_id}-${i}`} onClick={() => handleRowClick(row)} style={{
+                padding: 12, borderRadius: 10,
+                border: '1px solid var(--border-subtle)',
+                background: 'var(--bg-secondary)',
+                cursor: SIGNED_TYPE_ROUTE[row.source_type] ? 'pointer' : 'default',
+                display: 'flex', alignItems: 'center', gap: 12,
+              }}>
+                <span style={{
+                  fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 6,
+                  background: row.is_extra ? 'var(--accent-orange)' : 'var(--accent-purple)',
+                  color: '#fff', flexShrink: 0,
+                }}>{row.is_extra ? '🪶 加簽' : typeLabel}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
+                    {row.applicant_name || '—'} · {row.summary || `#${row.source_id}`}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                    {row.step_label || '—'} · {row.signed_at ? new Date(row.signed_at).toLocaleString('zh-TW', { dateStyle: 'short', timeStyle: 'short' }) : ''}
+                    · 整單狀態 {row.current_status || '—'}
+                  </div>
+                </div>
+                <span style={{ fontSize: 11, fontWeight: 700, color: actionColor }}>{actionLabel}</span>
+                {SIGNED_TYPE_ROUTE[row.source_type] && <ChevronRight size={16} color="var(--text-muted)" />}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// Outer wrapper — 切換「待簽核 / 已簽核」最外層 tab
+// ════════════════════════════════════════════════════════════════════════════
+export default function ApprovalCenter() {
+  const [outerTab, setOuterTab] = useState('pending')
+
+  return (
+    <div>
+      {/* 外層 tab bar */}
+      <div style={{
+        display: 'flex', gap: 0, marginBottom: 12,
+        borderBottom: '2px solid var(--border-subtle)',
+      }}>
+        {[
+          { key: 'pending', label: '待簽核', icon: Inbox },
+          { key: 'signed',  label: '已簽核', icon: FileCheck },
+        ].map(t => {
+          const Icon = t.icon
+          const isActive = outerTab === t.key
+          return (
+            <button key={t.key} onClick={() => setOuterTab(t.key)} style={{
+              padding: '10px 20px', border: 'none', background: 'transparent', cursor: 'pointer',
+              fontSize: 14, fontWeight: 700,
+              color: isActive ? 'var(--accent-cyan)' : 'var(--text-muted)',
+              borderBottom: isActive ? '2px solid var(--accent-cyan)' : '2px solid transparent',
+              marginBottom: -2,
+              display: 'flex', alignItems: 'center', gap: 6,
+            }}>
+              <Icon size={16} />
+              {t.label}
+            </button>
+          )
+        })}
+      </div>
+
+      {outerTab === 'pending' ? <PendingApprovalsView /> : <SignedApprovalsView />}
+    </div>
+  )
+}

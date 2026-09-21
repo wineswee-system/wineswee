@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:2500px; height:1686px; }
+  body { font-family:"Microsoft JhengHei","Noto Sans TC","PingFang TC",sans-serif; }
+  .grid {
+    width:2500px; height:1686px;
+    display:grid;
+    grid-template-columns:repeat(3, 1fr);
+    grid-template-rows:repeat(2, 1fr);
+  }
+  .cell { display:flex; flex-direction:column; align-items:center; justify-content:center; }
+  .tile {
+    width:372px; height:372px; border-radius:88px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .tile svg { width:228px; height:228px; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+  .label { margin-top:46px; font-size:96px; font-weight:800; color:#2d3142; letter-spacing:4px; }
+  .sub   { margin-top:14px; font-size:38px; font-weight:700; color:#9aa0ab; letter-spacing:6px; }
+
+  /* teal 打卡 */
+  .c1 { background:#d6f0ec; } .c1 .tile { background:#bfe7e0; } .c1 .tile svg { stroke:#14a99a; }
+  /* purple 補打卡 */
+  .c2 { background:#eae4f6; } .c2 .tile { background:#d9ccef; } .c2 .tile svg { stroke:#8b5cf6; }
+  /* blue 請假 */
+  .c3 { background:#e0e8fb; } .c3 .tile { background:#cdd9f6; } .c3 .tile svg { stroke:#3f6fe3; }
+  /* orange 加班 */
+  .c4 { background:#fcebd4; } .c4 .tile { background:#f9dcb4; } .c4 .tile svg { stroke:#ef8a22; }
+  /* green 薪資 */
+  .c5 { background:#dcefe1; } .c5 .tile { background:#c7e6d0; } .c5 .tile svg { stroke:#1fa257; }
+  /* rose HR */
+  .c6 { background:#fbe2e2; } .c6 .tile { background:#f6cfce; } .c6 .tile svg { stroke:#e05a5a; }
+</style>
+</head>
+<body>
+  <div class="grid">
+
+    <div class="cell c1">
+      <div class="tile">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3.2 2"/></svg>
+      </div>
+      <div class="label">打卡</div>
+      <div class="sub">CLOCK</div>
+    </div>
+
+    <div class="cell c2">
+      <div class="tile">
+        <svg viewBox="0 0 24 24"><path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1"/><path d="M3 4v3.6h3.6"/><path d="M12 8.2V12l2.8 1.7"/></svg>
+      </div>
+      <div class="label">忘打卡</div>
+      <div class="sub">MISSED</div>
+    </div>
+
+    <div class="cell c3">
+      <div class="tile">
+        <svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 12.5h6M9 16h4"/></svg>
+      </div>
+      <div class="label">請假</div>
+      <div class="sub">LEAVE</div>
+    </div>
+
+    <div class="cell c4">
+      <div class="tile">
+        <svg viewBox="0 0 24 24"><circle cx="10.8" cy="11" r="7.3"/><path d="M10.8 7v4l2.7 1.7"/><path d="M18.8 15.5v5M16.3 18h5"/></svg>
+      </div>
+      <div class="label">申請加班</div>
+      <div class="sub">OVERTIME</div>
+    </div>
+
+    <div class="cell c5">
+      <div class="tile">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 6.5v11M14.7 9.2c0-1.1-1.2-1.9-2.7-1.9s-2.7.8-2.7 1.9 1.2 1.6 2.7 1.9 2.7.8 2.7 1.9-1.2 1.9-2.7 1.9-2.7-.8-2.7-1.9"/></svg>
+      </div>
+      <div class="label">薪資袋</div>
+      <div class="sub">PAY</div>
+    </div>
+
+    <div class="cell c6">
+      <div class="tile">
+        <svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.6"/></svg>
+      </div>
+      <div class="label">更多</div>
+      <div class="sub">MORE</div>
+    </div>
+
+  </div>
+</body>
+</html>

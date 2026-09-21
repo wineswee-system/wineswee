@@ -1,0 +1,990 @@
+﻿import { useState, useEffect, useMemo } from 'react'
+import { Search, Shield, ShieldOff, CheckCircle2, XCircle, AlertCircle, RotateCcw, Plus, Minus, LogOut } from 'lucide-react'
+import { getTenantOrgId } from '../../lib/events/middleware/tenantContext'
+import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../contexts/AuthContext'
+import LoadingSpinner from '../../components/LoadingSpinner'
+import { toast } from '../../lib/toast'
+import PermissionModuleSection from './components/PermissionModuleSection'
+import { SOURCE_BADGE } from './components/PermissionFeatureRow'
+import { majorGroups, NAV_ENTRIES, navTopCode, navEntryCode } from '../../components/sidebar/sidebarConfig'
+
+// ── 逐入口導航權限（自動從 sidebarConfig 生成，每 top tab / 每 leaf 一個開關）──
+// 用 view 欄當「可見」單一 toggle；只在 DB 有該碼時才顯示（migration 20260806120000 上線後）。
+const NAV_GROUP_LABEL = Object.fromEntries(majorGroups.map(g => [g.key, g.label]))
+const NAV_FEATURES = [
+  ...majorGroups.map(g => ({ module: '導航 · 上排（整組）', label: g.label, view: navTopCode(g.key), edit: null })),
+  ...NAV_ENTRIES.map(e => ({ module: '導航 · ' + (NAV_GROUP_LABEL[e.topKey] || e.topKey), label: e.label, view: navEntryCode(e.path), edit: null })),
+]
+
+const ROLE_LABEL = {
+  store_staff:  '門市人員',
+  office_staff: '行政人員',
+  manager:      '主管',
+  admin:        'HR 管理員',
+  super_admin:  '超級管理員',
+  employee:     '行政人員',
+}
+const roleColor = {
+  super_admin: 'badge-danger',
+  admin:       'badge-purple',
+  manager:     'badge-info',
+  office_staff:'badge-neutral',
+  store_staff: 'badge-neutral',
+  employee:    'badge-neutral',
+}
+
+// ── 主功能配置（104 風格）──
+// 每個 feature 對應 1 個查詢 perm 和/或 1 個修改 perm。
+// 沒有 view = 該功能本身就是動作（如「假單核可」），只顯示「修改」
+// 沒有 edit = 該功能只能查看（如「全公司薪資」），只顯示「查詢」
+// 規則：點修改 ON → 自動帶上查詢 ON；點查詢 OFF → 自動帶上修改 OFF
+const FEATURES = [
+  // 組織架構
+  { module: '組織架構', label: '員工基本資料',   view: 'org.employee.view',     edit: 'org.employee.edit' },
+  { module: '組織架構', label: '員工完整個資',   view: 'org.employee.view_full', edit: null },
+  { module: '組織架構', label: '刪除員工 / 離職', view: null, edit: 'org.employee.delete' },
+  { module: '組織架構', label: '組織架構編輯',   view: null, edit: 'org.structure.edit' },
+  // 出勤與請假
+  { module: '出勤與請假', label: '打卡紀錄', view: 'attendance.view_all', edit: 'attendance.edit' },
+  { module: '出勤與請假', label: '補打卡編輯（任意員工）', view: null, edit: 'clock.correction_edit' },
+  { module: '出勤與請假', label: '假單核可', view: null, edit: 'leave.approve' },
+  { module: '出勤與請假', label: '加班核可', view: null, edit: 'ot.approve' },
+  { module: '出勤與請假', label: '出差核可', view: null, edit: 'trip.approve' },
+  { module: '出勤與請假', label: '假別設定', view: null, edit: 'leave_type.edit' },
+  // 排班管理
+  { module: '排班管理', label: '排班',            view: 'schedule.view_all', edit: 'schedule.edit' },
+  { module: '排班管理', label: '排班演算法',      view: null, edit: 'schedule.algo' },
+  { module: '排班管理', label: '排班規則 / 班別', view: null, edit: 'schedule.rule_edit' },
+  { module: '排班管理', label: '鎖定 / 解鎖班表', view: null, edit: 'schedule.lock' },
+  // HR 表單
+  { module: 'HR 表單', label: '審核 HR 表單',     view: 'hr_form.view', edit: 'hr_form.approve' },
+  { module: 'HR 表單', label: 'HR 表單範本',      view: null,           edit: 'hr_form.template_edit' },
+  { module: 'HR 表單', label: '刪除表單申請', view: null,           edit: 'hr_form.delete_all' },
+  { module: 'HR 表單', label: '還原已刪除單據', view: null,         edit: 'hr_form.restore' },
+  // 薪酬與福利
+  { module: '薪酬與福利', label: '部門薪資',   view: 'salary.view_dept',     edit: null },
+  { module: '薪酬與福利', label: '全公司薪資', view: 'salary.view_all',      edit: null },
+  { module: '薪酬與福利', label: '薪資結構',   view: null,                   edit: 'salary.edit' },
+  { module: '薪酬與福利', label: '批次計薪',   view: null,                   edit: 'salary.compute' },
+  { module: '薪酬與福利', label: '薪資發放 / 銀行帳號 / 代發薪檔', view: null,  edit: 'salary.pay' },
+  { module: '薪酬與福利', label: '匯出薪資報表',   view: null,                   edit: 'salary.export' },
+  { module: '薪酬與福利', label: '發送薪資條 (LINE)', view: null,                edit: 'salary.send_payslip' },
+  { module: '薪酬與福利', label: '資遣',       view: 'severance.view',       edit: 'severance.execute' },
+  { module: '薪酬與福利', label: '法扣',       view: 'legal_deduction.view', edit: 'legal_deduction.edit' },
+  { module: '薪酬與福利', label: '績效獎金',   view: 'bonus.view',           edit: 'bonus.compute' },
+  { module: '薪酬與福利', label: '門市業績獎金', view: null,                 edit: 'bonus.store.compute' },
+  { module: '薪酬與福利', label: '勞健保級距', view: 'insurance_rate.view',  edit: 'insurance_rate.edit' },
+  // 人才發展
+  { module: '人才發展', label: '招募管理',   view: 'recruit.view',   edit: 'recruit.manage' },
+  { module: '人才發展', label: '教育訓練',   view: 'training.view',  edit: 'training.manage' },
+  { module: '人才發展', label: '試用期評核', view: 'probation.view', edit: 'probation.evaluate' },
+  // 員工體驗
+  { module: '員工體驗', label: '滿意度調查結果', view: 'survey.view_result', edit: null },
+  { module: '員工體驗', label: 'AI 離職預測',    view: 'ai_attrition.view',  edit: null },
+  // 行政庶務
+  { module: '行政庶務', label: '費用申請審核', view: 'expense.view',         edit: 'expense.approve' },
+  { module: '行政庶務', label: '費用申請-檢視全部人', view: 'expense.view_all', edit: null },
+  { module: '行政庶務', label: '費用驗收', view: 'expense.settle_view',  edit: 'expense.settle' },
+  { module: '行政庶務', label: '經常性費用', view: 'expense.recurring_view', edit: 'expense.recurring_approve' },
+  { module: '行政庶務', label: '叫貨申請單-檢視全部人', view: 'order.view_all', edit: null },
+  { module: '行政庶務', label: '會計科目',     view: 'expense.account_view', edit: 'expense.account_edit' },
+  { module: '行政庶務', label: '文件',         view: 'doc.view',             edit: 'doc.delete' },
+  // 專案流程
+  { module: '專案流程', label: '專案',         view: 'project.view',         edit: 'project.manage' },
+  { module: '專案流程', label: '任務指派',     view: null,                   edit: 'task.assign' },
+  { module: '專案流程', label: '門市稽核-檢視全部人', view: 'liff.store_audit.view_all', edit: null },
+  { module: '專案流程', label: '門市稽核-管理（退回重編 / 刪除）', view: null, edit: 'store_audit.manage' },
+  { module: '專案流程', label: '簽核鏈設定',   view: 'approval_chain.view',  edit: 'approval_chain.edit' },
+  { module: '專案流程', label: '簽核代理設定', view: null,                   edit: 'approval.delegate_manage' },
+  { module: '專案流程', label: '收款（訂金 / 加盟金）', view: null,          edit: 'collection.manage' },
+  { module: '專案流程', label: '裝潢報價',       view: null,                   edit: 'renovation.manage' },
+  { module: '專案流程', label: '維修單（工務）', view: null,                   edit: 'repair_order.manage' },
+  { module: '專案流程', label: '線上預購 / 出貨SOP', view: null,                edit: 'preorder.manage' },
+  // 系統設定
+  { module: '系統設定', label: '使用者管理',     view: 'system.user_view',       edit: 'system.user_manage' },
+  { module: '系統設定', label: '員工個別權限',   view: 'system.permission_view', edit: 'system.permission_manage' },
+  { module: '系統設定', label: '操作紀錄',       view: 'audit.view',             edit: null },
+  { module: '系統設定', label: '系統設定編輯',   view: null,                     edit: 'system.admin' },
+  { module: '系統設定', label: '租戶管理',       view: null,                     edit: 'system.tenant_manage' },
+  // 財務（未交付，super_admin 才看得到）
+  { module: '財務', label: '財務查看', view: 'finance.view', edit: null },
+  { module: '財務', label: '財務編輯', view: null,           edit: 'finance.edit' },
+  // 數據分析（tier 權限碼已存在，補進權限頁讓可逐人開通）
+  { module: '數據分析', label: '數據分析 · 基本（tier 1）', view: 'analytics.tier_1', edit: null },
+  { module: '數據分析', label: '數據分析 · 進階（tier 2）', view: 'analytics.tier_2', edit: null },
+  // 導航顯示（sidebar 顯示控制，單一 toggle）
+  { module: '導航顯示', label: 'CRM 群組顯示',          view: null, edit: 'nav.group.crm' },
+  { module: '導航顯示', label: '供應鏈群組顯示',        view: null, edit: 'nav.group.supply' },
+  { module: '導航顯示', label: '分析群組顯示',          view: null, edit: 'nav.group.analytics' },
+  { module: '導航顯示', label: '系統群組顯示',          view: null, edit: 'nav.group.system' },
+  { module: '導航顯示', label: '超管群組顯示',          view: null, edit: 'nav.group.super_admin' },
+  { module: '導航顯示', label: '組織完整管理',          view: null, edit: 'nav.org.full' },
+  { module: '導航顯示', label: '組織內部資料',          view: null, edit: 'nav.org.internal' },
+  { module: '導航顯示', label: '員工管理（限 admin）',  view: null, edit: 'nav.org.employees' },
+  { module: '導航顯示', label: '部門管理（限 admin）',  view: null, edit: 'nav.org.departments' },
+  { module: '導航顯示', label: '門市管理（限 admin）',  view: null, edit: 'nav.org.locations' },
+  { module: '導航顯示', label: '排班與假日',            view: null, edit: 'nav.schedule.basic' },
+  { module: '導航顯示', label: '排班規則 / 工時設定',   view: null, edit: 'nav.schedule.config' },
+  { module: '導航顯示', label: '薪資查看與發放',        view: null, edit: 'nav.salary.basic' },
+  { module: '導航顯示', label: '進階薪資',              view: null, edit: 'nav.salary.advanced' },
+  { module: '導航顯示', label: '法令工資設定',          view: null, edit: 'nav.salary.law' },
+  { module: '導航顯示', label: '人才發展',              view: null, edit: 'nav.talent' },
+  { module: '導航顯示', label: 'LMS 課程管理（限 admin）', view: null, edit: 'nav.lms.admin' },
+  { module: '導航顯示', label: '員工體驗管理',          view: null, edit: 'nav.experience_mgr' },
+  { module: '導航顯示', label: '行政庶務',              view: null, edit: 'nav.admin_office' },
+  { module: '導航顯示', label: '表單建立器',            view: null, edit: 'nav.hr_form.builder' },
+  { module: '導航顯示', label: '專案工作管理',          view: null, edit: 'nav.project.work' },
+  { module: '導航顯示', label: '任務管理（任務頁）',     view: null, edit: 'nav.project.tasks' },
+  { module: '導航顯示', label: '專案設定 / AI 助理',    view: null, edit: 'nav.project.admin' },
+  // 首頁戰情儀表板分頁（manager+ 預設有；admin 可逐人調）
+  { module: '導航顯示', label: '戰情儀表板：人·HR 分頁', view: null, edit: 'nav.dashboard.hr' },
+  { module: '導航顯示', label: '戰情儀表板：流程 分頁',  view: null, edit: 'nav.dashboard.process' },
+  { module: 'LIFF',    label: 'LIFF 門市稽核',          view: null, edit: 'liff.store_audit' },
+]
+
+// 批次模式單一動作的 pill：label + 開/關兩個圓形 icon button
+// 預設淡背景，hover 顯示完整顏色
+function BatchActionPill({ label, accent, onOpen, onClose, disabled }) {
+  return (
+    <div style={{
+      display: 'inline-flex', alignItems: 'center', gap: 4,
+      padding: '3px 6px 3px 10px', borderRadius: 14,
+      background: 'var(--glass-light)',
+      border: `1px solid ${accent}`,
+      flexShrink: 0,
+    }}>
+      <span style={{ fontSize: 11, color: accent, fontWeight: 700, letterSpacing: 0.5 }}>{label}</span>
+      <button onClick={onOpen} disabled={disabled}
+        title={`對選中員工開啟「${label}」（grant）`}
+        style={{
+          width: 22, height: 22, borderRadius: '50%', padding: 0,
+          border: 'none', background: 'transparent',
+          color: 'var(--accent-green)', cursor: disabled ? 'wait' : 'pointer',
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          transition: 'background .12s',
+        }}
+        onMouseEnter={e => { if (!disabled) { e.currentTarget.style.background = 'var(--accent-green)'; e.currentTarget.style.color = '#fff' } }}
+        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--accent-green)' }}>
+        <Plus size={14} strokeWidth={3} />
+      </button>
+      <button onClick={onClose} disabled={disabled}
+        title={`對選中員工關閉「${label}」（revoke）`}
+        style={{
+          width: 22, height: 22, borderRadius: '50%', padding: 0,
+          border: 'none', background: 'transparent',
+          color: 'var(--accent-red)', cursor: disabled ? 'wait' : 'pointer',
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          transition: 'background .12s',
+        }}
+        onMouseEnter={e => { if (!disabled) { e.currentTarget.style.background = 'var(--accent-red)'; e.currentTarget.style.color = '#fff' } }}
+        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--accent-red)' }}>
+        <Minus size={14} strokeWidth={3} />
+      </button>
+    </div>
+  )
+}
+
+export default function EmployeePermissions() {
+  const { profile, hasPermission } = useAuth()
+  const isSuperAdmin = hasPermission('nav.group.super_admin')
+  const orgId = profile?.organization_id ?? getTenantOrgId()
+  // super_admin / admin 都可以用此頁；DB RPC 也對應放寬
+  const canManage = hasPermission('system.admin')
+
+  const [employees, setEmployees] = useState([])
+  const [search, setSearch] = useState('')
+  const [selectedEmp, setSelectedEmp] = useState(null)
+  const [permissions, setPermissions] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [loadingPerms, setLoadingPerms] = useState(false)
+  const [savingIds, setSavingIds] = useState(new Set())  // 哪些 permission_id 正在 save
+  // Revoke reason dialog: populated when a toggle would write mode='revoke'
+  const [revokeDialog, setRevokeDialog] = useState(null)  // null | { resolve: fn }
+  const [revokeReason, setRevokeReason] = useState('')
+
+  // 批次模式：勾選多位員工一起套用同樣的開/關
+  // 規則：單擊員工 row → 切換為單選編輯（清空 batch set）
+  //      勾 checkbox → 加入/移出批次（不影響 selectedEmp）
+  //      batchSelectedIds.size >= 2 時，右側切換成批次操作 UI
+  const [batchSelectedIds, setBatchSelectedIds] = useState(new Set())
+  const [batchSaving, setBatchSaving] = useState(false)
+
+  useEffect(() => {
+    if (!orgId) { setLoading(false); return }
+    supabase.from('employees')
+      .select('id, name, name_en, role, dept, position')
+      .eq('organization_id', orgId)
+      .eq('status', '在職').not('is_archived', 'is', true)
+      .order('name')
+      .then(({ data }) => {
+        setEmployees(data || [])
+        setLoading(false)
+      })
+  }, [orgId])
+
+  // 選員工 → 載入該員工有效權限
+  const loadPermissions = async (empId) => {
+    if (!empId) return
+    setLoadingPerms(true)
+    const { data, error } = await supabase.rpc('get_employee_effective_permissions', { p_emp_id: empId })
+    if (error) {
+      // 詳細記錄到 console 方便 debug
+      console.error('[EmployeePermissions] RPC error:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      })
+      toast.error('載入失敗：' + (error.message || error.code || error.details || '未知錯誤'))
+      setPermissions([])
+    } else {
+      setPermissions(data || [])
+    }
+    setLoadingPerms(false)
+  }
+
+  const handleSelectEmp = (emp) => {
+    // 單擊員工 row → 單選編輯，清空批次選擇
+    setBatchSelectedIds(new Set())
+    setSelectedEmp(emp)
+    loadPermissions(emp.id)
+  }
+
+  // 勾 checkbox → 加入/移出批次選擇（不切到單選編輯）
+  const handleToggleBatchSelect = (empId) => {
+    setBatchSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(empId)) next.delete(empId)
+      else next.add(empId)
+      return next
+    })
+  }
+
+  // 批次套用：對選中的 N 人 × M perm，用指定 mode 寫進去
+  // perms: [{ permission_id, code }]
+  // mode: 'grant' / 'revoke' / 'reset'
+  const batchApplyPerms = async (perms, mode) => {
+    if (batchSelectedIds.size === 0 || perms.length === 0) return
+    if (!isSuperAdmin) {
+      // admin 不能對自己 / 其他 admin / super_admin 動手
+      const targetEmps = employees.filter(e => batchSelectedIds.has(e.id))
+      const violators = targetEmps.filter(e =>
+        e.id === profile?.id || ['super_admin', 'admin'].includes(e.role)
+      )
+      if (violators.length > 0) {
+        toast.error(`不能修改：${violators.map(e => e.name).join('、')}（超管 / 其他管理員 / 自己）`)
+        return
+      }
+    }
+
+    setBatchSaving(true)
+    const tasks = []
+    for (const empId of batchSelectedIds) {
+      for (const perm of perms) {
+        tasks.push(supabase.rpc('set_employee_permission_override', {
+          p_emp_id: empId,
+          p_perm_id: perm.permission_id,
+          p_mode: mode,
+          p_reason: null,
+        }))
+      }
+    }
+    const results = await Promise.all(tasks)
+    setBatchSaving(false)
+
+    const failures = results.filter(r => r.error || r.data?.ok === false)
+    if (failures.length > 0) {
+      toast.error(`部分失敗：${failures.length}/${tasks.length}（${failures[0].error?.message || failures[0].data?.error || ''}）`)
+    } else {
+      const actionText = mode === 'grant' ? '開啟' : mode === 'revoke' ? '關閉' : '重置'
+      toast.success(`已對 ${batchSelectedIds.size} 位員工 ${actionText} ${perms.length} 項權限`)
+    }
+  }
+
+  // 批次：對 feature 套用「開啟查詢」「關閉查詢」「開啟修改」「關閉修改」
+  // 套用連動規則：開啟修改自動帶查詢；關閉查詢自動帶修改關閉
+  const handleBatchFeatureAction = async (feature, kind, action) => {
+    const viewPerm = feature.view ? permByCode[feature.view] : null
+    const editPerm = feature.edit ? permByCode[feature.edit] : null
+    let perms = []
+    if (kind === 'view') {
+      if (action === 'grant') {
+        // 開啟查詢 → 只動 view
+        if (viewPerm) perms.push(viewPerm)
+      } else {
+        // 關閉查詢 → view + edit 都關（不能看不能改）
+        if (viewPerm) perms.push(viewPerm)
+        if (editPerm) perms.push(editPerm)
+      }
+    } else {
+      if (action === 'grant') {
+        // 開啟修改 → view + edit 都開
+        if (viewPerm) perms.push(viewPerm)
+        if (editPerm) perms.push(editPerm)
+      } else {
+        // 關閉修改 → 只動 edit
+        if (editPerm) perms.push(editPerm)
+      }
+    }
+    await batchApplyPerms(perms, action)
+  }
+
+  const handleBatchFeatureReset = async (feature) => {
+    const viewPerm = feature.view ? permByCode[feature.view] : null
+    const editPerm = feature.edit ? permByCode[feature.edit] : null
+    const perms = [viewPerm, editPerm].filter(Boolean)
+    await batchApplyPerms(perms, 'reset')
+  }
+
+  // 區塊性「全選」「全不選」：對整個 module 內所有 feature 一次套用
+  // 自動用單選/批次模式（看 batchSelectedIds 是否有人）
+  const handleModuleSelectAll = async (features, action) => {
+    const targetIds = batchSelectedIds.size > 0
+      ? Array.from(batchSelectedIds)
+      : (selectedEmp ? [selectedEmp.id] : [])
+    if (targetIds.length === 0) return
+
+    // admin 防呆
+    if (!isSuperAdmin) {
+      const targetEmps = employees.filter(e => targetIds.includes(e.id))
+      const violators = targetEmps.filter(e =>
+        e.id === profile?.id || ['super_admin', 'admin'].includes(e.role)
+      )
+      if (violators.length > 0) {
+        toast.error(`不能修改：${violators.map(e => e.name).join('、')}`)
+        return
+      }
+    }
+
+    // 蒐集這個 module 內所有 perm（view + edit）
+    const perms = []
+    for (const f of features) {
+      if (f.view && permByCode[f.view]) perms.push(permByCode[f.view])
+      if (f.edit && permByCode[f.edit]) perms.push(permByCode[f.edit])
+    }
+    if (perms.length === 0) return
+
+    setBatchSaving(true)
+    const tasks = []
+    for (const empId of targetIds) {
+      for (const perm of perms) {
+        tasks.push(supabase.rpc('set_employee_permission_override', {
+          p_emp_id: empId, p_perm_id: perm.permission_id, p_mode: action, p_reason: null,
+        }))
+      }
+    }
+    const results = await Promise.all(tasks)
+    setBatchSaving(false)
+
+    const failures = results.filter(r => r.error || r.data?.ok === false)
+    if (failures.length > 0) {
+      toast.error(`部分失敗：${failures.length}/${tasks.length}`)
+    } else {
+      const verb = action === 'grant' ? '全選' : action === 'revoke' ? '全不選' : '重置'
+      toast.success(`已對 ${targetIds.length} 位員工的 ${perms.length} 項權限 ${verb}`)
+    }
+
+    // 單選模式 → 重抓選中員工狀態
+    if (batchSelectedIds.size === 0 && selectedEmp) {
+      const { data: refreshed } = await supabase.rpc('get_employee_effective_permissions', { p_emp_id: selectedEmp.id })
+      if (refreshed) setPermissions(refreshed)
+    }
+  }
+
+  const handleBatchResetAll = async () => {
+    if (batchSelectedIds.size === 0) return
+    if (!confirm(`確定要清除 ${batchSelectedIds.size} 位員工的所有個別權限調整，全部恢復為各自角色預設嗎？`)) return
+    if (!isSuperAdmin) {
+      const targetEmps = employees.filter(e => batchSelectedIds.has(e.id))
+      const violators = targetEmps.filter(e =>
+        e.id === profile?.id || ['super_admin', 'admin'].includes(e.role)
+      )
+      if (violators.length > 0) {
+        toast.error(`不能修改：${violators.map(e => e.name).join('、')}`)
+        return
+      }
+    }
+    setBatchSaving(true)
+    const tasks = Array.from(batchSelectedIds).map(empId =>
+      supabase.rpc('reset_all_employee_permission_overrides', { p_emp_id: empId })
+    )
+    const results = await Promise.all(tasks)
+    setBatchSaving(false)
+    const totalDeleted = results.reduce((s, r) => s + (r.data?.deleted || 0), 0)
+    toast.success(`已恢復 ${batchSelectedIds.size} 位員工的 ${totalDeleted} 項權限`)
+  }
+
+  // 全部恢復角色預設（清光該員工所有 override）
+  const handleForceLogout = async () => {
+    if (!selectedEmp) return
+const { error } = await supabase.rpc('admin_force_logout', { p_emp_id: selectedEmp.id })
+    if (error) { toast.error('強制登出失敗：' + error.message); return }
+    toast.success(`已將 ${selectedEmp.name} 強制登出`)
+  }
+
+  const handleResetAll = async () => {
+    if (!canManage || !selectedEmp) return
+    if (!isSuperAdmin && selectedEmp.id === profile?.id) {
+      toast.warning('您不能修改自己的權限')
+      return
+    }
+    if (!isSuperAdmin && ['super_admin', 'admin'].includes(selectedEmp.role)) {
+      toast.warning('管理員不能修改超管或其他管理員的權限')
+      return
+    }
+    const overrideCount = permissions.filter(p => p.source === 'grant' || p.source === 'role_revoke').length
+    if (overrideCount === 0) {
+      toast.info('沒有任何個別權限調整可恢復')
+      return
+    }
+    if (!confirm(`確定要清除 ${selectedEmp.name} 的所有個別權限調整（${overrideCount} 項），全部恢復為「${ROLE_LABEL[selectedEmp.role] || selectedEmp.role}」的預設嗎？`)) return
+
+    const { data, error } = await supabase.rpc('reset_all_employee_permission_overrides', { p_emp_id: selectedEmp.id })
+    if (error || data?.ok === false) {
+      toast.error('恢復失敗：' + (error?.message || data?.error || '未知錯誤'))
+      return
+    }
+    toast.success(`已恢復 ${data?.deleted ?? 0} 項權限至角色預設`)
+    // 重抓
+    const { data: refreshed } = await supabase.rpc('get_employee_effective_permissions', { p_emp_id: selectedEmp.id })
+    if (refreshed) setPermissions(refreshed)
+  }
+
+  // 員工搜尋過濾（中文姓名 / 英文姓名 / 部門 / 職稱）
+  const filteredEmployees = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return employees
+    return employees.filter(e =>
+      (e.name || '').toLowerCase().includes(q)
+      || (e.name_en || '').toLowerCase().includes(q)
+      || (e.dept || '').toLowerCase().includes(q)
+      || (e.position || '').toLowerCase().includes(q)
+    )
+  }, [employees, search])
+
+  // perm code → perm object（給 FEATURES lookup 用）
+  const permByCode = useMemo(() => {
+    const m = {}
+    for (const p of permissions) m[p.code] = p
+    return m
+  }, [permissions])
+
+  // 把 FEATURES 過濾掉「兩個 perm 都不存在」的（例：admin 看不到 finance.* 那兩個 feature 自動消失）
+  const visibleFeatures = useMemo(() => {
+    return [...FEATURES, ...NAV_FEATURES].filter(f => {
+      const hasView = f.view && permByCode[f.view]
+      const hasEdit = f.edit && permByCode[f.edit]
+      return hasView || hasEdit
+    })
+  }, [permByCode])
+
+  // 按 module 分組 features
+  const groupedFeatures = useMemo(() => {
+    const groups = {}
+    for (const f of visibleFeatures) {
+      if (!groups[f.module]) groups[f.module] = []
+      groups[f.module].push(f)
+    }
+    return groups
+  }, [visibleFeatures])
+
+  // 對單一 perm 做樂觀切換（內部用，給 handleFeatureToggle 呼叫）
+  const togglePermOptimistic = async (perm, targetEffective, reason = null) => {
+    let nextMode, optimisticSource
+    if (targetEffective && !perm.effective) {
+      // 要開但目前是關
+      nextMode = perm.source === 'none' ? 'grant' : 'reset'
+      optimisticSource = perm.source === 'none' ? 'grant' : 'role'
+    } else if (!targetEffective && perm.effective) {
+      // 要關但目前是開
+      nextMode = perm.source === 'role' ? 'revoke' : 'reset'
+      optimisticSource = perm.source === 'role' ? 'role_revoke' : 'none'
+    } else {
+      // 已經是目標狀態，不用動
+      return { ok: true }
+    }
+
+    // 樂觀更新本地 state
+    // override_at 在 grant/revoke 時設成「現在」；reset (回 role/none) 時清 null
+    const isOverrideAfter = optimisticSource === 'grant' || optimisticSource === 'role_revoke'
+    setPermissions(prev => prev.map(p =>
+      p.permission_id === perm.permission_id
+        ? {
+            ...p,
+            source: optimisticSource,
+            effective: targetEffective,
+            override_at: isOverrideAfter ? new Date().toISOString() : null,
+          }
+        : p
+    ))
+
+    const { data, error } = await supabase.rpc('set_employee_permission_override', {
+      p_emp_id:  selectedEmp.id,
+      p_perm_id: perm.permission_id,
+      p_mode:    nextMode,
+      p_reason:  reason || null,
+    })
+    return { ok: !error && data?.ok !== false, error, data }
+  }
+
+  // 切換 feature 的「查詢」或「修改」
+  // kind: 'view' or 'edit'
+  // 規則：
+  //   點修改 ON → 自動帶上查詢 ON（要先看到才能改）
+  //   點查詢 OFF → 自動帶上修改 OFF（不能改但能看不合理）
+  const handleFeatureToggle = async (feature, kind) => {
+    if (!canManage || !selectedEmp) return
+    if (!isSuperAdmin && selectedEmp.id === profile?.id) {
+      toast.warning('您不能修改自己的權限，請聯絡超級管理員')
+      return
+    }
+    if (!isSuperAdmin && ['super_admin', 'admin'].includes(selectedEmp.role)) {
+      toast.warning('管理員不能修改超管或其他管理員的權限')
+      return
+    }
+
+    const viewPerm = feature.view ? permByCode[feature.view] : null
+    const editPerm = feature.edit ? permByCode[feature.edit] : null
+
+    // 算目標 view/edit effective 狀態
+    let targetView = viewPerm?.effective ?? false
+    let targetEdit = editPerm?.effective ?? false
+    if (kind === 'view') {
+      targetView = !targetView
+      if (!targetView) targetEdit = false  // 查詢 OFF → 強制 修改 OFF
+    } else {
+      targetEdit = !targetEdit
+      if (targetEdit) targetView = true     // 修改 ON → 強制 查詢 ON
+    }
+
+    // When a permission is going from ON→OFF due to role-default (mode='revoke'),
+    // require a written reason so the override audit trail is meaningful.
+    const willRevoke = (
+      (viewPerm && !targetView && viewPerm.effective && viewPerm.source === 'role') ||
+      (editPerm && !targetEdit && editPerm.effective && editPerm.source === 'role')
+    )
+    let reason = null
+    if (willRevoke) {
+      reason = await new Promise(resolve => {
+        setRevokeReason('')
+        setRevokeDialog({ resolve })
+      })
+      if (reason === null) return  // user cancelled
+    }
+
+    // 標記正在 save（讓兩個 toggle 都 disable）
+    const ids = []
+    if (viewPerm) ids.push(viewPerm.permission_id)
+    if (editPerm) ids.push(editPerm.permission_id)
+    setSavingIds(s => new Set([...s, ...ids]))
+
+    // 平行打 RPC
+    const tasks = []
+    if (viewPerm) tasks.push(togglePermOptimistic(viewPerm, targetView, reason))
+    if (editPerm) tasks.push(togglePermOptimistic(editPerm, targetEdit, reason))
+    const results = await Promise.all(tasks)
+
+    setSavingIds(s => {
+      const n = new Set(s)
+      ids.forEach(id => n.delete(id))
+      return n
+    })
+
+    const failed = results.find(r => !r.ok)
+    if (failed) {
+      toast.error('儲存失敗：' + (failed.error?.message || failed.data?.error || '未知錯誤'))
+    }
+    // 成功 or 失敗都靜默重抓（不切 loading spinner 避免 scroll 跳）
+    // 重點：拿到 cascade 後的 nav perm 變化（feature 全關 → nav 自動關）
+    const { data: refreshed } = await supabase.rpc('get_employee_effective_permissions', { p_emp_id: selectedEmp.id })
+    if (refreshed) setPermissions(refreshed)
+  }
+
+  // 重置 feature（移除 view + edit 的 override）
+  const handleFeatureReset = async (feature) => {
+    if (!canManage || !selectedEmp) return
+    const viewPerm = feature.view ? permByCode[feature.view] : null
+    const editPerm = feature.edit ? permByCode[feature.edit] : null
+
+    const tasks = []
+    for (const perm of [viewPerm, editPerm]) {
+      if (!perm) continue
+      if (perm.source !== 'grant' && perm.source !== 'role_revoke') continue
+      tasks.push(supabase.rpc('set_employee_permission_override', {
+        p_emp_id: selectedEmp.id,
+        p_perm_id: perm.permission_id,
+        p_mode: 'reset',
+        p_reason: null,
+      }))
+    }
+    if (tasks.length === 0) return
+    await Promise.all(tasks)
+    // 重置完重抓一次（這個比較少用，可以接受抓）
+    const { data: refreshed } = await supabase.rpc('get_employee_effective_permissions', { p_emp_id: selectedEmp.id })
+    if (refreshed) setPermissions(refreshed)
+  }
+
+  if (loading) return <LoadingSpinner />
+
+  if (!canManage) {
+    return (
+      <div style={{ padding: 32, textAlign: 'center', color: 'var(--accent-red)' }}>
+        <Shield size={48} style={{ marginBottom: 16, opacity: 0.4 }} />
+        <h3>權限不足</h3>
+        <p style={{ color: 'var(--text-muted)' }}>此頁面僅限管理員 / 超級管理員使用</p>
+      </div>
+    )
+  }
+
+  return (
+    <>
+    <div className="fade-in">
+      <div className="page-header">
+        <h2><span className="header-icon">🔐</span> 員工個別權限</h2>
+        <p>超級管理員可針對個別員工開放或關閉特定功能，覆蓋角色預設</p>
+      </div>
+
+      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+        {/* ── 左側：員工列表（寬屏固定 320px；窄屏全寬 wrap 到下一行） ── */}
+        <div className="card" style={{
+          padding: 0,
+          flex: '1 1 280px',
+          minWidth: 0,
+          maxWidth: 360,
+          maxHeight: 'calc(100vh - 220px)',
+          overflow: 'auto',
+        }}>
+          <div style={{ padding: 12, borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-secondary)', position: 'sticky', top: 0 }}>
+            <div style={{ position: 'relative' }}>
+              <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+              <input className="form-input" placeholder="搜尋姓名 (中/英) / 部門 / 職稱"
+                value={search} onChange={e => setSearch(e.target.value)}
+                style={{ paddingLeft: 32, fontSize: 13 }} />
+            </div>
+          </div>
+          {/* 批次模式提示 + 全部恢復 */}
+          {batchSelectedIds.size > 0 && (
+            <div style={{
+              padding: '8px 12px', background: 'var(--accent-cyan-dim)',
+              fontSize: 11, color: 'var(--accent-cyan)', fontWeight: 600,
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+            }}>
+              <span>已勾選 {batchSelectedIds.size} 位（批次操作）</span>
+              <button onClick={() => setBatchSelectedIds(new Set())}
+                style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 11, color: 'var(--accent-cyan)', padding: 2 }}>
+                清空
+              </button>
+            </div>
+          )}
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            {filteredEmployees.length === 0 ? (
+              <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>查無員工</div>
+            ) : filteredEmployees.map(e => {
+              const roleLbl = ROLE_LABEL[e.role] || e.role || '—'
+              const isSelected = selectedEmp?.id === e.id
+              const isBatchChecked = batchSelectedIds.has(e.id)
+              return (
+                <div key={e.id}
+                  style={{
+                    padding: '10px 14px',
+                    background: isBatchChecked ? 'var(--accent-cyan-dim)'
+                              : isSelected ? 'var(--glass-light)' : 'transparent',
+                    borderLeft: isSelected || isBatchChecked
+                      ? '3px solid var(--accent-cyan)' : '3px solid transparent',
+                    borderBottom: '1px solid var(--border-subtle)',
+                    display: 'flex', alignItems: 'center', gap: 10,
+                  }}>
+                  {/* checkbox 加入批次 */}
+                  <input type="checkbox" checked={isBatchChecked}
+                    onChange={() => handleToggleBatchSelect(e.id)}
+                    onClick={(ev) => ev.stopPropagation()}
+                    style={{ cursor: 'pointer', width: 14, height: 14 }}
+                    title="勾選加入批次操作" />
+                  {/* 點 row 進入單選編輯 */}
+                  <button onClick={() => handleSelectEmp(e)}
+                    style={{
+                      flex: 1, textAlign: 'left', border: 'none', cursor: 'pointer',
+                      background: 'transparent', padding: 0,
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    }}>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 13 }}>{e.name}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                        {[e.dept, e.position].filter(Boolean).join(' · ')}
+                      </div>
+                    </div>
+                    <span className={`badge ${roleColor[e.role] || 'badge-neutral'}`} style={{ fontSize: 11 }}>{roleLbl}</span>
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* ── 右側：權限編輯 / 批次操作（窄屏會 wrap 到下一行全寬） ── */}
+        <div className="card" style={{ flex: '2 1 460px', minWidth: 0 }}>
+          {batchSelectedIds.size > 0 ? (
+            // ── 批次操作 UI ──
+            <>
+              <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--accent-cyan-dim)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+                  <div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--accent-cyan)' }}>
+                      🔧 批次操作 · 已選 {batchSelectedIds.size} 位員工
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, maxWidth: 600 }}>
+                      {employees.filter(e => batchSelectedIds.has(e.id)).map(e => e.name).join('、')}
+                    </div>
+                  </div>
+                  <button onClick={handleBatchResetAll}
+                    disabled={batchSaving}
+                    style={{
+                      padding: '6px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+                      background: 'transparent', color: 'var(--accent-red)',
+                      border: '1px solid var(--accent-red)',
+                      cursor: batchSaving ? 'wait' : 'pointer',
+                      display: 'flex', alignItems: 'center', gap: 4,
+                    }}>
+                    <RotateCcw size={12} /> 全部恢復角色預設
+                  </button>
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8, lineHeight: 1.6 }}>
+                  · 點 <b style={{ color: 'var(--accent-green)' }}>+開</b> 一次對選中員工開啟該權限 · 點 <b style={{ color: 'var(--accent-red)' }}>−關</b> 一次關閉<br />
+                  · 連動規則同單一模式：開修改自動帶查詢、關查詢自動帶關修改
+                </div>
+              </div>
+
+              <div style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {Object.entries(groupedFeatures).map(([module, features]) => (
+                  <div key={module}>
+                    <div style={{
+                      fontSize: 12, fontWeight: 700, color: 'var(--accent-cyan)',
+                      letterSpacing: 1, marginBottom: 8, paddingBottom: 6,
+                      borderBottom: '1px dashed var(--border-medium)',
+                      display: 'flex', alignItems: 'center', gap: 12,
+                    }}>
+                      <span>{module}</span>
+                      <button onClick={() => handleModuleSelectAll(features, 'grant')}
+                        disabled={batchSaving}
+                        title="對此區塊所有功能 一次全部開啟"
+                        style={{
+                          fontSize: 12, fontWeight: 500,
+                          background: 'transparent', border: 'none',
+                          color: 'var(--text-primary)',
+                          cursor: batchSaving ? 'wait' : 'pointer',
+                          display: 'inline-flex', alignItems: 'center', gap: 4,
+                          padding: '2px 4px',
+                          letterSpacing: 'normal',
+                        }}>
+                        <span style={{
+                          width: 14, height: 14, borderRadius: 3,
+                          border: '1.5px solid var(--text-secondary)',
+                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                          background: 'transparent',
+                        }} />
+                        全選
+                      </button>
+                      <button onClick={() => handleModuleSelectAll(features, 'revoke')}
+                        disabled={batchSaving}
+                        title="對此區塊所有功能 一次全部關閉"
+                        style={{
+                          fontSize: 12, fontWeight: 500,
+                          background: 'transparent', border: 'none',
+                          color: 'var(--text-primary)',
+                          cursor: batchSaving ? 'wait' : 'pointer',
+                          display: 'inline-flex', alignItems: 'center', gap: 4,
+                          padding: '2px 4px',
+                          letterSpacing: 'normal',
+                        }}>
+                        <span style={{
+                          width: 14, height: 14, borderRadius: 3,
+                          border: '1.5px solid var(--text-secondary)',
+                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                          background: 'transparent',
+                        }} />
+                        全不選
+                      </button>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {features.map(f => (
+                        <div key={(f.view || '') + (f.edit || '') + f.label} style={{
+                          display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+                          padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border-subtle)',
+                        }}>
+                          <div style={{ flex: '1 1 200px', minWidth: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 600 }}>{f.label}</div>
+                          </div>
+                          {f.view && (
+                            <BatchActionPill label="查詢" accent="var(--accent-cyan)"
+                              onOpen={() => handleBatchFeatureAction(f, 'view', 'grant')}
+                              onClose={() => handleBatchFeatureAction(f, 'view', 'revoke')}
+                              disabled={batchSaving} />
+                          )}
+                          {f.edit && (
+                            <BatchActionPill label="修改" accent="var(--accent-orange)"
+                              onOpen={() => handleBatchFeatureAction(f, 'edit', 'grant')}
+                              onClose={() => handleBatchFeatureAction(f, 'edit', 'revoke')}
+                              disabled={batchSaving} />
+                          )}
+                          <button onClick={() => handleBatchFeatureReset(f)} disabled={batchSaving}
+                            title="重置此功能的 override（恢復角色預設）"
+                            style={{
+                              width: 26, height: 26, borderRadius: '50%', padding: 0,
+                              background: 'transparent', border: '1px solid var(--border-medium)',
+                              color: 'var(--text-muted)', cursor: batchSaving ? 'wait' : 'pointer',
+                              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                              flexShrink: 0,
+                            }}>
+                            <RotateCcw size={12} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {/* NOTE: batch mode uses its own pill UI (BatchActionPill) — PermissionModuleSection is used in single-select mode below */}
+            </>
+          ) : !selectedEmp ? (
+            <div style={{ padding: 48, textAlign: 'center', color: 'var(--text-muted)' }}>
+              <Shield size={48} style={{ marginBottom: 16, opacity: 0.4 }} />
+              <h3>請從左側選擇員工</h3>
+              <p style={{ fontSize: 13 }}>單擊員工 → 編輯該員工權限；勾 checkbox → 加入批次操作</p>
+            </div>
+          ) : loadingPerms ? (
+            <LoadingSpinner />
+          ) : (
+            <>
+              <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border-subtle)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+                  <div>
+                    <div style={{ fontSize: 16, fontWeight: 700 }}>{selectedEmp.name}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+                      {[ROLE_LABEL[selectedEmp.role], selectedEmp.dept, selectedEmp.position].filter(Boolean).join(' · ')}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                      {permissions.filter(p => p.effective).length} / {permissions.length} 項權限
+                      {permissions.filter(p => p.source === 'grant' || p.source === 'role_revoke').length > 0 && (
+                        <span style={{ marginLeft: 8, color: 'var(--accent-orange)', fontWeight: 600 }}>
+                          ({permissions.filter(p => p.source === 'grant' || p.source === 'role_revoke').length} 項個別調整)
+                        </span>
+                      )}
+                    </div>
+                    <button onClick={handleResetAll}
+                      disabled={permissions.filter(p => p.source === 'grant' || p.source === 'role_revoke').length === 0}
+                      style={{
+                        padding: '6px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+                        background: 'transparent',
+                        color: 'var(--text-secondary)',
+                        border: '1px solid var(--border-medium)',
+                        cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', gap: 4,
+                      }}
+                      title="清除所有個別權限調整，全部恢復為該角色的預設">
+                      <RotateCcw size={12} /> 全部恢復角色預設
+                    </button>
+                    <button onClick={handleForceLogout}
+                      style={{
+                        padding: '6px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+                        background: 'var(--accent-red-dim)',
+                        color: 'var(--accent-red)',
+                        border: '1px solid var(--accent-red)',
+                        cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', gap: 4,
+                      }}
+                      title="立即強制該員工登出（Realtime 即時生效）">
+                      <LogOut size={12} /> 強制登出
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {Object.entries(groupedFeatures).map(([module, features]) => (
+                  <PermissionModuleSection
+                    key={module}
+                    module={module}
+                    features={features}
+                    empPerms={permByCode}
+                    onToggle={handleFeatureToggle}
+                    onReset={handleFeatureReset}
+                    savingIds={savingIds}
+                    onModuleSelectAll={handleModuleSelectAll}
+                    batchSaving={batchSaving}
+                  />
+                ))}
+              </div>
+
+              <div style={{
+                padding: 14, borderTop: '1px solid var(--border-subtle)',
+                background: 'var(--bg-secondary)', fontSize: 11, color: 'var(--text-muted)',
+                lineHeight: 1.6,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                  <AlertCircle size={12} /> <b>說明</b>
+                </div>
+                · <b>查詢</b> = 看得到，不能改 · <b>修改</b> = 看得到 + 可以改<br />
+                · 點修改 ON 自動帶上查詢；點查詢 OFF 自動把修改也關掉<br />
+                · <span style={{ color: SOURCE_BADGE.grant.color }}>綠色 手動調整</span>：角色預設沒有，被個別加給<br />
+                · <span style={{ color: SOURCE_BADGE.role_revoke.color }}>紅色 手動調整</span>：角色預設有，被個別禁用<br />
+                · 右側 ↻ 圖示：移除個別調整、回到角色預設
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+
+    {/* ── Revoke reason dialog ── */}
+    {revokeDialog && (
+      <div style={{
+        position: 'fixed', inset: 0, zIndex: 9000,
+        background: 'rgba(0,0,0,0.55)', display: 'flex',
+        alignItems: 'center', justifyContent: 'center', padding: 24,
+      }}>
+        <div className="card" style={{ width: '100%', maxWidth: 440, padding: 24 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>
+            <ShieldOff size={16} style={{ marginRight: 6, verticalAlign: -2, color: 'var(--accent-red)' }} />
+            禁用原因
+          </div>
+          <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 14, lineHeight: 1.6 }}>
+            您正在禁用一項員工原本透過角色擁有的權限。請說明禁用原因（將記錄在稽核日誌中）。
+          </p>
+          <textarea
+            autoFocus
+            className="form-input"
+            rows={3}
+            placeholder="例：該員工暫時調離此職務，暫停費用審核權限…"
+            value={revokeReason}
+            onChange={e => setRevokeReason(e.target.value)}
+            style={{ width: '100%', resize: 'vertical', fontSize: 13 }}
+          />
+          <div style={{ display: 'flex', gap: 10, marginTop: 16, justifyContent: 'flex-end' }}>
+            <button
+              onClick={() => { revokeDialog.resolve(null); setRevokeDialog(null) }}
+              className="btn btn-secondary"
+              style={{ fontSize: 13 }}>
+              取消
+            </button>
+            <button
+              onClick={() => {
+                const r = revokeReason.trim()
+                if (!r) { return }
+                revokeDialog.resolve(r)
+                setRevokeDialog(null)
+              }}
+              disabled={!revokeReason.trim()}
+              className="btn btn-danger"
+              style={{ fontSize: 13 }}>
+              確認禁用
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
+  )
+}
